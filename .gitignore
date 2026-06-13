@@ -1,0 +1,27 @@
+# Contains bank credentials in plaintext — never commit
+.mcp.json
+.env
+
+# Cloned + built MCP server (large, regenerable via git clone + npm run build)
+israeli-bank-mcp/
+
+# Scraped financial data & personal documents — never commit
+data/
+riseup-data/
+riseup-session.json
+receipts/
+reports/
+statements/
+logs/
+*.xlsx
+.~lock.*#
+
+# Browser automation session artifacts
+.playwright/
+.playwright-cli/
+
+# macOS
+.DS_Store
+
+# Build artifacts
+riseup-skill.zip
