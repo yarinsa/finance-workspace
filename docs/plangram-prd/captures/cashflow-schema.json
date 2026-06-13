@@ -1,0 +1,913 @@
+{
+  "profile_sections": [
+    {
+      "name": "income",
+      "title": "הכנסות",
+      "subtitle": "עקוב אחר כל מקורות ההכנסה החודשיים שלך",
+      "entities": [
+        {
+          "type": "income",
+          "name": "עבודות",
+          "itemName": "עבודה",
+          "disableAdd": false,
+          "disableDelete": false,
+          "item_fields": [
+            "userId",
+            "scenarioId",
+            "type",
+            "description",
+            "amount",
+            "startType",
+            "startDate",
+            "endType",
+            "endDate",
+            "rise",
+            "interval",
+            "repetitions",
+            "insertDate",
+            "updateDate",
+            "assosiatedAssetType",
+            "assosiatedAssetId",
+            "incomeToAssetType",
+            "incomeToAssetId",
+            "id",
+            "entityCacheKey"
+          ]
+        },
+        {
+          "type": "income-onetime",
+          "name": "הכנסות",
+          "itemName": "הכנסה",
+          "disableAdd": false,
+          "disableDelete": false,
+          "item_fields": []
+        },
+        {
+          "type": "income-allowance",
+          "name": "קצבאות",
+          "itemName": "קצבה",
+          "disableAdd": false,
+          "disableDelete": false,
+          "item_fields": []
+        },
+        {
+          "type": "income-property",
+          "name": "תזרימים מנכסים",
+          "itemName": "תזרים מנכסים",
+          "disableAdd": false,
+          "disableDelete": false,
+          "item_fields": [
+            "userId",
+            "scenarioId",
+            "type",
+            "description",
+            "amount",
+            "startType",
+            "startDate",
+            "endType",
+            "endDate",
+            "rise",
+            "interval",
+            "repetitions",
+            "insertDate",
+            "updateDate",
+            "assosiatedAssetType",
+            "assosiatedAssetId",
+            "incomeToAssetType",
+            "incomeToAssetId",
+            "id",
+            "entityCacheKey"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "expense",
+      "title": "הוצאות",
+      "subtitle": "נהל את ההוצאות השוטפות שלך",
+      "entities": [
+        {
+          "type": "Expense",
+          "name": "שכירות",
+          "itemName": "שכירות",
+          "disableAdd": false,
+          "disableDelete": false,
+          "item_fields": [
+            "userId",
+            "scenarioId",
+            "type",
+            "description",
+            "amount",
+            "startType",
+            "startDate",
+            "endType",
+            "endDate",
+            "rise",
+            "interval",
+            "repetitions",
+            "insertDate",
+            "updateDate",
+            "assosiatedAssetType",
+            "assosiatedAssetId",
+            "id",
+            "entityCacheKey"
+          ]
+        },
+        {
+          "type": "Expense",
+          "name": "הוצאות צריכה",
+          "itemName": "הוצאת צריכה",
+          "disableAdd": false,
+          "disableDelete": false,
+          "item_fields": [
+            "userId",
+            "scenarioId",
+            "type",
+            "description",
+            "amount",
+            "startType",
+            "startDate",
+            "endType",
+            "endDate",
+            "rise",
+            "interval",
+            "repetitions",
+            "insertDate",
+            "updateDate",
+            "assosiatedAssetType",
+            "assosiatedAssetId",
+            "id",
+            "entityCacheKey"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "goals",
+      "title": "יעדים",
+      "subtitle": "נהל את היעדים הפיננסיים שלך",
+      "entities": [
+        {
+          "type": "goals",
+          "name": "יעדים",
+          "itemName": "יעד",
+          "disableAdd": false,
+          "disableDelete": false,
+          "item_fields": [
+            "id",
+            "description",
+            "amount",
+            "type",
+            "startDate",
+            "endDate",
+            "interval",
+            "repetitions",
+            "rise",
+            "assosiatedAssetType",
+            "assosiatedAssetId"
+          ]
+        },
+        {
+          "type": "GlobalEmergencyFund",
+          "name": "קרן חירום",
+          "itemName": "קרן חירום",
+          "disableAdd": false,
+          "disableDelete": false,
+          "item_fields": [
+            "id",
+            "amount"
+          ]
+        },
+        {
+          "type": "GlobalInheritanceFund",
+          "name": "הורשה",
+          "itemName": "הורשה",
+          "disableAdd": false,
+          "disableDelete": true,
+          "item_fields": [
+            "id",
+            "amount"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "assets",
+      "title": "נכסים",
+      "subtitle": "רשום ועקוב אחר הנכסים וההשקעות שברשותך",
+      "entities": [
+        {
+          "type": "BankAccount",
+          "name": "חשבונות בנק",
+          "itemName": "חשבון בנק",
+          "disableAdd": false,
+          "disableDelete": false,
+          "item_fields": [
+            "userId",
+            "scenarioId",
+            "bankId",
+            "description",
+            "balanceCurrent",
+            "creditLimit",
+            "balanceGoal",
+            "accountType",
+            "insertDate",
+            "updateDate",
+            "descriptionForList",
+            "id",
+            "entityCacheKey"
+          ]
+        },
+        {
+          "type": "Pension",
+          "name": "נכסים פנסיונים",
+          "itemName": "נכס פנסיוני",
+          "disableAdd": false,
+          "disableDelete": false,
+          "item_fields": [
+            "userId",
+            "scenarioId",
+            "balance",
+            "interest",
+            "fee1",
+            "fee2",
+            "percentageMukeret",
+            "tactics",
+            "withdrawPizuim",
+            "workStartYear",
+            "depositStartType",
+            "depositStartDate",
+            "depositEndType",
+            "depositEndDate",
+            "depositSum",
+            "depositRise",
+            "atzmai",
+            "owner",
+            "type",
+            "description",
+            "insertDate",
+            "updateDate",
+            "structure",
+            "tacticsDetailed",
+            "prevEmployeeVetek",
+            "policyNumber",
+            "personName",
+            "status",
+            "mekadem",
+            "id",
+            "entityCacheKey"
+          ]
+        },
+        {
+          "type": "Keren",
+          "name": "קרנות השתלמות",
+          "itemName": "קרן השתלמות",
+          "disableAdd": false,
+          "disableDelete": false,
+          "item_fields": [
+            "userId",
+            "scenarioId",
+            "balance",
+            "type",
+            "fee",
+            "fee2",
+            "interest",
+            "depositStartType",
+            "depositStartDate",
+            "depositEndType",
+            "depositEndDate",
+            "depositSum",
+            "depositRise",
+            "atzmai",
+            "owner",
+            "description",
+            "policyNumber",
+            "allowWithdraw",
+            "insertDate",
+            "updateDate",
+            "personName",
+            "status",
+            "workStartYear",
+            "prevEmployeeVetek",
+            "structure",
+            "tacticsDetailed",
+            "descriptionForList",
+            "id",
+            "entityCacheKey"
+          ]
+        },
+        {
+          "type": "Portfolio",
+          "name": "תיקי השקעות",
+          "itemName": "תיק השקעות",
+          "disableAdd": false,
+          "disableDelete": false,
+          "item_fields": [
+            "userId",
+            "scenarioId",
+            "description",
+            "balance",
+            "manualBalance",
+            "interest",
+            "fee",
+            "profitFraction",
+            "fifoLifo",
+            "designation",
+            "type",
+            "goal",
+            "deposit",
+            "portfolio_deposit",
+            "managementType",
+            "allowWithdraw",
+            "insertDate",
+            "updateDate",
+            "descriptionForList",
+            "id",
+            "entityCacheKey"
+          ]
+        },
+        {
+          "type": "RealEstate",
+          "name": "נכסי נדל״ן",
+          "itemName": "נכס נדל״ן",
+          "disableAdd": false,
+          "disableDelete": false,
+          "item_fields": [
+            "userId",
+            "scenarioId",
+            "value",
+            "rise",
+            "description",
+            "type",
+            "insertDate",
+            "updateDate",
+            "buyDate",
+            "buyPrice",
+            "buyCosts",
+            "buyFromType",
+            "buyFromIdx",
+            "sellDate",
+            "sellCosts",
+            "sellToType",
+            "sellToIdx",
+            "associatedDebtIds",
+            "associatedIncomeIds",
+            "descriptionForList",
+            "id",
+            "entityCacheKey"
+          ]
+        },
+        {
+          "type": "otherasset",
+          "name": "נכסים נוספים",
+          "itemName": "נכס נוסף",
+          "disableAdd": false,
+          "disableDelete": false,
+          "item_fields": []
+        }
+      ]
+    },
+    {
+      "name": "debt",
+      "title": "התחייבויות",
+      "subtitle": "נהל את החובות וההתחייבויות הפיננסיות שלך",
+      "entities": [
+        {
+          "type": "Debt",
+          "name": "הלוואות",
+          "itemName": "הלוואה",
+          "disableAdd": false,
+          "disableDelete": false,
+          "item_fields": [
+            "userId",
+            "scenarioId",
+            "description",
+            "dueDate",
+            "interest",
+            "monthlyPayment",
+            "type",
+            "definition",
+            "startDate",
+            "initialSum",
+            "totalPeriod",
+            "startType",
+            "insertDate",
+            "updateDate",
+            "assosiatedAssetType",
+            "assosiatedAssetId",
+            "terminationDate",
+            "terminationFromType",
+            "terminationFromId",
+            "loanToAssetId",
+            "loanToAssetType",
+            "prepaymentDate",
+            "prepaymentFromAssetId",
+            "prepaymentFromAssetType",
+            "descriptionForList",
+            "id",
+            "entityCacheKey"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "personal-information",
+      "title": "החשבון שלי",
+      "subtitle": "עדכן פרטים אישיים והוסף יעדים",
+      "entities": [
+        {
+          "type": "PersonalInformation",
+          "name": "פרטים אישיים",
+          "itemName": "בן/בת זוג",
+          "disableAdd": false,
+          "disableDelete": true,
+          "item_fields": [
+            "id",
+            "description",
+            "firstName",
+            "lastName",
+            "gender",
+            "birthDate",
+            "retirementAge"
+          ]
+        },
+        {
+          "type": "children",
+          "name": "ילדים",
+          "itemName": "ילדים",
+          "disableAdd": true,
+          "disableDelete": true,
+          "item_fields": [
+            "id",
+            "description",
+            "children"
+          ]
+        },
+        {
+          "type": "AccountDetails",
+          "name": "פרטי חשבון",
+          "itemName": "פרטי חשבון",
+          "disableAdd": true,
+          "disableDelete": true,
+          "item_fields": [
+            "id",
+            "description",
+            "email"
+          ]
+        }
+      ]
+    }
+  ],
+  "today_metrics": [
+    {
+      "name": "הכנסות",
+      "units": "₪",
+      "rank": null,
+      "higher_is_better": null,
+      "show_in_progress_tab": true,
+      "description": null
+    },
+    {
+      "name": "הוצאות",
+      "units": "₪",
+      "rank": null,
+      "higher_is_better": null,
+      "show_in_progress_tab": true,
+      "description": null
+    },
+    {
+      "name": "תזרים",
+      "units": "₪",
+      "rank": "good",
+      "higher_is_better": true,
+      "show_in_progress_tab": true,
+      "description": "מייצג את ההפרש בין ההכנסות להוצאות ללא התחשבות בכסף המופנה לחיסכון"
+    },
+    {
+      "name": "עודף בעובר ושב",
+      "units": "₪",
+      "rank": null,
+      "higher_is_better": null,
+      "show_in_progress_tab": false,
+      "description": null
+    },
+    {
+      "name": "משתנה מצב תזרים",
+      "units": "",
+      "rank": null,
+      "higher_is_better": null,
+      "show_in_progress_tab": false,
+      "description": null
+    },
+    {
+      "name": "חתיכה עודפת",
+      "units": "₪",
+      "rank": "bad",
+      "higher_is_better": null,
+      "show_in_progress_tab": true,
+      "description": "התזרים הפנוי שלא מנותב להשקעות"
+    },
+    {
+      "name": "חתיכה עודפת בערך מוחלט",
+      "units": "₪",
+      "rank": null,
+      "higher_is_better": null,
+      "show_in_progress_tab": false,
+      "description": null
+    },
+    {
+      "name": "משתנה מצב חיסכון",
+      "units": "",
+      "rank": null,
+      "higher_is_better": null,
+      "show_in_progress_tab": false,
+      "description": null
+    },
+    {
+      "name": "דרישת השקעה עודפת",
+      "units": "₪",
+      "rank": null,
+      "higher_is_better": null,
+      "show_in_progress_tab": false,
+      "description": null
+    },
+    {
+      "name": "אחוז עמידה בקרן חירום",
+      "units": "%",
+      "rank": null,
+      "higher_is_better": null,
+      "show_in_progress_tab": true,
+      "description": null
+    },
+    {
+      "name": "חוסר בקרן חירום",
+      "units": "₪",
+      "rank": null,
+      "higher_is_better": null,
+      "show_in_progress_tab": false,
+      "description": null
+    },
+    {
+      "name": "אחוז חיסכון",
+      "units": "%",
+      "rank": "bad",
+      "higher_is_better": null,
+      "show_in_progress_tab": true,
+      "description": "אחוז הכסף המופנה לחיסכון מתוך ההכנסה הכוללת נטו"
+    },
+    {
+      "name": "מדד גירעון",
+      "units": "%",
+      "rank": null,
+      "higher_is_better": null,
+      "show_in_progress_tab": false,
+      "description": null
+    },
+    {
+      "name": "הפקדה מתוכננת",
+      "units": "₪",
+      "rank": null,
+      "higher_is_better": null,
+      "show_in_progress_tab": true,
+      "description": null
+    },
+    {
+      "name": "אחוז החזר חוב",
+      "units": "%",
+      "rank": "good",
+      "higher_is_better": false,
+      "show_in_progress_tab": true,
+      "description": "שיעור החזר הלוואות מתוך סך ההוצאות החודשיות"
+    },
+    {
+      "name": "יחס השקעות",
+      "units": "%",
+      "rank": "bad",
+      "higher_is_better": null,
+      "show_in_progress_tab": true,
+      "description": "אחוז הכסף המופנה לחיסכון מתוך התזרים הפנוי"
+    },
+    {
+      "name": "רק תיקים רעים",
+      "units": "",
+      "rank": null,
+      "higher_is_better": null,
+      "show_in_progress_tab": false,
+      "description": null
+    },
+    {
+      "name": "רק תיקים סולידיים",
+      "units": "",
+      "rank": null,
+      "higher_is_better": null,
+      "show_in_progress_tab": false,
+      "description": null
+    },
+    {
+      "name": "שנה קודמת",
+      "units": "",
+      "rank": null,
+      "higher_is_better": null,
+      "show_in_progress_tab": false,
+      "description": null
+    },
+    {
+      "name": "שנה לפני 6 שנים",
+      "units": "",
+      "rank": null,
+      "higher_is_better": null,
+      "show_in_progress_tab": false,
+      "description": null
+    },
+    {
+      "name": "שווי נקי",
+      "units": "₪",
+      "rank": null,
+      "higher_is_better": null,
+      "show_in_progress_tab": true,
+      "description": null
+    },
+    {
+      "name": "מדד הצמיחה",
+      "units": "%",
+      "rank": "good",
+      "higher_is_better": true,
+      "show_in_progress_tab": true,
+      "description": "מייצג את קצב הגידול בשווי הנקי בעת הקרובה"
+    },
+    {
+      "name": "מדד פלנגרם",
+      "units": "",
+      "rank": "good",
+      "higher_is_better": true,
+      "show_in_progress_tab": true,
+      "description": "מדד פלנגרם מיוצג על ידי מספר בין 0-100. המספר משקף את רמת האיזון הכללי בין ניהול התזרים בהווה לתכנון ההשקעה לעתיד. ציון גבוה אינו אומר “יותר כסף”, אלא איזון נכון יותר בין ההווה לעתיד שלך."
+    },
+    {
+      "name": "חתיכה חסרה",
+      "units": "₪",
+      "rank": "good",
+      "higher_is_better": false,
+      "show_in_progress_tab": true,
+      "description": "חתיכה המייצגת את הפער להשלמת כלל היעדים שלכם לאורך כל מסלול החיים"
+    },
+    {
+      "name": "אחוז עמידה ביעדים",
+      "units": "%",
+      "rank": null,
+      "higher_is_better": null,
+      "show_in_progress_tab": true,
+      "description": null
+    },
+    {
+      "name": "אחוז עמידה ביעד פרישה",
+      "units": "%",
+      "rank": null,
+      "higher_is_better": null,
+      "show_in_progress_tab": true,
+      "description": null
+    },
+    {
+      "name": "סכום להורשה",
+      "units": "₪",
+      "rank": null,
+      "higher_is_better": null,
+      "show_in_progress_tab": true,
+      "description": null
+    },
+    {
+      "name": "מדד האיזון",
+      "units": "₪",
+      "rank": "good",
+      "higher_is_better": null,
+      "show_in_progress_tab": true,
+      "description": "מדד האיזון אומר כמה \"תזרים\" חסר כדי להתכנס ליעדנו. אם המדד חיובי, זה אומר בכמה להגדיל תזרים. אם המדד שלילי זה אומר שיש עודפים שנצברים בעו\"ש שניתן לנצל. אם הערך הוא 0 ומדד פלנגרם נמוך מ-100, סידור מחדש של פאזל הפלנגרם יסיט כסף מתקופות עודף לתקופות חוסר."
+    }
+  ],
+  "charts": {
+    "income_plot": {
+      "graph_type": "area",
+      "graph_title": "הכנסות ברוטו",
+      "xlabel": "גיל פורש ראשי [שנים]",
+      "ylabel": null,
+      "n_datasets": 4,
+      "dataset_names": [
+        "עבודה",
+        "מוכרת",
+        "מזכה",
+        "קיצבת זיקנה"
+      ],
+      "x_axis_len": 632
+    },
+    "expense_plot": {
+      "graph_type": "area",
+      "graph_title": "הוצאות",
+      "xlabel": "גיל פורש ראשי [שנים]",
+      "ylabel": null,
+      "n_datasets": 5,
+      "dataset_names": [
+        "הוצאות שוטפות",
+        "יעדים",
+        "הפקדה לקרן חירום",
+        "הלוואות",
+        "מס הכנסה"
+      ],
+      "x_axis_len": 632
+    },
+    "kizba_plot": {
+      "graph_type": "area",
+      "graph_title": "קצבאות פנסיוניות לאורך השנים",
+      "xlabel": "גיל פורש ראשי [שנים]",
+      "ylabel": null,
+      "n_datasets": 4,
+      "dataset_names": [
+        "עבודה",
+        "תזרים מנכסים",
+        "קצבה של ",
+        "קצבאות נוספות"
+      ],
+      "x_axis_len": 632
+    },
+    "portfolio_evolution": null,
+    "asset_plot": {
+      "graph_type": "area",
+      "graph_title": "השתנות בזמן של נכסים",
+      "xlabel": "גיל פורש ראשי [שנים]",
+      "ylabel": null,
+      "n_datasets": 7,
+      "dataset_names": [
+        "עובר ושב",
+        "נכס נדלן 1",
+        "שווי השתלמות לעצמאים",
+        "שווי קרן השתלמות - linx",
+        "שווי קרן השתלמות - טרנזיט",
+        "שווי קרן השתלמות Chase",
+        "שווי קרן חירום"
+      ],
+      "x_axis_len": 632
+    },
+    "asset_complete_plot": {
+      "graph_type": "area",
+      "graph_title": "השתנות בזמן של נכסים",
+      "xlabel": "גיל פורש ראשי [שנים]",
+      "ylabel": null,
+      "n_datasets": 6,
+      "dataset_names": [
+        "תגמולים Yarin Sasson ",
+        "פיצויים Yarin Sasson ",
+        "קרנות Yarin Sasson ",
+        "תיקים",
+        "נדלן",
+        "עובר ושב"
+      ],
+      "x_axis_len": 632
+    },
+    "loan_plot": {
+      "graph_type": "area",
+      "graph_title": "השתנות בזמן של יתרת הלוואות",
+      "xlabel": "גיל פורש ראשי [שנים]",
+      "ylabel": null,
+      "n_datasets": 2,
+      "dataset_names": [
+        "הלוואה משכנתא - 10 שנים",
+        "משלימה למשכנתא - פריים"
+      ],
+      "x_axis_len": 632
+    },
+    "pensias_plot": {
+      "graph_type": "area",
+      "graph_title": "השתנות בזמן של יתרת קרנות פנסיה",
+      "xlabel": "גיל פורש ראשי [שנים]",
+      "ylabel": null,
+      "n_datasets": 2,
+      "dataset_names": [
+        "קרן פנסיה של Yarin Sasson  - תגמולים",
+        "קרן פנסיה של Yarin Sasson  - פיצויים"
+      ],
+      "x_axis_len": 632
+    },
+    "liquid_plot": null,
+    "income_plot_simple": null,
+    "income_plot_3color": {
+      "graph_type": "area",
+      "graph_title": "הכנסות ברוטו",
+      "xlabel": "גיל פורש ראשי [שנים]",
+      "ylabel": null,
+      "n_datasets": 2,
+      "dataset_names": [
+        "הכנסות מעבודה",
+        "הכנסה מקצבאות"
+      ],
+      "x_axis_len": 9
+    },
+    "expense_plot_simple": {
+      "graph_type": "area",
+      "graph_title": "הוצאות",
+      "xlabel": "גיל פורש ראשי [שנים]",
+      "ylabel": null,
+      "n_datasets": 5,
+      "dataset_names": [
+        "הוצאה שוטפת",
+        "יעדים",
+        "הלוואות",
+        "מיסים",
+        "השקעות"
+      ],
+      "x_axis_len": 25
+    },
+    "buffer_plot": {
+      "graph_type": "area",
+      "graph_title": "יתרת עובר ושב",
+      "xlabel": "גיל פורש ראשי [שנים]",
+      "ylabel": null,
+      "n_datasets": 1,
+      "dataset_names": [
+        "גובה עובר ושב"
+      ],
+      "x_axis_len": 632
+    },
+    "assetpies": {
+      "keys": [
+        "data",
+        "show_in_csv",
+        "show_in_retirecalc"
+      ]
+    },
+    "netval_plot": {
+      "graph_type": "area",
+      "graph_title": "שווי נקי",
+      "xlabel": "גיל פורש ראשי [שנים]",
+      "ylabel": null,
+      "n_datasets": 1,
+      "dataset_names": [
+        "שווי נקי"
+      ],
+      "x_axis_len": 632
+    }
+  },
+  "timeline_item_schema": {
+    "value": "float",
+    "details": "list",
+    "date": "str",
+    "units": "str",
+    "category": "str",
+    "color": "str",
+    "text": "NoneType",
+    "progress": "NoneType",
+    "targetValue": "NoneType"
+  },
+  "focal_point_schema": [
+    "date",
+    "age",
+    "name",
+    "asset_val",
+    "loan_val",
+    "net_val",
+    "values",
+    "loans"
+  ],
+  "pirut_tazrim_schema": [
+    "incomes",
+    "expenses"
+  ],
+  "goal_compliance_keys": [
+    "passive_coverage",
+    "portfolio_goals",
+    "improve_by",
+    "missing_piece",
+    "bottom_line",
+    "freedom",
+    "base_problem_data",
+    "inheritance"
+  ],
+  "recommendation_schema": [
+    "id",
+    "code",
+    "name",
+    "description",
+    "status",
+    "showComplete",
+    "type",
+    "nextsteps",
+    "articles"
+  ],
+  "scenario_schema": [
+    "id",
+    "name",
+    "retirementAge",
+    "partnerRetirementAge",
+    "globalEmergencyFund",
+    "globalInheritanceFund",
+    "netWorthAtRetirement",
+    "isConservativeForecast",
+    "inflationRate",
+    "isDefault",
+    "updatedDate"
+  ],
+  "top_level": {
+    "profile.completePercent": 100,
+    "calculations.status": "success",
+    "currentScenarioId": "<int>",
+    "n_scenarios": 1
+  }
+}

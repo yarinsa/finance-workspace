@@ -6,7 +6,9 @@
 israeli-bank-mcp/
 
 # Scraped financial data & personal documents — never commit
-data/
+data/*
+# …but version the pipeline code that lives alongside the data
+!data/forecast.py
 riseup-data/
 riseup-session.json
 receipts/

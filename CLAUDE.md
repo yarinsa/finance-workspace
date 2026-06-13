@@ -46,6 +46,15 @@ output without re-scraping).
   balances, credit-card debt, loans/mortgage, detected salary, totals, and a
   `spending` summary. Query this for net-worth/debt questions.
 
+### Next-month forecast
+
+`python3 data/forecast.py` writes `data/digested/forecast.{json,md}` — a
+next-month cashflow projection built from RiseUp's forward-looking budget
+envelopes (not ledger extrapolation, which the dedup key makes unreliable), with
+CAL/AMEX committed billings as a non-summed cross-check. Read-only over scraped
+data; safe to re-run. Rationale and the trust/double-counting decisions are in
+`docs/forecast-architecture.md`.
+
 ### Dedup rules (important)
 
 - Two records are the **same purchase** when `date` and `abs(amount)` match.

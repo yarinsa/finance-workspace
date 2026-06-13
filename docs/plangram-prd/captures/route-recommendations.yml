@@ -1,0 +1,96 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e3]:
+    - banner [ref=e4]:
+      - generic [ref=e5]:
+        - link [ref=e6] [cursor=pointer]:
+          - /url: /overview
+          - img [ref=e7]
+        - link:
+          - /url: /overview
+      - generic [ref=e10]:
+        - generic [ref=e11]:
+          - button "התוכנית של Yarin Sasson" [ref=e14] [cursor=pointer]:
+            - generic [ref=e15]: התוכנית של Yarin Sasson
+          - button "הגדרות תחזית" [ref=e17] [cursor=pointer]:
+            - img [ref=e19]
+        - generic [ref=e21]:
+          - generic [ref=e23] [cursor=pointer]:
+            - img "profile" [ref=e24]
+            - text: תמיכה ועזרה
+          - button "תפריט משתמש" [ref=e26] [cursor=pointer]:
+            - generic [ref=e28]: Yarin
+    - generic [ref=e30]:
+      - navigation [ref=e31]:
+        - generic [ref=e33]:
+          - link "home מבט על" [ref=e34] [cursor=pointer]:
+            - /url: /overview
+            - img "home" [ref=e35]
+            - text: מבט על
+          - generic [ref=e37] [cursor=pointer]:
+            - img "plan" [ref=e38]
+            - text: התוכנית שלי
+          - generic [ref=e39]:
+            - link "סיכום" [ref=e40] [cursor=pointer]:
+              - /url: /summary
+            - link "הכנסות" [ref=e41] [cursor=pointer]:
+              - /url: /my-plan/income
+            - link "הוצאות" [ref=e42] [cursor=pointer]:
+              - /url: /my-plan/expense
+            - link "יעדים" [ref=e43] [cursor=pointer]:
+              - /url: /my-plan/goals
+            - link "נכסים" [ref=e44] [cursor=pointer]:
+              - /url: /my-plan/assets
+            - link "התחייבויות" [ref=e45] [cursor=pointer]:
+              - /url: /my-plan/debt
+          - link "portfolio השקעות" [ref=e46] [cursor=pointer]:
+            - /url: /portfolio
+            - img "portfolio" [ref=e47]
+            - text: השקעות
+          - link "recommendations המלצות 6" [ref=e67] [cursor=pointer]:
+            - /url: /recommendations
+            - img "recommendations" [ref=e49]
+            - text: המלצות
+            - generic [ref=e68]: "6"
+          - link "metrics התקדמות" [ref=e50] [cursor=pointer]:
+            - /url: /metrics
+            - img "metrics" [ref=e51]
+            - text: התקדמות
+          - generic [ref=e53] [cursor=pointer]:
+            - img "insights" [ref=e54]
+            - text: תובנות
+          - generic [ref=e56] [cursor=pointer]:
+            - img "plus" [ref=e57]
+            - text: תכנון פלוס
+      - main [ref=e58]:
+        - generic [ref=e61]:
+          - generic [ref=e69]:
+            - heading "המלצות" [level=1] [ref=e70]
+            - link "legend הסבר על עמוד זה" [ref=e71] [cursor=pointer]:
+              - /url: /article/60/דף-המלצות
+              - img "legend" [ref=e72]
+              - text: הסבר על עמוד זה
+          - generic [ref=e73]:
+            - heading "הצעות דחופות" [level=2] [ref=e75] [cursor=pointer]
+            - generic [ref=e76]:
+              - generic [ref=e77] [cursor=pointer]: קיים תזרים לא מנוצל
+              - generic [ref=e78] [cursor=pointer]: בחשבון עו"ש יש יתרה גבוהה מהיעד
+          - generic [ref=e79]:
+            - heading "הצעות" [level=2] [ref=e81] [cursor=pointer]
+            - generic [ref=e82]:
+              - generic [ref=e83] [cursor=pointer]: איך להפיק את המיטב מפלנגרם?
+              - generic [ref=e84] [cursor=pointer]: המשך למלא את קרן החירום שלך!
+              - generic [ref=e85] [cursor=pointer]: מומלץ לבחון מעבר לניהול עצמי (IRA) של חסכונות פנסיוניים
+              - generic [ref=e86] [cursor=pointer]: הגיע זמן לחלומות חדשים
+          - generic [ref=e88] [cursor=pointer]:
+            - heading "הושלם (0)" [level=2] [ref=e89]
+            - img "arrow" [ref=e91]
+          - generic [ref=e93] [cursor=pointer]:
+            - heading "הוסתר (0)" [level=2] [ref=e94]
+            - img "arrow" [ref=e96]
+  - iframe [ref=e65]:
+    
+  - button "צ'אט" [ref=e66] [cursor=pointer]:
+    - generic:
+      - img
+    - generic:
+      - img

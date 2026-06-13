@@ -1,0 +1,143 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e3]:
+    - banner [ref=e4]:
+      - generic [ref=e5]:
+        - link [ref=e6] [cursor=pointer]:
+          - /url: /overview
+          - img [ref=e7]
+        - link:
+          - /url: /overview
+      - generic [ref=e10]:
+        - generic [ref=e11]:
+          - button "התוכנית של Yarin Sasson" [ref=e14] [cursor=pointer]:
+            - generic [ref=e15]: התוכנית של Yarin Sasson
+          - button "הגדרות תחזית" [ref=e17] [cursor=pointer]:
+            - img [ref=e19]
+        - generic [ref=e21]:
+          - generic [ref=e23] [cursor=pointer]:
+            - img "profile" [ref=e24]
+            - text: תמיכה ועזרה
+          - button "תפריט משתמש" [ref=e26] [cursor=pointer]:
+            - generic [ref=e28]: Yarin
+    - generic [ref=e30]:
+      - navigation [ref=e31]:
+        - generic [ref=e33]:
+          - link "home מבט על" [ref=e34] [cursor=pointer]:
+            - /url: /overview
+            - img "home" [ref=e35]
+            - text: מבט על
+          - generic [ref=e37] [cursor=pointer]:
+            - img "plan" [ref=e38]
+            - text: התוכנית שלי
+          - generic [ref=e39]:
+            - link "סיכום" [ref=e40] [cursor=pointer]:
+              - /url: /summary
+            - link "הכנסות" [ref=e41] [cursor=pointer]:
+              - /url: /my-plan/income
+            - link "הוצאות" [ref=e42] [cursor=pointer]:
+              - /url: /my-plan/expense
+            - link "יעדים" [ref=e43] [cursor=pointer]:
+              - /url: /my-plan/goals
+            - link "נכסים" [ref=e44] [cursor=pointer]:
+              - /url: /my-plan/assets
+            - link "התחייבויות" [ref=e45] [cursor=pointer]:
+              - /url: /my-plan/debt
+          - link "portfolio השקעות" [ref=e46] [cursor=pointer]:
+            - /url: /portfolio
+            - img "portfolio" [ref=e47]
+            - text: השקעות
+          - link "recommendations המלצות" [ref=e48] [cursor=pointer]:
+            - /url: /recommendations
+            - img "recommendations" [ref=e49]
+            - text: המלצות
+          - link "metrics התקדמות" [ref=e50] [cursor=pointer]:
+            - /url: /metrics
+            - img "metrics" [ref=e51]
+            - text: התקדמות
+          - generic [ref=e53] [cursor=pointer]:
+            - img "insights" [ref=e54]
+            - text: תובנות
+          - generic [ref=e56] [cursor=pointer]:
+            - img "plus" [ref=e57]
+            - text: תכנון פלוס
+      - main [ref=e58]:
+        - generic [ref=e59]:
+          - generic [ref=e61]:
+            - heading "השקעות שלי" [level=1] [ref=e86]
+            - generic [ref=e87]:
+              - generic [ref=e89]:
+                - generic [ref=e90]:
+                  - generic [ref=e91]:
+                    - heading "שווי תיק כולל" [level=2] [ref=e92]
+                    - generic [ref=e93]: ₪34K
+                    - generic [ref=e96]:
+                      - generic [ref=e97]: בשנה האחרונה
+                      - generic [ref=e98]: ₪0
+                      - generic [ref=e99]:
+                        - img "arrow" [ref=e100]
+                        - text: 0%
+                  - generic [ref=e101]:
+                    - button "שבוע" [ref=e102] [cursor=pointer]
+                    - button "חודש" [ref=e103] [cursor=pointer]
+                    - button "3 חודשים" [ref=e104] [cursor=pointer]
+                    - button "שנה" [ref=e105] [cursor=pointer]
+                    - button "הכל" [ref=e106] [cursor=pointer]
+                - generic [ref=e111]:
+                  - img "אין נתונים" [ref=e112]
+                  - generic [ref=e113]: בקרוב יוצג כאן גרף היסטוריית השווי
+                  - generic [ref=e114]: נתונים היסטוריים יצטברו לאחר מספר ימים
+              - generic [ref=e115]:
+                - heading "פירוט תיקי השקעות" [level=2] [ref=e116]
+                - generic [ref=e117]:
+                  - button "edit ייבוא חכם" [ref=e118] [cursor=pointer]:
+                    - img "edit" [ref=e119]
+                    - text: ייבוא חכם
+                  - button "add הוספת תיק" [ref=e120] [cursor=pointer]:
+                    - img "add" [ref=e121]
+                    - text: הוספת תיק
+              - generic [ref=e123]:
+                - generic [ref=e124]:
+                  - heading "קרן חירום" [level=3] [ref=e125]
+                  - link "ערוך תיק" [ref=e127] [cursor=pointer]:
+                    - /url: "#profile/assets/portfolio/edit/1419"
+                    - img "ערוך תיק" [ref=e128]
+                - generic [ref=e129]:
+                  - generic [ref=e132]: ₪34K
+                  - generic [ref=e133]:
+                    - generic [ref=e134]: ניהול ידני
+                    - link "✦ לעבור למתקדם" [ref=e135] [cursor=pointer]:
+                      - /url: "#"
+                      - generic [ref=e136]: ✦
+                      - text: לעבור למתקדם
+              - generic [ref=e138]:
+                - heading "חלוקת התיקים" [level=4] [ref=e139]
+                - generic [ref=e143] [cursor=pointer]:
+                  - generic [ref=e145]: קרן חירום
+                  - generic [ref=e146]: ‏34,000 ‏₪
+                  - generic [ref=e147]: 100.0%
+              - heading "חלוקה לפי סוגי נכסים" [level=4] [ref=e154]
+          - generic [ref=e66]:
+            - img "portfolio" [ref=e68]
+            - heading "נתחו את ביצועי ההשקעות שלכם על פני כל תיקי ההשקעות שלכם" [level=2] [ref=e69]
+            - list [ref=e70]:
+              - listitem [ref=e71]:
+                - generic [ref=e72]: מעקב אחר שווי תיק ההשקעות בזמן אמת
+              - listitem [ref=e73]:
+                - generic [ref=e74]: תצוגה של מניות, קרנות, קריפטו כולם במקום אחד
+              - listitem [ref=e75]:
+                - generic [ref=e76]: היסטוריית שווי וצמיחת התיקים
+              - listitem [ref=e77]:
+                - generic [ref=e78]: פירוט ויזואלי של התפלגות ההשקעות
+            - link "קראו עוד על איזור ההשקעות >" [ref=e79] [cursor=pointer]:
+              - /url: /article/125/ניהול-מתקדם-של-תיקי-השקעות
+            - link "plus לשדרוג לפלנגרם פלוס" [ref=e80] [cursor=pointer]:
+              - /url: /plus-signup
+              - img "plus" [ref=e81]
+              - text: לשדרוג לפלנגרם פלוס
+  - iframe [ref=e82]:
+    
+  - button "צ'אט" [ref=e83] [cursor=pointer]:
+    - generic:
+      - img
+    - generic:
+      - img

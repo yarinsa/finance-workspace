@@ -1,0 +1,127 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e3]:
+    - banner [ref=e4]:
+      - generic [ref=e5]:
+        - link [ref=e6] [cursor=pointer]:
+          - /url: /overview
+          - img [ref=e7]
+        - link:
+          - /url: /overview
+      - generic [ref=e10]:
+        - generic [ref=e11]:
+          - button "התוכנית של Yarin Sasson" [ref=e14] [cursor=pointer]:
+            - generic [ref=e15]: התוכנית של Yarin Sasson
+          - button "הגדרות תחזית" [ref=e17] [cursor=pointer]:
+            - img [ref=e19]
+        - generic [ref=e21]:
+          - generic [ref=e23] [cursor=pointer]:
+            - img "profile" [ref=e24]
+            - text: תמיכה ועזרה
+          - button "תפריט משתמש" [ref=e26] [cursor=pointer]:
+            - generic [ref=e28]: Yarin
+    - generic [ref=e30]:
+      - navigation [ref=e31]:
+        - generic [ref=e33]:
+          - link "home מבט על" [ref=e34] [cursor=pointer]:
+            - /url: /overview
+            - img "home" [ref=e35]
+            - text: מבט על
+          - generic [ref=e37] [cursor=pointer]:
+            - img "plan" [ref=e38]
+            - text: התוכנית שלי
+          - generic [ref=e39]:
+            - link "סיכום" [ref=e40] [cursor=pointer]:
+              - /url: /summary
+            - link "הכנסות" [ref=e41] [cursor=pointer]:
+              - /url: /my-plan/income
+            - link "הוצאות" [ref=e42] [cursor=pointer]:
+              - /url: /my-plan/expense
+            - link "יעדים" [ref=e43] [cursor=pointer]:
+              - /url: /my-plan/goals
+            - link "נכסים" [ref=e44] [cursor=pointer]:
+              - /url: /my-plan/assets
+            - link "התחייבויות" [ref=e45] [cursor=pointer]:
+              - /url: /my-plan/debt
+          - link "portfolio השקעות" [ref=e46] [cursor=pointer]:
+            - /url: /portfolio
+            - img "portfolio" [ref=e47]
+            - text: השקעות
+          - link "recommendations המלצות 6" [ref=e66] [cursor=pointer]:
+            - /url: /recommendations
+            - img "recommendations" [ref=e49]
+            - text: המלצות
+            - generic [ref=e67]: "6"
+          - link "metrics התקדמות" [ref=e50] [cursor=pointer]:
+            - /url: /metrics
+            - img "metrics" [ref=e51]
+            - text: התקדמות
+          - generic [ref=e53] [cursor=pointer]:
+            - img "insights" [ref=e54]
+            - text: תובנות
+          - generic [ref=e56] [cursor=pointer]:
+            - img "plus" [ref=e57]
+            - text: תכנון פלוס
+      - main [ref=e58]:
+        - generic [ref=e61]:
+          - heading "סיכום התוכנית שלי" [level=1] [ref=e69]
+          - region "המסע הפיננסי שלי" [ref=e70]:
+            - generic:
+              - heading "המסע הפיננסי שלי" [level=2] [ref=e71]
+              - button "הוספת אירוע" [ref=e72] [cursor=pointer]:
+                - img [ref=e73]
+                - text: הוספת אירוע
+            - generic [ref=e74]:
+              - img [ref=e75]
+              - img [ref=e76]
+              - generic:
+                - generic: הפרישה שלך
+              - generic [ref=e92]:
+                - generic [ref=e93]: ₪60M
+                - generic [ref=e94]: ₪45M
+                - generic [ref=e95]: ₪30M
+                - generic [ref=e96]: ₪15M
+                - generic [ref=e97]: "0"
+              - generic [ref=e98]:
+                - generic [ref=e99]: היום
+                - generic [ref=e100]: גיל 35
+                - generic [ref=e101]: גיל 41
+                - generic [ref=e102]: גיל 48
+                - generic [ref=e103]: גיל 54
+                - generic [ref=e104]: גיל 61
+                - generic [ref=e105]: גיל 67
+                - generic [ref=e106]: גיל 74
+                - generic [ref=e107]: גיל 80
+          - region "התקדמות התוכנית" [ref=e108]:
+            - article [ref=e109]:
+              - img [ref=e111]
+              - heading "השלמת 5 מתוך 5 מחלקות" [level=2] [ref=e114]
+              - paragraph [ref=e115]: חשוב להשלים את כל המחלקות לקבלת תמונה מלאה
+            - button "הושלם הכנסות עקוב אחר כל מקורות ההכנסה החודשיים שלך" [ref=e116] [cursor=pointer]:
+              - generic [ref=e118]: הושלם
+              - heading "הכנסות" [level=2] [ref=e119]
+              - paragraph [ref=e120]: עקוב אחר כל מקורות ההכנסה החודשיים שלך
+            - button "הושלם הוצאות נהל את ההוצאות השוטפות שלך" [ref=e121] [cursor=pointer]:
+              - generic [ref=e123]: הושלם
+              - heading "הוצאות" [level=2] [ref=e124]
+              - paragraph [ref=e125]: נהל את ההוצאות השוטפות שלך
+            - button "הושלם יעדים נהל יעדים פיננסיים, קרן חירום והורשה" [ref=e126] [cursor=pointer]:
+              - generic [ref=e128]: הושלם
+              - heading "יעדים" [level=2] [ref=e129]
+              - paragraph [ref=e130]: נהל יעדים פיננסיים, קרן חירום והורשה
+            - button "הושלם נכסים רשום ועקוב אחר הנכסים וההשקעות שברשותך" [ref=e131] [cursor=pointer]:
+              - generic [ref=e133]: הושלם
+              - heading "נכסים" [level=2] [ref=e134]
+              - paragraph [ref=e135]: רשום ועקוב אחר הנכסים וההשקעות שברשותך
+            - button "הושלם התחייבויות עדכן פרטים אישיים והוסף יעדים" [ref=e136] [cursor=pointer]:
+              - generic [ref=e138]: הושלם
+              - heading "התחייבויות" [level=2] [ref=e139]
+              - paragraph [ref=e140]: עדכן פרטים אישיים והוסף יעדים
+          - region "פרטי התוכנית" [ref=e141]:
+            - button "גיל פרישה אתה 67 | בת הזוג 65" [ref=e142] [cursor=pointer]:
+              - heading "גיל פרישה" [level=2] [ref=e143]
+              - paragraph [ref=e144]: אתה 67 | בת הזוג 65
+            - button "הפרופיל שלי Yarin Sasson | תאריך לידה 23/11/1997" [ref=e145] [cursor=pointer]:
+              - heading "הפרופיל שלי" [level=2] [ref=e146]
+              - paragraph [ref=e147]: Yarin Sasson | תאריך לידה 23/11/1997
+  - iframe [ref=e65]:
+    

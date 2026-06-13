@@ -1,0 +1,119 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e3]:
+    - banner [ref=e4]:
+      - generic [ref=e5]:
+        - link [ref=e6] [cursor=pointer]:
+          - /url: /overview
+          - img [ref=e7]
+        - link:
+          - /url: /overview
+      - generic [ref=e10]:
+        - generic [ref=e11]:
+          - button "התוכנית של Yarin Sasson" [ref=e14] [cursor=pointer]:
+            - generic [ref=e15]: התוכנית של Yarin Sasson
+          - button "הגדרות תחזית" [ref=e17] [cursor=pointer]:
+            - img [ref=e19]
+        - generic [ref=e21]:
+          - generic [ref=e23] [cursor=pointer]:
+            - img "profile" [ref=e24]
+            - text: תמיכה ועזרה
+          - button "תפריט משתמש" [ref=e26] [cursor=pointer]:
+            - generic [ref=e28]: Yarin
+    - generic [ref=e30]:
+      - navigation [ref=e31]:
+        - generic [ref=e33]:
+          - link "home מבט על" [ref=e34] [cursor=pointer]:
+            - /url: /overview
+            - img "home" [ref=e35]
+            - text: מבט על
+          - generic [ref=e37] [cursor=pointer]:
+            - img "plan" [ref=e38]
+            - text: התוכנית שלי
+          - generic [ref=e39]:
+            - link "סיכום" [ref=e40] [cursor=pointer]:
+              - /url: /summary
+            - link "הכנסות" [ref=e41] [cursor=pointer]:
+              - /url: /my-plan/income
+            - link "הוצאות" [ref=e42] [cursor=pointer]:
+              - /url: /my-plan/expense
+            - link "יעדים" [ref=e43] [cursor=pointer]:
+              - /url: /my-plan/goals
+            - link "נכסים" [ref=e44] [cursor=pointer]:
+              - /url: /my-plan/assets
+            - link "התחייבויות" [ref=e45] [cursor=pointer]:
+              - /url: /my-plan/debt
+          - link "portfolio השקעות" [ref=e46] [cursor=pointer]:
+            - /url: /portfolio
+            - img "portfolio" [ref=e47]
+            - text: השקעות
+          - link "recommendations המלצות 6" [ref=e72] [cursor=pointer]:
+            - /url: /recommendations
+            - img "recommendations" [ref=e49]
+            - text: המלצות
+            - generic [ref=e73]: "6"
+          - link "metrics התקדמות" [ref=e50] [cursor=pointer]:
+            - /url: /metrics
+            - img "metrics" [ref=e51]
+            - text: התקדמות
+          - generic [ref=e53] [cursor=pointer]:
+            - img "insights" [ref=e54]
+            - text: תובנות
+          - generic [ref=e55]:
+            - link "תזרים כספי" [ref=e56] [cursor=pointer]:
+              - /url: /cashflow
+            - link "שווי נקי" [ref=e57] [cursor=pointer]:
+              - /url: /networth
+            - link "ציר זמן" [ref=e58] [cursor=pointer]:
+              - /url: /timeline
+            - link "יעדים" [ref=e59] [cursor=pointer]:
+              - /url: /goals
+          - generic [ref=e61] [cursor=pointer]:
+            - img "plus" [ref=e62]
+            - text: תכנון פלוס
+      - main [ref=e63]:
+        - generic [ref=e66]:
+          - generic [ref=e74]:
+            - heading "יעדים" [level=1] [ref=e75]
+            - link "legend הסבר על עמוד זה" [ref=e76] [cursor=pointer]:
+              - /url: /article/75/%D7%93%D7%A3-%D7%99%D7%A2%D7%93%D7%99%D7%9D
+              - img "legend" [ref=e77]
+              - text: הסבר על עמוד זה
+          - heading "יעדים אישיים" [level=2] [ref=e81]
+          - generic [ref=e85] [cursor=pointer]:
+            - generic [ref=e86]:
+              - generic [ref=e87]: החלפת טלפון
+              - img "החלפת טלפון" [ref=e89]
+            - generic [ref=e90]:
+              - generic [ref=e91]: 100% סיכוי לעמידה ביעד
+              - generic [ref=e96]:
+                - generic [ref=e97]: יעד ₪3,000
+                - generic [ref=e98]: תאריך יעד 23 בנובמבר 2025
+          - heading "יעדים כללים" [level=2] [ref=e102]
+          - generic [ref=e104]:
+            - generic [ref=e105]:
+              - img "אחוז עמידה ביעדים" [ref=e107]
+              - heading "אחוז עמידה ביעדים" [level=5] [ref=e108]
+              - generic [ref=e109]: 100%
+              - text: לפרטים
+            - generic [ref=e110]:
+              - img "אחוז עמידה בקרן חירום" [ref=e112]
+              - heading "אחוז עמידה בקרן חירום" [level=5] [ref=e113]
+              - generic [ref=e114]: 100%
+              - text: לפרטים
+            - generic [ref=e115]:
+              - img "אחוז עמידה ביעד פרישה" [ref=e117]
+              - heading "אחוז עמידה ביעד פרישה" [level=5] [ref=e118]
+              - generic [ref=e119]: 100%
+              - text: לפרטים
+            - generic [ref=e120]:
+              - img "סכום להורשה" [ref=e122]
+              - heading "סכום להורשה" [level=5] [ref=e123]
+              - generic [ref=e124]: ₪53.8M
+              - text: לפרטים
+  - iframe [ref=e70]:
+    
+  - button "צ'אט" [ref=e71] [cursor=pointer]:
+    - generic:
+      - img
+    - generic:
+      - img

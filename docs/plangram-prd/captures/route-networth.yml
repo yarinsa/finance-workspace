@@ -1,0 +1,142 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e3]:
+    - banner [ref=e4]:
+      - generic [ref=e5]:
+        - link [ref=e6] [cursor=pointer]:
+          - /url: /overview
+          - img [ref=e7]
+        - link:
+          - /url: /overview
+      - generic [ref=e10]:
+        - generic [ref=e11]:
+          - button "התוכנית של Yarin Sasson" [ref=e14] [cursor=pointer]:
+            - generic [ref=e15]: התוכנית של Yarin Sasson
+          - button "הגדרות תחזית" [ref=e17] [cursor=pointer]:
+            - img [ref=e19]
+        - generic [ref=e21]:
+          - generic [ref=e23] [cursor=pointer]:
+            - img "profile" [ref=e24]
+            - text: תמיכה ועזרה
+          - button "תפריט משתמש" [ref=e26] [cursor=pointer]:
+            - generic [ref=e28]: Yarin
+    - generic [ref=e30]:
+      - navigation [ref=e31]:
+        - generic [ref=e33]:
+          - link "home מבט על" [ref=e34] [cursor=pointer]:
+            - /url: /overview
+            - img "home" [ref=e35]
+            - text: מבט על
+          - generic [ref=e37] [cursor=pointer]:
+            - img "plan" [ref=e38]
+            - text: התוכנית שלי
+          - generic [ref=e39]:
+            - link "סיכום" [ref=e40] [cursor=pointer]:
+              - /url: /summary
+            - link "הכנסות" [ref=e41] [cursor=pointer]:
+              - /url: /my-plan/income
+            - link "הוצאות" [ref=e42] [cursor=pointer]:
+              - /url: /my-plan/expense
+            - link "יעדים" [ref=e43] [cursor=pointer]:
+              - /url: /my-plan/goals
+            - link "נכסים" [ref=e44] [cursor=pointer]:
+              - /url: /my-plan/assets
+            - link "התחייבויות" [ref=e45] [cursor=pointer]:
+              - /url: /my-plan/debt
+          - link "portfolio השקעות" [ref=e46] [cursor=pointer]:
+            - /url: /portfolio
+            - img "portfolio" [ref=e47]
+            - text: השקעות
+          - link "recommendations המלצות 6" [ref=e72] [cursor=pointer]:
+            - /url: /recommendations
+            - img "recommendations" [ref=e49]
+            - text: המלצות
+            - generic [ref=e73]: "6"
+          - link "metrics התקדמות" [ref=e50] [cursor=pointer]:
+            - /url: /metrics
+            - img "metrics" [ref=e51]
+            - text: התקדמות
+          - generic [ref=e53] [cursor=pointer]:
+            - img "insights" [ref=e54]
+            - text: תובנות
+          - generic [ref=e55]:
+            - link "תזרים כספי" [ref=e56] [cursor=pointer]:
+              - /url: /cashflow
+            - link "שווי נקי" [ref=e57] [cursor=pointer]:
+              - /url: /networth
+            - link "ציר זמן" [ref=e58] [cursor=pointer]:
+              - /url: /timeline
+            - link "יעדים" [ref=e59] [cursor=pointer]:
+              - /url: /goals
+          - generic [ref=e61] [cursor=pointer]:
+            - img "plus" [ref=e62]
+            - text: תכנון פלוס
+      - main [ref=e63]:
+        - generic [ref=e66]:
+          - generic [ref=e74]:
+            - heading "שווי נקי" [level=1] [ref=e75]
+            - link "legend הסבר על עמוד זה" [ref=e76] [cursor=pointer]:
+              - /url: /article/74/דף-שווי-נקי
+              - img "legend" [ref=e77]
+              - text: הסבר על עמוד זה
+          - generic [ref=e78]:
+            - generic [ref=e79]:
+              - heading "מדד פלנגרם" [level=5] [ref=e80]
+              - generic [ref=e81]: "100"
+              - text: מעולה
+            - generic [ref=e82]:
+              - heading "מדד הצמיחה" [level=5] [ref=e83]
+              - generic [ref=e84]: 12%
+              - text: מעולה
+            - generic [ref=e85]:
+              - heading "נכסים" [level=5] [ref=e86]
+              - generic [ref=e87]: ₪2.7M
+            - generic [ref=e88]:
+              - heading "הלוואות" [level=5] [ref=e89]
+              - generic [ref=e90]: ₪99.6K
+          - generic [ref=e94]:
+            - heading "שווי נקי" [level=4] [ref=e95]
+            - generic [ref=e96]:
+              - generic [ref=e97]:
+                - heading "נוכחי" [level=5] [ref=e98]
+                - generic [ref=e99]: ₪2.7M
+              - generic [ref=e100]:
+                - heading "בפרישה" [level=5] [ref=e101]
+                - generic [ref=e102]: ₪46.6M
+            - generic [ref=e103]: לפי כלל הנתונים שהזנת, השווי הנקי שלך בגיל 80 צפוי להיות בסך 53.76M₪
+          - generic [ref=e109]:
+            - heading "גרף נכסים" [level=4] [ref=e110]
+            - generic [ref=e113]:
+              - button "אפשרויות גרף" [ref=e115] [cursor=pointer]:
+                - generic [ref=e116]: 
+              - generic [ref=e118]:
+                - generic "עובר ושב" [ref=e119] [cursor=pointer]:
+                  - generic [ref=e121]: עובר ושב
+                - generic "נכס נדלן 1" [ref=e122] [cursor=pointer]:
+                  - generic [ref=e124]: נכס נדלן 1
+                - generic "שווי השתלמות לעצמאים" [ref=e125] [cursor=pointer]:
+                  - generic [ref=e127]: שווי השתלמות לעצמאים
+                - generic "שווי קרן השתלמות - linx" [ref=e128] [cursor=pointer]:
+                  - generic [ref=e130]: שווי קרן השתלמות - linx
+                - generic "שווי קרן השתלמות - טרנזיט" [ref=e131] [cursor=pointer]:
+                  - generic [ref=e133]: שווי קרן השתלמות - טרנזיט
+                - generic "שווי קרן השתלמות Chase" [ref=e134] [cursor=pointer]:
+                  - generic [ref=e136]: שווי קרן השתלמות Chase
+                - generic "שווי קרן חירום" [ref=e137] [cursor=pointer]:
+                  - generic [ref=e139]: שווי קרן חירום
+          - generic [ref=e143]:
+            - heading "גרף התחייבויות" [level=4] [ref=e144]
+            - generic [ref=e147]:
+              - button "אפשרויות גרף" [ref=e149] [cursor=pointer]:
+                - generic [ref=e150]: 
+              - generic [ref=e152]:
+                - generic "הלוואה משכנתא - 10 שנים" [ref=e153] [cursor=pointer]:
+                  - generic [ref=e155]: הלוואה משכנתא - 10 שנים
+                - generic "משלימה למשכנתא - פריים" [ref=e156] [cursor=pointer]:
+                  - generic [ref=e158]: משלימה למשכנתא - פריים
+  - iframe [ref=e70]:
+    
+  - button "צ'אט" [ref=e71] [cursor=pointer]:
+    - generic:
+      - img
+    - generic:
+      - img

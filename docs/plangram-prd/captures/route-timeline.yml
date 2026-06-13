@@ -1,0 +1,222 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e3]:
+    - banner [ref=e4]:
+      - generic [ref=e5]:
+        - link [ref=e6] [cursor=pointer]:
+          - /url: /overview
+          - img [ref=e7]
+        - link:
+          - /url: /overview
+      - generic [ref=e10]:
+        - generic [ref=e11]:
+          - button "התוכנית של Yarin Sasson" [ref=e14] [cursor=pointer]:
+            - generic [ref=e15]: התוכנית של Yarin Sasson
+          - button "הגדרות תחזית" [ref=e17] [cursor=pointer]:
+            - img [ref=e19]
+        - generic [ref=e21]:
+          - generic [ref=e23] [cursor=pointer]:
+            - img "profile" [ref=e24]
+            - text: תמיכה ועזרה
+          - button "תפריט משתמש" [ref=e26] [cursor=pointer]:
+            - generic [ref=e28]: Yarin
+    - generic [ref=e30]:
+      - navigation [ref=e31]:
+        - generic [ref=e33]:
+          - link "home מבט על" [ref=e34] [cursor=pointer]:
+            - /url: /overview
+            - img "home" [ref=e35]
+            - text: מבט על
+          - generic [ref=e37] [cursor=pointer]:
+            - img "plan" [ref=e38]
+            - text: התוכנית שלי
+          - generic [ref=e39]:
+            - link "סיכום" [ref=e40] [cursor=pointer]:
+              - /url: /summary
+            - link "הכנסות" [ref=e41] [cursor=pointer]:
+              - /url: /my-plan/income
+            - link "הוצאות" [ref=e42] [cursor=pointer]:
+              - /url: /my-plan/expense
+            - link "יעדים" [ref=e43] [cursor=pointer]:
+              - /url: /my-plan/goals
+            - link "נכסים" [ref=e44] [cursor=pointer]:
+              - /url: /my-plan/assets
+            - link "התחייבויות" [ref=e45] [cursor=pointer]:
+              - /url: /my-plan/debt
+          - link "portfolio השקעות" [ref=e46] [cursor=pointer]:
+            - /url: /portfolio
+            - img "portfolio" [ref=e47]
+            - text: השקעות
+          - link "recommendations המלצות 6" [ref=e72] [cursor=pointer]:
+            - /url: /recommendations
+            - img "recommendations" [ref=e49]
+            - text: המלצות
+            - generic [ref=e73]: "6"
+          - link "metrics התקדמות" [ref=e50] [cursor=pointer]:
+            - /url: /metrics
+            - img "metrics" [ref=e51]
+            - text: התקדמות
+          - generic [ref=e53] [cursor=pointer]:
+            - img "insights" [ref=e54]
+            - text: תובנות
+          - generic [ref=e55]:
+            - link "תזרים כספי" [ref=e56] [cursor=pointer]:
+              - /url: /cashflow
+            - link "שווי נקי" [ref=e57] [cursor=pointer]:
+              - /url: /networth
+            - link "ציר זמן" [ref=e58] [cursor=pointer]:
+              - /url: /timeline
+            - link "יעדים" [ref=e59] [cursor=pointer]:
+              - /url: /goals
+          - generic [ref=e61] [cursor=pointer]:
+            - img "plus" [ref=e62]
+            - text: תכנון פלוס
+      - main [ref=e63]:
+        - generic [ref=e66]:
+          - generic [ref=e74]:
+            - heading "ציר זמן" [level=1] [ref=e75]
+            - link "legend הסבר על עמוד זה" [ref=e76] [cursor=pointer]:
+              - /url: /article/124/%D7%A6%D7%99%D7%A8-%D7%94%D7%96%D7%9E%D7%9F-%D7%94%D7%A6%D7%A6%D7%94-%D7%9C%D7%90%D7%99%D7%9A-%D7%99%D7%A8%D7%90%D7%94-%D7%9B%D7%9C-%D7%97%D7%95%D7%93%D7%A9-%D7%91%D7%A2%D7%AA%D7%99%D7%93-%D7%A9%D7%9C%D7%9B%D7%9D
+              - img "legend" [ref=e77]
+              - text: הסבר על עמוד זה
+          - generic [ref=e78]:
+            - generic [ref=e79]:
+              - button "הכנסות (630)" [ref=e80] [cursor=pointer]:
+                - generic [ref=e82]: הכנסות
+                - generic [ref=e83]: (630)
+              - button "הוצאות (630)" [ref=e84] [cursor=pointer]:
+                - generic [ref=e86]: הוצאות
+                - generic [ref=e87]: (630)
+              - button "הלוואות (104)" [ref=e88] [cursor=pointer]:
+                - generic [ref=e90]: הלוואות
+                - generic [ref=e91]: (104)
+              - button "הפקדות לתיקים (630)" [ref=e92] [cursor=pointer]:
+                - generic [ref=e94]: הפקדות לתיקים
+                - generic [ref=e95]: (630)
+              - button "יעדים (4)" [ref=e96] [cursor=pointer]:
+                - generic [ref=e98]: יעדים
+                - generic [ref=e99]: (4)
+              - button "תכנון פרישה (2)" [ref=e100] [cursor=pointer]:
+                - generic [ref=e102]: תכנון פרישה
+                - generic [ref=e103]: (2)
+            - button "מציג כל השנים " [ref=e105] [cursor=pointer]:
+              - generic [ref=e106]: מציג כל השנים
+              - text: 
+          - generic [ref=e107]:
+            - generic [ref=e109]:
+              - generic [ref=e111]: יוני 2026
+              - generic [ref=e113]:
+                - generic [ref=e114]:
+                  - heading "הכנסות ₪30,000" [level=2] [ref=e115]:
+                    - button "הכנסות ₪30,000" [expanded] [ref=e116] [cursor=pointer]:
+                      - generic [ref=e117]: הכנסות
+                      - generic [ref=e118]: ₪30,000
+                  - generic [ref=e124]:
+                    - generic [ref=e126]: סך ההכנסה נטו של משק הבית
+                    - generic [ref=e127]: ₪30,000
+                - heading "הוצאות ₪11,663" [level=2] [ref=e129]:
+                  - button "הוצאות ₪11,663" [ref=e130] [cursor=pointer]:
+                    - generic [ref=e131]: הוצאות
+                    - generic [ref=e132]: ₪11,663
+                - heading "הלוואות ₪1,606" [level=2] [ref=e134]:
+                  - button "הלוואות ₪1,606" [ref=e135] [cursor=pointer]:
+                    - generic [ref=e136]: הלוואות
+                    - generic [ref=e137]: ₪1,606
+                - heading "הפקדות לתיקים ₪16,731" [level=2] [ref=e139]:
+                  - button "הפקדות לתיקים ₪16,731" [ref=e140] [cursor=pointer]:
+                    - generic [ref=e141]: הפקדות לתיקים
+                    - generic [ref=e142]: ₪16,731
+            - generic [ref=e143]:
+              - generic [ref=e145]: יולי 2026
+              - generic [ref=e147]:
+                - generic [ref=e148]:
+                  - heading "הכנסות ₪30,000" [level=2] [ref=e149]:
+                    - button "הכנסות ₪30,000" [expanded] [ref=e150] [cursor=pointer]:
+                      - generic [ref=e151]: הכנסות
+                      - generic [ref=e152]: ₪30,000
+                  - generic [ref=e158]:
+                    - generic [ref=e160]: סך ההכנסה נטו של משק הבית
+                    - generic [ref=e161]: ₪30,000
+                - heading "הוצאות ₪11,663" [level=2] [ref=e163]:
+                  - button "הוצאות ₪11,663" [ref=e164] [cursor=pointer]:
+                    - generic [ref=e165]: הוצאות
+                    - generic [ref=e166]: ₪11,663
+                - heading "הלוואות ₪1,606" [level=2] [ref=e168]:
+                  - button "הלוואות ₪1,606" [ref=e169] [cursor=pointer]:
+                    - generic [ref=e170]: הלוואות
+                    - generic [ref=e171]: ₪1,606
+                - heading "הפקדות לתיקים ₪16,731" [level=2] [ref=e173]:
+                  - button "הפקדות לתיקים ₪16,731" [ref=e174] [cursor=pointer]:
+                    - generic [ref=e175]: הפקדות לתיקים
+                    - generic [ref=e176]: ₪16,731
+            - generic [ref=e177]:
+              - generic [ref=e179]: אוגוסט 2026
+              - generic [ref=e181]:
+                - generic [ref=e182]:
+                  - heading "הכנסות ₪30,000" [level=2] [ref=e183]:
+                    - button "הכנסות ₪30,000" [expanded] [ref=e184] [cursor=pointer]:
+                      - generic [ref=e185]: הכנסות
+                      - generic [ref=e186]: ₪30,000
+                  - generic [ref=e192]:
+                    - generic [ref=e194]: סך ההכנסה נטו של משק הבית
+                    - generic [ref=e195]: ₪30,000
+                - heading "הוצאות ₪11,663" [level=2] [ref=e197]:
+                  - button "הוצאות ₪11,663" [ref=e198] [cursor=pointer]:
+                    - generic [ref=e199]: הוצאות
+                    - generic [ref=e200]: ₪11,663
+                - heading "הלוואות ₪1,606" [level=2] [ref=e202]:
+                  - button "הלוואות ₪1,606" [ref=e203] [cursor=pointer]:
+                    - generic [ref=e204]: הלוואות
+                    - generic [ref=e205]: ₪1,606
+                - heading "הפקדות לתיקים ₪16,731" [level=2] [ref=e207]:
+                  - button "הפקדות לתיקים ₪16,731" [ref=e208] [cursor=pointer]:
+                    - generic [ref=e209]: הפקדות לתיקים
+                    - generic [ref=e210]: ₪16,731
+            - generic [ref=e211]:
+              - generic [ref=e213]: ספטמבר 2026
+              - generic [ref=e215]:
+                - generic [ref=e216]:
+                  - heading "הכנסות ₪30,000" [level=2] [ref=e217]:
+                    - button "הכנסות ₪30,000" [expanded] [ref=e218] [cursor=pointer]:
+                      - generic [ref=e219]: הכנסות
+                      - generic [ref=e220]: ₪30,000
+                  - generic [ref=e226]:
+                    - generic [ref=e228]: סך ההכנסה נטו של משק הבית
+                    - generic [ref=e229]: ₪30,000
+                - heading "הוצאות ₪11,663" [level=2] [ref=e231]:
+                  - button "הוצאות ₪11,663" [ref=e232] [cursor=pointer]:
+                    - generic [ref=e233]: הוצאות
+                    - generic [ref=e234]: ₪11,663
+                - heading "הלוואות ₪1,606" [level=2] [ref=e236]:
+                  - button "הלוואות ₪1,606" [ref=e237] [cursor=pointer]:
+                    - generic [ref=e238]: הלוואות
+                    - generic [ref=e239]: ₪1,606
+                - heading "הפקדות לתיקים ₪16,731" [level=2] [ref=e241]:
+                  - button "הפקדות לתיקים ₪16,731" [ref=e242] [cursor=pointer]:
+                    - generic [ref=e243]: הפקדות לתיקים
+                    - generic [ref=e244]: ₪16,731
+          - generic [ref=e246]:
+            - img "portfolio" [ref=e248]
+            - heading "צפו בציר הזמן המלא שלכם" [level=2] [ref=e249]
+            - paragraph [ref=e250]: עוד 626 חודשים ממתינים לכם
+            - list [ref=e251]:
+              - listitem [ref=e252]:
+                - generic [ref=e253]: צפייה בכל האירועים הפיננסים העתידיים
+              - listitem [ref=e254]:
+                - generic [ref=e255]: תכנון מדויק של הכנסות, הוצאות והפקדות
+              - listitem [ref=e256]:
+                - generic [ref=e257]: מעקב אחר יעדים והלוואות לאורך זמן
+              - listitem [ref=e258]:
+                - generic [ref=e259]: תמונה מלאה של העתיד הפיננסי שלכם
+            - link "קראו עוד על ציר הזמן >" [ref=e260] [cursor=pointer]:
+              - /url: /article/124/ציר-הזמן-הצצה-לאיך-יראה-כל-חודש-בעתיד-שלכם
+            - link "plus לשדרוג לפלנגרם פלוס" [ref=e261] [cursor=pointer]:
+              - /url: /plus-signup
+              - img "plus" [ref=e262]
+              - text: לשדרוג לפלנגרם פלוס
+  - iframe [ref=e70]:
+    
+  - button "צ'אט" [ref=e71] [cursor=pointer]:
+    - generic:
+      - img
+    - generic:
+      - img

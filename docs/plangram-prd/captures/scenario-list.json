@@ -1,0 +1,23 @@
+{
+  "_note": "schema only — GET /Scenario/List response (double-encoded JSON string)",
+  "envelope_keys": [
+    "success",
+    "data",
+    "currentScenarioId"
+  ],
+  "item_keys": [
+    "id",
+    "name",
+    "description",
+    "retirementAge",
+    "partnerRetirementAge",
+    "globalEmergencyFund",
+    "globalInheritanceFund",
+    "netWorthAtRetirement",
+    "isConservativeForecast",
+    "inflationRate",
+    "isDefault",
+    "updatedDate"
+  ],
+  "count": 1
+}

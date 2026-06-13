@@ -1,0 +1,210 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e3]:
+    - banner [ref=e4]:
+      - generic [ref=e5]:
+        - link [ref=e6] [cursor=pointer]:
+          - /url: /overview
+          - img [ref=e7]
+        - link:
+          - /url: /overview
+      - generic [ref=e10]:
+        - generic [ref=e11]:
+          - button "התוכנית של Yarin Sasson" [ref=e14] [cursor=pointer]:
+            - generic [ref=e15]: התוכנית של Yarin Sasson
+          - button "הגדרות תחזית" [ref=e17] [cursor=pointer]:
+            - img [ref=e19]
+        - generic [ref=e21]:
+          - generic [ref=e23] [cursor=pointer]:
+            - img "profile" [ref=e24]
+            - text: תמיכה ועזרה
+          - button "תפריט משתמש" [ref=e26] [cursor=pointer]:
+            - generic [ref=e28]: Yarin
+    - generic [ref=e30]:
+      - navigation [ref=e31]:
+        - generic [ref=e33]:
+          - link "home מבט על" [ref=e34] [cursor=pointer]:
+            - /url: /overview
+            - img "home" [ref=e35]
+            - text: מבט על
+          - generic [ref=e37] [cursor=pointer]:
+            - img "plan" [ref=e38]
+            - text: התוכנית שלי
+          - generic [ref=e39]:
+            - link "סיכום" [ref=e40] [cursor=pointer]:
+              - /url: /summary
+            - link "הכנסות" [ref=e41] [cursor=pointer]:
+              - /url: /my-plan/income
+            - link "הוצאות" [ref=e42] [cursor=pointer]:
+              - /url: /my-plan/expense
+            - link "יעדים" [ref=e43] [cursor=pointer]:
+              - /url: /my-plan/goals
+            - link "נכסים" [ref=e44] [cursor=pointer]:
+              - /url: /my-plan/assets
+            - link "התחייבויות" [ref=e45] [cursor=pointer]:
+              - /url: /my-plan/debt
+          - link "portfolio השקעות" [ref=e46] [cursor=pointer]:
+            - /url: /portfolio
+            - img "portfolio" [ref=e47]
+            - text: השקעות
+          - link "recommendations המלצות 6" [ref=e67] [cursor=pointer]:
+            - /url: /recommendations
+            - img "recommendations" [ref=e49]
+            - text: המלצות
+            - generic [ref=e68]: "6"
+          - link "metrics התקדמות" [ref=e50] [cursor=pointer]:
+            - /url: /metrics
+            - img "metrics" [ref=e51]
+            - text: התקדמות
+          - generic [ref=e53] [cursor=pointer]:
+            - img "insights" [ref=e54]
+            - text: תובנות
+          - generic [ref=e56] [cursor=pointer]:
+            - img "plus" [ref=e57]
+            - text: תכנון פלוס
+      - main [ref=e58]:
+        - generic [ref=e61]:
+          - generic [ref=e69]:
+            - heading "היי Yarin Sasson," [level=1] [ref=e70]
+            - generic [ref=e71]: להלן מבט מהיר לתמונת המצב הפיננסית שלך
+          - generic [ref=e72]:
+            - img "update-balances" [ref=e73]
+            - generic [ref=e74]: הגיע זמן לעדכן כמה נתונים כדי לשמור על המערכת מדויקת
+            - link "לעדכון יתרות" [ref=e75] [cursor=pointer]:
+              - /url: "#profile/update-balances"
+          - generic [ref=e77]:
+            - generic [ref=e85] [cursor=pointer]:
+              - generic [ref=e86]:
+                - generic [ref=e87]: שווי נקי נוכחי
+                - generic "סך כל הנכסים שלך פחות התחייבויות" [ref=e88]:
+                  - img "tooltip" [ref=e89]
+              - generic [ref=e90]: ₪2,632,507
+              - generic [ref=e91]:
+                - generic [ref=e92]: ₪1K
+                - generic [ref=e93]: משבוע שעבר
+            - generic [ref=e97] [cursor=pointer]:
+              - generic [ref=e98]:
+                - generic [ref=e99]:
+                  - text: הסיכוי לעמידה ביעדים
+                  - generic "במספר אחד מגלים מה הסיכוי שלנו לעמוד בכל היעדים הפיננסיים שלנו." [ref=e100]:
+                    - img "tooltip" [ref=e101]
+                - generic [ref=e102]: 100%
+                - generic [ref=e103]: יש לך סיכוי של 100% לממן את התוכנית שלך במלואה.
+              - img "butterfly" [ref=e105]
+          - generic [ref=e106]:
+            - generic [ref=e110]:
+              - generic [ref=e111]:
+                - heading "הפרופיל שלך מוכן!" [level=4] [ref=e112]
+                - generic [ref=e113]: כל הכבוד! השלמת את הפרופיל שלך. כצעד ראשון, מומלץ לצאת לסיור קצר כדי להכיר את כל הכלים שיעזרו לך למקסם את התוכנית שלך.
+                - button "יאללה, לסיור!" [ref=e114] [cursor=pointer]
+              - img "profile-complete" [ref=e116]
+            - generic [ref=e119]:
+              - generic [ref=e120]:
+                - heading "המלצות" [level=4] [ref=e121]
+                - button "לכל המלצות 6" [ref=e122] [cursor=pointer]:
+                  - text: לכל המלצות
+                  - generic [ref=e123]: "6"
+              - generic [ref=e125]:
+                - generic [ref=e126] [cursor=pointer]:
+                  - img "lightning" [ref=e128]
+                  - generic [ref=e129]: קיים תזרים לא מנוצל
+                - generic [ref=e131] [cursor=pointer]:
+                  - img "lightning" [ref=e133]
+                  - generic [ref=e134]: בחשבון עו"ש יש יתרה גבוהה מהיעד
+                - generic [ref=e136] [cursor=pointer]:
+                  - img "lightning" [ref=e138]
+                  - generic [ref=e139]: איך להפיק את המיטב מפלנגרם?
+          - generic [ref=e142]:
+            - heading "סימולציית פלנגרם גולת הכותרת של פלנגרם היא סימולציית עתיד שמציגה ויזואלית מאילו מקורות תקציב נכסה את היעדים שלנו. החתיכה החסרה מצביעה על היעדים שנתקשה לכסות והעיתוי שלהם." [level=4] [ref=e143]:
+              - text: סימולציית פלנגרם
+              - generic "גולת הכותרת של פלנגרם היא סימולציית עתיד שמציגה ויזואלית מאילו מקורות תקציב נכסה את היעדים שלנו. החתיכה החסרה מצביעה על היעדים שנתקשה לכסות והעיתוי שלהם." [ref=e144]:
+                - img "tooltip" [ref=e145]
+            - generic [ref=e146]:
+              - generic [ref=e147]:
+                - generic [ref=e149]:
+                  - heading "מדד פלנגרם" [level=5] [ref=e150]
+                  - generic [ref=e151]: "100"
+                  - text: מעולה
+                - generic [ref=e152]: "הישג מרשים! מדד פלנגרם גבוה הוא הגביע הקדוש של התיכנון הפיננסי. האיזון הכלכלי שלך בין רמת החיים שלך היום לבין התכנון לעתיד כמעט מושלם: לא רק שאתה חי ברווחה, אתה גם צועד בביטחון לעבר היעדים שסימנת לעצמך."
+              - generic [ref=e154]:
+                - button "אפשרויות גרף" [ref=e156] [cursor=pointer]:
+                  - generic [ref=e157]: 
+                - generic [ref=e159]:
+                  - generic "הכנסות מעבודה" [ref=e160] [cursor=pointer]:
+                    - generic [ref=e162]: הכנסות מעבודה
+                  - generic "הכנסה מקצבאות" [ref=e163] [cursor=pointer]:
+                    - generic [ref=e165]: הכנסה מקצבאות
+          - generic [ref=e174]:
+            - generic [ref=e175]:
+              - heading "מדדים מובילים הערכת התוכנית שלך לפי מדדים פיננסיים מרכזיים לזיהוי החוזקות וההזדמנויות לשיפור." [level=4] [ref=e176]:
+                - text: מדדים מובילים
+                - generic "הערכת התוכנית שלך לפי מדדים פיננסיים מרכזיים לזיהוי החוזקות וההזדמנויות לשיפור." [ref=e177]:
+                  - img "tooltip" [ref=e178]
+              - button "לעמוד התקדמות" [ref=e179] [cursor=pointer]
+            - generic [ref=e180]:
+              - generic [ref=e181]:
+                - heading "אחוז חיסכון" [level=5] [ref=e182]
+                - generic [ref=e183]: 0%
+                - text: לא משהו
+              - generic [ref=e184]:
+                - heading "חתיכה עודפת" [level=5] [ref=e185]
+                - generic [ref=e186]: ₪16.7K
+                - text: לא משהו
+              - generic [ref=e187]:
+                - heading "אחוז החזר חוב" [level=5] [ref=e188]
+                - generic [ref=e189]: 5%
+                - text: מעולה
+              - generic [ref=e190]:
+                - heading "חתיכה חסרה" [level=5] [ref=e191]
+                - generic [ref=e192]: ₪0
+                - text: מעולה
+          - generic [ref=e193]:
+            - generic [ref=e196]:
+              - heading "התזרים" [level=4] [ref=e197]
+              - generic [ref=e198]: נכון להיום
+              - generic [ref=e202]:
+                - generic [ref=e203]:
+                  - heading "תזרים" [level=5] [ref=e204]
+                  - generic [ref=e205]: ₪16.7K
+                - generic [ref=e206]:
+                  - heading "הכנסות" [level=5] [ref=e207]
+                  - generic [ref=e208]: ₪30K
+                - generic [ref=e209]:
+                  - heading "הוצאות" [level=5] [ref=e210]
+                  - generic [ref=e211]: ₪13.3K
+            - generic [ref=e217]:
+              - generic [ref=e218]:
+                - heading "פיזור נכסים" [level=4] [ref=e219]
+                - generic [ref=e220]: נכון להיום
+              - generic [ref=e223]:
+                - generic [ref=e224] [cursor=pointer]:
+                  - generic [ref=e226]: נדלן
+                  - generic [ref=e227]: 84.2%
+                - generic [ref=e228] [cursor=pointer]:
+                  - generic [ref=e230]: פנסיה
+                  - generic [ref=e231]: 9.8%
+                - generic [ref=e232] [cursor=pointer]:
+                  - generic [ref=e234]: השתלמות
+                  - generic [ref=e235]: 4.4%
+                - generic [ref=e236] [cursor=pointer]:
+                  - generic [ref=e238]: תיקים
+                  - generic [ref=e239]: 1.2%
+                - generic [ref=e240] [cursor=pointer]:
+                  - generic [ref=e242]: עובר ושב
+                  - generic [ref=e243]: 0.3%
+          - generic [ref=e251]:
+            - heading "שווי נקי" [level=4] [ref=e252]
+            - generic [ref=e253]:
+              - generic [ref=e254]:
+                - heading "נוכחי" [level=5] [ref=e255]
+                - generic [ref=e256]: ₪2.7M
+              - generic [ref=e257]:
+                - heading "בפרישה" [level=5] [ref=e258]
+                - generic [ref=e259]: ₪46.6M
+            - generic [ref=e260]: לפי כלל הנתונים שהזנת, השווי הנקי שלך בגיל 80 צפוי להיות בסך 53.76M₪
+  - button "צ'אט" [ref=e65] [cursor=pointer]:
+    - generic:
+      - img
+    - generic:
+      - img
+  - iframe [ref=e66]:
+    
