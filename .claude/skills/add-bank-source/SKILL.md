@@ -41,7 +41,9 @@ Existing examples to copy from (read the closest one first):
 | 9222 | `~/.chrome-cdp-riseup` | RiseUp |
 | 9223 | `~/.chrome-cdp-discount` | Discount (personal + business + mortgage share this) |
 | 9224 | `~/.chrome-cdp-leumi` | Leumi |
-| **9225+** | `~/.chrome-cdp-<source>` | **← next new source** |
+| 9225 | `~/.chrome-cdp-cal` | CAL / cal-online (כאל credit cards) |
+| 9226 | `~/.chrome-cdp-amex` | American Express Israel (Isracard/ICC-operated) |
+| **9227+** | `~/.chrome-cdp-<source>` | **← next new source** |
 
 > Sources behind the **same login** can share a port/profile (as the three
 > Discount apps do). A genuinely separate institution gets its own.
@@ -66,11 +68,22 @@ the endpoint list goes.
 ```bash
 /Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome \
   --remote-debugging-port=<PORT> --user-data-dir="$HOME/.chrome-cdp-<NAME>" \
+  --no-first-run --no-default-browser-check --new-window \
   "<LOGIN_URL>" >/tmp/chrome-cdp-<NAME>.log 2>&1 &
-sleep 4
-playwright-cli -s=<NAME> attach --cdp=http://localhost:<PORT>
+# poll until the port actually binds (don't trust a fixed sleep)
+for i in $(seq 1 10); do sleep 2; curl -s "http://127.0.0.1:<PORT>/json/version" | grep -q Browser && break; done
+playwright-cli -s=<NAME> attach --cdp=http://127.0.0.1:<PORT>   # 127.0.0.1, NOT localhost
 playwright-cli -s=<NAME> tab-select 0
 ```
+
+> **Launch/attach gotchas (hit on AMEX):**
+> - Attach via **`127.0.0.1`**, never `localhost` — playwright-cli resolves
+>   `localhost`→`::1` (IPv6) and Chrome only listens on IPv4, giving
+>   `ECONNREFUSED ::1:<PORT>`.
+> - On macOS the launcher sometimes prints `DevTools listening …` then **exits
+>   without binding** (multi-instance handoff). If `curl /json/version` returns
+>   nothing, clear `Singleton*` in the profile and relaunch with `--new-window`;
+>   poll the port in a loop (above) instead of a one-shot `sleep`.
 
 ### 3. USER logs in. Confirm:
 ```bash

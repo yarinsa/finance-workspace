@@ -14,15 +14,26 @@ Personal finance management workspace. Data is pulled from Israeli banks and cre
 ## Data pipeline
 
 ```
-data/<source>/raw/  --(<source>/normalize.py)-->  data/<source>/normalized/  --(data/digest.py)-->  data/digested/snapshot.{json,md}
+data/<source>/raw/  --(<source>/normalize.py)-->  data/<source>/normalized/
+                                                          |
+                                                  data/digest.py
+                                                          |
+                    data/digested/{transactions.json, snapshot.json, snapshot.md}
 ```
 
 Each source has its own refresh skill that scrapes a logged-in Chrome via CDP into
 `raw/`, plus a self-contained `normalize.py` that emits a common envelope
 (`{source, entity, generated_at, records}`). `data/digest.py` runs every source's
-normalizer, then combines all `normalized/*.json` into one consolidated snapshot.
+normalizer, then combines all `normalized/*.json` into:
+
+- **`data/digested/transactions.json`** — one deduped, queryable transaction ledger
+  across every source (matched on `(date, abs amount)`; RiseUp's category-tagged copy
+  wins on conflict; `sources: [...]` records every scraper that saw it). Includes a
+  spending `summary` by category and origin.
+- **`data/digested/snapshot.{json,md}`** — headline net-worth / debt position.
 
 Run `python3 data/digest.py` (or `--no-normalize` to combine existing output only).
+See `CLAUDE.md` for the dedup rules and conventions.
 
 | Source | Raw | normalize.py | Entities emitted |
 |---|:--:|:--:|---|
@@ -30,7 +41,9 @@ Run `python3 data/digest.py` (or `--no-normalize` to combine existing output onl
 | `discount-business` (SME checking) | ✅ | ✅ | accounts, credit_cards, transactions |
 | `discount-mortgage` (mortgage + loans) | ✅ | ✅ | loans |
 | `leumi` (checking + loan total) | ✅ | ✅ | accounts, loans, transactions |
-| `riseup` (aggregator) | ✅ | ✅ | accounts, credit_cards, income, subscription |
+| `cal` (CAL credit cards) | ✅ | ✅ | credit_cards, transactions |
+| `amex` (American Express / Isracard) | ✅ | ✅ | credit_cards, transactions |
+| `riseup` (aggregator) | ✅ | ✅ | accounts, credit_cards, income, subscription, transactions |
 
 ## Goals
 
