@@ -32,6 +32,105 @@ def load_entities():
     return entities
 
 
+# --- Internal-transfer detection -------------------------------------------
+# Money moved between the household's OWN accounts is not cashflow — it's the
+# same shekels in two ledgers. The dedup key (date, abs amount) already collapses
+# the clean same-day both-legs case into one row; what survives is a single leg
+# whose counterpart sits in another of our accounts (or an untracked personal
+# account, e.g. Bank Hapoalim). The reliable signal is the description naming the
+# household member or one of our own account numbers. We TAG these
+# (`internal_transfer: true`) rather than drop them — the ledger stays complete
+# and auditable; the spending summary and cashflow exclude them.
+#
+# NOTE: tuned to this household. Update OWN_NAMES / OWN_ACCOUNT_HINTS if accounts
+# or holders change. External salary ("העברת משכורת", "בנק לאומי משכורת") does NOT
+# name the holder, so it is correctly kept as real income.
+OWN_NAMES = ["ירין ששון", "ששון ירין"]
+OWN_ACCOUNT_HINTS = ["806-6719", "806-671963", "10-806", "0034069", "0123444499"]
+# Account-sweep descriptions that don't name the holder but are confirmed self-
+# transfers between our own accounts. "העברה דיגיטל" always originates from the
+# Leumi account and empties it to ~0, matched by a "+X העברה מירין ששון" inbound
+# on Discount — i.e. a Leumi→Discount sweep. Treated as internal.
+OWN_TRANSFER_DESCRIPTIONS = ["העברה דיגיטל"]
+
+
+def is_internal_transfer(rec):
+    """True if the transaction is a move between the household's own accounts.
+
+    Matches on the description referencing an own holder name, own account
+    number, or a known self-transfer phrase. Conservative: only fires on a
+    positive signal, so external transfers (real income/expense) are kept.
+    """
+    desc = rec.get("description") or ""
+    if any(n in desc for n in OWN_NAMES):
+        return True
+    if any(a in desc for a in OWN_ACCOUNT_HINTS):
+        return True
+    if any(p in desc for p in OWN_TRANSFER_DESCRIPTIONS):
+        return True
+    return False
+
+
+# --- Credit-card bill settlement -------------------------------------------
+# A card BILL payment (bank account → card issuer) is not spend: the underlying
+# purchases are already in the ledger as individual card transactions, so
+# counting the monthly settlement too double-counts. These rows are bank-side
+# debits whose description is the issuer's clearing name + "חיוב". Tagged
+# `card_bill_payment: true` and excluded from cashflow/summary.
+#
+# Scoped to bank origins so we never catch an actual purchase. Phrase list is the
+# clearing names seen in the dumps (CAL/Diners, Amex, Isracard/Mastercard, Max).
+CARD_BILL_PHRASES = [
+    "דיינרס", "אמריקן אקס", "מאסטרקרד", "מסטרקארד", "ל.מאסטרקרד",
+    "ויזה כ.א.ל", "כרטיסי אשראי", "מקס איט", "max", "ישראכרט", "כאל",
+]
+BANK_ORIGINS = {"discount", "discount-business", "leumi"}
+
+
+def is_card_bill_payment(rec):
+    """True if this is a bank→card-issuer monthly settlement (not real spend)."""
+    if rec.get("origin") not in BANK_ORIGINS:
+        return False
+    if float(rec.get("amount") or 0) >= 0:        # settlements are debits
+        return False
+    desc = (rec.get("description") or "")
+    low = desc.lower()
+    if "חיוב" in desc and any(p in desc for p in CARD_BILL_PHRASES if p.isascii() is False):
+        return True
+    # ascii issuer names (max) — match on the lowercased description
+    if "חיוב" in desc and any(p in low for p in CARD_BILL_PHRASES if p.isascii()):
+        return True
+    return False
+
+
+# --- Savings / investment deposits -----------------------------------------
+# Money routed into the household's OWN savings or investment vehicles (a liquid
+# deposit, an asset-management standing order). It leaves the checking account
+# (so it's a real outflow) but it is *saved*, not *spent* — Plangram models it as
+# its own bucket. Tagged `savings: true`; cashflow routes it to a "savings"
+# bucket and keeps it out of the spending breakdown.
+# NOTE: "ניהול נכסי" (property management) is deliberately NOT here — the
+# "עיין ניהול נכסי" standing order is RENT, a real living expense, not savings.
+# "ניהול השק" (investment management, e.g. Excellence) stays.
+SAVINGS_PHRASES = [
+    "פיקדון", "פקדון", "ניהול השק", "קרן השתלמות",
+    "אקסלנס", "הראל", "גמל", "השקעות",
+]
+
+
+def is_savings_deposit(rec):
+    """True if this is a deposit into our own savings/investment vehicle."""
+    if float(rec.get("amount") or 0) >= 0:        # a deposit is an outflow
+        return False
+    desc = rec.get("description") or ""
+    # "הפקדה ל..." / standing order to an investment manager
+    if "הפקדה" in desc and ("פיקדון" in desc or "פקדון" in desc):
+        return True
+    if any(p in desc for p in SAVINGS_PHRASES) and ("הפקדה" in desc or 'הו"ק' in desc or "העברה ל" in desc):
+        return True
+    return False
+
+
 # RiseUp tags transactions with its own origin names; map them to our source ids
 # so a CAL charge from riseup and the same charge from data/cal/ dedup together.
 RISEUP_ORIGIN = {
@@ -52,7 +151,7 @@ def _canon_tx(r):
     origin = src
     if src == "riseup":
         origin = RISEUP_ORIGIN.get(r.get("origin"), r.get("origin") or "riseup")
-    return {
+    t = {
         "date": r.get("date", ""),
         "amount": round(r.get("amount", 0), 2),
         "description": r.get("description", ""),
@@ -64,6 +163,13 @@ def _canon_tx(r):
         "account_id": r.get("account_id"),
         "_riseup": src == "riseup",
     }
+    if is_internal_transfer(t):
+        t["internal_transfer"] = True            # excluded from cashflow/summary
+    elif is_card_bill_payment(t):
+        t["card_bill_payment"] = True            # excluded — purchases already in ledger
+    elif is_savings_deposit(t):
+        t["savings"] = True                      # real outflow, but saved not spent
+    return t
 
 
 def consolidate_transactions(txns):
@@ -91,6 +197,18 @@ def consolidate_transactions(txns):
         for f in ("category", "card_last4", "account_id", "origin"):
             if not winner.get(f) and other.get(f):
                 winner[f] = other[f]
+        # Re-evaluate the exclusion flags on the MERGED row rather than OR-ing the
+        # legs. Two unrelated charges can collide on (date, abs amount) — a real
+        # purchase vs a self-transfer of the same value on the same day — and we
+        # must not let one leg's flag taint the other. Trust only the description
+        # that actually survives onto the merged row.
+        for flag, test in (("internal_transfer", is_internal_transfer),
+                           ("card_bill_payment", is_card_bill_payment),
+                           ("savings", is_savings_deposit)):
+            if test(winner):
+                winner[flag] = True
+            else:
+                winner.pop(flag, None)
         if not winner.get("description"):
             winner["description"] = other.get("description", "")
         buckets[key] = winner
@@ -221,7 +339,21 @@ def spending_summary(ledger):
     by_origin = defaultdict(float)
     income = 0.0
     out = 0.0
+    saved = 0.0                       # money routed to our own savings/investments
+    internal_count = 0               # moves between our own accounts
+    bill_count = 0                   # card settlements (purchases already counted)
+    savings_count = 0
+    counted = 0
     for t in ledger:
+        if t.get("internal_transfer") or t.get("card_bill_payment"):
+            internal_count += t.get("internal_transfer", 0) and 1
+            bill_count += t.get("card_bill_payment", 0) and 1
+            continue
+        if t.get("savings"):          # real outflow, but saved — out of the spend total
+            saved += -t["amount"]
+            savings_count += 1
+            continue
+        counted += 1
         amt = t["amount"]
         if t.get("is_income") or amt > 0:
             income += amt
@@ -231,9 +363,13 @@ def spending_summary(ledger):
             by_origin[t.get("origin") or "unknown"] += -amt
     top = sorted(spent.items(), key=lambda kv: kv[1], reverse=True)
     return {
-        "transactions": len(ledger),
+        "transactions": counted,
+        "internal_transfers_excluded": internal_count,
+        "card_bill_payments_excluded": bill_count,
         "total_spent": round(out, 2),
         "total_income": round(income, 2),
+        "total_saved": round(saved, 2),
+        "savings_deposits": savings_count,
         "by_category": {k: round(v, 2) for k, v in top},
         "by_origin": {k: round(v, 2) for k, v in sorted(by_origin.items(), key=lambda kv: kv[1], reverse=True)},
     }

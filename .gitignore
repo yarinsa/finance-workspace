@@ -18,6 +18,10 @@ data/*
 data/*/raw/
 data/*/normalized/
 !data/*/normalize.py
+# Re-including data/*/ above exposes these — they hold real balances/account
+# numbers (digested output) or are throwaway bytecode. Never commit.
+data/digested/
+data/__pycache__/
 riseup-data/
 riseup-session.json
 receipts/

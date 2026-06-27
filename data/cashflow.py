@@ -90,12 +90,17 @@ def aggregate_by_month(transactions):
     months = defaultdict(lambda: {
         "income": 0.0,
         "expense": 0.0,
+        "saved": 0.0,        # routed to own savings/investments — not spend
         "net": 0.0,
         "count": 0,
         "income_by_bucket": defaultdict(float),
         "expense_by_bucket": defaultdict(float),
     })
     for t in transactions:
+        # Not cashflow: money moving between our own accounts, and card-bill
+        # settlements (the underlying purchases are already in the ledger).
+        if t.get("internal_transfer") or t.get("card_bill_payment"):
+            continue
         date = t.get("date")
         if not date or len(date) < 7:
             continue
@@ -104,16 +109,21 @@ def aggregate_by_month(transactions):
         cat = t.get("category")
         m = months[ym]
         m["count"] += 1
-        if t.get("is_income") or amount > 0:
+        if t.get("savings"):              # outflow, but saved not spent
+            m["saved"] += -amount
+        elif t.get("is_income") or amount > 0:
             m["income"] += amount
             m["income_by_bucket"][_income_bucket(cat)] += amount
         else:
             m["expense"] += -amount  # store as positive
             m["expense_by_bucket"][_expense_bucket(cat)] += -amount
     for m in months.values():
-        m["net"] = round(m["income"] - m["expense"], 2)
+        # Net keeps savings on the books (it left the checking account), so the
+        # cashflow line still reflects liquidity. 'saved' is surfaced separately.
+        m["net"] = round(m["income"] - m["expense"] - m["saved"], 2)
         m["income"] = round(m["income"], 2)
         m["expense"] = round(m["expense"], 2)
+        m["saved"] = round(m["saved"], 2)
         m["income_by_bucket"] = {k: round(v, 2) for k, v in m["income_by_bucket"].items()}
         m["expense_by_bucket"] = {k: round(v, 2) for k, v in m["expense_by_bucket"].items()}
     return dict(sorted(months.items()))
@@ -219,7 +229,8 @@ def build_charts(months, current_key):
     cur = months[current_key]
 
     today = {
-        "income": cur["income"], "expense": cur["expense"], "net": cur["net"],
+        "income": cur["income"], "expense": cur["expense"],
+        "saved": cur.get("saved", 0.0), "net": cur["net"],
     }
 
     income_ds = [
@@ -324,6 +335,7 @@ def _write_md(model):
         f"| | {CURRENCY} |", "|---|---:|",
         f"| הכנסות | {t['income']:,.0f} |",
         f"| הוצאות | {t['expense']:,.0f} |",
+        *( [f"| חיסכון | {t['saved']:,.0f} |"] if t.get('saved') else [] ),
         f"| **תזרים** | **{t['net']:,.0f}** |",
         "", "## Metrics", "",
         "| מדד | ערך | דירוג |", "|---|---:|:---:|",
@@ -458,6 +470,7 @@ const t = MODEL.today;
 document.getElementById('today').innerHTML =
   `<div><div class="t">הכנסות</div><div class="n pos">${fmt(t.income,'₪')}</div></div>
    <div><div class="t">הוצאות</div><div class="n neg">${fmt(t.expense,'₪')}</div></div>
+   ${t.saved ? `<div><div class="t">חיסכון</div><div class="n" style="color:var(--accent)">${fmt(t.saved,'₪')}</div></div>` : ''}
    <div><div class="t">תזרים</div><div class="n ${t.net>=0?'pos':'neg'}">${fmt(t.net,'₪')}</div></div>`;
 
 if (typeof Chart === 'undefined') {
