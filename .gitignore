@@ -18,6 +18,11 @@ data/*
 data/*/raw/
 data/*/normalized/
 !data/*/normalize.py
+# Pipeline tests + their fixtures travel with the code (pytest reads data/tests/).
+!data/conftest.py
+!data/tests/
+!data/tests/**
+data/tests/__pycache__/
 # Re-including data/*/ above exposes these — they hold real balances/account
 # numbers (digested output) or are throwaway bytecode. Never commit.
 data/digested/
@@ -40,3 +45,6 @@ logs/
 
 # Build artifacts
 riseup-skill.zip
+
+# Python virtualenv for running the test suite
+.venv/

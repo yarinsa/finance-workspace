@@ -95,3 +95,32 @@ debt-bearing cards for totals and enriches them with the roster names by last4.
   it up automatically (no wiring needed). If the source overlaps RiseUp, add its
   origin name to `RISEUP_ORIGIN`.
 - Credentials live in `.env` / `.mcp.json` (gitignored) — never commit secrets.
+
+## Testing
+
+The pipeline's pure logic is covered by **pytest**, driven by *real cases* — every
+test mirrors an actual reconciliation decision (a specific Hebrew description, a
+real dedup collision), not synthetic edge cases. Tests live in `data/tests/` and
+import the scripts directly (`import digest`, `import cashflow`); `data/conftest.py`
+puts `data/` on the path. Run them with:
+
+```
+python3 -m venv .venv && .venv/bin/pip install pytest   # first time only
+.venv/bin/python -m pytest                              # run the suite
+```
+
+Current coverage: `digest.py` classifiers (internal-transfer / card-bill /
+savings), `consolidate_transactions` dedup + merged-flag re-evaluation,
+`spending_summary`, and `cashflow.py` bucketing + monthly aggregation.
+
+**Bugs → tests (required).** When a money figure comes out wrong, the workflow is:
+1. **Open a bug as a user story** — *"As the household, when I see `<real
+   description>` on `<date>` for `<amount>`, it should be classified as `<X>`,"*
+   capturing the concrete transaction that misbehaved.
+2. **Add a failing regression test** against it first — paste the exact
+   description/amount into the matching `data/tests/test_*.py` case (the files are
+   organized so there's an obvious home), watch it fail.
+3. **Then fix** the classifier/dedup/aggregation until it passes.
+
+This keeps the test suite a growing ledger of every real misclassification we've
+seen, so the same shekel never gets double-counted twice.
