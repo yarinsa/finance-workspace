@@ -7,8 +7,17 @@ israeli-bank-mcp/
 
 # Scraped financial data & personal documents — never commit
 data/*
-# …but version the pipeline code that lives alongside the data
+# …but version the pipeline code (Python) that lives alongside the data.
+# Re-include directories so nested scripts are reachable, then the scripts
+# themselves; raw/ and normalized/ dumps stay ignored via data/*/raw etc. below.
 !data/forecast.py
+!data/digest.py
+!data/cashflow.py
+!data/projection.py
+!data/*/
+data/*/raw/
+data/*/normalized/
+!data/*/normalize.py
 riseup-data/
 riseup-session.json
 receipts/
