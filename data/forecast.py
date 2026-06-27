@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """
-Next-month cashflow forecast.
+Three-month cashflow forecast (next month + the two after).
 
 Reads RiseUp's forward-looking budget envelopes (data/riseup/raw/budget_current.json)
 — which already carry RiseUp's per-category monthly *predictions* — and the digested
 ledger (data/digested/transactions.json) as a sanity band, then writes:
 
-  data/digested/forecast.json
+  data/digested/forecast.json   (all 3 months under "months": [...])
   data/digested/forecast.md
 
 RiseUp envelope model:
@@ -15,6 +15,17 @@ RiseUp envelope model:
   - type "trackingCategory" -> discretionary spend categories, predicted per month
                               (originalAmount = predicted, name in trackingCategoryMetadata).
   - type "variable"/"variableIncome" -> uncategorised misc this month (used for run-rate only).
+
+Projection horizon & confidence:
+  RiseUp emits ONE monthly prediction, not a separate figure per future month, so the
+  income / fixed / discretionary envelopes are held flat across all three months. Two
+  things are recomputed per target month from authoritative source data:
+    - mortgage installment — per-loan NextPayment, dropped once a loan's LastPaymentDate
+      passes (so a loan ending mid-horizon stops being charged);
+    - committed card charges — only exist for months the issuer has already billed
+      (typically just next month), so later months correctly show none.
+  Month 1 (next month) is therefore high-confidence; months 2-3 are an envelope
+  carry-forward — treat them as a planning baseline, not a hard prediction.
 
 Money out is negative, income positive — matching repo convention.
 Run: python3 data/forecast.py
@@ -39,12 +50,17 @@ OUT_JSON = ROOT / "digested" / "forecast.json"
 OUT_MD = ROOT / "digested" / "forecast.md"
 
 
-def next_month(yyyymm):
+HORIZON = 3  # months to project: next month + the two after
+
+
+def add_months(yyyymm, n):
     y, m = int(yyyymm[:4]), int(yyyymm[5:7])
-    m += 1
-    if m > 12:
-        y, m = y + 1, 1
-    return f"{y:04d}-{m:02d}"
+    idx = (y * 12 + (m - 1)) + n
+    return f"{idx // 12:04d}-{idx % 12 + 1:02d}"
+
+
+def next_month(yyyymm):
+    return add_months(yyyymm, 1)
 
 
 def load():
@@ -62,12 +78,17 @@ def category_names(b):
     return m
 
 
-def authoritative_mortgage_payment():
-    """Full next mortgage installment from the Discount mortgage dump.
+def authoritative_mortgage_payment(target_month=None):
+    """Full mortgage installment from the Discount mortgage dump for `target_month`.
 
-    Returns ``(total, due_date)`` where total = Σ ``NextPayment`` across all
-    active loans and due_date is their shared ``NextPaymentDate`` (YYYY-MM-DD),
-    or ``(None, None)`` if the file is missing.
+    Returns ``(total, due_date)`` where total = Σ ``NextPayment`` across loans
+    still active in ``target_month`` (YYYY-MM) and due_date is the installment
+    day in that month (YYYY-MM-DD), or ``(None, None)`` if the file is missing.
+
+    The dump only knows each loan's *next* payment date, but the loans are
+    standard monthly amortising loans, so we carry ``NextPayment`` forward and
+    simply drop any loan whose ``LastPaymentDate`` falls before ``target_month``.
+    When ``target_month`` is None we report the dump's own next installment.
 
     Why this and not RiseUp's envelope: RiseUp (and the mortgage ``Summary``'s
     ``CurrentMonthTotalPayment``) report the *residual* of the current billing
@@ -82,9 +103,19 @@ def authoritative_mortgage_payment():
         return None, None
     block = d["MortgagesDetails"]["MortgagesBlock"]["MortgageEntry"][0]
     loans = block["MortgageDetailsBlock"]["LoanEntry"]
-    total = sum(l.get("NextPayment", 0) for l in loans)
     raw = next((l.get("NextPaymentDate") for l in loans if l.get("NextPaymentDate")), None)
-    due = f"{raw[:4]}-{raw[4:6]}-{raw[6:8]}" if raw and len(raw) == 8 else raw
+    day = raw[6:8] if raw and len(raw) == 8 else "10"
+
+    active = loans
+    if target_month:
+        # Keep loans whose final payment is in or after the target month.
+        active = [l for l in loans
+                  if (l.get("LastPaymentDate") or "99999999")[:6] >= target_month.replace("-", "")]
+        due = f"{target_month}-{day}"
+    else:
+        due = f"{raw[:4]}-{raw[4:6]}-{raw[6:8]}" if raw and len(raw) == 8 else raw
+
+    total = sum(l.get("NextPayment", 0) for l in active)
     return round(total, 2), due
 
 
@@ -129,14 +160,30 @@ def committed_card_charges(fmonth):
     return out
 
 
-def build(b, tx):
+def ledger_band(tx):
+    """Net of recent full calendar months (excludes the current partial month)."""
+    bym = defaultdict(lambda: [0.0, 0.0])
+    cur = date.today().strftime("%Y-%m")
+    for r in tx["transactions"]:
+        mm = r.get("date", "")[:7]
+        a = r.get("amount", 0)
+        if a < 0:
+            bym[mm][0] += a
+        else:
+            bym[mm][1] += a
+    full = {m: v for m, v in bym.items() if m < cur and v[1] > 1000}
+    band = sorted(full.items())[-5:]
+    return [{"month": m, "net": round(v[1] + v[0], 2)} for m, v in band]
+
+
+def build(b, fmonth):
+    """Project a single target month `fmonth` (YYYY-MM) from the envelopes."""
     envs = b["envelopes"]
     base_month = b["budgetDate"]
-    fmonth = next_month(base_month)
     names = category_names(b)
 
     # Authoritative mortgage installment replaces RiseUp's residual-cycle figure.
-    mort_amt, mort_due = authoritative_mortgage_payment()
+    mort_amt, mort_due = authoritative_mortgage_payment(fmonth)
 
     fixed_income, fixed_expense = [], []
     for e in envs:
@@ -181,25 +228,14 @@ def build(b, tx):
     expense_total = fixed_exp_total + discr_total
     net = income_total - expense_total
 
-    # Ledger sanity band: net of full calendar months (exclude current partial month).
-    bym = defaultdict(lambda: [0.0, 0.0])
-    cur = date.today().strftime("%Y-%m")
-    for r in tx["transactions"]:
-        mm = r.get("date", "")[:7]
-        a = r.get("amount", 0)
-        if a < 0:
-            bym[mm][0] += a
-        else:
-            bym[mm][1] += a
-    full = {m: v for m, v in bym.items() if m < cur and v[1] > 1000}
-    band = sorted(full.items())[-5:]
-
     cards = committed_card_charges(fmonth)
     cards_total = round(sum(c["amount"] for c in cards), 2)
 
     return {
         "forecast_month": fmonth,
         "based_on_budget": base_month,
+        "horizon_offset": None,  # set by build_all
+        "confidence": None,      # set by build_all
         "currency": "ILS",
         "income": {"total": round(income_total, 2), "items": fixed_income},
         "expenses": {
@@ -211,34 +247,47 @@ def build(b, tx):
         },
         "projected_net": round(net, 2),
         "committed_card_charges": {"total": cards_total, "items": cards},
-        "ledger_band": [
-            {"month": m, "net": round(v[1] + v[0], 2)} for m, v in band
-        ],
     }
 
 
-def render_md(f):
+def build_all(b, tx):
+    """Project HORIZON months forward, sharing one ledger sanity band."""
+    base_month = b["budgetDate"]
+    band = ledger_band(tx)
+    months = []
+    for off in range(1, HORIZON + 1):
+        fmonth = add_months(base_month, off)
+        m = build(b, fmonth)
+        m["horizon_offset"] = off
+        m["confidence"] = "high" if off == 1 else "carry-forward"
+        months.append(m)
+    return {
+        "generated_for": date.today().isoformat(),
+        "based_on_budget": base_month,
+        "horizon_months": HORIZON,
+        "currency": "ILS",
+        "months": months,
+        "ledger_band": band,
+    }
+
+
+def render_month(f):
+    """Render one month's detail section."""
     L = []
-    L.append(f"# Cashflow forecast — {f['forecast_month']}")
-    L.append("")
-    L.append(
-        f"*Projected from RiseUp's `{f['based_on_budget']}` budget envelopes "
-        f"(recurring bills + category predictions). `python3 data/forecast.py`.*"
-    )
-    L.append("")
-    L.append("## Bottom line")
+    tag = "high confidence" if f["confidence"] == "high" else "envelope carry-forward"
+    L.append(f"## {f['forecast_month']} — *{tag}*")
     L.append("")
     inc = f["income"]["total"]
     exp = f["expenses"]["total"]
     net = f["projected_net"]
     sign = "surplus" if net >= 0 else "shortfall"
-    L.append(f"- **Projected income:** ₪{inc:,.0f}")
-    L.append(f"- **Projected spending:** ₪{exp:,.0f}  "
+    L.append(f"- **Income:** ₪{inc:,.0f}")
+    L.append(f"- **Spending:** ₪{exp:,.0f}  "
              f"(fixed ₪{f['expenses']['fixed_total']:,.0f} · "
              f"discretionary ₪{f['expenses']['discretionary_total']:,.0f})")
-    L.append(f"- **Projected net:** ₪{net:,.0f} ({sign})")
+    L.append(f"- **Net:** ₪{net:,.0f} ({sign})")
     L.append("")
-    L.append("## Income")
+    L.append("### Income")
     L.append("")
     L.append("| Source | ₪ |")
     L.append("|---|--:|")
@@ -246,13 +295,7 @@ def render_md(f):
         L.append(f"| {r['name']} | {r['amount']:,.0f} |")
     L.append(f"| **Total** | **{inc:,.0f}** |")
     L.append("")
-    L.append("## Fixed / recurring expenses")
-    L.append("")
-    L.append(
-        "> Mortgage uses the **full next installment** (Σ per-loan `NextPayment`) "
-        "from the Discount mortgage dump, not RiseUp's residual-cycle figure — see "
-        "`docs/forecast-architecture.md`."
-    )
+    L.append("### Fixed / recurring expenses")
     L.append("")
     L.append("| Item | Category | ₪ |")
     L.append("|---|---|--:|")
@@ -260,7 +303,7 @@ def render_md(f):
         L.append(f"| {r['name']} | {r['category'] or ''} | {r['amount']:,.0f} |")
     L.append(f"| **Total** | | **{f['expenses']['fixed_total']:,.0f}** |")
     L.append("")
-    L.append("## Discretionary (predicted per category)")
+    L.append("### Discretionary (predicted per category)")
     L.append("")
     L.append("| Category | ₪ |")
     L.append("|---|--:|")
@@ -270,13 +313,13 @@ def render_md(f):
     L.append("")
     cc = f.get("committed_card_charges", {})
     if cc.get("items"):
-        L.append(f"## Already-committed card charges — {f['forecast_month']}")
+        L.append("### Already-committed card charges")
         L.append("")
         L.append(
-            "Credit-card billings already locked in for next month (installments + "
-            "posted transactions). **Not added to the net above** — these settle "
-            "purchases RiseUp already counts in its envelopes; shown here as a "
-            "confidence check on how much July spend is already fixed."
+            "Credit-card billings already locked in (installments + posted "
+            "transactions). **Not added to the net above** — these settle purchases "
+            "RiseUp already counts in its envelopes; shown as a confidence check on "
+            "how much spend is already fixed."
         )
         L.append("")
         L.append("| Card | Debit date | ₪ |")
@@ -285,12 +328,56 @@ def render_md(f):
             L.append(f"| {c['issuer']} | {c['debit_date']} | {c['amount']:,.0f} |")
         L.append(f"| **Total committed** | | **{cc['total']:,.0f}** |")
         L.append("")
+    return L
 
+
+def render_md(out):
+    months = out["months"]
+    L = []
+    L.append(f"# Cashflow forecast — {months[0]['forecast_month']} → "
+             f"{months[-1]['forecast_month']}")
+    L.append("")
+    L.append(
+        f"*{out['horizon_months']}-month projection from RiseUp's "
+        f"`{out['based_on_budget']}` budget envelopes (recurring bills + category "
+        f"predictions). `python3 data/forecast.py`.*"
+    )
+    L.append("")
+    L.append(
+        "> Mortgage uses the **full installment** (Σ per-loan `NextPayment`) from the "
+        "Discount mortgage dump, not RiseUp's residual-cycle figure — see "
+        "`docs/forecast-architecture.md`. Income/fixed/discretionary envelopes are held "
+        "**flat** across months (RiseUp emits one monthly prediction). Month 1 is "
+        "high-confidence; later months are an envelope carry-forward for planning — "
+        "committed card charges only exist where the issuer has already billed."
+    )
+    L.append("")
+    # At-a-glance summary
+    L.append("## At a glance")
+    L.append("")
+    L.append("| Month | Income | Spending | Net | Confidence |")
+    L.append("|---|--:|--:|--:|---|")
+    for f in months:
+        L.append(f"| **{f['forecast_month']}** | {f['income']['total']:,.0f} | "
+                 f"{f['expenses']['total']:,.0f} | {f['projected_net']:,.0f} | "
+                 f"{f['confidence']} |")
+    cum = 0
+    cum_parts = []
+    for f in months:
+        cum += f["projected_net"]
+        cum_parts.append(f"{f['forecast_month']} ₪{cum:,.0f}")
+    L.append("")
+    L.append(f"**Cumulative net:** {' · '.join(cum_parts)}")
+    L.append("")
+    # Per-month detail
+    for f in months:
+        L += render_month(f)
+    # Shared ledger band
     L.append("## Sanity check — recent full-month net (from ledger)")
     L.append("")
     L.append("| Month | Net ₪ |")
     L.append("|---|--:|")
-    for r in f["ledger_band"]:
+    for r in out["ledger_band"]:
         L.append(f"| {r['month']} | {r['net']:,.0f} |")
     L.append("")
     L.append(
@@ -305,13 +392,16 @@ def render_md(f):
 
 def main():
     b, tx = load()
-    f = build(b, tx)
-    OUT_JSON.write_text(json.dumps(f, ensure_ascii=False, indent=2))
-    OUT_MD.write_text(render_md(f))
+    out = build_all(b, tx)
+    OUT_JSON.write_text(json.dumps(out, ensure_ascii=False, indent=2))
+    OUT_MD.write_text(render_md(out))
     print(f"wrote {OUT_JSON}")
     print(f"wrote {OUT_MD}")
-    print(f"\n{f['forecast_month']}: income ₪{f['income']['total']:,.0f}  "
-          f"spend ₪{f['expenses']['total']:,.0f}  net ₪{f['projected_net']:,.0f}")
+    for f in out["months"]:
+        print(f"{f['forecast_month']} ({f['confidence']:>13}): "
+              f"income ₪{f['income']['total']:,.0f}  "
+              f"spend ₪{f['expenses']['total']:,.0f}  "
+              f"net ₪{f['projected_net']:,.0f}")
 
 
 if __name__ == "__main__":
