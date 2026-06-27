@@ -50,7 +50,7 @@ OUT_JSON = ROOT / "digested" / "forecast.json"
 OUT_MD = ROOT / "digested" / "forecast.md"
 
 
-HORIZON = 3  # months to project: next month + the two after
+HORIZON = 6  # months to project: next month through end of horizon (Jul→Dec 2026)
 
 
 def add_months(yyyymm, n):
