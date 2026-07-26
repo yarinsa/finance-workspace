@@ -41,6 +41,7 @@ LEDGER = ROOT / "digested" / "transactions.json"
 CAL_BIG = ROOT / "cal" / "raw" / "bigNumberAndDetails.json"
 AMEX_BILL = ROOT / "amex" / "raw" / "billingsOverview.json"
 MORTGAGE = ROOT / "discount-mortgage" / "raw" / "mortgage_details.json"
+FREEZE = ROOT / "freeze.json"
 
 # RiseUp tags the mortgage envelope with this expense category. We suppress it
 # and substitute the authoritative next-installment sum from the mortgage data
@@ -115,8 +116,44 @@ def authoritative_mortgage_payment(target_month=None):
     else:
         due = f"{raw[:4]}-{raw[4:6]}-{raw[6:8]}" if raw and len(raw) == 8 else raw
 
-    total = sum(l.get("NextPayment", 0) for l in active)
+    freeze = load_freeze()
+    total = sum(payment_for_track(l, target_month, freeze) for l in active)
     return round(total, 2), due
+
+
+def load_freeze():
+    """User-confirmed freeze parameters from data/freeze.json (or {} if none).
+
+    Written by ``detect_freeze.py`` when the bank's dump still shows the frozen
+    (interest-only) installment but the user has told us the freeze's real shape,
+    so we can project the correct full payment once it lifts — before the bank
+    reflects it.
+    """
+    try:
+        return json.loads(FREEZE.read_text()).get("tracks", {})
+    except FileNotFoundError:
+        return {}
+
+
+def payment_for_track(track, target_month, freeze=None):
+    """Payment for one mortgage track in ``target_month``, applying any freeze.
+
+    The bank's dump reports the current (frozen) ``NextPayment`` and won't reflect
+    the post-freeze figure until that charge posts. If ``freeze`` (from
+    ``load_freeze()``) records this track, we return the frozen payment through the
+    freeze window and the recomputed full payment from ``resume_month`` onward.
+    With no freeze record, or no target month, we fall back to ``NextPayment``.
+    """
+    nxt = track.get("NextPayment", 0)
+    if not target_month:
+        return nxt
+    frz = (freeze if freeze is not None else load_freeze()).get(
+        track.get("LoanAccount"))
+    if not frz:
+        return nxt
+    if target_month >= frz["resume_month"]:
+        return frz["resume_payment"]
+    return frz.get("frozen_payment", nxt)
 
 
 def committed_card_charges(fmonth):

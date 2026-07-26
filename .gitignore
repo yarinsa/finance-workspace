@@ -14,6 +14,7 @@ data/*
 !data/digest.py
 !data/cashflow.py
 !data/projection.py
+!data/detect_freeze.py
 !data/*/
 data/*/raw/
 data/*/normalized/
@@ -27,6 +28,8 @@ data/tests/__pycache__/
 # numbers (digested output) or are throwaway bytecode. Never commit.
 data/digested/
 data/__pycache__/
+# User-confirmed freeze params (holds real per-track loan payment amounts).
+data/freeze.json
 riseup-data/
 riseup-session.json
 receipts/
