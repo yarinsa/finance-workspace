@@ -9,6 +9,8 @@ net-worth/debt snapshot. Currency is ILS (₪) throughout.
 > loan notes like the Leumi 2529 refund, active mortgage freeze). It is part of the
 > project architecture, standalone from the user's machine-global Claude memory.
 > When the user tells you a durable fact the data can't show, record it there.
+> On a fresh clone `MEMORY.md` won't exist — seed it from the committed template:
+> `cp MEMORY.example.md MEMORY.md`, then fill in real values.
 
 ## Intent
 
