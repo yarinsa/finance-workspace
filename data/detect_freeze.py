@@ -170,6 +170,11 @@ def prompt_for_freeze(flagged):
         dur = _ask("   1) Freeze duration — 3 or 6 months? [3/6] ", ["3", "6"])
         ftype = _ask("   2) Principal-only or full freeze? [p/f] ", ["p", "f"])
         push = _ask("   3) Is the loan END DATE pushed out? [y/n] ", ["y", "n"])
+        # Free-text override: the user can record anything the data can't see
+        # (e.g. "8% but a monthly refund makes it effectively 0%") to inform the
+        # calculation and future sessions. Blank = no note.
+        note = input("   4) Any note / your own take on this loan? "
+                     "(optional, Enter to skip) ").strip()
         months = int(dur)
         freeze_type = "principal_only" if ftype == "p" else "full"
         push_end = push == "y"
@@ -191,10 +196,14 @@ def prompt_for_freeze(flagged):
             "frozen_from_month": start_month,
             "resume_month": resume_month,
             "resume_payment": resume_pay,
+            "note": note,  # user's free-text override / perspective, "" if none
         }
         print(f"   → frozen ₪{f['current_payment']:,.0f} through "
               f"{add_months(resume_month, -1)}, then ₪{resume_pay:,.0f} "
-              f"from {resume_month}.\n")
+              f"from {resume_month}.")
+        if note:
+            print(f"   → note: {note}")
+        print()
     return entries
 
 

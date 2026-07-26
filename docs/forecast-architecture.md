@@ -1,9 +1,9 @@
 # Cashflow forecast — architecture decisions
 
-`data/forecast.py` produces a next-month cashflow projection
-(`data/digested/forecast.{json,md}`). This doc records *why* it is built the way
-it is, because the non-obvious calls are about which source to trust and how to
-avoid double-counting — not the code itself.
+`data/forecast.py` produces a multi-month cashflow projection (`HORIZON` months,
+currently 6) at `data/digested/forecast.{json,md}`. This doc records *why* it is
+built the way it is, because the non-obvious calls are about which source to trust
+and how to avoid double-counting — not the code itself.
 
 ## What it answers
 
@@ -100,9 +100,16 @@ safe to re-run any time; it does no scraping and holds no state. Refresh the
 underlying data first (`*-refresh` skills → `python3 data/digest.py`), then run
 `python3 data/forecast.py`.
 
-## Resolved: the mortgage step-up
-The "~₪8.5k July mortgage" flagged in project memory was **verified** against
-`data/discount-mortgage/raw/mortgage_details.json` and is now modelled — see
-decision #3. It was not a one-off step-up but the normal recurring installment
-that RiseUp's envelope under-reported (residual-cycle figure). No open gap
-remains here.
+## The mortgage installment: full price vs. freeze
+The full recurring mortgage installment (~₪8.5k) was **verified** against
+`data/discount-mortgage/raw/mortgage_details.json` — it is the normal charge that
+RiseUp's envelope under-reports (residual-cycle figure). We use
+`sum(LoanEntry[].NextPayment)`, not RiseUp's number — see decision #3.
+
+**Current state (as of the freeze):** the 3 big tracks are **principal-frozen**
+(paying interest-only), so the dump's `NextPayment` sum reads **~₪5,901**, not the
+~₪8.5k full price. The full price returns when the freeze lifts. The dump won't
+show the higher figure until that charge posts, so `forecast.py` applies the
+user-confirmed freeze from `data/freeze.json` (written by `detect_freeze.py`) to
+project the post-freeze months correctly. Do **not** treat the current ~₪5,901 as
+permanent — see the freeze section in the `discount-mortgage-refresh` skill.

@@ -235,8 +235,8 @@ Forward-looking net-worth projection, wired into `cashflow.py` (adds a
   recurring investable surplus compounding at **4% real**. This sidesteps the
   Phase-1 ledger-noise problem entirely.
 - Loans with no schedule (Leumi aggregate) are straight-lined over a default term.
-- Assumptions live in `projection.CONFIG`: `current_age` (⚠ placeholder 35 — not
-  in scraped data; edit for an accurate horizon), `retirement_age=67`,
+- Assumptions live in `projection.CONFIG`: `current_age` (derived from
+  `BIRTH_DATE` 1997-11-23 — accurate, not in scraped data), `retirement_age=67`,
   `end_age=90`, `real_return=0.04`.
 
 **Outputs:** `timeline` (yearly net-worth/loan/invested points → `netval_plot`),

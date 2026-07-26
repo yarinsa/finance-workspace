@@ -46,14 +46,58 @@ output without re-scraping).
   balances, credit-card debt, loans/mortgage, detected salary, totals, and a
   `spending` summary. Query this for net-worth/debt questions.
 
-### Next-month forecast
+### Cashflow forecast
 
 `python3 data/forecast.py` writes `data/digested/forecast.{json,md}` — a
-next-month cashflow projection built from RiseUp's forward-looking budget
-envelopes (not ledger extrapolation, which the dedup key makes unreliable), with
-CAL/AMEX committed billings as a non-summed cross-check. Read-only over scraped
-data; safe to re-run. Rationale and the trust/double-counting decisions are in
+multi-month cashflow projection (`HORIZON` months, currently 6) built from
+RiseUp's forward-looking budget envelopes (not ledger extrapolation, which the
+dedup key makes unreliable), with CAL/AMEX committed billings as a non-summed
+cross-check. Month 1 is high-confidence; later months are an envelope
+carry-forward. The **mortgage** installment comes from `sum(LoanEntry[].NextPayment)`
+in the mortgage dump (not RiseUp's residual figure), and is **freeze-aware**: if
+`data/freeze.json` exists (written by `data/detect_freeze.py`), post-freeze months
+use the recomputed full payment. Read-only over scraped data; safe to re-run.
+Rationale and the trust/double-counting decisions are in
 `docs/forecast-architecture.md`.
+
+### Long-range projection
+
+`python3 data/projection.py` writes a net-worth projection to retirement/end age.
+`current_age` is derived from `BIRTH_DATE` at the top of the file (not in scraped
+data). **If `BIRTH_DATE` is missing or looks wrong, ask the user for their birth
+date** rather than guessing — a wrong age shifts every loan-payoff and retirement
+milestone.
+
+### Saving money — how to answer "where/how can I save?"
+
+When the user asks how to save money, work from their **real line items**, not
+generic advice. There are two distinct levers — cover both and say which applies:
+
+1. **Easy recurring cuts (lowest lifestyle impact).** Scan the fixed/recurring
+   envelopes and the ledger for: waivable **bank/card fees** (עמלות, `דמי כרטיס`),
+   **duplicate services** (e.g. two international-call plans; Spotify overlapping
+   an Apple Music bundle; overlapping streaming), and **unused subscriptions**.
+   Quote the actual Hebrew description + ₪ amount, rate each by ease
+   (trivial/easy/moderate), and total the picks into ₪100 / ₪300 / ₪500 tiers.
+2. **Loan prepayment for cashflow.** To make the *forecast* more positive, a lump
+   sum should reduce the **monthly payment**, which requires two things: pick a
+   **Schpitzer (annuity)** loan (a 0%/fixed-principal loan prepayment only shortens
+   the term — no monthly relief), and instruct the bank to **הקטנת התשלום** (reduce
+   the installment), **not** קיצור התקופה (shorten the term). Rank targets by
+   ₪/mo freed per ₪1,000 deployed. **Never** recommend prepaying a loan whose
+   interest is refunded/subsidised to ~0% effective (see household notes below).
+
+### Household-specific facts (not derivable from the data)
+
+These are true for this household and the pipeline cannot infer them — honour them:
+
+- **Leumi loan 2529** is nominally ~8% but a **monthly refund offsets the
+  interest**, so its *effective* rate is **~0%**. Treat it as effectively free —
+  never a payoff/prepayment target, and don't quote its 8% as a real cost.
+- The **mortgage** may be under a **payment freeze** (see the
+  `discount-mortgage-refresh` skill): when the installment looks unusually low
+  (interest-only), run `data/detect_freeze.py` and confirm the freeze params with
+  the user rather than treating the low figure as permanent.
 
 ### Dedup rules (important)
 

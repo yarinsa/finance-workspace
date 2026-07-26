@@ -135,6 +135,36 @@ Subsidy (מתווה) tracks have a near-zero rate and a fixed end date
 (`LastPaymentDate`/`FinishDate`); when they end, the monthly total drops by
 their combined `NextPayment`.
 
+### Payment freezes (הקפאה / גרייס) — detect BEFORE the bank does
+
+A freeze temporarily lowers a track's installment. The dump reflects it **only
+after the first frozen charge posts** — but the household knows about a freeze
+the moment they arrange it, so the pipeline detects it early rather than waiting.
+
+**Signal:** under a *principal-only* freeze a track pays roughly its **interest
+only**, i.e. `NextPayment ≈ PrincipalBalance × TotalInterestRate/100 / 12`. When
+a large track's `NextPayment` sits within a few ₪ of that interest-only figure
+(while siblings/history pay materially more), it is almost certainly frozen even
+though `IsLoanInArrears`/`LoanRefundStatus` still read normal.
+
+**A Discount freeze is defined by three parameters** — you must ask the user
+these, because they determine the post-freeze payment and the dump can't tell you:
+
+1. **Duration** — 3 or 6 months.
+2. **Type** — *principal-only* (pay interest, defer principal) or *full* (pay ₪0,
+   interest capitalises onto the balance).
+3. **Push end date?** — if the loan's end date is pushed out by the freeze length,
+   the same full payment resumes later; if **not** pushed, the deferred principal
+   is squeezed into the unchanged remaining term, so the payment **rises**.
+
+`data/detect_freeze.py` implements exactly this: it flags interest-only tracks,
+asks the user the 3 params, and writes `data/freeze.json` (gitignored — real
+payment amounts) with the recomputed post-freeze payment per track.
+`data/forecast.py` reads it so the months after the freeze show the real
+(higher) payment instead of naively carrying the frozen figure forward. When a
+mortgage looks frozen, run `python3 data/detect_freeze.py` and confirm with the
+user — don't assume the current `NextPayment` is permanent.
+
 ## Gotchas (do not break)
 
 - **The USER logs in. You never type credentials, OTP, or card numbers.** Open
