@@ -130,13 +130,23 @@ def aggregate_by_month(transactions):
 
 
 def pick_current_month(months):
-    """Latest *complete* month: the most recent month that is not the current
-    calendar month (which is still accruing). Falls back to the latest available."""
+    """The most relevant month to display: the current calendar month if it has
+    data, otherwise the most recent month that does have data.
+
+    The old design always excluded the current calendar month as "still accruing,"
+    but that caused a systematic one-month lag (e.g. showing June on July 26 when
+    July already had 157 transactions). We now show the current calendar month
+    whenever the ledger contains any transactions for it, and fall back to the
+    latest available month only when the current month is absent entirely (e.g.
+    first hour of a new month before any transactions clear).
+    """
     if not months:
         return None
     this_month = datetime.now(timezone.utc).strftime("%Y-%m")
-    complete = [m for m in months if m < this_month]
-    return complete[-1] if complete else list(months)[-1]
+    if this_month in months:
+        return this_month
+    # Current month not in ledger yet — return whatever is latest
+    return list(months)[-1]
 
 
 # --- Metrics ----------------------------------------------------------------

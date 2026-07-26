@@ -57,18 +57,42 @@ class TestAggregateByMonth:
         assert months == {}
 
 
+def _freeze_now(monkeypatch, year, month, day):
+    """Patch cashflow.datetime so now() returns a fixed date."""
+    class _Now:
+        @staticmethod
+        def now(tz=None):
+            from datetime import datetime as real, timezone
+            dt = real(year, month, day)
+            if tz is not None:
+                dt = real(year, month, day, tzinfo=timezone.utc)
+            return dt
+    monkeypatch.setattr(cashflow, "datetime", _Now)
+
+
 class TestPickCurrentMonth:
-    def test_picks_latest_complete_month_not_the_accruing_one(self, monkeypatch):
-        # Freeze "now" to 2026-06 so the result is deterministic: 06 is still
-        # accruing, so the latest *complete* month is 05.
-        class _Now:
-            @staticmethod
-            def now(tz=None):
-                from datetime import datetime as real
-                return real(2026, 6, 15)
-        monkeypatch.setattr(cashflow, "datetime", _Now)
-        months = {"2026-04": {}, "2026-05": {}, "2026-06": {}}
-        assert cashflow.pick_current_month(months) == "2026-05"
+    def test_returns_current_calendar_month_when_it_has_data(self, monkeypatch):
+        # Real case: 2026-07-26, July has 157 transactions — should return July,
+        # not June. The old "always exclude current calendar month" design was
+        # systematically one month behind whenever the current month was active.
+        _freeze_now(monkeypatch, 2026, 7, 26)
+        months = {
+            "2026-05": {"count": 94},
+            "2026-06": {"count": 152},
+            "2026-07": {"count": 157},
+        }
+        assert cashflow.pick_current_month(months) == "2026-07"
+
+    def test_falls_back_to_previous_month_when_current_month_is_empty(self, monkeypatch):
+        # First day of the month: the current month has no transactions yet.
+        # Fall back to the previous (complete) month.
+        _freeze_now(monkeypatch, 2026, 7, 1)
+        months = {
+            "2026-05": {"count": 94},
+            "2026-06": {"count": 152},
+            # 2026-07 absent: no data yet
+        }
+        assert cashflow.pick_current_month(months) == "2026-06"
 
     def test_none_when_empty(self):
         assert cashflow.pick_current_month({}) is None
