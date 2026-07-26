@@ -4,6 +4,12 @@ Personal finance workspace for a single household. Aggregates Israeli bank and
 credit-card data into **one deduped, queryable transaction ledger** plus a
 net-worth/debt snapshot. Currency is ILS (₪) throughout.
 
+> **Read `MEMORY.md` first (if present).** It is the project-local, gitignored
+> household memory — real personal facts the scraped data can't infer (birth date,
+> loan notes like the Leumi 2529 refund, active mortgage freeze). It is part of the
+> project architecture, standalone from the user's machine-global Claude memory.
+> When the user tells you a durable fact the data can't show, record it there.
+
 ## Intent
 
 The goal is to answer plain questions about money — *"how much did I spend on
@@ -89,15 +95,11 @@ generic advice. There are two distinct levers — cover both and say which appli
 
 ### Household-specific facts (not derivable from the data)
 
-These are true for this household and the pipeline cannot infer them — honour them:
-
-- **Leumi loan 2529** is nominally ~8% but a **monthly refund offsets the
-  interest**, so its *effective* rate is **~0%**. Treat it as effectively free —
-  never a payoff/prepayment target, and don't quote its 8% as a real cost.
-- The **mortgage** may be under a **payment freeze** (see the
-  `discount-mortgage-refresh` skill): when the installment looks unusually low
-  (interest-only), run `data/detect_freeze.py` and confirm the freeze params with
-  the user rather than treating the low figure as permanent.
+Facts true for this household that the pipeline cannot infer — e.g. a loan whose
+interest is refunded to ~0% effective, or an active mortgage freeze — live in the
+project-local **`MEMORY.md`** (gitignored). Read it each session and honour it;
+record new durable facts there rather than inlining them here, so this committed
+guide stays about *method* and `MEMORY.md` holds the personal specifics.
 
 ### Dedup rules (important)
 

@@ -2,6 +2,11 @@
 .mcp.json
 .env
 
+# Project-local household memory — real personal facts (birth date, loan notes).
+# Part of the project architecture (loaded via CLAUDE.md) but never committed;
+# back it up alongside the scraped data, not in git.
+MEMORY.md
+
 # Cloned + built MCP server (large, regenerable via git clone + npm run build)
 israeli-bank-mcp/
 
