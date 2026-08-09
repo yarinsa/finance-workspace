@@ -43,6 +43,26 @@ data/<source>/raw/  --(<source>/normalize.py)-->  data/<source>/normalized/*.jso
 Run `python3 data/digest.py` (or `--no-normalize` to combine existing normalized
 output without re-scraping).
 
+### Refreshing everything
+
+The `refresh-all` skill orchestrates all seven sources end to end. It checks
+every session **first** (`.claude/skills/refresh-all/scripts/check_sessions.sh`), batches the logins you need
+into one pass, scrapes in dependency-correct order, then digests and forecasts.
+
+Two things it encodes that are easy to get wrong:
+
+- **Discount order is `account → mortgage → business`.** The three Discount apps
+  share one login; the business (SME) app rebinds the server session and blocks
+  the mortgage endpoints with `actionRequired: stepup`. Business last, always.
+- **Never overwrite a good dump with error stubs.** A scrape against a
+  half-authenticated session returns HTTP 200 with a few hundred bytes of error
+  JSON. Verify the session is live *before* writing; stop rather than dump.
+
+**The user logs in.** Credentials, OTPs and card numbers are never typed by an
+agent, read from Keychain, or pulled from Messages — these are live bank
+accounts, and unattended authentication is not a capability worth automating.
+Chrome profiles persist logins, so this costs a login only when one lapses.
+
 ## The two things the app reads
 
 - **`data/digested/transactions.json`** — the unified ledger. Every transaction
