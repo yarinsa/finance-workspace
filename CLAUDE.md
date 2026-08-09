@@ -103,6 +103,18 @@ project-local **`MEMORY.md`** (gitignored). Read it each session and honour it;
 record new durable facts there rather than inlining them here, so this committed
 guide stays about *method* and `MEMORY.md` holds the personal specifics.
 
+### Savings are assets, not cashflow (important)
+
+Long-term savings vehicles (Harel pension + study funds) emit a **`savings`**
+entity and **never a `transactions` entity**. A pension contribution is not
+spending — emitting deposits into the ledger would inflate `total_spent`, and the
+bank-side debit is already captured by the bank source anyway.
+
+In `snapshot.json` these sit in their own `savings` block. `tracked_net_position`
+deliberately **excludes** them (it stays a liquid-position-vs-debt figure);
+`net_position_with_savings` is the one that includes them. Keep that split — the
+two answer different questions ("can I pay my bills" vs "what am I worth").
+
 ### Dedup rules (important)
 
 - Two records are the **same purchase** when `date` and `abs(amount)` match.
@@ -127,6 +139,7 @@ guide stays about *method* and `MEMORY.md` holds the personal specifics.
 | `cal` (CAL credit cards) | ✅ | credit_cards, transactions |
 | `amex` (American Express / Isracard) | ✅ | credit_cards, transactions |
 | `riseup` (aggregator) | ✅ | accounts, credit_cards, income, subscription, transactions |
+| `harel` (pension + study funds) | ✅ | savings |
 
 RiseUp's `transactions` come from its budget envelopes (`actuals` + `excluded`) and
 are the category-tagged copies used for dedup priority above. amex/cal emit a full

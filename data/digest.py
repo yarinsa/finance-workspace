@@ -273,18 +273,26 @@ def build_snapshot(e):
 
     tracked_net = round(bank_sum - cc_total - mortgage_balance - consumer_balance, 2)
 
+    # Long-term savings (pension / study funds). Assets, not cashflow — they carry
+    # no transactions, so they never touch the ledger. Kept OUT of
+    # tracked_net_position (which stays a liquid-position-vs-debt figure) and
+    # surfaced separately in net_position_with_savings.
+    savings = e.get("savings", [])
+    savings_sum = round(sum(s["balance"] for s in savings), 2)
+
     def clean(records):                           # drop internal stamps from output
         return [{k: v for k, v in r.items() if not k.startswith("_")} for r in records]
 
     return {
         "generated_at": datetime.datetime.now().astimezone().isoformat(timespec="seconds"),
         "currency": "ILS",
-        "note": "Combined from the normalized layer. Tracked accounts only — property value "
-                "and external savings/investments are NOT in these sources, so totals reflect "
-                "bank balances and debts, not full net worth.",
+        "note": "Combined from the normalized layer. Bank balances, debts and long-term "
+                "savings (pension / study funds). Property value and any savings held "
+                "outside the scraped sources are still NOT included.",
         "bank_accounts": clean(accounts),
         "credit_cards": clean(cards),
         "loans": clean(loans),
+        "savings": clean(savings),
         "income": clean(income),
         "transactions_count": len(txns),
         "totals": {
@@ -294,6 +302,8 @@ def build_snapshot(e):
             "consumer_loan_balance": consumer_balance,
             "total_debt": round(cc_total + mortgage_balance + consumer_balance, 2),
             "tracked_net_position": tracked_net,
+            "long_term_savings": savings_sum,
+            "net_position_with_savings": round(tracked_net + savings_sum, 2),
             "monthly_loan_service": loan_monthly,
             "detected_monthly_salary": salary,
         },
@@ -313,6 +323,10 @@ def write_markdown(s):
           f"- **Monthly loan service:** {ils(t['monthly_loan_service'])}.",
           f"- **Bank balances:** {ils(t['bank_balances_sum'])}.",
           f"- **Transactions normalized:** {s['transactions_count']}."]
+    if t.get("long_term_savings"):
+        md.append(f"- **Long-term savings:** {ils(t['long_term_savings'])} "
+                  f"(pension / study funds) → net with savings "
+                  f"{ils(t['net_position_with_savings'])}.")
     if t["detected_monthly_salary"]:
         md.append(f"- **Detected monthly salary:** {ils(t['detected_monthly_salary'])} "
                   f"({t['monthly_loan_service']/t['detected_monthly_salary']*100:.0f}% goes to loans).")
@@ -328,6 +342,13 @@ def write_markdown(s):
     md.append("|---|--:|")
     for c in s["credit_cards"]:
         md.append(f"| {c['issuer']} ····{c['last4']} | {ils(c['owed'])} |")
+    if s.get("savings"):
+        md.append("\n## Long-term savings\n")
+        md.append("| Fund | Kind | Policies | Balance |")
+        md.append("|---|---|--:|--:|")
+        for v in s["savings"]:
+            md.append(f"| {v['label']} | {v['kind']} | {v.get('policies_count') or '—'} | "
+                      f"{ils(v['balance'])} |")
     md.append(f"\n> {s['note']}\n")
     (OUT / "snapshot.md").write_text("\n".join(md) + "\n")
 
