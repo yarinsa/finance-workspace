@@ -32,7 +32,7 @@ new numbers. All shapes are typed in `src/lib/data.ts`.
 | `/summary` | 03 | ⚠️ status map (journey curve + section completeness) |
 | `/recommendations` | 05 | ⚠️ heuristic nudges (no rules engine yet) |
 | `/goals` | 04 | ✅ real (4 general cards + personal goals, from `data/goals/`) |
-| `/portfolio` | 07 | ⛔ needs pension/portfolio/real-estate source |
+| `/portfolio` | 07 | ⚠️ real (Harel pension + study funds; no fees/yield, no real-estate) |
 | `/my-plan` | 10 | ⛔ Plus-gated, not captured |
 
 The ⛔/⚠️ screens render honest "needs input / not captured" notices rather than

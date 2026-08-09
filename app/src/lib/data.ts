@@ -62,13 +62,35 @@ export interface Loan {
   [k: string]: unknown;
 }
 
+/**
+ * A long-term savings vehicle (pension / study fund). These are assets, not
+ * cashflow — they carry no transactions, so they never appear in the ledger.
+ * `management_fee` / `yield_ytd` are null until the per-policy detail is
+ * captured (see the harel-refresh skill's "known gap").
+ */
+export interface Savings {
+  institution: string;
+  kind: "pension" | "study_fund" | "savings";
+  label: string;
+  section?: string | null;
+  policies_count?: number | null;
+  balance: number;
+  currency: string;
+  management_fee?: number | null;
+  yield_ytd?: number | null;
+}
+
 export interface SnapshotTotals {
   bank_balances_sum: number;
   credit_card_debt: number;
   mortgage_balance: number;
   consumer_loan_balance: number;
   total_debt: number;
+  /** Liquid position vs debt — deliberately EXCLUDES long-term savings. */
   tracked_net_position: number;
+  long_term_savings?: number;
+  /** tracked_net_position + long_term_savings. */
+  net_position_with_savings?: number;
   monthly_loan_service: number;
   detected_monthly_salary: number;
 }
@@ -80,6 +102,7 @@ export interface Snapshot {
   bank_accounts: unknown[];
   credit_cards: unknown[];
   loans: Loan[];
+  savings?: Savings[];
   income?: unknown;
   transactions_count?: number;
   totals: SnapshotTotals;
