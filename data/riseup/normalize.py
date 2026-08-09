@@ -97,17 +97,39 @@ def _tx(t, excluded):
         "excluded": excluded,
     }
 
-txns = {}                                         # transactionId -> record
-budget = load("budget_current.json")
-for env in budget.get("envelopes", []):
-    for a in env.get("actuals", []):
-        r = _tx(a, excluded=False)
-        if r["id"]:
-            txns[r["id"]] = r
-for x in budget.get("excluded", []):
-    r = _tx(x, excluded=True)
-    if r["id"]:
-        txns[r["id"]] = r
+def collect_txns(budgets):
+    """Flatten every budget month's actuals + excluded into id -> record.
+
+    `budget_current.json` holds only the month in progress, which is nearly empty
+    right after a month rolls over (on the 1st it can be 3 records). The multi-month
+    `budget_<YYYY-MM>_<n>.json` dumps carry the populated history, so we read every
+    available month and let transactionId dedupe the overlap.
+    """
+    txns = {}
+    for budget in budgets:
+        for env in budget.get("envelopes", []):
+            for a in env.get("actuals", []):
+                r = _tx(a, excluded=False)
+                if r["id"]:
+                    txns[r["id"]] = r
+        for x in budget.get("excluded", []):
+            r = _tx(x, excluded=True)
+            if r["id"]:
+                txns[r["id"]] = r
+    return txns
+
+
+def load_budgets():
+    """Every budget month on disk, oldest file first; current month read last so it wins."""
+    budgets = []
+    for path in sorted(RAW.glob("budget_[0-9]*.json")):
+        data = json.load(open(path, encoding="utf-8"))
+        budgets.extend(data if isinstance(data, list) else [data])
+    budgets.append(load("budget_current.json"))
+    return budgets
+
+
+txns = collect_txns(load_budgets())
 emit("transactions", sorted(txns.values(), key=lambda r: r["date"]))
 
 # ---- subscription state ----
