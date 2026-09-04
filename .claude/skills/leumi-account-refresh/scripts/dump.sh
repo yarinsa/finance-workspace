@@ -46,28 +46,53 @@ echo "----------------------------------------"
 #   body (for Broker calls) -> {"ProcessRequestResult":0,"jsonResp":"<json string>"}
 # So we parse the run-code layer twice, then unwrap jsonResp if present and
 # write THAT (the real payload) pretty-printed.
+#
+# STUB GUARD (added — do not remove): a dead SessionID returns HTTP 200 with
+# a small error body instead of real data. Before overwriting an existing
+# file we require: valid JSON, not login-shell HTML, and no known auth-error
+# marker. A legitimately small response ({} or []) is NOT rejected — only
+# known failure markers are. On failure: do not write, print an error, leave
+# the previous file untouched.
 parse_and_write() {
   local resp_file="$1" out_file="$2" label="$3"
-  node -e '
+  node -e '(function(){
     const fs = require("fs");
     let raw = fs.readFileSync(process.argv[1], "utf8").trim();
     let obj = JSON.parse(raw);
     if (typeof obj === "string") obj = JSON.parse(obj);   // run-code double-encode
     let body = obj.body ?? "";
-    let payload = body;
-    try {
-      let parsed = JSON.parse(body);
-      // Broker calls wrap the real data in jsonResp (a JSON string). Unwrap it.
-      if (parsed && typeof parsed === "object" && typeof parsed.jsonResp === "string") {
-        try { parsed = { ...parsed, jsonResp: JSON.parse(parsed.jsonResp) }; } catch {}
-      }
-      payload = JSON.stringify(parsed, null, 2);
-    } catch {}
-    fs.writeFileSync(process.argv[2], payload);
     const status = String(obj.status);
+    const outFile = process.argv[2], label = process.argv[3];
+
+    if (/^\s*<(!doctype|html)/i.test(body)) {
+      console.log(`  --  ${String(body.length).padStart(9)}B  ${label}  <-- LOGIN-SHELL HTML, NOT WRITTEN (previous file kept)`);
+      process.exitCode = 2;
+      return;
+    }
+    let parsed;
+    try { parsed = JSON.parse(body); }
+    catch {
+      console.log(`  --  ${String(body.length).padStart(9)}B  ${label}  <-- NOT JSON, NOT WRITTEN (previous file kept)`);
+      process.exitCode = 2;
+      return;
+    }
+    // Broker calls wrap the real data in jsonResp (a JSON string). Unwrap it.
+    if (parsed && typeof parsed === "object" && typeof parsed.jsonResp === "string") {
+      try { parsed = { ...parsed, jsonResp: JSON.parse(parsed.jsonResp) }; } catch {}
+    }
+    const flat = JSON.stringify(parsed);
+    const AUTH_ERROR_MARKERS = [/actionRequired["\s:]*["\s]*stepup/i, /SME\s*-\s*קלט לא תקין/];
+    if (AUTH_ERROR_MARKERS.some(re => re.test(flat))) {
+      console.log(`  --  ${String(body.length).padStart(9)}B  ${label}  <-- AUTH-ERROR STUB, NOT WRITTEN (previous file kept)`);
+      process.exitCode = 2;
+      return;
+    }
+
+    const payload = JSON.stringify(parsed, null, 2);
+    fs.writeFileSync(outFile, payload);
     const warn = (status !== "200") ? "  <-- non-200" : "";
-    console.log(`  ${status}  ${String(body.length).padStart(9)}B  ${process.argv[3]}${warn}`);
-  ' "$resp_file" "$out_file" "$label"
+    console.log(`  ${status}  ${String(body.length).padStart(9)}B  ${label}${warn}`);
+})();' "$resp_file" "$out_file" "$label"
 }
 
 run_js() { playwright-cli -s="$SESSION" --raw run-code --filename="$TMP_JS" > "$TMP_RESP" 2>/dev/null; }
