@@ -42,9 +42,18 @@ a time, mid-refresh. It checks everything first and asks once.
 ```
 
 Reports each source as **live** / **NEEDS LOGIN** / **chrome not running** /
-**unknown**. Read-only: it never logs in and never scrapes. Note it *navigates*
-each window to its bank in order to judge honestly — a tab parked on an
-unrelated page is not evidence of a dead session.
+**unknown**. Read-only: it never logs in, never scrapes, and — deliberately —
+**never navigates**. An earlier version drove each tab to the source's
+homepage "to judge honestly," and that navigation is exactly what destroyed
+the sessions it was trying to check: several of these SPAs hold their auth in
+sessionStorage or in-memory state (cal's `calConnectToken`, Leumi's live
+SessionID), which a cross-origin navigation loses outright, and on Discount's
+single-session backend re-entering the gateway URL can rebind the session
+server-side. So the script only reads CDP metadata (`/json/list`) for a tab
+already sitting on the app; if no such tab exists it reports **unknown**, not
+**NEEDS LOGIN** — a tab parked on an unrelated page is not evidence of a dead
+session. **Do not "fix" this back to navigating** — that regression is the
+whole reason the current, metadata-only approach exists.
 
 - `chrome not running` → `LAUNCH=1 .claude/skills/refresh-all/scripts/check_sessions.sh` starts the missing
   windows. A closed browser is **not** an expired session; the profile still
