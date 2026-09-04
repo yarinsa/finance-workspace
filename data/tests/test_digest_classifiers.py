@@ -67,3 +67,48 @@ class TestSavingsDeposit:
 
     def test_inbound_is_not_savings(self):
         assert not digest.is_savings_deposit(tx(2000, "הפקדה לפיקדון"))
+
+
+class TestDepositWithdrawalIsNotIncome:
+    """2026-08 leak: withdrawing from our own liquid deposit (פיקדון נזיל) came
+    back tagged as real income. It's the user's own money returning, not cashflow
+    — should be tagged internal_transfer just like the deposit leg is tagged
+    savings, so spending_summary excludes both sides of the round-trip.
+    """
+
+    def test_liquid_deposit_withdrawal_is_internal(self):
+        assert digest.is_internal_transfer(tx(9507, "משיכה מפיקדון נזיל יומי+"))
+        assert digest.is_internal_transfer(tx(8900, "משיכה מפיקדון נזיל יומי+"))
+        assert digest.is_internal_transfer(tx(4200, "משיכה מפיקדון נזיל יומי+"))
+        assert digest.is_internal_transfer(tx(300, "משיכה מפיקדון נזיל יומי+"))
+
+    def test_liquid_deposit_withdrawal_profit_is_internal(self):
+        # Small interest/profit credited alongside a withdrawal — also our own money.
+        assert digest.is_internal_transfer(tx(0.03, "רווחים ממשיכת הפקדה מפיקדון"))
+
+    def test_liquid_deposit_deposit_leg_still_savings_not_internal(self):
+        # The deposit leg (money leaving to the deposit) keeps its existing
+        # `savings` classification — do not silently reclassify it.
+        assert digest.is_savings_deposit(tx(-23296, "הפקדה לפיקדון נזיל יומי+"))
+        assert not digest.is_internal_transfer(tx(-23296, "הפקדה לפיקדון נזיל יומי+"))
+
+
+class TestLoanRoundTrip:
+    """2026-08 leak: a loan opened and repaid within days (same loan id
+    13200898802) netted to ~zero but both legs counted as real income/spend.
+    Match on the specific loan-number pairing that actually round-tripped, not a
+    blanket rule on every 'הקמת הלוואה'/'פירעון הלוואה' — most loan repayments in
+    the ledger (leumi, discount loans 10800100014 / 15500316168) are real ongoing
+    debt service and must stay counted as spend.
+    """
+
+    def test_opened_and_repaid_same_loan_id_is_internal(self):
+        assert digest.is_internal_transfer(tx(10000, "הקמת הלוואה 13200898802"))
+        assert digest.is_internal_transfer(tx(-10008.67, "פירעון הלוואה 13200898802"))
+
+    def test_ordinary_ongoing_loan_repayment_is_not_internal(self):
+        # These loan ids never had a matching "הקמת הלוואה" — real debt service.
+        assert not digest.is_internal_transfer(tx(-666.72, "פירעון הלוואה 10800100014"))
+        assert not digest.is_internal_transfer(tx(-310.44, "פירעון הלוואה 15500316168"))
+        assert not digest.is_internal_transfer(tx(-867.8, "פרעון הלוואה", origin="leumi"))
+

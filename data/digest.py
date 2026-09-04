@@ -7,7 +7,7 @@ By default this runs every <source>/normalize.py first, then combines all
 <source>/normalized/*.json envelopes into one consolidated snapshot.
 Run `python3 digest.py --no-normalize` to combine existing normalized output only.
 """
-import json, datetime, glob, subprocess, sys
+import json, datetime, glob, re, subprocess, sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent          # .../Finance/data
@@ -53,13 +53,31 @@ OWN_ACCOUNT_HINTS = ["806-6719", "806-671963", "10-806", "0034069", "0123444499"
 # on Discount — i.e. a Leumi→Discount sweep. Treated as internal.
 OWN_TRANSFER_DESCRIPTIONS = ["העברה דיגיטל"]
 
+# Withdrawals from our own liquid deposit (פיקדון נזיל) coming back into checking,
+# plus the tiny interest/profit credited alongside them. The deposit LEG (money
+# going in) is real savings (is_savings_deposit, below); the withdrawal LEG is the
+# same money returning and must not be double-counted as income.
+DEPOSIT_WITHDRAWAL_PHRASES = ["משיכה מפיקדון", "רווחים ממשיכת הפקדה מפיקדון"]
+
+# Loan ids where BOTH "הקמת הלוואה <id>" (opened) and "פירעון/פרעון הלוואה <id>"
+# (repaid) were observed in the ledger — i.e. confirmed round-trips that net to
+# ~zero, not real borrowing/debt-service. Populated below from ledger evidence.
+# Deliberately an allowlist of specific ids, NOT a blanket rule on the phrase —
+# most "פירעון הלוואה" rows are real ongoing loan repayments (leumi, discount
+# loans 10800100014 / 15500316168) and must stay counted as spend.
+ROUND_TRIP_LOAN_IDS = {"13200898802"}
+
+_LOAN_ID_RE = re.compile(r"(?:הקמת|פירעון|פרעון) הלוואה\s+(\d+)")
+
 
 def is_internal_transfer(rec):
     """True if the transaction is a move between the household's own accounts.
 
     Matches on the description referencing an own holder name, own account
-    number, or a known self-transfer phrase. Conservative: only fires on a
-    positive signal, so external transfers (real income/expense) are kept.
+    number, a known self-transfer phrase, a liquid-deposit withdrawal (the
+    money returning from our own deposit), or one leg of a confirmed
+    open+repay loan round-trip. Conservative: only fires on a positive
+    signal, so external transfers (real income/expense) are kept.
     """
     desc = rec.get("description") or ""
     if any(n in desc for n in OWN_NAMES):
@@ -67,6 +85,11 @@ def is_internal_transfer(rec):
     if any(a in desc for a in OWN_ACCOUNT_HINTS):
         return True
     if any(p in desc for p in OWN_TRANSFER_DESCRIPTIONS):
+        return True
+    if any(p in desc for p in DEPOSIT_WITHDRAWAL_PHRASES):
+        return True
+    m = _LOAN_ID_RE.search(desc)
+    if m and m.group(1) in ROUND_TRIP_LOAN_IDS:
         return True
     return False
 
