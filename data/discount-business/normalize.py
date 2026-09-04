@@ -14,6 +14,9 @@ Emits:
     accounts.json      -> the business current account
     credit_cards.json  -> cards carrying a balance
     transactions.json  -> flattened operation list
+    savings.json        -> business deposits (usually empty: deposits_depositsDetails.json
+                            returns an Error envelope "לא נמצאו הפקדות פעילות" when there
+                            are none, which `load()` already turns into zero records)
 
 Common envelope: {"source", "entity", "generated_at", "records": [...]}
 Self-contained; safe to re-run after each scrape.
@@ -104,3 +107,27 @@ if tx:
             "status": "completed",
         })
 emit("transactions", sorted(txns, key=lambda r: r["date"] or ""))
+
+# ---- savings (business deposits, if any) ----
+savings = []
+deposits = load("deposits_depositsDetails.json")   # None for the Error envelope
+if deposits:
+    details = deposits.get("DepositsDetails", {})
+    for acc in (details.get("DepositAccountBlock") or {}).get("DepositAccountEntry", []):
+        label = acc.get("ProductShortName") or acc.get("ProductLongName") or "deposit"
+        balance = acc.get("TotalDepositsCurrentValue")
+        if balance is None:
+            continue
+        savings.append({
+            "institution": "discount-business",
+            "account_id": acc.get("TermNewAccountNumber") or acc.get("AccountNumber"),
+            "kind": "bank_deposit",
+            "label": label,
+            "liquid": "נזיל" in label,
+            "balance": round(balance, 2),
+            "currency": acc.get("CurrencyCode", "ILS"),
+            "maturity_date": None,
+            "management_fee": None,
+            "yield_ytd": None,
+        })
+emit("savings", savings)

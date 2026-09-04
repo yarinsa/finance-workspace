@@ -314,12 +314,22 @@ def build_snapshot(e):
 
     tracked_net = round(bank_sum - cc_total - mortgage_balance - consumer_balance, 2)
 
-    # Long-term savings (pension / study funds). Assets, not cashflow — they carry
-    # no transactions, so they never touch the ledger. Kept OUT of
+    # Savings (pension / study funds / bank deposits). Assets, not cashflow — they
+    # carry no transactions, so they never touch the ledger. Kept OUT of
     # tracked_net_position (which stays a liquid-position-vs-debt figure) and
     # surfaced separately in net_position_with_savings.
+    #
+    # Not all savings are equal: Harel pension/study funds are locked for years
+    # (illiquid), while a Discount נזיל deposit can be exited same-day (liquid).
+    # Lumping them into one number would misleadingly suggest money is available
+    # that isn't. Each record carries `liquid: true/false` (default False —
+    # unmarked/legacy records like Harel's are conservatively illiquid) so the
+    # totals below can be reported split, while net_position_with_savings keeps
+    # its existing meaning (all savings, liquid or not, added to the tracked net).
     savings = e.get("savings", [])
     savings_sum = round(sum(s["balance"] for s in savings), 2)
+    liquid_savings_sum = round(sum(s["balance"] for s in savings if s.get("liquid")), 2)
+    illiquid_savings_sum = round(savings_sum - liquid_savings_sum, 2)
 
     def clean(records):                           # drop internal stamps from output
         return [{k: v for k, v in r.items() if not k.startswith("_")} for r in records]
@@ -344,6 +354,8 @@ def build_snapshot(e):
             "total_debt": round(cc_total + mortgage_balance + consumer_balance, 2),
             "tracked_net_position": tracked_net,
             "long_term_savings": savings_sum,
+            "liquid_savings": liquid_savings_sum,
+            "illiquid_savings": illiquid_savings_sum,
             "net_position_with_savings": round(tracked_net + savings_sum, 2),
             "monthly_loan_service": loan_monthly,
             "detected_monthly_salary": salary,
@@ -365,9 +377,10 @@ def write_markdown(s):
           f"- **Bank balances:** {ils(t['bank_balances_sum'])}.",
           f"- **Transactions normalized:** {s['transactions_count']}."]
     if t.get("long_term_savings"):
-        md.append(f"- **Long-term savings:** {ils(t['long_term_savings'])} "
-                  f"(pension / study funds) → net with savings "
-                  f"{ils(t['net_position_with_savings'])}.")
+        md.append(f"- **Total savings:** {ils(t['long_term_savings'])} "
+                  f"(liquid {ils(t.get('liquid_savings', 0))} — deposits you can exit "
+                  f"same-day · illiquid {ils(t.get('illiquid_savings', 0))} — pension / "
+                  f"study funds) → net with savings {ils(t['net_position_with_savings'])}.")
     if t["detected_monthly_salary"]:
         md.append(f"- **Detected monthly salary:** {ils(t['detected_monthly_salary'])} "
                   f"({t['monthly_loan_service']/t['detected_monthly_salary']*100:.0f}% goes to loans).")
