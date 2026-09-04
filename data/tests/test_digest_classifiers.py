@@ -48,9 +48,12 @@ class TestCardBillPayment:
         # an actual purchase, must not be excluded.
         assert not digest.is_card_bill_payment(tx(-89, "חיוב ויזה כ.א.ל", origin="cal"))
 
-    def test_inbound_credit_is_not_a_bill(self):
-        # Settlements are debits; a positive amount is never a bill payment.
-        assert not digest.is_card_bill_payment(tx(8000, "חיוב ויזה כ.א.ל", origin="discount"))
+    def test_inbound_credit_naming_a_card_issuer_is_a_settlement_reversal(self):
+        # A positive bank-side amount naming a known card issuer is our own money
+        # bouncing back from a settlement (reversal/re-charge) — not income. See
+        # TestCardIssuerSettlementReversal for the real 2026-08 AMEX case this
+        # generalizes from; CAL/ויזה כ.א.ל is the same pattern.
+        assert digest.is_card_bill_payment(tx(8000, "חיוב ויזה כ.א.ל", origin="discount"))
 
 
 class TestSavingsDeposit:
@@ -112,3 +115,33 @@ class TestLoanRoundTrip:
         assert not digest.is_internal_transfer(tx(-310.44, "פירעון הלוואה 15500316168"))
         assert not digest.is_internal_transfer(tx(-867.8, "פרעון הלוואה", origin="leumi"))
 
+
+class TestCardIssuerSettlementReversal:
+    """2026-08 leak: an AMEX settlement reversal landed on the bank side as a
+    POSITIVE amount with description "אמריקן אקס" (no "חיוב" suffix, unlike the
+    genuine debit settlements 3 days on either side), so it fell through
+    is_card_bill_payment (which requires amount < 0 and the "חיוב" suffix) and
+    got counted as real income. It's our own money bouncing back from the card
+    issuer, not income — must be excluded regardless of sign or suffix, keyed on
+    the counterparty being one of our known card issuers on a BANK origin.
+    """
+
+    def test_amex_settlement_reversal_credit_is_not_income(self):
+        # Real row: 2026-08-11, discount origin, +10244.72, no "חיוב" suffix.
+        t = tx(10244.72, "אמריקן אקס", origin="discount")
+        assert digest.is_card_bill_payment(t)
+
+    def test_amex_settlement_debit_with_chiyuv_suffix_still_matches(self):
+        # Pre-existing behavior must still work: the ordinary debit settlements.
+        assert digest.is_card_bill_payment(tx(-14308.54, "אמריקן אקס,חיוב", origin="discount"))
+        assert digest.is_card_bill_payment(tx(-10215.08, "אמריקן אקס,חיוב", origin="discount"))
+        assert digest.is_card_bill_payment(tx(-1157.00, "אמריקן אקס,חיוב", origin="discount"))
+
+    def test_merchant_refund_on_card_origin_is_not_a_card_settlement(self):
+        # A genuine merchant refund lands on the CARD side (origin amex/cal), with
+        # a specific merchant name — not one of our card-issuer counterparty names.
+        # Must NOT be classified as a card_bill_payment/internal settlement; it
+        # legitimately reduces spend and stays as-is.
+        refund = tx(150.0, "זיכוי - רמי לוי", origin="amex")
+        assert not digest.is_card_bill_payment(refund)
+        assert not digest.is_internal_transfer(refund)

@@ -110,20 +110,38 @@ CARD_BILL_PHRASES = [
 BANK_ORIGINS = {"discount", "discount-business", "leumi"}
 
 
+def _mentions_card_issuer(desc, low):
+    if any(p in desc for p in CARD_BILL_PHRASES if p.isascii() is False):
+        return True
+    # ascii issuer names (max) — match on the lowercased description
+    if any(p in low for p in CARD_BILL_PHRASES if p.isascii()):
+        return True
+    return False
+
+
 def is_card_bill_payment(rec):
-    """True if this is a bank→card-issuer monthly settlement (not real spend)."""
+    """True if this is a bank-side move against a card-issuer settlement — the
+    monthly debit, or a reversal/re-charge credit of one — not real spend or income.
+
+    Keyed on the counterparty being one of our known card issuers on a BANK
+    origin, not on the "חיוב" suffix alone: a settlement reversal (issuer credits
+    the bank back, e.g. a charge reversed then re-billed days later) carries a
+    POSITIVE amount and often lacks "חיוב" in its description, but it is still
+    our own money moving between our bank and our card issuer — never counted as
+    income. Ordinary debit settlements (negative, "...,חיוב") keep matching as
+    before. Scoped to BANK_ORIGINS so a genuine merchant refund on the CARD side
+    (origin cal/amex, a specific merchant name) is never caught here.
+    """
     if rec.get("origin") not in BANK_ORIGINS:
-        return False
-    if float(rec.get("amount") or 0) >= 0:        # settlements are debits
         return False
     desc = (rec.get("description") or "")
     low = desc.lower()
-    if "חיוב" in desc and any(p in desc for p in CARD_BILL_PHRASES if p.isascii() is False):
-        return True
-    # ascii issuer names (max) — match on the lowercased description
-    if "חיוב" in desc and any(p in low for p in CARD_BILL_PHRASES if p.isascii()):
-        return True
-    return False
+    amount = float(rec.get("amount") or 0)
+    if amount < 0:                                 # ordinary debit settlement
+        return "חיוב" in desc and _mentions_card_issuer(desc, low)
+    # positive amount: only a settlement reversal/credit from a known issuer
+    # counterparty qualifies — never match on amount alone.
+    return _mentions_card_issuer(desc, low)
 
 
 # --- Savings / investment deposits -----------------------------------------
