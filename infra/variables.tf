@@ -12,7 +12,7 @@ variable "owner_email" {
 variable "domain_name" {
   description = "Public hostname for the dashboard. The Cognito login lives on auth.<domain_name>."
   type        = string
-  default     = "finance.yarinsa.me"
+  default     = "my-finance.yarinsa.me"
 }
 
 variable "hosted_zone_name" {
