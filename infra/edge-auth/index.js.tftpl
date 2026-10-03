@@ -159,6 +159,29 @@ function redirectToLogin(host) {
   };
 }
 
+function redirect(location) {
+  return {
+    status: "302",
+    statusDescription: "Found",
+    headers: {
+      location: [{ key: "Location", value: location }],
+      "cache-control": [{ key: "Cache-Control", value: "no-store" }],
+    },
+  };
+}
+
+/**
+ * Managed login's passkey enrolment page. It needs a live managed-login
+ * session on the auth domain, which exists right after signing in; the
+ * redirect_uri must be a registered callback, hence /_callback.
+ */
+function redirectToPasskeyEnrolment() {
+  const target = new URL(`https://$${CONFIG.hosted_domain}/passkeys/add`);
+  target.searchParams.set("client_id", CONFIG.client_id);
+  target.searchParams.set("redirect_uri", `https://$${CONFIG.site_domain}/_callback`);
+  return redirect(target.toString());
+}
+
 function denied(reason) {
   return {
     status: "403",
@@ -179,7 +202,9 @@ function denied(reason) {
 async function handleCallback(request, host) {
   const params = new URLSearchParams(request.querystring || "");
   const code = params.get("code");
-  if (!code) return denied("missing authorization code");
+  // The passkey enrolment page returns here with no code. Nothing is granted
+  // by this redirect — "/" re-checks the session like any other request.
+  if (!code) return redirect("/");
 
   const basic = Buffer.from(
     `$${CONFIG.client_id}:$${CONFIG.client_secret}`
@@ -232,6 +257,14 @@ exports.handler = async (event) => {
   const headers = request.headers;
   const host = headers.host[0].value;
 
+  // One canonical origin: the session cookie, the OAuth redirect_uri and the
+  // passkey relying party all assume it. The raw *.cloudfront.net name is
+  // bounced before anything else happens.
+  if (host !== CONFIG.site_domain) {
+    const qs = request.querystring ? `?$${request.querystring}` : "";
+    return redirect(`https://$${CONFIG.site_domain}$${request.uri}$${qs}`);
+  }
+
   if (request.uri === "/_callback") {
     return handleCallback(request, host);
   }
@@ -258,6 +291,9 @@ exports.handler = async (event) => {
 
   const claims = await verify(token);
   if (!claims) return redirectToLogin(host);
+
+  // Signed-in only: enrolling a passkey is a privileged action.
+  if (request.uri === "/_passkey") return redirectToPasskeyEnrolment();
 
   // Authenticated: let the request through to S3 untouched.
   return request;

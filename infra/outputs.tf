@@ -1,6 +1,11 @@
 output "url" {
   description = "The dashboard. Hitting it redirects to the Cognito login until a session cookie exists."
-  value       = "https://${aws_cloudfront_distribution.site.domain_name}"
+  value       = "https://${var.domain_name}"
+}
+
+output "passkey_url" {
+  description = "Open while signed in to enrol a passkey (Face ID / Touch ID / security key)."
+  value       = "https://${var.domain_name}/_passkey"
 }
 
 output "bucket" {
@@ -14,8 +19,8 @@ output "distribution_id" {
 }
 
 output "login_domain" {
-  description = "Cognito hosted UI domain."
-  value       = "${aws_cognito_user_pool_domain.users.domain}.auth.${var.region}.amazoncognito.com"
+  description = "Cognito managed login domain (passkey relying party)."
+  value       = local.auth_domain
 }
 
 output "user_pool_id" {
