@@ -13,47 +13,80 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarProvider,
-  SidebarTrigger,
+  useSidebar,
 } from "@/components/ui/sidebar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { MobileTabBar } from "@/components/MobileTabBar";
+
+/** "Updated N days ago" — tap-able so the stale warning works on touch. */
+function Freshness({ days }: { days: number }) {
+  const stale = days > 7;
+  return (
+    <Popover>
+      <PopoverTrigger className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+        עודכן לפני {days} ימים
+        {stale && <span className="stale-dot" aria-label="נתונים ישנים" />}
+      </PopoverTrigger>
+      <PopoverContent className="w-64 text-sm">
+        {stale
+          ? "הנתונים ישנים משבוע — כדאי לרענן את המקורות ולהריץ digest."
+          : "הנתונים עדכניים."}
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+function AppSidebar({ days }: { days: number }) {
+  const { pathname } = useLocation();
+  const { setOpenMobile } = useSidebar();
+  return (
+    <Sidebar side="right">
+      <SidebarHeader>
+        <div className="px-2 py-1 text-lg font-bold">Plangram</div>
+      </SidebarHeader>
+      <SidebarContent>
+        <SidebarGroup>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {routes.map(({ path, label, icon: Icon }) => (
+                <SidebarMenuItem key={path}>
+                  <SidebarMenuButton asChild isActive={pathname === path}>
+                    <NavLink to={path} onClick={() => setOpenMobile(false)}>
+                      <Icon />
+                      {label}
+                    </NavLink>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ))}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+      </SidebarContent>
+      <SidebarFooter>
+        <div className="px-2">
+          <Freshness days={days} />
+        </div>
+      </SidebarFooter>
+    </Sidebar>
+  );
+}
 
 export default function App() {
   const { pathname } = useLocation();
   const days = daysSince(cashflow.generated_at);
-  const stale = days > 7;
+  const current = routes.find((r) => r.path === pathname);
   return (
     <TooltipProvider>
       <SidebarProvider>
-        <Sidebar side="right">
-          <SidebarHeader>
-            <div className="px-2 py-1 text-lg font-bold">Plangram</div>
-          </SidebarHeader>
-          <SidebarContent>
-            <SidebarGroup>
-              <SidebarGroupContent>
-                <SidebarMenu>
-                  {routes.map((r) => (
-                    <SidebarMenuItem key={r.path}>
-                      <SidebarMenuButton asChild isActive={pathname === r.path}>
-                        <NavLink to={r.path}>{r.label}</NavLink>
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
-                  ))}
-                </SidebarMenu>
-              </SidebarGroupContent>
-            </SidebarGroup>
-          </SidebarContent>
-          <SidebarFooter>
-            <div className="px-2 text-xs text-muted-foreground">
-              עודכן לפני {days} ימים
-              {stale && <span className="stale-dot" title="נתונים ישנים" />}
-            </div>
-          </SidebarFooter>
-        </Sidebar>
+        <AppSidebar days={days} />
         <SidebarInset>
-          <header className="flex h-12 items-center gap-2 border-b px-4 md:hidden">
-            <SidebarTrigger />
-            <span className="font-bold">Plangram</span>
+          <header
+            className="sticky top-0 z-30 flex h-12 items-center justify-between border-b bg-background/80 px-4 backdrop-blur-xl md:hidden"
+            style={{ paddingTop: "env(safe-area-inset-top)", boxSizing: "content-box" }}
+          >
+            <span className="font-bold">{current?.label ?? "Plangram"}</span>
+            <Freshness days={days} />
           </header>
           <main className="content">
             <Routes>
@@ -65,6 +98,7 @@ export default function App() {
             </Routes>
           </main>
         </SidebarInset>
+        <MobileTabBar />
       </SidebarProvider>
     </TooltipProvider>
   );

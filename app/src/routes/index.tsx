@@ -1,4 +1,17 @@
 import type { ComponentType } from "react";
+import {
+  ArrowLeftRight,
+  CalendarRange,
+  ClipboardList,
+  Gauge,
+  House,
+  Landmark,
+  Lightbulb,
+  PieChart,
+  Sparkles,
+  Target,
+  type LucideIcon,
+} from "lucide-react";
 import Cashflow from "./Cashflow";
 import Overview from "./Overview";
 import Summary from "./Summary";
@@ -13,19 +26,22 @@ import MyPlan from "./MyPlan";
 export interface RouteDef {
   path: string;
   label: string; // Hebrew nav label
+  icon: LucideIcon;
+  /** Pinned to the mobile tab bar; the rest live behind "More". */
+  primary?: boolean;
   Component: ComponentType;
 }
 
 /** Mirrors the 10 PRD features in docs/plangram-prd. Order = nav order. */
 export const routes: RouteDef[] = [
-  { path: "/overview", label: "מבט על", Component: Overview },
-  { path: "/cashflow", label: "תזרים כספי", Component: Cashflow },
-  { path: "/summary", label: "סיכום התוכנית", Component: Summary },
-  { path: "/goals", label: "יעדים", Component: Goals },
-  { path: "/recommendations", label: "המלצות", Component: Recommendations },
-  { path: "/networth", label: "שווי נקי", Component: Networth },
-  { path: "/portfolio", label: "השקעות", Component: Portfolio },
-  { path: "/metrics", label: "התקדמות", Component: Metrics },
-  { path: "/timeline", label: "ציר זמן", Component: Timeline },
-  { path: "/my-plan", label: "תכנון פלוס", Component: MyPlan },
+  { path: "/overview", label: "מבט על", icon: House, primary: true, Component: Overview },
+  { path: "/cashflow", label: "תזרים כספי", icon: ArrowLeftRight, primary: true, Component: Cashflow },
+  { path: "/summary", label: "סיכום התוכנית", icon: ClipboardList, Component: Summary },
+  { path: "/goals", label: "יעדים", icon: Target, primary: true, Component: Goals },
+  { path: "/recommendations", label: "המלצות", icon: Lightbulb, Component: Recommendations },
+  { path: "/networth", label: "שווי נקי", icon: Landmark, primary: true, Component: Networth },
+  { path: "/portfolio", label: "השקעות", icon: PieChart, Component: Portfolio },
+  { path: "/metrics", label: "התקדמות", icon: Gauge, Component: Metrics },
+  { path: "/timeline", label: "ציר זמן", icon: CalendarRange, Component: Timeline },
+  { path: "/my-plan", label: "תכנון פלוס", icon: Sparkles, Component: MyPlan },
 ];

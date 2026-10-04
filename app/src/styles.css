@@ -21,32 +21,6 @@ body {
   direction: rtl;
 }
 
-.layout { display: flex; min-height: 100%; }
-
-/* right rail (RTL → visually on the right) */
-.rail {
-  width: 220px;
-  flex-shrink: 0;
-  background: var(--lg-panel);
-  border-inline-start: 1px solid var(--lg-line);
-  padding: 20px 14px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.brand { font-weight: 800; font-size: 20px; letter-spacing: 0.5px; margin-bottom: 12px; }
-nav { display: flex; flex-direction: column; gap: 4px; }
-.nav-item {
-  display: block;
-  padding: 9px 12px;
-  border-radius: 10px;
-  color: var(--lg-muted);
-  text-decoration: none;
-  font-size: 15px;
-}
-.nav-item:hover { background: var(--lg-panel-2); color: var(--lg-text); }
-.nav-item.active { background: var(--lg-accent); color: #0b0e14; font-weight: 700; }
-.rail-foot { margin-top: auto; color: var(--lg-muted); font-size: 12px; }
 .stale-dot {
   display: inline-block; width: 8px; height: 8px; border-radius: 50%;
   background: var(--lg-warn); margin-inline-start: 6px; vertical-align: middle;
@@ -65,7 +39,8 @@ nav { display: flex; flex-direction: column; gap: 4px; }
 
 /* Phones: one column for the wide grids, two for the KPI rows. */
 @media (max-width: 767px) {
-  .content { padding: 16px; }
+  /* Extra bottom room so the floating tab bar never covers content. */
+  .content { padding: 16px 16px calc(env(safe-area-inset-bottom) + 112px); }
   .page-title { font-size: 22px; }
   .grid-2, .grid-3 { grid-template-columns: 1fr; }
   .grid-4, .grid-5 { grid-template-columns: repeat(2, 1fr); }
