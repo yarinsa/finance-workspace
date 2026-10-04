@@ -5,6 +5,15 @@ Reads every raw/fetch-transactions_*.json, dedupes transactions across pulls by
 (account_id, identifier), and emits:
     accounts.json      -> per-account current balance
     transactions.json  -> flattened, deduped transaction list
+    savings.json        -> bank deposits (פיקדונות), from deposits_depositsDetails.json
+
+Deposits are an ASSET, not spending: no `transactions` entity is emitted for
+them, matching the harel savings producer. Unlike Harel's pension/study funds
+(illiquid, locked for years), a Discount נזיל deposit can be exited daily — so
+each record carries `liquid: true/false` (kind-derived: "נזיל" in the product
+name => liquid, anything else conservatively marked illiquid) so digest.py can
+tell the two apart instead of lumping locked and available money into one
+number.
 
 Common envelope: {"source", "entity", "generated_at", "records": [...]}
 Self-contained; safe to re-run after each scrape.
@@ -82,3 +91,40 @@ for fp in sorted(glob.glob(str(RAW / "fetch-transactions_*.json"))):
 
 emit("accounts", list(accounts.values()))
 emit("transactions", sorted(txns.values(), key=lambda r: r["date"]))
+
+
+# ---- savings (bank deposits / פיקדונות) ----
+# Institutions vary in shape: personal Discount returns real deposit data;
+# discount-business returns {"Error": {...}} when there are no active deposits
+# ("לא נמצאו הפקדות פעילות") — that must normalize to zero records, not a crash
+# and not a phantom record.
+def normalize_deposits(fp, institution):
+    if not fp.exists() or fp.stat().st_size == 0:
+        return []
+    data = json.load(open(fp, encoding="utf-8"))
+    if "Error" in data:
+        return []  # e.g. RET011039 "no active deposits" — a valid empty state
+
+    details = data.get("DepositsDetails", {})
+    records = []
+    for acc in (details.get("DepositAccountBlock") or {}).get("DepositAccountEntry", []):
+        label = acc.get("ProductShortName") or acc.get("ProductLongName") or "deposit"
+        balance = acc.get("TotalDepositsCurrentValue")
+        if balance is None:
+            continue
+        records.append({
+            "institution": institution,
+            "account_id": acc.get("TermNewAccountNumber") or acc.get("AccountNumber"),
+            "kind": "bank_deposit",
+            "label": label,
+            "liquid": "נזיל" in label,  # daily-exit deposit vs a locked term deposit
+            "balance": round(balance, 2),
+            "currency": acc.get("CurrencyCode", "ILS"),
+            "maturity_date": None,
+            "management_fee": None,
+            "yield_ytd": None,
+        })
+    return records
+
+
+emit("savings", normalize_deposits(RAW / "deposits_depositsDetails.json", "discount"))

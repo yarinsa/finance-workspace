@@ -44,21 +44,51 @@ echo "----------------------------------------"
 
 # run-code --raw output is double-JSON-encoded: parse once -> string, parse
 # again -> {status, body}. (Reused verbatim from riseup-raw-refresh.)
+#
+# STUB GUARD (added — do not remove): a half-authenticated session returns
+# HTTP 200 with a few hundred bytes of error JSON (e.g. landing on
+# apollo/business2 gives `actionRequired: stepup` or `SME - קלט לא תקין`).
+# Before overwriting an existing file we require: valid JSON, not a
+# login-shell HTML page, and no known auth-error marker. A legitimately
+# small response (e.g. {} or []) is NOT rejected — only markers matching a
+# known failure signature are. On failure: do not write, print an error,
+# leave the previous file untouched, and mark the run non-zero.
 parse_and_write() {
   local resp_file="$1" out_file="$2" label="$3"
-  node -e '
+  node -e '(function(){
     const fs = require("fs");
     let raw = fs.readFileSync(process.argv[1], "utf8").trim();
     let obj = JSON.parse(raw);
     if (typeof obj === "string") obj = JSON.parse(obj);
     let body = obj.body ?? "";
-    let pretty = body;
-    try { pretty = JSON.stringify(JSON.parse(body), null, 2); } catch {}
-    fs.writeFileSync(process.argv[2], pretty);
     const status = String(obj.status);
+    const outFile = process.argv[2], label = process.argv[3];
+
+    if (/^\s*<(!doctype|html)/i.test(body)) {
+      console.log(`  --  ${String(body.length).padStart(9)}B  ${label}  <-- LOGIN-SHELL HTML, NOT WRITTEN (previous file kept)`);
+      process.exitCode = 2;
+      return;
+    }
+    let parsed;
+    try { parsed = JSON.parse(body); }
+    catch {
+      console.log(`  --  ${String(body.length).padStart(9)}B  ${label}  <-- NOT JSON, NOT WRITTEN (previous file kept)`);
+      process.exitCode = 2;
+      return;
+    }
+    const flat = JSON.stringify(parsed);
+    const AUTH_ERROR_MARKERS = [/actionRequired["\s:]*["\s]*stepup/i, /SME\s*-\s*קלט לא תקין/];
+    if (AUTH_ERROR_MARKERS.some(re => re.test(flat))) {
+      console.log(`  --  ${String(body.length).padStart(9)}B  ${label}  <-- AUTH-ERROR STUB, NOT WRITTEN (previous file kept)`);
+      process.exitCode = 2;
+      return;
+    }
+
+    const pretty = JSON.stringify(parsed, null, 2);
+    fs.writeFileSync(outFile, pretty);
     const warn = (status !== "200") ? "  <-- non-200" : "";
-    console.log(`  ${status}  ${String(body.length).padStart(9)}B  ${process.argv[3]}${warn}`);
-  ' "$resp_file" "$out_file" "$label"
+    console.log(`  ${status}  ${String(body.length).padStart(9)}B  ${label}${warn}`);
+})();' "$resp_file" "$out_file" "$label"
 }
 
 # GET helper: fname|path

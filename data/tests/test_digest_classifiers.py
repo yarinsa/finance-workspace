@@ -48,9 +48,12 @@ class TestCardBillPayment:
         # an actual purchase, must not be excluded.
         assert not digest.is_card_bill_payment(tx(-89, "חיוב ויזה כ.א.ל", origin="cal"))
 
-    def test_inbound_credit_is_not_a_bill(self):
-        # Settlements are debits; a positive amount is never a bill payment.
-        assert not digest.is_card_bill_payment(tx(8000, "חיוב ויזה כ.א.ל", origin="discount"))
+    def test_inbound_credit_naming_a_card_issuer_is_a_settlement_reversal(self):
+        # A positive bank-side amount naming a known card issuer is our own money
+        # bouncing back from a settlement (reversal/re-charge) — not income. See
+        # TestCardIssuerSettlementReversal for the real 2026-08 AMEX case this
+        # generalizes from; CAL/ויזה כ.א.ל is the same pattern.
+        assert digest.is_card_bill_payment(tx(8000, "חיוב ויזה כ.א.ל", origin="discount"))
 
 
 class TestSavingsDeposit:
@@ -67,3 +70,78 @@ class TestSavingsDeposit:
 
     def test_inbound_is_not_savings(self):
         assert not digest.is_savings_deposit(tx(2000, "הפקדה לפיקדון"))
+
+
+class TestDepositWithdrawalIsNotIncome:
+    """2026-08 leak: withdrawing from our own liquid deposit (פיקדון נזיל) came
+    back tagged as real income. It's the user's own money returning, not cashflow
+    — should be tagged internal_transfer just like the deposit leg is tagged
+    savings, so spending_summary excludes both sides of the round-trip.
+    """
+
+    def test_liquid_deposit_withdrawal_is_internal(self):
+        assert digest.is_internal_transfer(tx(9507, "משיכה מפיקדון נזיל יומי+"))
+        assert digest.is_internal_transfer(tx(8900, "משיכה מפיקדון נזיל יומי+"))
+        assert digest.is_internal_transfer(tx(4200, "משיכה מפיקדון נזיל יומי+"))
+        assert digest.is_internal_transfer(tx(300, "משיכה מפיקדון נזיל יומי+"))
+
+    def test_liquid_deposit_withdrawal_profit_is_internal(self):
+        # Small interest/profit credited alongside a withdrawal — also our own money.
+        assert digest.is_internal_transfer(tx(0.03, "רווחים ממשיכת הפקדה מפיקדון"))
+
+    def test_liquid_deposit_deposit_leg_still_savings_not_internal(self):
+        # The deposit leg (money leaving to the deposit) keeps its existing
+        # `savings` classification — do not silently reclassify it.
+        assert digest.is_savings_deposit(tx(-23296, "הפקדה לפיקדון נזיל יומי+"))
+        assert not digest.is_internal_transfer(tx(-23296, "הפקדה לפיקדון נזיל יומי+"))
+
+
+class TestLoanRoundTrip:
+    """2026-08 leak: a loan opened and repaid within days (same loan id
+    13200898802) netted to ~zero but both legs counted as real income/spend.
+    Match on the specific loan-number pairing that actually round-tripped, not a
+    blanket rule on every 'הקמת הלוואה'/'פירעון הלוואה' — most loan repayments in
+    the ledger (leumi, discount loans 10800100014 / 15500316168) are real ongoing
+    debt service and must stay counted as spend.
+    """
+
+    def test_opened_and_repaid_same_loan_id_is_internal(self):
+        assert digest.is_internal_transfer(tx(10000, "הקמת הלוואה 13200898802"))
+        assert digest.is_internal_transfer(tx(-10008.67, "פירעון הלוואה 13200898802"))
+
+    def test_ordinary_ongoing_loan_repayment_is_not_internal(self):
+        # These loan ids never had a matching "הקמת הלוואה" — real debt service.
+        assert not digest.is_internal_transfer(tx(-666.72, "פירעון הלוואה 10800100014"))
+        assert not digest.is_internal_transfer(tx(-310.44, "פירעון הלוואה 15500316168"))
+        assert not digest.is_internal_transfer(tx(-867.8, "פרעון הלוואה", origin="leumi"))
+
+
+class TestCardIssuerSettlementReversal:
+    """2026-08 leak: an AMEX settlement reversal landed on the bank side as a
+    POSITIVE amount with description "אמריקן אקס" (no "חיוב" suffix, unlike the
+    genuine debit settlements 3 days on either side), so it fell through
+    is_card_bill_payment (which requires amount < 0 and the "חיוב" suffix) and
+    got counted as real income. It's our own money bouncing back from the card
+    issuer, not income — must be excluded regardless of sign or suffix, keyed on
+    the counterparty being one of our known card issuers on a BANK origin.
+    """
+
+    def test_amex_settlement_reversal_credit_is_not_income(self):
+        # Real row: 2026-08-11, discount origin, +10244.72, no "חיוב" suffix.
+        t = tx(10244.72, "אמריקן אקס", origin="discount")
+        assert digest.is_card_bill_payment(t)
+
+    def test_amex_settlement_debit_with_chiyuv_suffix_still_matches(self):
+        # Pre-existing behavior must still work: the ordinary debit settlements.
+        assert digest.is_card_bill_payment(tx(-14308.54, "אמריקן אקס,חיוב", origin="discount"))
+        assert digest.is_card_bill_payment(tx(-10215.08, "אמריקן אקס,חיוב", origin="discount"))
+        assert digest.is_card_bill_payment(tx(-1157.00, "אמריקן אקס,חיוב", origin="discount"))
+
+    def test_merchant_refund_on_card_origin_is_not_a_card_settlement(self):
+        # A genuine merchant refund lands on the CARD side (origin amex/cal), with
+        # a specific merchant name — not one of our card-issuer counterparty names.
+        # Must NOT be classified as a card_bill_payment/internal settlement; it
+        # legitimately reduces spend and stays as-is.
+        refund = tx(150.0, "זיכוי - רמי לוי", origin="amex")
+        assert not digest.is_card_bill_payment(refund)
+        assert not digest.is_internal_transfer(refund)

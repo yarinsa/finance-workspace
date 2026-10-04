@@ -7,7 +7,7 @@ By default this runs every <source>/normalize.py first, then combines all
 <source>/normalized/*.json envelopes into one consolidated snapshot.
 Run `python3 digest.py --no-normalize` to combine existing normalized output only.
 """
-import json, datetime, glob, subprocess, sys
+import json, datetime, glob, re, subprocess, sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent          # .../Finance/data
@@ -53,13 +53,31 @@ OWN_ACCOUNT_HINTS = ["806-6719", "806-671963", "10-806", "0034069", "0123444499"
 # on Discount — i.e. a Leumi→Discount sweep. Treated as internal.
 OWN_TRANSFER_DESCRIPTIONS = ["העברה דיגיטל"]
 
+# Withdrawals from our own liquid deposit (פיקדון נזיל) coming back into checking,
+# plus the tiny interest/profit credited alongside them. The deposit LEG (money
+# going in) is real savings (is_savings_deposit, below); the withdrawal LEG is the
+# same money returning and must not be double-counted as income.
+DEPOSIT_WITHDRAWAL_PHRASES = ["משיכה מפיקדון", "רווחים ממשיכת הפקדה מפיקדון"]
+
+# Loan ids where BOTH "הקמת הלוואה <id>" (opened) and "פירעון/פרעון הלוואה <id>"
+# (repaid) were observed in the ledger — i.e. confirmed round-trips that net to
+# ~zero, not real borrowing/debt-service. Populated below from ledger evidence.
+# Deliberately an allowlist of specific ids, NOT a blanket rule on the phrase —
+# most "פירעון הלוואה" rows are real ongoing loan repayments (leumi, discount
+# loans 10800100014 / 15500316168) and must stay counted as spend.
+ROUND_TRIP_LOAN_IDS = {"13200898802"}
+
+_LOAN_ID_RE = re.compile(r"(?:הקמת|פירעון|פרעון) הלוואה\s+(\d+)")
+
 
 def is_internal_transfer(rec):
     """True if the transaction is a move between the household's own accounts.
 
     Matches on the description referencing an own holder name, own account
-    number, or a known self-transfer phrase. Conservative: only fires on a
-    positive signal, so external transfers (real income/expense) are kept.
+    number, a known self-transfer phrase, a liquid-deposit withdrawal (the
+    money returning from our own deposit), or one leg of a confirmed
+    open+repay loan round-trip. Conservative: only fires on a positive
+    signal, so external transfers (real income/expense) are kept.
     """
     desc = rec.get("description") or ""
     if any(n in desc for n in OWN_NAMES):
@@ -67,6 +85,11 @@ def is_internal_transfer(rec):
     if any(a in desc for a in OWN_ACCOUNT_HINTS):
         return True
     if any(p in desc for p in OWN_TRANSFER_DESCRIPTIONS):
+        return True
+    if any(p in desc for p in DEPOSIT_WITHDRAWAL_PHRASES):
+        return True
+    m = _LOAN_ID_RE.search(desc)
+    if m and m.group(1) in ROUND_TRIP_LOAN_IDS:
         return True
     return False
 
@@ -87,20 +110,38 @@ CARD_BILL_PHRASES = [
 BANK_ORIGINS = {"discount", "discount-business", "leumi"}
 
 
+def _mentions_card_issuer(desc, low):
+    if any(p in desc for p in CARD_BILL_PHRASES if p.isascii() is False):
+        return True
+    # ascii issuer names (max) — match on the lowercased description
+    if any(p in low for p in CARD_BILL_PHRASES if p.isascii()):
+        return True
+    return False
+
+
 def is_card_bill_payment(rec):
-    """True if this is a bank→card-issuer monthly settlement (not real spend)."""
+    """True if this is a bank-side move against a card-issuer settlement — the
+    monthly debit, or a reversal/re-charge credit of one — not real spend or income.
+
+    Keyed on the counterparty being one of our known card issuers on a BANK
+    origin, not on the "חיוב" suffix alone: a settlement reversal (issuer credits
+    the bank back, e.g. a charge reversed then re-billed days later) carries a
+    POSITIVE amount and often lacks "חיוב" in its description, but it is still
+    our own money moving between our bank and our card issuer — never counted as
+    income. Ordinary debit settlements (negative, "...,חיוב") keep matching as
+    before. Scoped to BANK_ORIGINS so a genuine merchant refund on the CARD side
+    (origin cal/amex, a specific merchant name) is never caught here.
+    """
     if rec.get("origin") not in BANK_ORIGINS:
-        return False
-    if float(rec.get("amount") or 0) >= 0:        # settlements are debits
         return False
     desc = (rec.get("description") or "")
     low = desc.lower()
-    if "חיוב" in desc and any(p in desc for p in CARD_BILL_PHRASES if p.isascii() is False):
-        return True
-    # ascii issuer names (max) — match on the lowercased description
-    if "חיוב" in desc and any(p in low for p in CARD_BILL_PHRASES if p.isascii()):
-        return True
-    return False
+    amount = float(rec.get("amount") or 0)
+    if amount < 0:                                 # ordinary debit settlement
+        return "חיוב" in desc and _mentions_card_issuer(desc, low)
+    # positive amount: only a settlement reversal/credit from a known issuer
+    # counterparty qualifies — never match on amount alone.
+    return _mentions_card_issuer(desc, low)
 
 
 # --- Savings / investment deposits -----------------------------------------
@@ -273,18 +314,36 @@ def build_snapshot(e):
 
     tracked_net = round(bank_sum - cc_total - mortgage_balance - consumer_balance, 2)
 
+    # Savings (pension / study funds / bank deposits). Assets, not cashflow — they
+    # carry no transactions, so they never touch the ledger. Kept OUT of
+    # tracked_net_position (which stays a liquid-position-vs-debt figure) and
+    # surfaced separately in net_position_with_savings.
+    #
+    # Not all savings are equal: Harel pension/study funds are locked for years
+    # (illiquid), while a Discount נזיל deposit can be exited same-day (liquid).
+    # Lumping them into one number would misleadingly suggest money is available
+    # that isn't. Each record carries `liquid: true/false` (default False —
+    # unmarked/legacy records like Harel's are conservatively illiquid) so the
+    # totals below can be reported split, while net_position_with_savings keeps
+    # its existing meaning (all savings, liquid or not, added to the tracked net).
+    savings = e.get("savings", [])
+    savings_sum = round(sum(s["balance"] for s in savings), 2)
+    liquid_savings_sum = round(sum(s["balance"] for s in savings if s.get("liquid")), 2)
+    illiquid_savings_sum = round(savings_sum - liquid_savings_sum, 2)
+
     def clean(records):                           # drop internal stamps from output
         return [{k: v for k, v in r.items() if not k.startswith("_")} for r in records]
 
     return {
         "generated_at": datetime.datetime.now().astimezone().isoformat(timespec="seconds"),
         "currency": "ILS",
-        "note": "Combined from the normalized layer. Tracked accounts only — property value "
-                "and external savings/investments are NOT in these sources, so totals reflect "
-                "bank balances and debts, not full net worth.",
+        "note": "Combined from the normalized layer. Bank balances, debts and long-term "
+                "savings (pension / study funds). Property value and any savings held "
+                "outside the scraped sources are still NOT included.",
         "bank_accounts": clean(accounts),
         "credit_cards": clean(cards),
         "loans": clean(loans),
+        "savings": clean(savings),
         "income": clean(income),
         "transactions_count": len(txns),
         "totals": {
@@ -294,6 +353,10 @@ def build_snapshot(e):
             "consumer_loan_balance": consumer_balance,
             "total_debt": round(cc_total + mortgage_balance + consumer_balance, 2),
             "tracked_net_position": tracked_net,
+            "long_term_savings": savings_sum,
+            "liquid_savings": liquid_savings_sum,
+            "illiquid_savings": illiquid_savings_sum,
+            "net_position_with_savings": round(tracked_net + savings_sum, 2),
             "monthly_loan_service": loan_monthly,
             "detected_monthly_salary": salary,
         },
@@ -313,6 +376,11 @@ def write_markdown(s):
           f"- **Monthly loan service:** {ils(t['monthly_loan_service'])}.",
           f"- **Bank balances:** {ils(t['bank_balances_sum'])}.",
           f"- **Transactions normalized:** {s['transactions_count']}."]
+    if t.get("long_term_savings"):
+        md.append(f"- **Total savings:** {ils(t['long_term_savings'])} "
+                  f"(liquid {ils(t.get('liquid_savings', 0))} — deposits you can exit "
+                  f"same-day · illiquid {ils(t.get('illiquid_savings', 0))} — pension / "
+                  f"study funds) → net with savings {ils(t['net_position_with_savings'])}.")
     if t["detected_monthly_salary"]:
         md.append(f"- **Detected monthly salary:** {ils(t['detected_monthly_salary'])} "
                   f"({t['monthly_loan_service']/t['detected_monthly_salary']*100:.0f}% goes to loans).")
@@ -328,6 +396,13 @@ def write_markdown(s):
     md.append("|---|--:|")
     for c in s["credit_cards"]:
         md.append(f"| {c['issuer']} ····{c['last4']} | {ils(c['owed'])} |")
+    if s.get("savings"):
+        md.append("\n## Long-term savings\n")
+        md.append("| Fund | Kind | Policies | Balance |")
+        md.append("|---|---|--:|--:|")
+        for v in s["savings"]:
+            md.append(f"| {v['label']} | {v['kind']} | {v.get('policies_count') or '—'} | "
+                      f"{ils(v['balance'])} |")
     md.append(f"\n> {s['note']}\n")
     (OUT / "snapshot.md").write_text("\n".join(md) + "\n")
 
