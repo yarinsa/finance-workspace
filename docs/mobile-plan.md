@@ -54,8 +54,8 @@ desktop size.
 - Remove `styles.css` and the `--lg-*` tokens once no route uses them. Drop Heebo or make it the shadcn `--font-sans`.
 - Code-split routes (`React.lazy`) to get under the 1.1 MB bundle warning, which matters on mobile networks.
 
-## Open questions
-1. Bottom tab bar vs. sheet-only navigation. Which 4 screens are primary?
-2. Font: keep Heebo (Hebrew-first) or move to Geist plus a Hebrew fallback?
-3. Should the installed PWA ever cache data offline, or always fetch live?
-4. Hide anything on mobile entirely (e.g. MyPlan, a placeholder screen)?
+## Decisions
+- **Navigation:** a floating pill tab bar (iOS style) with Overview, Cashflow, Goals and Net worth, plus a separate round "More" button that opens the sidebar sheet. The route set comes from `primary: true` in `src/routes/index.tsx`. *(Phase 1 done.)*
+- **Font:** decided in Phase 5.
+- **Offline data:** none. The installed app always fetches live data.
+- **MyPlan:** stays reachable from "More".
