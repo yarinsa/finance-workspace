@@ -1,10 +1,9 @@
-// Single source of truth for the digested pipeline outputs. These are imported
-// statically (Vite resolves `@digested` to ../data/digested) so the app always
-// renders whatever the last `python3 data/digest.py` produced.
-import cashflowJson from "@digested/cashflow.json";
-import snapshotJson from "@digested/snapshot.json";
-import transactionsJson from "@digested/transactions.json";
-import goalsJson from "@digested/goals.json";
+// Single source of truth for the digested pipeline outputs. They are fetched at
+// runtime from /data/*.json — never bundled — so the app bundle carries no
+// financial data and can be built and deployed by CI, while the data itself is
+// published separately from the machine that ran `python3 data/digest.py`
+// (`infra/deploy.sh --data-only`). In dev/preview, vite.config.ts serves
+// /data/* straight from ../data/digested.
 
 export type Rank = "good" | "bad" | "warning" | null;
 
@@ -168,10 +167,22 @@ export interface Goals {
   liquid_buffer: number;
 }
 
-export const cashflow = cashflowJson as unknown as Cashflow;
-export const snapshot = snapshotJson as unknown as Snapshot;
-export const transactions = transactionsJson as unknown as Transactions;
-export const goals = goalsJson as unknown as Goals;
+async function loadDigested<T>(name: string): Promise<T> {
+  const res = await fetch(`/data/${name}.json`, { cache: "no-store" });
+  // A missing key comes back as the SPA's index.html (CloudFront maps S3's
+  // 403/404 to it), so check the content type, not just the status.
+  if (!res.ok || !res.headers.get("content-type")?.includes("json")) {
+    throw new Error(`data/${name}.json not available — run python3 data/digest.py and publish it`);
+  }
+  return (await res.json()) as T;
+}
+
+export const [cashflow, snapshot, transactions, goals] = await Promise.all([
+  loadDigested<Cashflow>("cashflow"),
+  loadDigested<Snapshot>("snapshot"),
+  loadDigested<Transactions>("transactions"),
+  loadDigested<Goals>("goals"),
+]);
 
 /** ₪ formatter — ILS, no decimals, RTL-safe. */
 export function shekel(n: number, opts: { decimals?: number } = {}): string {

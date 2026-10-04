@@ -1,23 +1,41 @@
-import { defineConfig } from "vite";
+import { defineConfig, type Connect, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
-import { resolve } from "node:path";
+import { readFile } from "node:fs/promises";
+import { basename, resolve } from "node:path";
 
-// The app renders the pipeline's digested JSON. We alias `@digested` to the
-// repo's data/digested so re-running `python3 data/digest.py` is picked up on
-// the next dev reload — no copy step.
+const DIGESTED = resolve(__dirname, "../data/digested");
+
+// The app fetches the pipeline's digested JSON from /data/*.json at runtime (in
+// production that path is the private S3 bucket behind the auth gate). Locally,
+// serve it straight from data/digested so re-running `python3 data/digest.py`
+// shows up on the next reload — no copy step, and nothing lands in dist/.
+function serveDigested(): Plugin {
+  const middleware: Connect.NextHandleFunction = async (req, res, next) => {
+    const match = req.url?.match(/^\/data\/([^/?]+\.json)(\?.*)?$/);
+    if (!match) return next();
+    try {
+      const body = await readFile(resolve(DIGESTED, basename(match[1])));
+      res.setHeader("Content-Type", "application/json; charset=utf-8");
+      res.setHeader("Cache-Control", "no-store");
+      res.end(body);
+    } catch {
+      res.statusCode = 404;
+      res.end();
+    }
+  };
+  return {
+    name: "serve-digested",
+    configureServer: (server) => void server.middlewares.use(middleware),
+    configurePreviewServer: (server) => void server.middlewares.use(middleware),
+  };
+}
+
 export default defineConfig({
-  plugins: [react(), tailwindcss()],
+  plugins: [react(), tailwindcss(), serveDigested()],
   resolve: {
     alias: {
-      "@digested": resolve(__dirname, "../data/digested"),
       "@": resolve(__dirname, "src"),
-    },
-  },
-  server: {
-    fs: {
-      // allow importing JSON from the parent data/ dir
-      allow: [resolve(__dirname, ".."), resolve(__dirname)],
     },
   },
 });

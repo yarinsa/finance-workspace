@@ -30,10 +30,22 @@ pnpm build    # type-check + production build to dist/
 
 ## How it reads data
 
-There is no backend. Vite aliases `@digested` → `../data/digested`, so the app
-imports `cashflow.json`, `snapshot.json`, and `transactions.json` directly. After
-re-running `python3 data/digest.py`, the next dev reload (or rebuild) reflects the
-new numbers. All shapes are typed in `src/lib/data.ts`.
+There is no backend, and **no data in the bundle**. The app fetches
+`/data/{cashflow,snapshot,transactions,goals}.json` at runtime (top-level await in
+`src/lib/data.ts`; shapes typed there). Locally, `vite.config.ts` serves `/data/*`
+straight from `../data/digested`, so after `python3 data/digest.py` a reload shows
+the new numbers.
+
+## Deploy
+
+Code and data ship separately:
+
+- **App bundle** — automatic. Merging to `master` (anything under `app/`) runs
+  `.github/workflows/deploy-app.yml`, which assumes an OIDC role
+  (`infra/github-deploy.tf`) and runs `infra/deploy.sh --app-only`. CI never sees
+  financial data; the role is denied access to `data/*` in the bucket.
+- **Data** — from your machine after a refresh: `infra/deploy.sh --data-only`.
+- Both at once (manual): `infra/deploy.sh`.
 
 ## Screens (mirrors the 10 PRDs)
 
