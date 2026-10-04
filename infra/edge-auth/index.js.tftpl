@@ -1,0 +1,300 @@
+"use strict";
+
+/**
+ * CloudFront viewer-request gate for the Plangram dashboard.
+ *
+ * Every request — the HTML, the JS bundle, and critically the digested
+ * financial JSON — passes through here first. Without a valid Cognito session
+ * the request never reaches S3; it is redirected to the hosted login instead.
+ *
+ * Why verification is done by hand: Lambda@Edge cannot read environment
+ * variables and bundling a JWT library would mean shipping node_modules to the
+ * edge. The JWKS fetch + RSA verify below is small enough to inline, and
+ * verifying the signature is the whole point — decoding a token without
+ * checking it would accept anything a caller chose to send.
+ */
+
+const https = require("https");
+const crypto = require("crypto");
+
+const CONFIG = ${config_json};
+
+const ISSUER = `https://cognito-idp.$${CONFIG.region}.amazonaws.com/$${CONFIG.user_pool_id}`;
+const JWKS_URL = `$${ISSUER}/.well-known/jwks.json`;
+
+// Cached across invocations on a warm container. Keys rotate rarely; a miss
+// simply refetches.
+let jwksCache = null;
+
+function httpsGet(url) {
+  return new Promise((resolve, reject) => {
+    https
+      .get(url, (res) => {
+        let body = "";
+        res.on("data", (c) => (body += c));
+        res.on("end", () => {
+          if (res.statusCode < 200 || res.statusCode >= 300) {
+            reject(new Error(`GET $${url} -> $${res.statusCode}`));
+            return;
+          }
+          resolve(body);
+        });
+      })
+      .on("error", reject);
+  });
+}
+
+function httpsPostForm(url, form, authHeader) {
+  return new Promise((resolve, reject) => {
+    const payload = new URLSearchParams(form).toString();
+    const u = new URL(url);
+    const req = https.request(
+      {
+        hostname: u.hostname,
+        path: u.pathname,
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+          "Content-Length": Buffer.byteLength(payload),
+          Authorization: authHeader,
+        },
+      },
+      (res) => {
+        let body = "";
+        res.on("data", (c) => (body += c));
+        res.on("end", () => {
+          if (res.statusCode < 200 || res.statusCode >= 300) {
+            reject(new Error(`POST $${url} -> $${res.statusCode}: $${body}`));
+            return;
+          }
+          resolve(JSON.parse(body));
+        });
+      }
+    );
+    req.on("error", reject);
+    req.write(payload);
+    req.end();
+  });
+}
+
+async function getJwks() {
+  if (jwksCache) return jwksCache;
+  jwksCache = JSON.parse(await httpsGet(JWKS_URL)).keys;
+  return jwksCache;
+}
+
+function b64urlToBuf(s) {
+  return Buffer.from(s.replace(/-/g, "+").replace(/_/g, "/"), "base64");
+}
+
+/**
+ * Verify an RS256 Cognito ID token: signature against the pool's JWKS, then
+ * issuer, audience, use and expiry. Returns the claims, or null on any failure.
+ * Never throws to the caller — a malformed token is simply "not authenticated".
+ */
+async function verify(token) {
+  try {
+    const parts = token.split(".");
+    if (parts.length !== 3) return null;
+
+    const header = JSON.parse(b64urlToBuf(parts[0]).toString("utf8"));
+    const claims = JSON.parse(b64urlToBuf(parts[1]).toString("utf8"));
+
+    if (header.alg !== "RS256") return null;
+
+    const keys = await getJwks();
+    const jwk = keys.find((k) => k.kid === header.kid);
+    if (!jwk) return null;
+
+    const pubKey = crypto.createPublicKey({ key: jwk, format: "jwk" });
+    const ok = crypto.verify(
+      "RSA-SHA256",
+      Buffer.from(`$${parts[0]}.$${parts[1]}`),
+      pubKey,
+      b64urlToBuf(parts[2])
+    );
+    if (!ok) return null;
+
+    const now = Math.floor(Date.now() / 1000);
+    if (claims.iss !== ISSUER) return null;
+    if (claims.aud !== CONFIG.client_id) return null;
+    if (claims.token_use !== "id") return null;
+    if (typeof claims.exp !== "number" || claims.exp <= now) return null;
+
+    return claims;
+  } catch (err) {
+    console.log("verify failed:", err.message);
+    return null;
+  }
+}
+
+function parseCookies(headers) {
+  const out = {};
+  const raw = headers.cookie;
+  if (!raw) return out;
+  for (const entry of raw) {
+    for (const pair of entry.value.split(";")) {
+      const i = pair.indexOf("=");
+      if (i === -1) continue;
+      out[pair.slice(0, i).trim()] = pair.slice(i + 1).trim();
+    }
+  }
+  return out;
+}
+
+function redirectToLogin(host) {
+  const target = new URL(`https://$${CONFIG.hosted_domain}/login`);
+  target.searchParams.set("client_id", CONFIG.client_id);
+  target.searchParams.set("response_type", "code");
+  target.searchParams.set("scope", "openid email");
+  target.searchParams.set("redirect_uri", `https://$${host}/_callback`);
+
+  return {
+    status: "302",
+    statusDescription: "Found",
+    headers: {
+      location: [{ key: "Location", value: target.toString() }],
+      "cache-control": [{ key: "Cache-Control", value: "no-store" }],
+    },
+  };
+}
+
+function redirect(location) {
+  return {
+    status: "302",
+    statusDescription: "Found",
+    headers: {
+      location: [{ key: "Location", value: location }],
+      "cache-control": [{ key: "Cache-Control", value: "no-store" }],
+    },
+  };
+}
+
+/**
+ * Managed login's passkey enrolment page. It needs a live managed-login
+ * session on the auth domain, which exists right after signing in; the
+ * redirect_uri must be a registered callback, hence /_callback.
+ */
+function redirectToPasskeyEnrolment() {
+  const target = new URL(`https://$${CONFIG.hosted_domain}/passkeys/add`);
+  target.searchParams.set("client_id", CONFIG.client_id);
+  target.searchParams.set("redirect_uri", `https://$${CONFIG.site_domain}/_callback`);
+  return redirect(target.toString());
+}
+
+function denied(reason) {
+  return {
+    status: "403",
+    statusDescription: "Forbidden",
+    headers: {
+      "content-type": [{ key: "Content-Type", value: "text/plain; charset=utf-8" }],
+      "cache-control": [{ key: "Cache-Control", value: "no-store" }],
+    },
+    body: `Forbidden: $${reason}`,
+  };
+}
+
+/**
+ * Exchange the OAuth code for tokens and set the session cookie.
+ * The cookie is HttpOnly + Secure + SameSite=Lax so the browser will not expose
+ * it to page scripts, which matters because the page renders real account data.
+ */
+async function handleCallback(request, host) {
+  const params = new URLSearchParams(request.querystring || "");
+  const code = params.get("code");
+  // The passkey enrolment page returns here with no code. Nothing is granted
+  // by this redirect — "/" re-checks the session like any other request.
+  if (!code) return redirect("/");
+
+  const basic = Buffer.from(
+    `$${CONFIG.client_id}:$${CONFIG.client_secret}`
+  ).toString("base64");
+
+  let tokens;
+  try {
+    tokens = await httpsPostForm(
+      `https://$${CONFIG.hosted_domain}/oauth2/token`,
+      {
+        grant_type: "authorization_code",
+        client_id: CONFIG.client_id,
+        code,
+        redirect_uri: `https://$${host}/_callback`,
+      },
+      `Basic $${basic}`
+    );
+  } catch (err) {
+    console.log("token exchange failed:", err.message);
+    return denied("token exchange failed");
+  }
+
+  const claims = await verify(tokens.id_token);
+  if (!claims) return denied("issued token failed verification");
+
+  // Cookie lifetime tracks the token, so an expired token cannot linger as a
+  // cookie that looks valid to the browser.
+  const maxAge = Math.max(60, claims.exp - Math.floor(Date.now() / 1000));
+
+  return {
+    status: "302",
+    statusDescription: "Found",
+    headers: {
+      location: [{ key: "Location", value: "/" }],
+      "cache-control": [{ key: "Cache-Control", value: "no-store" }],
+      "set-cookie": [
+        {
+          key: "Set-Cookie",
+          value:
+            `$${CONFIG.cookie_name}=$${tokens.id_token}; Path=/; HttpOnly; Secure; ` +
+            `SameSite=Lax; Max-Age=$${maxAge}`,
+        },
+      ],
+    },
+  };
+}
+
+exports.handler = async (event) => {
+  const request = event.Records[0].cf.request;
+  const headers = request.headers;
+  const host = headers.host[0].value;
+
+  // One canonical origin: the session cookie, the OAuth redirect_uri and the
+  // passkey relying party all assume it. The raw *.cloudfront.net name is
+  // bounced before anything else happens.
+  if (host !== CONFIG.site_domain) {
+    const qs = request.querystring ? `?$${request.querystring}` : "";
+    return redirect(`https://$${CONFIG.site_domain}$${request.uri}$${qs}`);
+  }
+
+  if (request.uri === "/_callback") {
+    return handleCallback(request, host);
+  }
+
+  if (request.uri === "/_logout") {
+    return {
+      status: "302",
+      statusDescription: "Found",
+      headers: {
+        location: [{ key: "Location", value: "/" }],
+        "set-cookie": [
+          {
+            key: "Set-Cookie",
+            value: `$${CONFIG.cookie_name}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`,
+          },
+        ],
+      },
+    };
+  }
+
+  const cookies = parseCookies(headers);
+  const token = cookies[CONFIG.cookie_name];
+  if (!token) return redirectToLogin(host);
+
+  const claims = await verify(token);
+  if (!claims) return redirectToLogin(host);
+
+  // Signed-in only: enrolling a passkey is a privileged action.
+  if (request.uri === "/_passkey") return redirectToPasskeyEnrolment();
+
+  // Authenticated: let the request through to S3 untouched.
+  return request;
+};

@@ -56,3 +56,10 @@ riseup-skill.zip
 
 # Python virtualenv for running the test suite
 .venv/
+
+# terraform — state holds the Cognito client secret; never commit
+infra/.terraform/
+infra/.build/
+infra/terraform.tfstate*
+infra/tfplan
+infra/*.tfvars
