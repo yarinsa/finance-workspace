@@ -52,7 +52,7 @@ nav { display: flex; flex-direction: column; gap: 4px; }
   background: var(--lg-warn); margin-inline-start: 6px; vertical-align: middle;
 }
 
-.content { flex: 1; padding: 28px 36px; max-width: 1100px; }
+.content { flex: 1; min-width: 0; padding: 28px 36px; max-width: 1100px; }
 
 .page-title { font-size: 26px; font-weight: 800; margin: 0 0 20px; }
 
@@ -61,6 +61,15 @@ nav { display: flex; flex-direction: column; gap: 4px; }
 .grid-3 { grid-template-columns: repeat(3, 1fr); }
 .grid-4 { grid-template-columns: repeat(4, 1fr); }
 .grid-5 { grid-template-columns: repeat(5, 1fr); }
+.grid > * { min-width: 0; }
+
+/* Phones: one column for the wide grids, two for the KPI rows. */
+@media (max-width: 767px) {
+  .content { padding: 16px; }
+  .page-title { font-size: 22px; }
+  .grid-2, .grid-3 { grid-template-columns: 1fr; }
+  .grid-4, .grid-5 { grid-template-columns: repeat(2, 1fr); }
+}
 
 .card {
   background: var(--lg-panel);
