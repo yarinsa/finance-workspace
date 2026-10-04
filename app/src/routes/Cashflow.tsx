@@ -1,4 +1,4 @@
-import { Card, Kpi, PageTitle } from "@/components/ui";
+import { Card, Kpi, PageTitle } from "@/components/common";
 import NetWorthChart from "@/components/NetWorthChart";
 import { cashflow, shekel, transactions } from "@/lib/data";
 
@@ -53,7 +53,7 @@ export default function Cashflow() {
           </div>
           <div className="row">
             <span>תזרים</span>
-            <strong style={{ color: today.net >= 0 ? "var(--good)" : "var(--bad)" }}>
+            <strong style={{ color: today.net >= 0 ? "var(--lg-good)" : "var(--lg-bad)" }}>
               {shekel(today.net)}
             </strong>
           </div>

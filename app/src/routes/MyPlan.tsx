@@ -1,4 +1,4 @@
-import { PageTitle, StubNotice } from "@/components/ui";
+import { PageTitle, StubNotice } from "@/components/common";
 
 export default function MyPlan() {
   return (

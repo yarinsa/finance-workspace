@@ -1,4 +1,4 @@
-import { Card, PageTitle } from "@/components/ui";
+import { Card, PageTitle } from "@/components/common";
 import NetWorthChart from "@/components/NetWorthChart";
 import { shekel, snapshot } from "@/lib/data";
 
@@ -50,12 +50,12 @@ export default function Networth() {
           {liabilities.map(([k, v]) => (
             <div key={k} className="row">
               <span>{k}</span>
-              <strong style={{ color: "var(--bad)" }}>{shekel(v)}</strong>
+              <strong style={{ color: "var(--lg-bad)" }}>{shekel(v)}</strong>
             </div>
           ))}
           <div className="row">
             <span>סך חוב</span>
-            <strong style={{ color: "var(--bad)" }}>{shekel(t.total_debt)}</strong>
+            <strong style={{ color: "var(--lg-bad)" }}>{shekel(t.total_debt)}</strong>
           </div>
         </Card>
       </div>
@@ -66,7 +66,7 @@ export default function Networth() {
             מצב נטו נזיל (עו"ש − חוב)
             <span className="muted"> · ללא חיסכון ארוך טווח</span>
           </span>
-          <strong style={{ color: t.tracked_net_position >= 0 ? "var(--good)" : "var(--bad)" }}>
+          <strong style={{ color: t.tracked_net_position >= 0 ? "var(--lg-good)" : "var(--lg-bad)" }}>
             {shekel(t.tracked_net_position)}
           </strong>
         </div>
@@ -78,7 +78,7 @@ export default function Networth() {
             </span>
             <strong
               style={{
-                color: t.net_position_with_savings >= 0 ? "var(--good)" : "var(--bad)",
+                color: t.net_position_with_savings >= 0 ? "var(--lg-good)" : "var(--lg-bad)",
               }}
             >
               {shekel(t.net_position_with_savings)}

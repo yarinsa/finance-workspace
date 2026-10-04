@@ -63,3 +63,7 @@ infra/.build/
 infra/terraform.tfstate*
 infra/tfplan
 infra/*.tfvars
+
+# Dashboard screenshots hold real financial figures — never commit
+.claude/screenshots/
+.claude/skills/dashboard-screenshots/node_modules/

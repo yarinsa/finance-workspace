@@ -1,7 +1,8 @@
-import { Card, PageTitle, RankPill } from "@/components/ui";
+import { Card, PageTitle, RankPill } from "@/components/common";
 import { cashflow, shekel } from "@/lib/data";
 
-function fmtMetric(value: number, units: string): string {
+function fmtMetric(value: number | null, units: string): string {
+  if (value == null) return "—";
   if (units === "₪") return shekel(value);
   if (units === "%") return `${value.toFixed(1)}%`;
   return value.toLocaleString("he-IL");
