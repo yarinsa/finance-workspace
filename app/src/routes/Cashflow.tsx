@@ -1,12 +1,6 @@
-import { Card, Kpi, PageTitle } from "@/components/common";
+import { Card, Kpi, KpiGrid, PageTitle } from "@/components/common";
 import NetWorthChart from "@/components/NetWorthChart";
-import { cashflow, shekel, transactions } from "@/lib/data";
-
-function fmtMetric(value: number, units: string): string {
-  if (units === "₪") return shekel(value);
-  if (units === "%") return `${value.toFixed(1)}%`;
-  return value.toLocaleString("he-IL");
-}
+import { cashflow, shekel, transactions, formatMetric, formatMetricCompact } from "@/lib/data";
 
 export default function Cashflow() {
   const { metrics, today } = cashflow;
@@ -22,18 +16,19 @@ export default function Cashflow() {
     <div>
       <PageTitle>תזרים כספי</PageTitle>
 
-      <div className="grid grid-5">
+      <KpiGrid cols={5}>
         {kpis.map((m) => (
           <Card key={m.key} to="/metrics">
             <Kpi
               label={m.name}
-              value={fmtMetric(m.value, m.units)}
+              value={formatMetric(m.value, m.units)}
+              compactValue={formatMetricCompact(m.value, m.units)}
               rank={m.rank}
               hint={m.description}
             />
           </Card>
         ))}
-      </div>
+      </KpiGrid>
 
       <div className="grid grid-2 section-gap">
         <Card to="/networth">

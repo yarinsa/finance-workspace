@@ -1,12 +1,5 @@
 import { Card, PageTitle, RankPill } from "@/components/common";
-import { cashflow, shekel } from "@/lib/data";
-
-function fmtMetric(value: number | null, units: string): string {
-  if (value == null) return "—";
-  if (units === "₪") return shekel(value);
-  if (units === "%") return `${value.toFixed(1)}%`;
-  return value.toLocaleString("he-IL");
-}
+import { cashflow, formatMetric } from "@/lib/data";
 
 export default function Metrics() {
   return (
@@ -17,7 +10,7 @@ export default function Metrics() {
           <Card key={m.key}>
             <div className="card-title">{m.name}</div>
             <div className="big-num" style={{ fontSize: 26 }}>
-              {fmtMetric(m.value, m.units)}
+              {formatMetric(m.value, m.units)}
             </div>
             <div style={{ margin: "8px 0" }}>
               <RankPill rank={m.rank} />
