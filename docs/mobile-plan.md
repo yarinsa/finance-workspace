@@ -63,6 +63,11 @@ desktop size.
   - Below 7.5rem tile width, ₪ values switch to compact form.
   - `NetWorthChart` drops the Y axis on phones in favour of a tap/drag readout, and sizes by aspect ratio.
   - Label/value `.row` lists already stack fine on phones, so no change.
+- **Routes (Phase 3):**
+  - Done: Overview, Cashflow.
+  - Shared blocks: `Card`, `CardLabel`, `BigNumber`, `StatRow`, `BarRow`, `Nudge` (Tailwind, in `common.tsx`). The palette is exposed as `bg-panel` / `border-line` / `text-good|bad|warn` / `bg-brand`.
+  - `PageTitle` is visually hidden on phones, since the sticky header names the page.
+  - Next: Goals → Net worth → Metrics → Portfolio → Timeline → Summary → Recommendations → MyPlan.
 - **Font:** decided in Phase 5.
 - **Offline data:** none. The installed app always fetches live data.
 - **MyPlan:** stays reachable from "More".
