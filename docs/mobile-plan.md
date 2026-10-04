@@ -56,6 +56,13 @@ desktop size.
 
 ## Decisions
 - **Navigation:** a floating pill tab bar (iOS style) with Overview, Cashflow, Goals and Net worth, plus a separate round "More" button that opens the sidebar sheet. The route set comes from `primary: true` in `src/routes/index.tsx`. *(Phase 1 done.)*
+- **Shared components (Phase 2):**
+  - `Kpi` hints are tap-able popovers that don't trigger the card link.
+  - `KpiGrid` is 2-up on phones, and a lone last tile spans the full row.
+  - Tiles share a height and show press feedback.
+  - Below 7.5rem tile width, ₪ values switch to compact form.
+  - `NetWorthChart` drops the Y axis on phones in favour of a tap/drag readout, and sizes by aspect ratio.
+  - Label/value `.row` lists already stack fine on phones, so no change.
 - **Font:** decided in Phase 5.
 - **Offline data:** none. The installed app always fetches live data.
 - **MyPlan:** stays reachable from "More".

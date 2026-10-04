@@ -192,6 +192,20 @@ export function shekelCompact(n: number): string {
   }).format(n);
 }
 
+/** Format a cashflow metric by its unit; `null` (not computable yet) renders as "—". */
+export function formatMetric(value: number | null, units: string): string {
+  if (value == null) return "—";
+  if (units === "₪") return shekel(value);
+  if (units === "%") return `${value.toFixed(1)}%`;
+  return value.toLocaleString("he-IL");
+}
+
+/** Short form of `formatMetric` for narrow tiles (₪1.6M); non-₪ units are already short. */
+export function formatMetricCompact(value: number | null, units: string): string {
+  if (value != null && units === "₪") return shekelCompact(value);
+  return formatMetric(value, units);
+}
+
 export function pct(n: number, decimals = 0): string {
   return `${n.toFixed(decimals)}%`;
 }

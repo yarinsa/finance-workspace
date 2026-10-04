@@ -54,6 +54,10 @@ body {
 }
 .card-link { text-decoration: none; color: inherit; display: block; }
 .card-link:hover .card { border-color: var(--lg-accent); }
+/* Grid rows stretch the link; let the card fill it so tiles share a height. */
+.card-link > .card { height: 100%; transition: transform .1s ease, border-color .1s ease; }
+.card-link { -webkit-tap-highlight-color: transparent; }
+.card-link:active .card { transform: scale(.98); border-color: var(--lg-accent); }
 
 .card-title { font-size: 14px; color: var(--lg-muted); margin: 0 0 10px; font-weight: 600; }
 

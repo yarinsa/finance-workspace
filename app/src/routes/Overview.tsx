@@ -1,12 +1,6 @@
-import { Card, Kpi, PageTitle } from "@/components/common";
+import { Card, Kpi, KpiGrid, PageTitle } from "@/components/common";
 import NetWorthChart from "@/components/NetWorthChart";
-import { cashflow, daysSince, shekel } from "@/lib/data";
-
-function fmtMetric(value: number, units: string): string {
-  if (units === "₪") return shekel(value);
-  if (units === "%") return `${value.toFixed(1)}%`;
-  return value.toLocaleString("he-IL");
-}
+import { cashflow, daysSince, shekel, formatMetric, formatMetricCompact } from "@/lib/data";
 
 export default function Overview() {
   const { metrics, today, projection } = cashflow;
@@ -46,12 +40,20 @@ export default function Overview() {
         </Card>
       </div>
 
-      <div className="grid grid-4 section-gap">
-        {topMetrics.map((m) => (
-          <Card key={m.key} to="/metrics">
-            <Kpi label={m.name} value={fmtMetric(m.value, m.units)} rank={m.rank} hint={m.description} />
-          </Card>
-        ))}
+      <div className="section-gap">
+        <KpiGrid cols={4}>
+          {topMetrics.map((m) => (
+            <Card key={m.key} to="/metrics">
+              <Kpi
+                label={m.name}
+                value={formatMetric(m.value, m.units)}
+                compactValue={formatMetricCompact(m.value, m.units)}
+                rank={m.rank}
+                hint={m.description}
+              />
+            </Card>
+          ))}
+        </KpiGrid>
       </div>
 
       <Card to="/networth" className="section-gap">
