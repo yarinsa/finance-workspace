@@ -1,4 +1,4 @@
-import { Card, Kpi, KpiGrid, PageTitle } from "@/components/common";
+import { BarRow, Card, CardLabel, Kpi, KpiGrid, PageTitle, StatRow } from "@/components/common";
 import NetWorthChart from "@/components/NetWorthChart";
 import { cashflow, shekel, transactions, formatMetric, formatMetricCompact } from "@/lib/data";
 
@@ -13,7 +13,7 @@ export default function Cashflow() {
   const maxCat = expenseCats[0]?.[1] ?? 1;
 
   return (
-    <div>
+    <div className="space-y-4 md:space-y-[18px]">
       <PageTitle>תזרים כספי</PageTitle>
 
       <KpiGrid cols={5}>
@@ -30,43 +30,29 @@ export default function Cashflow() {
         ))}
       </KpiGrid>
 
-      <div className="grid grid-2 section-gap">
-        <Card to="/networth">
-          <div className="card-title">שווי נקי — לאורך החיים</div>
+      {/* Phones: this month's numbers first — they're what you open the screen for. */}
+      <div className="grid gap-3 md:grid-cols-2 md:gap-3.5">
+        <Card to="/networth" className="max-md:order-2">
+          <CardLabel>שווי נקי — לאורך החיים</CardLabel>
           <NetWorthChart />
         </Card>
 
         <Card>
-          <div className="card-title">התזרים — נכון לחודש זה</div>
-          <div className="row">
-            <span>הכנסות</span>
-            <strong>{shekel(today.income)}</strong>
-          </div>
-          <div className="row">
-            <span>הוצאות</span>
-            <strong>{shekel(today.expense)}</strong>
-          </div>
-          <div className="row">
-            <span>תזרים</span>
-            <strong style={{ color: today.net >= 0 ? "var(--lg-good)" : "var(--lg-bad)" }}>
-              {shekel(today.net)}
-            </strong>
-          </div>
+          <CardLabel>התזרים — נכון לחודש זה</CardLabel>
+          <StatRow label="הכנסות" value={shekel(today.income)} />
+          <StatRow label="הוצאות" value={shekel(today.expense)} />
+          <StatRow
+            label="תזרים"
+            value={shekel(today.net)}
+            tone={today.net >= 0 ? "good" : "bad"}
+          />
         </Card>
       </div>
 
-      <Card className="section-gap">
-        <div className="card-title">הוצאות לפי קטגוריה</div>
+      <Card>
+        <CardLabel>הוצאות לפי קטגוריה</CardLabel>
         {expenseCats.map(([cat, amt]) => (
-          <div key={cat} style={{ margin: "10px 0" }}>
-            <div className="row" style={{ border: 0, paddingBottom: 4 }}>
-              <span>{cat}</span>
-              <strong>{shekel(amt)}</strong>
-            </div>
-            <div className="bar-track">
-              <div className="bar-fill" style={{ width: `${(amt / maxCat) * 100}%` }} />
-            </div>
-          </div>
+          <BarRow key={cat} label={cat} value={shekel(amt)} fraction={amt / maxCat} />
         ))}
       </Card>
     </div>

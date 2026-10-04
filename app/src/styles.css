@@ -28,7 +28,6 @@ body {
 
 .content { flex: 1; min-width: 0; padding: 28px 36px; max-width: 1100px; }
 
-.page-title { font-size: 26px; font-weight: 800; margin: 0 0 20px; }
 
 .grid { display: grid; gap: 14px; }
 .grid-2 { grid-template-columns: repeat(2, 1fr); }
@@ -41,25 +40,10 @@ body {
 @media (max-width: 767px) {
   /* Extra bottom room so the floating tab bar never covers content. */
   .content { padding: 16px 16px calc(env(safe-area-inset-bottom) + 112px); }
-  .page-title { font-size: 22px; }
   .grid-2, .grid-3 { grid-template-columns: 1fr; }
   .grid-4, .grid-5 { grid-template-columns: repeat(2, 1fr); }
 }
 
-.card {
-  background: var(--lg-panel);
-  border: 1px solid var(--lg-line);
-  border-radius: var(--lg-radius);
-  padding: 18px;
-}
-.card-link { text-decoration: none; color: inherit; display: block; }
-.card-link:hover .card { border-color: var(--lg-accent); }
-/* Grid rows stretch the link; let the card fill it so tiles share a height. */
-.card-link > .card { height: 100%; transition: transform .1s ease, border-color .1s ease; }
-.card-link { -webkit-tap-highlight-color: transparent; }
-.card-link:active .card { transform: scale(.98); border-color: var(--lg-accent); }
-
-.card-title { font-size: 14px; color: var(--lg-muted); margin: 0 0 10px; font-weight: 600; }
 
 .kpi { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
 .kpi-label { font-size: 13px; color: var(--lg-muted); }
@@ -72,17 +56,13 @@ body {
 .pill-bad { background: rgba(248,113,113,.15); color: var(--lg-bad); }
 .pill-warn { background: rgba(251,191,36,.15); color: var(--lg-warn); }
 
+.card-title { font-size: 14px; color: var(--lg-muted); margin: 0 0 10px; font-weight: 600; }
+
 .big-num { font-size: 34px; font-weight: 800; }
 .muted { color: var(--lg-muted); }
 .row { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid var(--lg-line); }
 .row:last-child { border-bottom: 0; }
 
-.nudge {
-  display: flex; justify-content: space-between; align-items: center; gap: 16px;
-  background: rgba(251,191,36,.08); border: 1px solid rgba(251,191,36,.3);
-  border-radius: var(--lg-radius); padding: 14px 18px; margin-bottom: 18px;
-}
-.cta { background: var(--lg-accent); color: #0b0e14; padding: 8px 14px; border-radius: 10px; font-weight: 700; }
 
 .stub {
   background: var(--lg-panel); border: 1px dashed var(--lg-line); border-radius: var(--lg-radius);
