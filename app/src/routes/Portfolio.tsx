@@ -1,4 +1,4 @@
-import { Card, Kpi, PageTitle, StubNotice } from "@/components/ui";
+import { Card, Kpi, PageTitle, StubNotice } from "@/components/common";
 import { shekel, snapshot } from "@/lib/data";
 
 const KIND_LABEL: Record<string, string> = {
@@ -44,12 +44,12 @@ export default function Portfolio() {
                 {s.policies_count ? ` · ${s.policies_count} פוליסות` : ""}
               </span>
             </span>
-            <strong style={{ color: "var(--good)" }}>{shekel(s.balance)}</strong>
+            <strong style={{ color: "var(--lg-good)" }}>{shekel(s.balance)}</strong>
           </div>
         ))}
         <div className="row">
           <span><strong>סה"כ</strong></span>
-          <strong style={{ color: "var(--good)" }}>{shekel(total)}</strong>
+          <strong style={{ color: "var(--lg-good)" }}>{shekel(total)}</strong>
         </div>
       </Card>
 

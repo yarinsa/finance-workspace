@@ -1,4 +1,4 @@
-import { Card, PageTitle, RankPill } from "@/components/ui";
+import { Card, PageTitle, RankPill } from "@/components/common";
 import { cashflow, shekel } from "@/lib/data";
 
 function fmtMetric(value: number, units: string): string {

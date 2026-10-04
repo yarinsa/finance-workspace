@@ -1,4 +1,4 @@
-import { Card, PageTitle } from "@/components/ui";
+import { Card, PageTitle } from "@/components/common";
 import NetWorthChart from "@/components/NetWorthChart";
 
 const sections: { label: string; status: string; route: string }[] = [

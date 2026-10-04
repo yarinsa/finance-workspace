@@ -4,6 +4,21 @@ Thin React + TS dashboard that renders the finance pipeline's digested outputs â
 a reimplementation of the screens documented in `../docs/plangram-prd/` against
 **our own** data, not Plangram's backend.
 
+## Stack
+
+Vite + React 19 + TypeScript, **Tailwind CSS v4** (`@tailwindcss/vite`, no config
+file; `@import "tailwindcss"` in `src/index.css`) and **shadcn/ui** (radix, nova
+preset, neutral, RTL, dark by default via `class="dark"` on `<html>`).
+
+Add a component: `pnpm dlx shadcn@latest add <name>` â€” lands in
+`src/components/ui/`. Config is `components.json`; import via `@/components/ui/...`.
+Project-specific shared pieces (legacy `Card`, `Kpi`, ...) live in
+`src/components/common.tsx`.
+
+Legacy hand-rolled styles remain in `src/styles.css` (imported after Tailwind).
+Their CSS variables are namespaced `--lg-*` so they don't clash with shadcn tokens.
+The app shell (`App.tsx`) uses the shadcn Sidebar; routes are not yet restyled.
+
 ## Run
 
 ```bash
