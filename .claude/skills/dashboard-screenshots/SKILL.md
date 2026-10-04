@@ -24,7 +24,7 @@ Output: `.claude/screenshots/<timestamp>/<viewport>-<route>.png` (e.g. `mobile-m
 
 ## Prerequisites (one time per checkout)
 
-- Data symlink (the app imports `@digested` -> `data/digested`, gitignored):
+- Data symlink (the dev/preview server serves `/data/*` from `data/digested`, gitignored):
   `ln -s /Users/yarinsa/Code/Finance/data/digested data/digested` (from the repo/worktree root). Never commit it.
 - Playwright lives in this skill dir, not `app/`: `cd .claude/skills/dashboard-screenshots && npm install` (node_modules is gitignored). No browser download needed: if Playwright's pinned Chromium is absent, the script falls back to any `chromium-*` in `~/Library/Caches/ms-playwright`. Otherwise run `npx playwright install chromium` in the skill dir.
 

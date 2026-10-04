@@ -1,6 +1,6 @@
 ---
 name: refresh-all
-description: Refresh every financial data source end to end — checks all sessions up front, batches the logins you need into one pass, scrapes each source in dependency-correct order, then runs digest and forecast. Activate when the user asks to sync, refresh, update, or pull fresh data for ALL sources / everything / the whole pipeline, rather than one named institution.
+description: Refresh every financial data source end to end — checks all sessions up front, batches the logins you need into one pass, scrapes each source in dependency-correct order, then runs digest and forecast and publishes the data to the dashboard. Activate when the user asks to sync, refresh, update, or pull fresh data for ALL sources / everything / the whole pipeline, rather than one named institution.
 ---
 
 # Refresh everything
@@ -95,7 +95,7 @@ python3 data/digest.py      # normalizes every source, then combines
 python3 data/forecast.py    # 6-month cashflow projection
 ```
 
-Then check the outputs before reporting success:
+Then check the outputs before publishing or reporting success:
 
 - Transaction count should be in the **low thousands**, not hundreds. A collapse
   to a few hundred means a source normalized to almost nothing.
@@ -104,6 +104,21 @@ Then check the outputs before reporting success:
 - If `data/freeze.json` is missing while the mortgage shows interest-only
   tracks, the forecast is carrying a frozen payment forward indefinitely — say
   so. `python3 data/detect_freeze.py --check` reports without prompting.
+
+### 5. Publish to the dashboard
+
+**Only if step 4's checks passed**, push the fresh data live:
+
+```bash
+infra/deploy.sh --data-only
+```
+
+This uploads `data/digested/*.json` to the private bucket behind the auth gate
+and invalidates CloudFront. The app bundle itself deploys from CI on merge to
+`master`; the data never goes through git or CI, so this step is the only way
+new numbers reach the dashboard. If a check failed, **do not publish** — the
+live dashboard keeps the last good data, which beats a collapsed ledger. Say
+which you did.
 
 ## Reporting
 
