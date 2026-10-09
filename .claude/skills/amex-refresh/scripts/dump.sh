@@ -201,30 +201,37 @@ else
 async (page) => {
   const cards = $ACTIVE_CARDS_JSON;
 
+  // billingMonth format is DD/MM/YYYY with day fixed at "01" (recovered from
+  // the SPA's own outgoing POST body via DevTools 2026-09-18) -- NOT YYYYMM
+  // and NOT MM-YYYY. isNextBillingDate/cardStatus are required fields too;
+  // omitting them yields HTTP 200 + errorCode "11" (empty, not a login shell).
   const now = new Date();
   const months = [0, 1].map(back => {
     const d = new Date(now.getFullYear(), now.getMonth() - back, 1);
-    return \`\${d.getFullYear()}\${String(d.getMonth() + 1).padStart(2, '0')}\`;
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    return { tag: \`\${mm}-\${d.getFullYear()}\`, billingMonth: \`01/\${mm}/\${d.getFullYear()}\` };
   });
 
   const out = [];
   for (const c of cards) {
-    for (const billingMonth of months) {
+    for (const { tag, billingMonth } of months) {
       try {
         const res = await page.request.post(
           'https://web.americanexpress.co.il/ocp/transactions/DigitalV3.Transactions/GetTransactionsList',
           {
             data: {
               card4Number: c.cardSuffix,
+              isNextBillingDate: true,
+              cardStatus: 0,
               billingMonth,
               companyCode: c.companyCode,
               isPartner: c.companyCode !== 77,
             },
           }
         );
-        out.push({ suffix: c.cardSuffix, month: billingMonth, status: res.status(), body: await res.text() });
+        out.push({ suffix: c.cardSuffix, month: tag, status: res.status(), body: await res.text() });
       } catch (e) {
-        out.push({ suffix: c.cardSuffix, month: billingMonth, status: 0, body: String(e) });
+        out.push({ suffix: c.cardSuffix, month: tag, status: 0, body: String(e) });
       }
     }
   }
