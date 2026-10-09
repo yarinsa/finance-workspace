@@ -168,10 +168,51 @@ export interface Goals {
   liquid_buffer: number;
 }
 
-export const cashflow = cashflowJson as unknown as Cashflow;
-export const snapshot = snapshotJson as unknown as Snapshot;
-export const transactions = transactionsJson as unknown as Transactions;
-export const goals = goalsJson as unknown as Goals;
+/**
+ * In dev these come from the Vite `@digested` alias — edit-reload still picks up
+ * a fresh `python3 data/digest.py` with no copy step.
+ *
+ * In a production build they must NOT be bundled: the deployed artifact would
+ * then contain every transaction and account number as readable static JS, which
+ * no amount of auth in front of it can walk back. Instead `loadData()` fetches
+ * them at runtime from /data/*.json in the private bucket, which CloudFront only
+ * serves once the edge auth gate has validated a session.
+ */
+const BUNDLED = import.meta.env.DEV;
+
+export let cashflow = (BUNDLED ? cashflowJson : {}) as unknown as Cashflow;
+export let snapshot = (BUNDLED ? snapshotJson : {}) as unknown as Snapshot;
+export let transactions = (BUNDLED ? transactionsJson : {}) as unknown as Transactions;
+export let goals = (BUNDLED ? goalsJson : {}) as unknown as Goals;
+
+/**
+ * Populate the exports above before the app renders. Called from main.tsx and
+ * awaited, so every route can keep importing the data synchronously.
+ *
+ * A failure here is surfaced, never swallowed: rendering a financial dashboard
+ * against silently-empty data would show a plausible-looking ₪0 net worth.
+ */
+export async function loadData(): Promise<void> {
+  if (BUNDLED) return;
+
+  const get = async (name: string) => {
+    const res = await fetch(`/data/${name}.json`, { credentials: "same-origin" });
+    if (!res.ok) throw new Error(`${name}.json → HTTP ${res.status}`);
+    return res.json();
+  };
+
+  const [c, s, t, g] = await Promise.all([
+    get("cashflow"),
+    get("snapshot"),
+    get("transactions"),
+    get("goals"),
+  ]);
+
+  cashflow = c as Cashflow;
+  snapshot = s as Snapshot;
+  transactions = t as Transactions;
+  goals = g as Goals;
+}
 
 /** ₪ formatter — ILS, no decimals, RTL-safe. */
 export function shekel(n: number, opts: { decimals?: number } = {}): string {
