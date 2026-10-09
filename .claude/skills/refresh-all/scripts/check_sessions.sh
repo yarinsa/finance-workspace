@@ -7,8 +7,12 @@
 # time, mid-refresh. This checks them all first so every needed login can be
 # done in a single sitting.
 #
-# Read-only: never logs in, never types credentials, never scrapes. It only
-# asks "is this session still alive?" and reports.
+# Read-only, and strictly so: never logs in, never types credentials, never
+# scrapes — and never NAVIGATES. An earlier version drove each tab to the
+# source's homepage "to judge honestly" and thereby destroyed the very sessions
+# it was checking (see the comment at the eval step). It now judges only what is
+# already open, via CDP metadata. If that is not enough to decide, the answer is
+# UNKNOWN, not NEEDS LOGIN.
 #
 # Usage:
 #   .claude/skills/refresh-all/scripts/check_sessions.sh
@@ -23,7 +27,10 @@ SOURCES=(
   "riseup|9222|riseup|location.href.includes('/web/') && !location.href.includes('login')"
   "discount|9223|discount|location.href.includes('apollo/retail3')"
   "leumi|9224|leumi|location.href.includes('#/hpsummary')"
-  "cal|9225|cal|!!(JSON.parse(sessionStorage.getItem('auth-module')||'{}').auth||{}).calConnectToken"
+  # cal's token is origin-scoped to digital-web.cal-online.co.il — read from any
+  # other host sessionStorage is simply empty, which is NOT a logged-out signal.
+  # Gate it on the hostname so an off-origin tab falls through to the URL check.
+  "cal|9225|cal|location.hostname.includes('cal-online.co.il') && !!(JSON.parse(sessionStorage.getItem('auth-module')||'{}').auth||{}).calConnectToken"
   "amex|9226|amex|document.title.includes('אזור אישי')"
   "harel|9227|harel|location.href.includes('client-view.aspx')"
 )
@@ -74,57 +81,38 @@ for row in "${SOURCES[@]}"; do
   #    sends the user hunting for a login they don't need. The signal must
   #    explicitly answer LIVE or DEAD; anything else is UNKNOWN.
   playwright-cli -s="$session" attach --cdp="http://127.0.0.1:$port" >/dev/null 2>&1
-  playwright-cli -s="$session" tab-select 0 >/dev/null 2>&1
 
-  #    Navigate to the source's own page before judging. The tab may be sitting
-  #    on something unrelated (the user browsed elsewhere), and reading
-  #    location.href then would report a perfectly good session as logged out.
-  #    Landing on the app and getting bounced to a login page is the real signal.
-  if [ "${NO_NAV:-0}" != "1" ]; then
-    if ! playwright-cli -s="$session" goto "${LOGIN_URL[$name]}" >/dev/null 2>&1; then
-      # playwright-cli unavailable for this session — drive the tab over plain
-      # CDP instead (PUT /json/new works without any attach).
-      curl -s --max-time 5 -X PUT \
-        "http://127.0.0.1:$port/json/new?${LOGIN_URL[$name]}" >/dev/null 2>&1
-    fi
-    sleep 5
-  fi
+  #    NEVER navigate. This check used to `goto` the source's homepage before
+  #    judging, and that is what made a "read-only" script cost five logins in
+  #    one night: these SPAs hold their auth in sessionStorage / in memory
+  #    (cal's calConnectToken, Leumi's live SessionID), so landing on another
+  #    origin loses it outright — and for the banks whose URL is the pre-auth
+  #    gateway, re-entering it terminates the session server-side (on Discount's
+  #    single-session backend a second gateway tab triggers the documented
+  #    `actionRequired: stepup` rebind).
+  #
+  #    So judge the tab that is ALREADY on the app, found by a pure metadata
+  #    read of /json/list — no navigation, no new tab, no closed tab. If no such
+  #    tab exists we say UNKNOWN ("open one and re-run"), never DEAD.
+  idx="$(curl -s --max-time 5 "http://127.0.0.1:$port/json/list" \
+          | SRC="$name" python3 "$(dirname "$0")/app_tab_index.py" 2>/dev/null)"
+  [ -n "$idx" ] && playwright-cli -s="$session" tab-select "$idx" >/dev/null 2>&1
 
-  result="$(playwright-cli -s="$session" --raw eval "(()=>{try{return ($signal)?'LIVE':'DEAD'}catch(e){return 'DEAD'}})()" 2>/dev/null | tail -1 | tr -d '"')"
+  #    Evaluate the source's own logged-in signal in the page. A truthy signal is
+  #    the strongest evidence we can get; a falsy one only means "not proven
+  #    here", because we may be reading the wrong tab (or, for cal, the wrong
+  #    origin). So falsy is NOT DEAD — it falls through to the URL check below.
+  result="$(playwright-cli -s="$session" --raw eval "(()=>{try{return ($signal)?'LIVE':''}catch(e){return ''}})()" 2>/dev/null | tail -1 | tr -d '"')"
 
   #    Fallback: playwright-cli's attach is flaky (it can report success but
-  #    leave the session unusable). CDP's /json/list needs no attach at all, so
-  #    fall back to judging by the open tab's URL/title. Coarser than the JS
-  #    signal — it cannot read sessionStorage — but enough to tell a logged-in
-  #    app page from a login page, which is all this check has to decide.
-  if [ "$result" != "LIVE" ] && [ "$result" != "DEAD" ]; then
-    result="$(curl -s --max-time 5 "http://127.0.0.1:$port/json/list" | SRC="$name" python3 -c '
-import json, os, sys
-src = os.environ["SRC"]
-# A page counts as logged-in when its url/title matches the app, and does NOT
-# look like a login/OTP screen.
-APP = {
-  "riseup":   (("input.riseup.co.il/web/",), ()),
-  "discount": (("apollo/retail3",), ()),
-  "leumi":    (("#/hpsummary",), ()),
-  "cal":      (("digital-web.cal-online.co.il/dashboard",), ()),
-  "amex":     (("web.americanexpress.co.il",), ("אזור אישי",)),
-  "harel":    (("client-view.aspx",), ("הראל שלי",)),
-}
-LOGIN_HINTS = ("login", "signin", "gate-keeper", "otp")
-try:
-    tabs = [t for t in json.load(sys.stdin) if t.get("type") == "page"]
-except Exception:
-    print("UNKNOWN"); raise SystemExit
-url_pats, title_pats = APP.get(src, ((), ()))
-for t in tabs:
-    url, title = t.get("url", ""), t.get("title", "")
-    if any(h in url.lower() for h in LOGIN_HINTS):
-        continue
-    if any(p in url for p in url_pats) or any(p in title for p in title_pats):
-        print("LIVE"); raise SystemExit
-print("DEAD" if tabs else "UNKNOWN")
-' 2>/dev/null)"
+  #    leave the session unusable), and the signal above is deliberately
+  #    inconclusive when falsy. CDP's /json/list needs no attach at all, so fall
+  #    back to judging by the open tabs' URL/title — the same matching table,
+  #    defined once in app_tab_index.py. Coarser than the JS signal (it cannot
+  #    read sessionStorage) but enough to tell an app page from a login page.
+  if [ "$result" != "LIVE" ]; then
+    result="$(curl -s --max-time 5 "http://127.0.0.1:$port/json/list" \
+                | SRC="$name" python3 "$(dirname "$0")/app_tab_index.py" --verdict 2>/dev/null)"
     result="${result:-UNKNOWN}"
   fi
 
@@ -138,9 +126,11 @@ print("DEAD" if tabs else "UNKNOWN")
       needs_login+=("$name")
       ;;
     *)
-      # Chrome is up but we could not talk to the page (detached session, no
-      # tab, playwright-cli error). Not a login problem — report it as such.
-      printf '%-12s %-6s %s\n' "$name" "$port" "unknown (attach failed)"
+      # Chrome is up but nothing here proves the session either way: no tab is
+      # on this source's app, or the page could not be read. Emphatically NOT a
+      # login problem — saying "NEEDS LOGIN" here is the crying-wolf that makes
+      # the user re-authenticate for nothing.
+      printf '%-12s %-6s %s\n' "$name" "$port" "unknown (no tab on this app)"
       unknown+=("$name")
       ;;
   esac
@@ -195,9 +185,11 @@ fi
 
 if [ ${#unknown[@]} -gt 0 ]; then
   echo
-  echo "Could not read the page for: ${unknown[*]}"
-  echo "Chrome is running, so this is usually a detached playwright-cli session"
-  echo "or a closed tab — not an expired login. Open a tab on the source and re-run."
+  echo "Could not judge the session for: ${unknown[*]}"
+  echo "Chrome is running, but no open tab is on the source's app (or the page"
+  echo "could not be read). This check never navigates — navigating is what kills"
+  echo "these sessions — so it cannot go look for itself."
+  echo "This is NOT an expired login. Open a tab on the source yourself and re-run."
 fi
 
 [ ${#needs_login[@]} -eq 0 ] && [ ${#not_running[@]} -eq 0 ] && [ ${#unknown[@]} -eq 0 ] && exit 0
