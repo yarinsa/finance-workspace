@@ -20,6 +20,7 @@ data/*
 !data/cashflow.py
 !data/projection.py
 !data/detect_freeze.py
+!data/goals.py
 !data/*/
 data/*/raw/
 data/*/normalized/
@@ -57,9 +58,19 @@ riseup-skill.zip
 # Python virtualenv for running the test suite
 .venv/
 
+# Goals store — the user's real targets (plus atomic-write .bak/.tmp). Personal,
+# hand-edited; never commit. data/goals.py is the code that reads it.
+data/goals/
+
 # terraform — state holds the Cognito client secret; never commit
 infra/.terraform/
 infra/.build/
 infra/terraform.tfstate*
 infra/tfplan
 infra/*.tfvars
+
+# Claude Code worktrees, stray bytecode, and ad-hoc screenshots at the repo root
+# (these can capture real balances)
+.claude/worktrees/
+__pycache__/
+/*.png
