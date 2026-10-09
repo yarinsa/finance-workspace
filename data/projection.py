@@ -30,13 +30,25 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 SNAPSHOT = os.path.join(HERE, "digested", "snapshot.json")
 
 # --- Assumptions (OURS — editable) -----------------------------------------
+# Birth date is the household's real one (not in scraped data); current_age is
+# derived from it (accounting for whether this year's birthday has passed) so the
+# horizon stays correct as years pass.
+BIRTH_DATE = date(1997, 11, 23)
+
+
+def _age_on(d):
+    """Exact age in whole years on date `d`, accounting for the birthday."""
+    return d.year - BIRTH_DATE.year - (
+        (d.month, d.day) < (BIRTH_DATE.month, BIRTH_DATE.day))
+
+
 CONFIG = {
-    "current_age": 35,        # not in source data; edit to your real age
+    "current_age": _age_on(date.today()),  # derived from BIRTH_DATE
     "retirement_age": 67,     # matches Plangram scenario / IL standard
     "end_age": 90,            # horizon end
     "real_return": 0.04,      # 4% real annual return on invested surplus
-    "_note": "Real (after-inflation) terms. current_age is a placeholder — "
-             "not present in scraped data; set it to get an accurate horizon.",
+    "_note": f"Real (after-inflation) terms. current_age derived from "
+             f"BIRTH_DATE={BIRTH_DATE.isoformat()}.",
 }
 
 

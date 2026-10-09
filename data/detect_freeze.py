@@ -18,11 +18,65 @@ A Discount freeze ("גרייס"/הקפאה) is fully described by three paramete
                      If NOT pushed: the deferred principal is squeezed into the
                      unchanged remaining term, so the post-freeze payment RISES.
 
-Detection signal: for a normal amortising track the installment covers interest
-plus principal. Under a principal-only freeze the installment collapses to about
-the monthly interest (balance × annual_rate / 12). So a track whose NextPayment
-≈ its interest-only figure — while its own history/siblings pay materially more —
-is almost certainly frozen. We surface the discrepancy and let the user confirm.
+Detection signal (a HINT, not a verdict): for a normal amortising track the
+installment covers interest plus principal. Under a *principal-only* freeze the
+installment collapses to about the monthly interest (balance × annual_rate / 12).
+So a track whose NextPayment ≈ its interest-only figure is *worth investigating*.
+
+*** THIS SCRIPT CANNOT DATE A FREEZE. Read this before trusting its output. ***
+
+mortgage_details.json gives exactly two data points per track — PreviousPayment
+and NextPayment. Two points cannot tell you when a freeze began, how many months
+it runs, or whether it is still active. This script therefore reports a
+*suspicion* and asks the user; it never establishes a freeze on its own.
+
+Two failure modes this heuristic has actually hit (Aug 2026, the household's
+real mortgage), both of which produced confidently wrong answers:
+
+  1. FALSE POSITIVE from coincidence. Track 1 (4.60%, ₪441,497) had NextPayment
+     1,692.40 vs an interest-only figure of 1,692.40 — an exact match to the
+     agora. It was NOT frozen; the freeze had ended two months earlier and the
+     match was luck. An interest-only match proves nothing by itself.
+
+  2. WRONG FREEZE TYPE. The real freeze was FULL, not principal-only: the three
+     main tracks paid ₪0 and only the three 0.0001% מתווה tracks kept paying
+     (461.59 + 659.51 + 586.44 = 1,707.54 exactly). A full freeze does NOT leave
+     tracks sitting at interest-only, so this heuristic cannot see one at all —
+     it is blind to the very freeze shape Discount actually granted.
+
+THE ONLY WAY TO DATE A FREEZE is the checking-account charge history: the
+mortgage posts one debit per month described "דסק-משכנתא".
+
+  GET /Titan/gatewayAPI/lastTransactions/transactions/<acct>/ByDate
+        ?FromDate=YYYYMMDD&ToDate=YYYYMMDD&IsTransactionDetails=True
+        &IsFutureTransactionFlag=True&IsEventNames=True&IsCategoryDescCode=True
+  Headers: UUID: <live UUID from the running app>   (mandatory)
+           BusinessProcessID: OSH_LENTRIES_ALTAMIRA (mandatory)
+  Omitting either returns HTTP 200 with {"Error":{"MsgText":"קלט לא תקין"}}.
+  Lookback is capped at ~9-10 months (FromDate=20250901 works, 20250801 is empty).
+
+See .claude/skills/discount-mortgage-refresh/SKILL.md ("Dating a freeze from
+payment history") for the full recipe and the worked Apr-Jun 2026 example.
+
+For the record, that history — the evidence that settled it:
+
+    2025-09-01   -8,622.29    normal
+    2025-10-03   -8,652.03    normal
+    2025-11-02   -8,640.80    normal
+    2025-12-01   -8,637.99    normal
+    2026-01-01   -8,574.38    normal
+    2026-02-01   -8,504.54    normal
+    2026-03-10  -10,272.44    catch-up/double month; charge day moves 1st -> 10th
+    2026-04-10   -1,707.54    FREEZE month 1  (= the 3 מתווה tracks, exactly)
+    2026-05-10   -1,707.54    FREEZE month 2
+    2026-06-10   -1,707.54    FREEZE month 3
+    2026-07-10   -6,240.16    post-freeze (carries ~₪250 unexplained residue)
+    2026-08-10   -5,901.25    scheduled; = sum(LoanEntry[].NextPayment)
+
+  => 3-month FULL freeze covering the Apr/May/Jun 2026 charges. Already ENDED.
+     Post-freeze payment settled at 5,901.25, ~₪2,700 BELOW the pre-freeze
+     ~8,600 — the end date was pushed out rather than the deferred principal
+     being squeezed into the unchanged term.
 
 Run: python3 data/detect_freeze.py            (interactive)
      python3 data/detect_freeze.py --check     (report only, no prompts, exit 1 if discrepancy)
@@ -86,15 +140,29 @@ def full_payment_estimate(track):
 
 
 def detect(tracks):
-    """Return the list of tracks that look principal-frozen, with diagnostics."""
+    """Return tracks that *might* be principal-frozen, with diagnostics.
+
+    Deliberately conservative. An interest-only match alone is NOT enough — see
+    the module docstring: track 1 matched its interest-only figure to the agora
+    in Aug 2026 while not being frozen at all. So we additionally require
+    corroboration that the payment actually *dropped*: PreviousPayment must be
+    materially above NextPayment. A track that has been paying the same amount
+    for two cycles is not entering a freeze, whatever its interest-only figure
+    happens to equal.
+
+    This still cannot see a FULL freeze (tracks paying ₪0 are absent from the
+    charge entirely, not sitting at interest-only) — see detect_full_freeze.
+    """
     flagged = []
     for t in tracks:
         bal = t.get("PrincipalBalance", 0)
         if bal < MIN_TRACK_BALANCE:
             continue
         nxt = t.get("NextPayment", 0)
+        prev = t.get("PreviousPayment", 0)
         int_only = monthly_interest(t)
-        if abs(nxt - int_only) <= INTEREST_ONLY_TOLERANCE:
+        stepped_down = prev > nxt + INTEREST_ONLY_TOLERANCE
+        if abs(nxt - int_only) <= INTEREST_ONLY_TOLERANCE and stepped_down:
             full = full_payment_estimate(t)
             flagged.append({
                 "loan_account": t.get("LoanAccount"),
@@ -207,34 +275,100 @@ def prompt_for_freeze(flagged):
     return entries
 
 
-def report(flagged):
-    print(f"Detected {len(flagged)} track(s) that look principal-frozen "
-          f"(paying ≈ interest-only):\n")
-    for f in flagged:
-        print(f"  ⚠ {f['rate']}%  balance ₪{f['balance']:,.0f}: "
-              f"pays ₪{f['current_payment']:,.0f}, full ≈ "
-              f"₪{f['full_payment_est']:,.0f}  "
-              f"(Δ ₪{f['deferred_principal_per_mo']:,.0f}/mo deferred)")
+HISTORY_HINT = """
+  ⚠ This is a SUSPICION, not a finding. mortgage_details.json holds only two
+    data points per track (PreviousPayment / NextPayment) and CANNOT tell you
+    when a freeze started, how long it runs, or whether it already ended.
+
+    To confirm, query the checking-account charge history and read the
+    "דסק-משכנתא" debits month by month — the frozen months are visibly smaller:
+
+      GET /Titan/gatewayAPI/lastTransactions/transactions/<acct>/ByDate
+            ?FromDate=YYYYMMDD&ToDate=YYYYMMDD&IsTransactionDetails=True
+            &IsFutureTransactionFlag=True&IsEventNames=True&IsCategoryDescCode=True
+      Headers: UUID: <live from app>, BusinessProcessID: OSH_LENTRIES_ALTAMIRA
+      (lookback caps at ~9-10 months)
+
+    Recipe: .claude/skills/discount-mortgage-refresh/SKILL.md
+            -> "Dating a freeze from payment history"
+"""
+
+
+def zero_paying_tracks(tracks):
+    """Tracks charging ~₪0 — the signature of a FULL freeze.
+
+    Under a full freeze the track pays nothing at all (interest capitalises), so
+    it never resembles interest-only and detect() is blind to it. The Apr-Jun
+    2026 freeze was exactly this shape.
+    """
+    out = []
+    for t in tracks:
+        if t.get("PrincipalBalance", 0) < MIN_TRACK_BALANCE:
+            continue
+        if abs(t.get("NextPayment", 0)) < 1.0:
+            out.append(t)
+    return out
+
+
+def report(flagged, zeroed=()):
+    if zeroed:
+        print(f"{len(zeroed)} substantial track(s) are charging ~₪0 — the "
+              f"signature of a FULL freeze:\n")
+        for t in zeroed:
+            print(f"  ⚠ {t.get('TotalInterestRate')}%  balance "
+                  f"₪{t.get('PrincipalBalance', 0):,.0f}: NextPayment ₪0")
+        print()
+
+    if flagged:
+        print(f"Detected {len(flagged)} track(s) that MAY be principal-frozen "
+              f"(paying ≈ interest-only AND stepped down last cycle):\n")
+        for f in flagged:
+            print(f"  ⚠ {f['rate']}%  balance ₪{f['balance']:,.0f}: "
+                  f"pays ₪{f['current_payment']:,.0f}, full ≈ "
+                  f"₪{f['full_payment_est']:,.0f}  "
+                  f"(Δ ₪{f['deferred_principal_per_mo']:,.0f}/mo deferred)")
+    print(HISTORY_HINT)
 
 
 def main():
     check_only = "--check" in sys.argv
     tracks = load_tracks()
     flagged = detect(tracks)
+    zeroed = zero_paying_tracks(tracks)
 
-    if not flagged:
-        print("No payment discrepancy detected — no mortgage track looks frozen.")
+    if not flagged and not zeroed:
+        print("No payment discrepancy detected in the current dump.")
+        print("NOTE: this does NOT rule out a freeze — a freeze that has already "
+              "ended leaves no trace here. Only the charge history can tell you.")
+        print(HISTORY_HINT)
         # Clear a stale freeze file so the forecast stops applying it.
         if FREEZE.exists() and not check_only:
             FREEZE.unlink()
             print(f"Removed stale {FREEZE.name}.")
         return 0
 
-    report(flagged)
+    report(flagged, zeroed)
 
     if check_only:
-        print("\n(--check) Run without --check to record the freeze parameters.")
+        print("(--check) Nothing has been recorded. Run the history query above "
+              "to establish whether a freeze is real, when it started, and "
+              "whether it is still active — then run without --check to record "
+              "the confirmed parameters.")
         return 1
+
+    if not flagged:
+        # Only a full freeze was seen; there is no interest-only track to
+        # parameterise, and we will not invent one.
+        print("Nothing recorded: confirm the window from the charge history "
+              "first, then record it deliberately.")
+        return 1
+
+    print("Confirm against the charge history BEFORE answering these prompts — "
+          "if the freeze has already ended, do not record one.")
+    proceed = _ask("Record a freeze anyway? [y/n] ", ["y", "n"])
+    if proceed == "n":
+        print("Nothing written.")
+        return 0
 
     entries = prompt_for_freeze(flagged)
     payload = {
