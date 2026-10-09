@@ -1,6 +1,6 @@
 ---
 name: riseup
-description: Query your RiseUp personal finance data — spending, income, balances, transactions, trends, and more. Activate when user mentions finances, spending, income, budget, bank balance, salary, subscriptions, debt, or riseup.
+description: RiseUp-native operations — classify, rename, exclude, or merge RiseUp transactions, and RiseUp-specific queries. Activate when the user explicitly mentions RiseUp, or wants to edit/classify RiseUp categories. For general money questions (spending, income, net worth, goals) prefer the `finance` skill, which reads the unified digested ledger.
 ---
 
 # RiseUp Finance CLI Skill

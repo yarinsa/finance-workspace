@@ -124,7 +124,7 @@ tracks ending), so read it from these fields rather than assuming it's fixed:
 | `PreviousPayment` / `PreviousPaymentDate` | Last installment, for comparison. |
 | `TotalInterestRate` + `BaseInterestTypeName` | Current rate and its base. `פריים`/Prime tracks move with the BoI rate; CPI-linked (`LinkageType: 3`) move with the index. |
 | `NextInterestChangeDate` | When this track's rate next resets (empty = continuous, e.g. Prime). The main signal for *why* a future payment will differ. |
-| `IsLoanInArrears` / `LoanRefundStatus` | Arrears or freeze/hold flags. `False` / `0` = normal. A freeze or arrears here is what would make an installment differ. |
+| `IsLoanInArrears` / `LoanRefundStatus` | Arrears flags. `False` / `0` = normal. **These do NOT indicate a freeze** — they read normal straight through an active freeze (verified Aug 2026). Never use them to detect one. |
 
 **Caveat — don't trust `Summary.CurrentMonthTotalPayment` as "next payment".**
 It reflects only the tracks whose `CurrentMonthPayment` is non-zero (e.g. the
@@ -141,11 +141,20 @@ A freeze temporarily lowers a track's installment. The dump reflects it **only
 after the first frozen charge posts** — but the household knows about a freeze
 the moment they arrange it, so the pipeline detects it early rather than waiting.
 
-**Signal:** under a *principal-only* freeze a track pays roughly its **interest
-only**, i.e. `NextPayment ≈ PrincipalBalance × TotalInterestRate/100 / 12`. When
-a large track's `NextPayment` sits within a few ₪ of that interest-only figure
-(while siblings/history pay materially more), it is almost certainly frozen even
-though `IsLoanInArrears`/`LoanRefundStatus` still read normal.
+**Signal (weak — a hint, never a conclusion):** under a *principal-only* freeze a
+track pays roughly its **interest only**, i.e.
+`NextPayment ≈ PrincipalBalance × TotalInterestRate/100 / 12`.
+
+> **⚠ Do not date a freeze from `mortgage_details.json`.** The dump gives you two
+> data points — `PreviousPayment` and `NextPayment` — and two points cannot tell
+> you when a freeze started, how long it runs, or whether it has already ended.
+> In August 2026 this cost us two rounds of wrong answers: track 1 (4.60%) sat
+> within an agora of its interest-only figure and was read as "actively frozen",
+> when in fact the freeze had **ended two months earlier** and the match was a
+> coincidence. **Always confirm against the payment history below.**
+
+**The freeze is only datable from the checking-account charge history.** See
+"Dating a freeze from payment history" below — that is the authoritative method.
 
 **A Discount freeze is defined by three parameters** — you must ask the user
 these, because they determine the post-freeze payment and the dump can't tell you:
@@ -164,6 +173,83 @@ payment amounts) with the recomputed post-freeze payment per track.
 (higher) payment instead of naively carrying the frozen figure forward. When a
 mortgage looks frozen, run `python3 data/detect_freeze.py` and confirm with the
 user — don't assume the current `NextPayment` is permanent.
+
+### Dating a freeze from payment history (the authoritative method)
+
+The mortgage is charged to the **checking account** as a single debit described
+`דסק-משכנתא`. Pulling that account's history and filtering on that description
+gives one row per month — which is what actually dates a freeze.
+
+```
+GET /Titan/gatewayAPI/lastTransactions/transactions/<acct>/ByDate
+      ?FromDate=YYYYMMDD&ToDate=YYYYMMDD
+      &IsTransactionDetails=True&IsFutureTransactionFlag=True
+      &IsEventNames=True&IsCategoryDescCode=True
+```
+
+Two headers are **mandatory** and are *not* the ones the rest of this skill uses:
+
+| Header | Value |
+|---|---|
+| `UUID` | a **live** UUID taken from the running app (e.g. `Hlw9605131850XA3D7`) |
+| `BusinessProcessID` | `OSH_LENTRIES_ALTAMIRA` |
+
+Omit either one and you get `{"Error":{"MsgText":"קלט לא תקין", ...}}` — a
+200 with an error body, not an HTTP failure. Grab the live UUID by hooking
+`window.fetch` on `#/OSH_LENTRIES_ALTAMIRA` (עובר ושב → "לכל התנועות") and
+reading the headers off any gateway call the page makes.
+
+> **~9–10 month lookback cap.** `FromDate=20250901` returns rows;
+> `FromDate=20250801` returns **zero**. A freeze older than roughly nine months
+> **cannot be dated from this endpoint** — say so plainly rather than inferring.
+
+**Worked example — the Apr–Jun 2026 freeze (real, resolved 2026-08-09).**
+Filtering `דסק-משכנתא` over `FromDate=20250901&ToDate=20260809`:
+
+| Charge date | ₪ | |
+|---|---|---|
+| 2025-09-01 | -8,622.29 | normal |
+| 2025-10-03 | -8,652.03 | normal |
+| 2025-11-02 | -8,640.80 | normal |
+| 2025-12-01 | -8,637.99 | normal |
+| 2026-01-01 | -8,574.38 | normal |
+| 2026-02-01 | -8,504.54 | normal |
+| **2026-03-10** | **-10,272.44** | catch-up/double month; charge day moves 1st → 10th |
+| **2026-04-10** | **-1,707.54** | freeze month 1 |
+| **2026-05-10** | **-1,707.54** | freeze month 2 |
+| **2026-06-10** | **-1,707.54** | freeze month 3 |
+| 2026-07-10 | -6,240.16 | post-freeze (carries ~₪250 unexplained residue) |
+| 2026-08-10 | -5,901.25 | scheduled; = `sum(LoanEntry[].NextPayment)` |
+
+**It was a FULL freeze, not principal-only.** `1,707.54 = 461.59 + 659.51 +
+586.44` **exactly** — the three 0.0001% מתווה tracks. So the three real tracks
+(2.09% / 4.60% / 4.55%) paid **₪0** for three months; the מתווה tracks were
+excluded from the freeze and kept paying. Decomposing the frozen figure against
+the מתווה tracks is the cleanest way to tell full from principal-only.
+
+Note the post-freeze payment settled at **5,901.25**, ~₪2,700 *below* the
+pre-freeze ~8,600 — the end date was pushed out rather than the deferred
+principal being squeezed into the unchanged term.
+
+### What does NOT work (don't rediscover this — it cost ~43 tool calls)
+
+- **No field anywhere in the Discount API names a freeze.** There is no `grace`,
+  `gracePeriod`, `freeze`, `הקפאה`, `גרייס`, or `דחייה` field. `IsLoanInArrears`
+  reads `"False"` and `LoanRefundStatus` reads `"0"` straight through an active
+  freeze — **both are useless for freeze detection**, despite what the field
+  table above might suggest.
+- **Guessed `mortgage/*` endpoints all fail** with
+  `{"Error":{"ReturnedCode":"E100146","MsgText":"אין אפשרות להציג את המידע"}}`:
+  `paymentsSchedule`, `amortizationSchedule`, `loanSchedule`, `transactions`,
+  `movements`, `paymentsHistory`, `history`, `futurePayments`, `loanDetails`,
+  `summary`, `mainMenu`, `actions`. The uniform error means "no such route" —
+  guessing more names is not productive. Drive the UI and hook `fetch` instead.
+- **דו"ח סילוקין is NOT an online view.** The button opens a *request-by-mail
+  form* that charges a **₪15 fee** on submit. It is a write action: open it to
+  confirm what it is if you must, then close it — **never submit**. This skill is
+  read-only against the bank and that discipline must be preserved.
+- **דוח שנתי משכנתא** (`#/MORTGAGE_YEARLY_MAIL`) only offers year **2025**, which
+  predates the 2026 freeze. Useless for anything recent.
 
 ## Gotchas (do not break)
 

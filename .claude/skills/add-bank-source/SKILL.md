@@ -140,6 +140,92 @@ Spot-check one file with `node -e` that it's valid JSON with real figures.
 - If the user wants stored credentials, add `<NAME>_*` placeholders to the
   gitignored `.env` — **empty, user-filled, never auto-typed**.
 
+## Troubleshooting a scrape that returns HTML (read before blaming the login)
+
+**A stale endpoint and a dead session look identical.** Both return
+**HTTP 200 with an HTML login shell** (~3.6 KB on AMEX). "Body is HTML, not
+JSON" is therefore *not* an auth test — it is an ambiguous symptom with three
+possible causes:
+
+- **(a) session expired** — the user really must log in again;
+- **(b) the endpoint path is stale** — the SPA was re-platformed and moved it;
+- **(c) wrong host/origin** — the call went to the web host, not the API host.
+
+This is not hypothetical. AMEX's card list moved from
+`POST /ocp/statuspage/DigitalV3.StatusPage/GetCardList` to
+`POST /ocp/transactions/DigitalV3.Transactions/GetCardList`. The skill kept
+requesting the old path, got 200 + HTML every time, and three separate agents
+reported "session expired". The user logged in **three times**. The session had
+been live the whole time. **Never report (a) without first ruling out (b) and (c).**
+
+### Disambiguate, in this order
+
+1. **Hit the source's own is-logged-in endpoint**, if it has one — it is the only
+   unambiguous auth signal. AMEX: `GET /IsLoggedIn` → 200 + JSON when live.
+2. **Inspect the Playwright context cookie jar**, not `document.cookie`:
+   ```js
+   async (page) => JSON.stringify((await page.context().cookies()).map(c => c.name + '@' + c.domain))
+   ```
+   Auth cookies are typically **HttpOnly** (AMEX: `authentication_shared`,
+   `JSESSIONID`) — invisible to `document.cookie` and **not carried by a
+   `fetch()` inside `page.evaluate`**. Auth cookies present **and** the API
+   returning HTML ⇒ the endpoint is stale, **not** the session.
+3. **Capture what the SPA itself requests** (below) and diff the real paths
+   against the ones hardcoded in the skill's `dump.sh`.
+
+### Prefer capturing responses over reconstructing requests
+
+Reconstructed `fetch()` calls drift from the app and silently drop HttpOnly
+cookies. Navigating the SPA to the page that naturally fires the calls inherits
+auth, headers and cookies automatically, and by construction cannot go stale:
+
+```js
+async (page) => {
+  const captured = {};
+  page.on('response', async (r) => {
+    const m = r.url().match(/YourApi\/(\w+)$/);
+    if (m && r.request().method() === 'POST') {
+      try { captured[m[1]] = await r.text(); } catch (e) {}
+    }
+  });
+  await page.goto('<the page that triggers the calls>', { waitUntil: 'networkidle', timeout: 45000 }).catch(() => {});
+  await page.waitForTimeout(9000);
+  return JSON.stringify(Object.keys(captured));
+}
+```
+
+### Ask the user for DevTools evidence — after ONE failure, not three
+
+If a scrape fails and the session **may** be live, **do not retry and do not ask
+for another login.** Ask the user to open DevTools → Network on the page that
+works, find the relevant call, and paste:
+
+- the **request line + path** — reveals a moved endpoint (this is what finally
+  cracked AMEX);
+- the **request headers** — reveals required custom headers (AMEX needs a
+  `TraceIdentifier`) and the real `Referer`/`Origin`;
+- the **response headers** — `content-type: application/json` plus a
+  `set-cookie` on the API domain (AMEX: `.api.isracard.co.il`) is **proof the
+  call is authenticated**, and names the backend host actually serving it.
+
+Say *why* you're asking: their browser is ground truth, it costs them 30 seconds,
+and a login fixes nothing if the path moved. One paste beat three retries.
+
+### Report what you observed, not what you inferred
+
+Never claim "session expired" from a failed API call alone. Write
+*"`POST /ocp/statuspage/…/GetCardList` returned 200 with a 3,646-byte HTML login
+shell — that means either the session lapsed or the endpoint moved"*, then run
+the checks above. Crying wolf about logins is expensive and erodes trust.
+
+### `playwright-cli run-code` gotchas
+
+- The flag is **`--filename=`**, not `--file=`.
+- The file must contain a **bare async function expression** —
+  `async (page) => { ... }`. No `module.exports`, no top-level statements.
+- **`require()` is unavailable** inside the snippet.
+- **`console.log` does not reliably surface** — `return` a string and grep it.
+
 ## Hard rules (carry into every source)
 
 1. **The USER logs in. You never type credentials, OTP, or card numbers.**
