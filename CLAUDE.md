@@ -45,7 +45,7 @@ output without re-scraping).
 
 ### Refreshing everything
 
-The `refresh-all` skill orchestrates all seven sources end to end. It checks
+The `refresh-all` skill orchestrates all eight sources end to end. It checks
 every session **first** (`.claude/skills/refresh-all/scripts/check_sessions.sh`), batches the logins you need
 into one pass, scrapes in dependency-correct order, then digests and forecasts.
 
@@ -125,7 +125,7 @@ guide stays about *method* and `MEMORY.md` holds the personal specifics.
 
 ### Savings are assets, not cashflow (important)
 
-Long-term savings vehicles (Harel pension + study funds) emit a **`savings`**
+Long-term savings vehicles (Harel pension + study funds, More study funds) emit a **`savings`**
 entity and **never a `transactions` entity**. A pension contribution is not
 spending — emitting deposits into the ledger would inflate `total_spent`, and the
 bank-side debit is already captured by the bank source anyway.
@@ -160,6 +160,7 @@ two answer different questions ("can I pay my bills" vs "what am I worth").
 | `amex` (American Express / Isracard) | ✅ | credit_cards, transactions |
 | `riseup` (aggregator) | ✅ | accounts, credit_cards, income, subscription, transactions |
 | `harel` (pension + study funds) | ✅ | savings |
+| `more` (More study funds, incl. self-employed) | ✅ | savings |
 
 RiseUp's `transactions` come from its budget envelopes (`actuals` + `excluded`) and
 are the category-tagged copies used for dedup priority above. amex/cal emit a full

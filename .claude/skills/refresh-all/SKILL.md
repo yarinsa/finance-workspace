@@ -30,7 +30,7 @@ a time, mid-refresh. It checks everything first and asks once.
   Correct order: **account → mortgage → business**.
 - **Everything else is parallel-safe.** Each institution has its own CDP port
   and profile, so they cannot collide:
-  riseup 9222 · discount 9223 · leumi 9224 · cal 9225 · amex 9226 · harel 9227.
+  riseup 9222 · discount 9223 · leumi 9224 · cal 9225 · amex 9226 · harel 9227 · more 9228.
   Only the three Discount apps must be sequential, because they share 9223.
 
 ## Flow
@@ -74,6 +74,7 @@ existing skill:
 | cal | `cal-refresh` |
 | amex | `amex-refresh` |
 | harel | `harel-refresh` |
+| more | `more-refresh` |
 
 Tell every agent: **do not run `digest.py` or `forecast.py`** — this skill does
 that once, at the end, after all sources have landed.

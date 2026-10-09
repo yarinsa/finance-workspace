@@ -33,6 +33,7 @@ SOURCES=(
   "cal|9225|cal|location.hostname.includes('cal-online.co.il') && !!(JSON.parse(sessionStorage.getItem('auth-module')||'{}').auth||{}).calConnectToken"
   "amex|9226|amex|document.title.includes('אזור אישי')"
   "harel|9227|harel|location.href.includes('client-view.aspx')"
+  "more|9228|more|location.hostname==='my-account.more.co.il' && !!sessionStorage.getItem('accountData')"
 )
 
 # Login URL per source — used only to LAUNCH a window for the user, never to log in.
@@ -43,6 +44,7 @@ declare -A LOGIN_URL=(
   [cal]="https://www.cal-online.co.il/"
   [amex]="https://he.americanexpress.co.il/"
   [harel]="https://www.harel-group.co.il/"
+  [more]="https://my-account.more.co.il/personalarea/dashboard"
 )
 
 WANT=("$@")

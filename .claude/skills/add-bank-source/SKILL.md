@@ -44,7 +44,8 @@ Existing examples to copy from (read the closest one first):
 | 9225 | `~/.chrome-cdp-cal` | CAL / cal-online (כאל credit cards) |
 | 9226 | `~/.chrome-cdp-amex` | American Express Israel (Isracard/ICC-operated) |
 | 9227 | `~/.chrome-cdp-harel` | Harel (הראל) — pension + study funds (savings, not cashflow) |
-| **9228+** | `~/.chrome-cdp-<source>` | **← next new source** |
+| 9228 | `~/.chrome-cdp-more` | More Investment House (מור) — study funds (savings, not cashflow) |
+| **9229+** | `~/.chrome-cdp-<source>` | **← next new source** |
 
 > Sources behind the **same login** can share a port/profile (as the three
 > Discount apps do). A genuinely separate institution gets its own.
