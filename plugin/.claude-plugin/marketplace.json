@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-marketplace.json",
+  "name": "finance-copilot-marketplace",
+  "owner": { "name": "Yarin Sasson" },
+  "description": "Claude-as-UI personal finance for Israeli banks and cards.",
+  "plugins": [
+    {
+      "name": "finance-copilot",
+      "source": "./",
+      "description": "Scrape, digest, and answer money questions from chat — no native app required."
+    }
+  ]
+}

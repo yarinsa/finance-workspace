@@ -1,0 +1,16 @@
+# The plugin ships CODE only. Never commit secrets or personal financial data.
+.env
+finance.config.json
+MEMORY.md
+data/
+*.xlsx
+
+# atomic-write artifacts
+*.tmp
+*.bak
+
+# python
+__pycache__/
+*.pyc
+.venv/
+.mypy_cache/

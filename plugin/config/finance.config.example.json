@@ -1,0 +1,13 @@
+{
+  "_note": "Copy to finance.config.json (gitignored) and adjust. Non-secret settings only.",
+  "data_dir": "./data",
+  "_own_note": "Used by digest.py to detect transfers between YOUR OWN accounts (so they aren't counted as income/expense). Fill with your account holder name(s), account-number fragments that appear in transaction descriptions, and any confirmed self-transfer phrases. Leave empty to disable name/account-based detection.",
+  "own_names": [],
+  "own_account_hints": [],
+  "own_transfer_descriptions": [],
+  "projection": {
+    "retirement_age": 67,
+    "end_age": 90,
+    "real_return": 0.04
+  }
+}

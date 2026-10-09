@@ -1,0 +1,9 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-plugin.json",
+  "name": "finance-copilot",
+  "version": "0.1.0",
+  "description": "Turn Claude into the UI for a personal-finance workspace: scrape Israeli banks and cards over CDP, digest into one deduped ledger + net-worth snapshot, and answer money questions — cashflow, spending, net worth, debt, goals, forecast, retirement — straight from chat.",
+  "author": { "name": "Yarin Sasson" },
+  "license": "MIT",
+  "keywords": ["finance", "personal-finance", "israel", "banking", "cashflow", "budget", "net-worth"]
+}
