@@ -22,7 +22,7 @@ export default function Networth() {
 
       <Card>
         <div className="card-title">השווי הנקי לאורך החיים</div>
-        <NetWorthChart height={280} />
+        <NetWorthChart height={280} showLoans />
       </Card>
 
       <div className="grid grid-2 section-gap">

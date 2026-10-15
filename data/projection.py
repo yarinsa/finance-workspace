@@ -56,14 +56,24 @@ def _months_between_ages(a, b):
     return int(round((b - a) * 12))
 
 
+def annuity_payment(balance, rate_m, n):
+    """Fixed (Schpitzer) monthly payment that retires `balance` in `n` months."""
+    if rate_m <= 0:
+        return balance / n
+    return balance * rate_m / (1 - (1 + rate_m) ** -n)
+
+
 def amortize_loans(loans):
-    """Per-loan monthly schedule. Returns a list of active loans with a
-    ``schedule`` function and a ``payoff_month`` (months from now), plus the
-    monthly payment that frees up at payoff.
+    """Per-loan monthly schedule: balance, payment, monthly rate and the number
+    of payments left. The payment frees up as surplus once the loan retires.
 
     Each loan is treated as a fixed-payment amortizing balance at its real-ish
-    nominal rate. Loans without a rate/payment (e.g. the Leumi aggregate) are
-    amortized straight-line over a default term so they still pay down.
+    nominal rate. The scraped ``monthly_payment`` is today's installment, which
+    may be temporarily reduced (the Discount mortgage tracks are ≈interest-only
+    right now); if it can't retire the balance within ``payments_remaining`` we
+    use the annuity payment that does, so every loan ends on its final_date.
+    Loans without a rate/payment (e.g. the Leumi aggregate) are amortized
+    straight-line over a default term so they still pay down.
     """
     out = []
     for ln in loans:
@@ -80,6 +90,8 @@ def amortize_loans(loans):
             rem = rem or 60
             pay = bal / rem
             rate_m = 0.0
+        else:
+            pay = max(pay, annuity_payment(bal, rate_m, rem))
 
         out.append({
             "name": ln.get("name") or ln.get("loan_id"),
@@ -137,6 +149,9 @@ def simulate(snapshot, cfg=CONFIG):
             interest = l["balance"] * l["rate_m"]
             principal = l["payment"] - interest
             l["balance"] = max(0.0, l["balance"] - principal)
+            l["payments_remaining"] -= 1
+            if l["payments_remaining"] <= 0:
+                l["balance"] = 0.0   # last installment clears float residue
             if l["balance"] <= 0 and not l.get("_freed"):
                 l["_freed"] = True
                 freed_monthly += l["payment"]
