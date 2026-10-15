@@ -152,6 +152,9 @@ def pick_current_month(months):
 
 # --- Month-to-date pace -----------------------------------------------------
 
+AVG_MONTHS = 12  # trailing window for the "vs. your average" comparison
+
+
 def _prev_month(ym):
     y, m = int(ym[:4]), int(ym[5:7])
     return f"{y - 1}-12" if m == 1 else f"{y}-{m - 1:02d}"
@@ -183,14 +186,22 @@ def build_pace(transactions, current_key):
     ledger date (clamped to the shorter month). The cut-off is the ledger's own
     latest date, not the wall clock, so stale data still compares like-for-like.
 
+    ``average`` does the same against the mean of the trailing ``AVG_MONTHS``
+    months the ledger covers (each cut at the same day), so one unusual
+    September doesn't make every October look good.
+
     Uses the same inclusion rules as ``aggregate_by_month`` (no internal
     transfers, card-bill settlements or savings). ``daily_expense`` is the
     cumulative spend per day for the sparkline: the current month up to
     ``as_of_day``, the previous month in full (so its end-of-month is visible).
     """
     prev_key = _prev_month(current_key)
+    trailing = [prev_key]                      # the 12 months before this one
+    for _ in range(AVG_MONTHS - 1):
+        trailing.append(_prev_month(trailing[-1]))
+    keys = {current_key, *trailing}
     rows = [t for t in transactions
-            if (t.get("date") or "")[:7] in (current_key, prev_key)
+            if (t.get("date") or "")[:7] in keys
             and not (t.get("internal_transfer") or t.get("card_bill_payment")
                      or t.get("savings"))]
     cur_days = [int(t["date"][8:10]) for t in rows if t["date"][:7] == current_key]
@@ -236,8 +247,27 @@ def build_pace(transactions, current_key):
     cur = side(current_key, as_of_day)
     cur["daily_expense"] = cur["daily_expense"][:as_of_day]
     prev = side(prev_key, min(as_of_day, _days_in_month(prev_key)))
+
+    # 12-month average, cut at the same day — only months the ledger actually
+    # covers count, so a gap (no scrape that month) doesn't drag the mean to 0.
+    covered = {t["date"][:7] for t in rows}
+    sides = [side(k, min(as_of_day, _days_in_month(k))) for k in trailing if k in covered]
+    average = None
+    if sides:
+        n_days = _days_in_month(current_key)
+        mean = lambda xs: round(sum(xs) / len(xs), 2)
+        # cumulative curve per day; a shorter month holds its last value
+        curve = [mean([sd["daily_expense"][min(i, len(sd["daily_expense"]) - 1)] for sd in sides])
+                 for i in range(n_days)]
+        average = {
+            "months": len(sides),
+            "income": mean([sd["income"] for sd in sides]),
+            "expense": mean([sd["expense"] for sd in sides]),
+            "month_expense": mean([sd["month_expense"] for sd in sides]),
+            "daily_expense": curve,
+        }
     return {"as_of_day": as_of_day, "days_in_month": _days_in_month(current_key),
-            "current": cur, "previous": prev}
+            "current": cur, "previous": prev, "average": average}
 
 
 def expected_for_month(forecast, month_key):

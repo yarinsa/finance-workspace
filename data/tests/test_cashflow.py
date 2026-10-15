@@ -195,3 +195,37 @@ class TestCategoryDonut:
     def test_top_categories_without_a_tail_has_no_other(self):
         assert cashflow.top_categories({"משכנתא": 100.0, "פנאי": 5.0}) == [
             {"name": "משכנתא", "amount": 100.0}, {"name": "פנאי", "amount": 5.0}]
+
+
+class TestTrailingAverage:
+    """Wallet header's "vs. your 12-month average" — same-day cut, covered months only."""
+
+    def test_average_is_cut_at_same_day_over_covered_months(self):
+        # Real case: September 2026 was an outlier (partner moving out), so October
+        # vs. September alone overstated the improvement. Average Aug+Sep instead.
+        pace = cashflow.build_pace([
+            {"date": "2026-10-09", "amount": -900.0},
+            {"date": "2026-09-05", "amount": -1500.0},
+            {"date": "2026-09-25", "amount": -6800.0},   # after day 9 — excluded
+            {"date": "2026-08-03", "amount": -500.0},
+            # July 2026 has no rows (no scrape) — must not count as a ₪0 month
+        ], "2026-10")
+        avg = pace["average"]
+        assert avg["months"] == 2
+        assert avg["expense"] == 1000.0               # (1500 + 500) / 2
+        assert avg["month_expense"] == 4400.0         # (8300 + 500) / 2
+        assert len(avg["daily_expense"]) == 31
+        assert avg["daily_expense"][8] == 1000.0      # by the 9th
+
+    def test_window_is_twelve_months(self):
+        pace = cashflow.build_pace([
+            {"date": "2026-10-01", "amount": -10.0},
+            {"date": "2025-10-01", "amount": -100.0},   # 12 months back — in
+            {"date": "2025-09-01", "amount": -9999.0},  # 13 months back — out
+        ], "2026-10")
+        assert pace["average"]["months"] == 1
+        assert pace["average"]["expense"] == 100.0
+
+    def test_no_history_means_no_average(self):
+        pace = cashflow.build_pace([{"date": "2026-10-01", "amount": -10.0}], "2026-10")
+        assert pace["average"] is None

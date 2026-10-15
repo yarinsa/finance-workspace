@@ -54,12 +54,22 @@ export interface PaceSide {
   by_category?: { name: string; amount: number }[];
 }
 
+/** Mean of the trailing months the ledger covers, each cut at the same day. */
+export interface PaceAverage {
+  months: number;
+  income: number;
+  expense: number;
+  month_expense: number;
+  daily_expense: number[];
+}
+
 /** Month-to-date vs. the previous month cut at the same day (cashflow.build_pace). */
 export interface Pace {
   as_of_day: number;
   days_in_month: number;
   current: PaceSide;
   previous: PaceSide;
+  average?: PaceAverage | null;
   /** Full-month expectation from forecast.py's budget envelopes; null when stale/missing. */
   expected?: { income: number; expense: number; net: number; source: string } | null;
 }
