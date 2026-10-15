@@ -9,6 +9,7 @@ import Portfolio from "./Portfolio";
 import Metrics from "./Metrics";
 import Timeline from "./Timeline";
 import MyPlan from "./MyPlan";
+import Syncs from "./Syncs";
 
 export interface RouteDef {
   path: string;
@@ -16,7 +17,7 @@ export interface RouteDef {
   Component: ComponentType;
 }
 
-/** Mirrors the 10 PRD features in docs/plangram-prd. Order = nav order. */
+/** The 10 PRD features in docs/plangram-prd, plus data freshness. Order = nav order. */
 export const routes: RouteDef[] = [
   { path: "/overview", label: "מבט על", Component: Overview },
   { path: "/cashflow", label: "תזרים כספי", Component: Cashflow },
@@ -28,4 +29,5 @@ export const routes: RouteDef[] = [
   { path: "/metrics", label: "התקדמות", Component: Metrics },
   { path: "/timeline", label: "ציר זמן", Component: Timeline },
   { path: "/my-plan", label: "תכנון פלוס", Component: MyPlan },
+  { path: "/syncs", label: "סנכרונים", Component: Syncs },
 ];

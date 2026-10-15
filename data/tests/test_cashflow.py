@@ -142,3 +142,30 @@ class TestBuildPace:
         ], "2027-01")
         assert pace["previous"]["month"] == "2026-12"
         assert pace["previous"]["expense"] == 20.0
+
+
+class TestExpectedForMonth:
+    """The wallet card's "actual of expected" comes from forecast.py's current_month."""
+
+    FORECAST = {
+        "based_on_budget": "2026-10",
+        "current_month": {
+            "forecast_month": "2026-10", "based_on_budget": "2026-10",
+            "income": {"total": 27163.8}, "expenses": {"total": 31461.65},
+        },
+    }
+
+    def test_current_budget_month_becomes_expected(self):
+        exp = cashflow.expected_for_month(self.FORECAST, "2026-10")
+        assert exp["income"] == 27163.8
+        assert exp["expense"] == 31461.65
+        assert exp["net"] == -4297.85
+
+    def test_stale_forecast_is_not_this_months_target(self):
+        # Forecast last built from September's budget; it's now October.
+        stale = {"current_month": {**self.FORECAST["current_month"], "forecast_month": "2026-09"}}
+        assert cashflow.expected_for_month(stale, "2026-10") is None
+
+    def test_missing_forecast_or_old_format(self):
+        assert cashflow.expected_for_month(None, "2026-10") is None
+        assert cashflow.expected_for_month({"months": []}, "2026-10") is None

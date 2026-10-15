@@ -1,5 +1,6 @@
 import { Card, PageTitle } from "@/components/ui";
 import NetWorthChart from "@/components/NetWorthChart";
+import MortgageCard from "@/components/MortgageCard";
 import { shekel, snapshot } from "@/lib/data";
 
 export default function Networth() {
@@ -21,7 +22,7 @@ export default function Networth() {
 
       <Card>
         <div className="card-title">השווי הנקי לאורך החיים</div>
-        <NetWorthChart height={300} />
+        <NetWorthChart height={280} />
       </Card>
 
       <div className="grid grid-2 section-gap">
@@ -58,6 +59,10 @@ export default function Networth() {
             <strong style={{ color: "var(--bad)" }}>{shekel(t.total_debt)}</strong>
           </div>
         </Card>
+      </div>
+
+      <div className="section-gap">
+        <MortgageCard />
       </div>
 
       <Card className="section-gap">

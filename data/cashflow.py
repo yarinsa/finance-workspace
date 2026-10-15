@@ -23,6 +23,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 DIGESTED = os.path.join(HERE, "digested")
 TRANSACTIONS = os.path.join(DIGESTED, "transactions.json")
 SNAPSHOT = os.path.join(DIGESTED, "snapshot.json")
+FORECAST = os.path.join(DIGESTED, "forecast.json")
 OUT_JSON = os.path.join(DIGESTED, "cashflow.json")
 OUT_MD = os.path.join(DIGESTED, "cashflow.md")
 OUT_HTML = os.path.join(DIGESTED, "cashflow.html")
@@ -217,7 +218,29 @@ def build_pace(transactions, current_key):
     cur = side(current_key, as_of_day)
     cur["daily_expense"] = cur["daily_expense"][:as_of_day]
     prev = side(prev_key, min(as_of_day, _days_in_month(prev_key)))
-    return {"as_of_day": as_of_day, "current": cur, "previous": prev}
+    return {"as_of_day": as_of_day, "days_in_month": _days_in_month(current_key),
+            "current": cur, "previous": prev}
+
+
+def expected_for_month(forecast, month_key):
+    """The forecast's full-month expectation for ``month_key`` — or None.
+
+    Only the forecast's ``current_month`` block counts, and only when its budget
+    month is the month being shown: a stale forecast (last month's budget) must
+    not be passed off as this month's target. Returns positive figures, the same
+    convention as the pace block it sits next to.
+    """
+    cur = (forecast or {}).get("current_month")
+    if not cur or cur.get("forecast_month") != month_key:
+        return None
+    income = cur["income"]["total"]
+    expense = cur["expenses"]["total"]
+    return {
+        "income": income,
+        "expense": expense,
+        "net": round(income - expense, 2),
+        "source": f"forecast.py · RiseUp budget {cur.get('based_on_budget')}",
+    }
 
 
 # --- Metrics ----------------------------------------------------------------
@@ -347,6 +370,15 @@ def build_charts(months, current_key):
 
 # --- Orchestration ----------------------------------------------------------
 
+def _load_optional(path):
+    """Forecast is produced separately; the cashflow model still builds without it."""
+    try:
+        with open(path, encoding="utf-8") as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return None
+
+
 def build():
     with open(TRANSACTIONS, encoding="utf-8") as f:
         tx_doc = json.load(f)
@@ -379,7 +411,8 @@ def build():
         ),
         "metrics": metrics,
         "today": charts["today"],
-        "pace": build_pace(transactions, current),
+        "pace": {**build_pace(transactions, current),
+                 "expected": expected_for_month(_load_optional(FORECAST), current)},
         "charts": {
             **{k: v for k, v in charts.items() if k != "today"},
             "net_worth": proj["chart"],

@@ -36,7 +36,6 @@ body {
   flex-direction: column;
   gap: 8px;
 }
-.brand { font-weight: 800; font-size: 20px; letter-spacing: 0.5px; margin-bottom: 12px; }
 nav { display: flex; flex-direction: column; gap: 4px; }
 .nav-item {
   display: block;
@@ -146,14 +145,20 @@ nav { display: flex; flex-direction: column; gap: 4px; }
 .lg-cur { border-top: 2.5px solid #fff; }
 .lg-prev { border-top: 1.5px dashed rgba(255,255,255,.6); }
 
-.wallet-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 12px; }
-.wstat {
-  background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
-  padding: 12px; display: flex; flex-direction: column; gap: 3px; min-width: 0;
-}
-.wstat-label { font-size: 12px; color: var(--muted); }
-.wstat strong { font-size: 17px; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.delta { font-size: 12px; font-weight: 700; }
+.wallet-stats { margin-top: 12px; display: flex; flex-direction: column; gap: 14px; }
+.wallet-stats-title { display: flex; justify-content: space-between; font-size: 14px; font-weight: 700; }
+.wallet-stats-title .muted { font-size: 12px; font-weight: 500; }
+.wstat { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.wstat-line { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.wstat-meta { font-size: 12px; color: var(--muted); }
+.wstat-label { font-size: 14px; }
+.wstat strong { font-size: 18px; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.delta { font-size: 11px; font-weight: 700; white-space: nowrap; }
+.wstat-bar { position: relative; height: 6px; border-radius: 4px; background: var(--panel-2); }
+.wstat-fill { height: 100%; border-radius: 4px; background: var(--accent); }
+.wstat-fill.fill-good { background: var(--good); }
+.wstat-fill.fill-warn { background: var(--warn); }
+.wstat-tick { position: absolute; top: -3px; width: 2px; height: 11px; background: var(--text); opacity: .7; border-radius: 1px; }
 .delta-good { color: var(--good); }
 .delta-bad { color: var(--bad); }
 .wallet-foot { font-size: 11px; margin-top: 6px; }
@@ -171,7 +176,7 @@ nav { display: flex; flex-direction: column; gap: 4px; }
     padding: calc(env(safe-area-inset-top) + 12px) 16px 10px;
     background: rgba(15,17,21,.85); backdrop-filter: blur(10px);
   }
-  .topbar .brand { margin: 0; font-size: 18px; }
+  .topbar-title { font-size: 17px; font-weight: 800; }
   .topbar-age { font-size: 12px; color: var(--muted); }
   .topbar-age .stale-dot { margin-inline: 0 6px; }
 
@@ -227,3 +232,57 @@ nav { display: flex; flex-direction: column; gap: 4px; }
 }
 .list-row:has(+ .list-foot) { border-bottom: 0; }
 .card > .big-num + .list-row, .card > .big-num + .muted { margin-top: 4px; }
+
+/* Syncs page */
+.sync-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 8px; }
+.sync-meta { font-size: 13px; margin-top: 4px; }
+.sync-lag { margin-inline-start: 6px; }
+
+/* ---- Mortgage card ------------------------------------------------------ */
+.list-foot.no-rule { border-top: 0; margin-top: 0; padding-top: 8px; }
+.mini-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 12px 0 4px; }
+.mini-stats > div {
+  background: var(--panel-2); border-radius: 10px; padding: 10px;
+  display: flex; flex-direction: column; gap: 2px; min-width: 0;
+}
+.mini-stats span { font-size: 12px; color: var(--muted); }
+.mini-stats strong { font-size: 16px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.mini-stats em { font-style: normal; font-size: 11px; color: var(--muted); }
+.mix { margin: 12px 0 6px; }
+.mix-bar { display: flex; height: 8px; border-radius: 6px; overflow: hidden; background: var(--panel-2); }
+.mix-bar span { display: block; flex-grow: 0; flex-shrink: 0; }
+.mix-fixed { background: var(--accent); }
+.mix-var { background: var(--warn); }
+.mix-legend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12px; margin-top: 6px; }
+.mix-legend i { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-inline-end: 4px; }
+.rate-chip {
+  display: inline-block; margin-inline-start: 8px; padding: 1px 7px; border-radius: 999px;
+  font-size: 11px; font-weight: 700; background: var(--panel-2); color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- Charts ------------------------------------------------------------- */
+.chart { width: 100%; }
+.chart-legend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12px; margin-top: 6px; color: var(--text); }
+.chart-legend i { display: inline-block; width: 12px; height: 3px; border-radius: 2px; vertical-align: middle; margin-inline-end: 4px; }
+.chart-legend i.dashed { background: none !important; border-top: 2px dashed; height: 0; }
+.recharts-tooltip-wrapper { z-index: 5; }
+
+/* ---- Responsive polish -------------------------------------------------- */
+.row { gap: 12px; }
+.row > strong { white-space: nowrap; font-variant-numeric: tabular-nums; }
+@media (max-width: 767px) {
+  /* odd item out in a 2-col grid spans the row instead of leaving a hole */
+  .grid-3 > :last-child:nth-child(odd),
+  .grid-5 > :last-child:nth-child(odd) { grid-column: 1 / -1; }
+  .grid-3 { grid-template-columns: repeat(2, 1fr); }
+  .kpi-value { font-size: 19px; }
+  .mini-stats strong { font-size: 14px; }
+}
+@media (max-width: 360px) {
+  .mini-stats { grid-template-columns: 1fr 1fr; }
+  .wallet-balance { font-size: 36px; }
+}
+
+/* Overview reads as a single feed — keep it phone-shaped on wide screens too. */
+.feed { max-width: 720px; }

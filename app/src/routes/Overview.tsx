@@ -1,7 +1,8 @@
 import { Card, Kpi, ListRow, Section } from "@/components/ui";
 import NetWorthChart from "@/components/NetWorthChart";
 import WalletHero from "@/components/WalletHero";
-import { cashflow, daysSince, metricValue, num, shekel, snapshot, type Savings } from "@/lib/data";
+import MortgageCard from "@/components/MortgageCard";
+import { cashflow, daysSince, metricValue, num, pct, shekel, snapshot, type Savings } from "@/lib/data";
 
 const KIND_LABEL: Record<Savings["kind"], string> = {
   pension: "קרן פנסיה",
@@ -33,6 +34,7 @@ export default function Overview() {
   const savings = savingsByKind(snapshot.savings ?? []);
   const savingsTotal = savings.reduce((a, g) => a + g.balance, 0);
 
+  const allLoans = snapshot.debt_profile?.all_loans ?? null;
   const debts = [
     { label: "משכנתא", value: t.mortgage_balance },
     { label: "הלוואות", value: t.consumer_loan_balance },
@@ -44,7 +46,7 @@ export default function Overview() {
   const healthMetrics = metrics.filter((m) => !shown.has(m.key)).slice(0, 4);
 
   return (
-    <div>
+    <div className="feed">
       {age > 7 && (
         <div className="nudge">
           <span>🕑 הגיע זמן לעדכן את היתרות שלך — הנתונים מלפני {num(age)} ימים.</span>
@@ -93,8 +95,22 @@ export default function Overview() {
             <span className="muted">החזר חודשי</span>
             <strong>{shekel(t.monthly_loan_service)}</strong>
           </div>
+          {allLoans && (
+            <div className="list-foot no-rule">
+              <span className="muted" title="ממוצע משוקלל לפי יתרה, ריבית נומינלית כפי שהבנקים מדווחים">
+                ריבית ממוצעת על הלוואות
+              </span>
+              <strong>{pct(allLoans.avg_rate_pct, 2)}</strong>
+            </div>
+          )}
         </Card>
       </Section>
+
+      {snapshot.debt_profile?.mortgage && (
+        <Section title="משכנתא" to="/networth">
+          <MortgageCard />
+        </Section>
+      )}
 
       <Section title="שווי נקי" to="/networth">
         <Card>

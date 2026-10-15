@@ -16,11 +16,11 @@ export default function App() {
   const tabs = routes.filter((r) => TAB_PATHS.includes(r.path));
   const more = routes.filter((r) => !TAB_PATHS.includes(r.path));
   const inMore = more.some((r) => r.path === pathname);
+  const current = routes.find((r) => r.path === pathname);
 
   return (
     <div className="layout">
       <aside className="rail">
-        <div className="brand">Plangram</div>
         <nav>
           {routes.map((r) => (
             <NavLink key={r.path} to={r.path} className={navClass}>
@@ -35,7 +35,7 @@ export default function App() {
       </aside>
 
       <header className="topbar">
-        <span className="brand">Plangram</span>
+        <span className="topbar-title">{current?.label}</span>
         <span className="topbar-age">
           {stale && <span className="stale-dot" title="נתונים ישנים" />}
           עודכן {age === 0 ? "היום" : `לפני ${age} ימים`}

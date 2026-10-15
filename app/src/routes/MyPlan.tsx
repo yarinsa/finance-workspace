@@ -5,7 +5,7 @@ export default function MyPlan() {
     <div>
       <PageTitle>תכנון פלוס</PageTitle>
       <StubNotice status="נעול · Plus">
-        סימולטור התרחישים (what-if) של Plangram חסום מאחורי מנוי Plus ולא נלכד.
+        סימולטור התרחישים (what-if) חסום מאחורי מנוי Plus ולא נלכד.
         ראו <code>docs/plangram-prd/10-my-plan-plus.md</code>.
       </StubNotice>
     </div>

@@ -1,5 +1,6 @@
 import { Card, Kpi, PageTitle } from "@/components/ui";
 import NetWorthChart from "@/components/NetWorthChart";
+import MonthlyTrendChart from "@/components/MonthlyTrendChart";
 import { cashflow, metricValue, shekel, transactions } from "@/lib/data";
 
 export default function Cashflow() {
@@ -28,6 +29,11 @@ export default function Cashflow() {
           </Card>
         ))}
       </div>
+
+      <Card className="section-gap">
+        <div className="card-title">תזרים חודשי</div>
+        <MonthlyTrendChart />
+      </Card>
 
       <div className="grid grid-2 section-gap">
         <Card to="/networth">

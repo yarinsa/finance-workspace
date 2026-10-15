@@ -298,11 +298,17 @@ def build_all(b, tx):
         m["horizon_offset"] = off
         m["confidence"] = "high" if off == 1 else "carry-forward"
         months.append(m)
+    # The budget month itself: what RiseUp expects for the month in progress.
+    # The dashboard sets month-to-date actuals against it ("₪X of ₪Y expected").
+    current = build(b, base_month)
+    current["horizon_offset"] = 0
+    current["confidence"] = "budget"
     return {
         "generated_for": date.today().isoformat(),
         "based_on_budget": base_month,
         "horizon_months": HORIZON,
         "currency": "ILS",
+        "current_month": current,
         "months": months,
         "ledger_band": band,
     }

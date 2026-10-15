@@ -56,8 +56,11 @@ export interface PaceSide {
 /** Month-to-date vs. the previous month cut at the same day (cashflow.build_pace). */
 export interface Pace {
   as_of_day: number;
+  days_in_month: number;
   current: PaceSide;
   previous: PaceSide;
+  /** Full-month expectation from forecast.py's budget envelopes; null when stale/missing. */
+  expected?: { income: number; expense: number; net: number; source: string } | null;
 }
 
 export interface Cashflow {
@@ -74,11 +77,31 @@ export interface Cashflow {
 }
 
 export interface Loan {
+  lender?: string;
   name?: string;
+  category?: "mortgage" | "consumer" | string;
   balance?: number;
-  rate?: number;
+  rate_pct?: number;
+  rate_type?: "fixed" | "variable" | string;
+  index_linked?: boolean;
   monthly_payment?: number;
+  payments_remaining?: number;
+  /** '20530810' (Discount) or '2028-12-02' (Leumi). */
+  final_date?: string;
   [k: string]: unknown;
+}
+
+/** Balance-weighted summary of a loan group (digest.loan_profile). */
+export interface LoanProfile {
+  balance: number;
+  monthly_payment: number;
+  /** Nominal, balance-weighted. Interest refunds the bank pays back are not visible. */
+  avg_rate_pct: number;
+  /** Shares of balance, 0–1. index_linked overlaps fixed/variable. */
+  rate_mix: { fixed: number; variable: number; index_linked: number; zero_rate: number };
+  tracks: number;
+  final_date: string | null;
+  payments_remaining: number;
 }
 
 /**
@@ -123,11 +146,29 @@ export interface Snapshot {
   bank_accounts: unknown[];
   credit_cards: unknown[];
   loans: Loan[];
+  debt_profile?: {
+    mortgage: LoanProfile | null;
+    consumer: LoanProfile | null;
+    all_loans: LoanProfile | null;
+  };
   savings?: Savings[];
   income?: unknown;
   transactions_count?: number;
   totals: SnapshotTotals;
   spending?: unknown;
+  syncs?: SourceSync[];
+}
+
+/** Per-source data freshness (digest.source_syncs). */
+export interface SourceSync {
+  source: string;
+  /** Newest raw-dump mtime — when the scraper last wrote, not when digest ran. */
+  last_synced: string;
+  raw_files: number;
+  /** Record count per normalized entity. */
+  entities: Record<string, number>;
+  /** Newest transaction the source carries; null for savings/loan-only sources. */
+  latest_txn_date: string | null;
 }
 
 export interface TxSummary {
@@ -269,9 +310,19 @@ export function pct(n: number, decimals = 0): string {
   return fmt({ style: "percent", maximumFractionDigits: decimals }).format(n / 100);
 }
 
+/** Compact plain number for chart axes: 1,540,121 → "1.5M". */
+export function numCompact(n: number): string {
+  return fmt({ notation: "compact", maximumFractionDigits: 1 }).format(n);
+}
+
 /** Plain grouped number: 2316 → "2,316". */
 export function num(n: number, decimals = 0): string {
   return fmt({ maximumFractionDigits: decimals }).format(n);
+}
+
+/** Month + year for a loan end date, e.g. "אוג׳ 2053". */
+export function monthYear(iso: string): string {
+  return new Intl.DateTimeFormat(LOCALE, { month: "short", year: "numeric" }).format(new Date(`${iso.slice(0, 10)}T12:00:00`));
 }
 
 /** A pipeline Metric's value in its own units. */

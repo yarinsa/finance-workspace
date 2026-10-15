@@ -262,6 +262,57 @@ def consolidate_transactions(txns):
     return out
 
 
+def _iso_date(d):
+    """Loan end dates arrive as '20530810' (Discount) or '2028-12-02' (Leumi)."""
+    d = str(d or "")
+    if len(d) == 8 and d.isdigit():
+        return f"{d[:4]}-{d[4:6]}-{d[6:]}"
+    return d[:10] or None
+
+
+# Discount marks subsidised tracks (מתווה, לשעורין) with a 0.0001% placeholder.
+_ZERO_RATE_EPS = 0.01
+
+
+def loan_profile(loans):
+    """Balance-weighted summary of a set of loans (e.g. the mortgage's tracks).
+
+    ``avg_rate_pct`` is weighted by outstanding balance, so a small 8% loan barely
+    moves it and the large tracks dominate — which is what "what does my debt
+    cost" means. It is the *nominal* rate the banks report: a refund that offsets
+    interest (see MEMORY.md) is invisible here. ``rate_mix`` gives the share of
+    balance that is fixed / variable / CPI-linked (linked overlaps the other two).
+    Returns None for an empty set.
+    """
+    loans = [l for l in loans if (l.get("balance") or 0) > 0]
+    if not loans:
+        return None
+    total = sum(l["balance"] for l in loans)
+
+    def rate(l):
+        r = float(l.get("rate_pct") or 0)
+        return 0.0 if r < _ZERO_RATE_EPS else r
+
+    def share(pred):
+        return round(sum(l["balance"] for l in loans if pred(l)) / total, 4)
+
+    ends = [d for d in (_iso_date(l.get("final_date")) for l in loans) if d]
+    return {
+        "balance": round(total, 2),
+        "monthly_payment": round(sum(l.get("monthly_payment") or 0 for l in loans), 2),
+        "avg_rate_pct": round(sum(l["balance"] * rate(l) for l in loans) / total, 2),
+        "rate_mix": {
+            "fixed": share(lambda l: l.get("rate_type") == "fixed"),
+            "variable": share(lambda l: l.get("rate_type") == "variable"),
+            "index_linked": share(lambda l: bool(l.get("index_linked"))),
+            "zero_rate": share(lambda l: rate(l) == 0),
+        },
+        "tracks": len(loans),
+        "final_date": max(ends) if ends else None,
+        "payments_remaining": max((l.get("payments_remaining") or 0) for l in loans),
+    }
+
+
 def build_snapshot(e):
     accounts = e.get("accounts", [])
     cards = e.get("credit_cards", [])
@@ -346,6 +397,11 @@ def build_snapshot(e):
         "savings": clean(savings),
         "income": clean(income),
         "transactions_count": len(txns),
+        "debt_profile": {
+            "mortgage": loan_profile(mortgage),
+            "consumer": loan_profile(consumer),
+            "all_loans": loan_profile(loans),
+        },
         "totals": {
             "bank_balances_sum": bank_sum,
             "credit_card_debt": cc_total,
@@ -450,6 +506,39 @@ def spending_summary(ledger):
     }
 
 
+def source_syncs(root=ROOT):
+    """Per-source data freshness for the dashboard's Syncs page.
+
+    `last_synced` is the newest raw-dump mtime — when the scraper last wrote, not
+    when normalize/digest re-ran (those touch every source on each run and would
+    make a week-old dump look fresh). `latest_txn_date` is the newest transaction
+    the source actually carries, which can lag the scrape (e.g. a card that
+    posts with delay).
+    """
+    out = []
+    for raw in sorted(root.glob("*/raw")):
+        files = [f for f in raw.rglob("*") if f.is_file() and not f.name.startswith(".")]
+        if not files:
+            continue
+        newest = max(f.stat().st_mtime for f in files)
+        entities, latest_txn = {}, None
+        for fp in sorted((raw.parent / "normalized").glob("*.json")):
+            env = json.load(open(fp, encoding="utf-8"))
+            entities[env["entity"]] = len(env["records"])
+            if env["entity"] == "transactions":
+                dates = [r["date"][:10] for r in env["records"] if r.get("date")]
+                if dates:
+                    latest_txn = max([latest_txn or "", *dates])
+        out.append({
+            "source": raw.parent.name,
+            "last_synced": datetime.datetime.fromtimestamp(newest).astimezone().isoformat(timespec="seconds"),
+            "raw_files": len(files),
+            "entities": entities,
+            "latest_txn_date": latest_txn,
+        })
+    return out
+
+
 def main():
     if "--no-normalize" not in sys.argv:
         run_normalizers()
@@ -470,6 +559,7 @@ def main():
 
     snapshot = build_snapshot(entities)
     snapshot["spending"] = summary
+    snapshot["syncs"] = source_syncs()
     (OUT / "snapshot.json").write_text(json.dumps(snapshot, ensure_ascii=False, indent=2))
     write_markdown(snapshot)
     print(f"wrote {OUT / 'transactions.json'} ({len(ledger)} deduped txns)")
