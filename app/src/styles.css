@@ -1,15 +1,45 @@
 :root {
-  --bg: #0f1115;
-  --panel: #181b22;
-  --panel-2: #1f232c;
-  --line: #2a2f3a;
-  --text: #e7e9ee;
-  --muted: #9aa3b2;
-  --accent: #6c8cff;
-  --good: #34d399;
-  --bad: #f87171;
-  --warn: #fbbf24;
-  --radius: 14px;
+  /* Light (default) — mint + navy, after the FlowMint reference */
+  --bg: #eef4f2;
+  --panel: #ffffff;
+  --panel-2: #f1f6f4;
+  --line: #e2eae7;
+  --text: #0f1d33;
+  --muted: #6b7a8c;
+  --accent: #14b48c;
+  --on-accent: #ffffff;
+  --good: #10a37f;
+  --bad: #e5484d;
+  --warn: #e5a50a;
+  --hero-1: #0f1f3d;
+  --hero-2: #17305a;
+  --hero-text: #f3f7ff;
+  --hero-accent: #3ee0b4;
+  --shadow: 0 6px 24px rgba(15, 31, 61, .07);
+  --chrome: rgba(255, 255, 255, .9);
+  --radius: 20px;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0d1117;
+    --panel: #161b24;
+    --panel-2: #1e2430;
+    --line: #2a3140;
+    --text: #e8ecf2;
+    --muted: #94a0b2;
+    --accent: #2fd1a4;
+    --on-accent: #08130f;
+    --good: #34d399;
+    --bad: #f87171;
+    --warn: #fbbf24;
+    --hero-1: #13264a;
+    --hero-2: #0c1830;
+    --shadow: 0 6px 24px rgba(0, 0, 0, .35);
+    --chrome: rgba(22, 27, 36, .92);
+    color-scheme: dark;
+  }
 }
 
 * { box-sizing: border-box; }
@@ -46,7 +76,7 @@ nav { display: flex; flex-direction: column; gap: 4px; }
   font-size: 15px;
 }
 .nav-item:hover { background: var(--panel-2); color: var(--text); }
-.nav-item.active { background: var(--accent); color: #0b0e14; font-weight: 700; }
+.nav-item.active { background: var(--accent); color: var(--on-accent); font-weight: 700; }
 .rail-foot { margin-top: auto; color: var(--muted); font-size: 12px; }
 .stale-dot {
   display: inline-block; width: 8px; height: 8px; border-radius: 50%;
@@ -68,6 +98,7 @@ nav { display: flex; flex-direction: column; gap: 4px; }
   border: 1px solid var(--line);
   border-radius: var(--radius);
   padding: 18px;
+  box-shadow: var(--shadow);
 }
 .card-link { text-decoration: none; color: inherit; display: block; }
 .card-link:hover .card { border-color: var(--accent); }
@@ -95,7 +126,7 @@ nav { display: flex; flex-direction: column; gap: 4px; }
   background: rgba(251,191,36,.08); border: 1px solid rgba(251,191,36,.3);
   border-radius: var(--radius); padding: 14px 18px; margin-bottom: 18px;
 }
-.cta { background: var(--accent); color: #0b0e14; padding: 8px 14px; border-radius: 10px; font-weight: 700; }
+.cta { background: var(--accent); color: var(--on-accent); padding: 8px 14px; border-radius: 10px; font-weight: 700; }
 
 .stub {
   background: var(--panel); border: 1px dashed var(--line); border-radius: var(--radius);
@@ -115,12 +146,12 @@ nav { display: flex; flex-direction: column; gap: 4px; }
 
 /* ---- Wallet header (Overview) ------------------------------------------ */
 .wallet-card {
-  display: block; text-decoration: none; color: #f5f7ff;
+  display: block; text-decoration: none; color: var(--hero-text); position: relative; overflow: hidden;
   border-radius: 22px; padding: 20px 20px 14px;
   background:
-    radial-gradient(120% 140% at 100% 0%, rgba(255,255,255,.14), transparent 55%),
-    linear-gradient(135deg, #4f6bff 0%, #3a3fb8 55%, #262a6e 100%);
-  box-shadow: 0 10px 30px rgba(40, 52, 160, .35);
+    radial-gradient(90% 120% at 0% 100%, rgba(62, 224, 180, .22), transparent 60%),
+    linear-gradient(150deg, var(--hero-2) 0%, var(--hero-1) 70%);
+  box-shadow: 0 14px 34px rgba(15, 31, 61, .28);
 }
 .wallet-top { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
 .wallet-label { font-size: 14px; font-weight: 600; opacity: .85; }
@@ -134,15 +165,15 @@ nav { display: flex; flex-direction: column; gap: 4px; }
   display: inline-block; margin-top: 12px; padding: 5px 12px; border-radius: 999px;
   font-size: 13px; font-weight: 700; background: rgba(255,255,255,.14);
 }
-.wallet-chip.chip-good { color: #86efac; }
-.wallet-chip.chip-bad { color: #fca5a5; }
+.wallet-chip.chip-good { color: var(--hero-accent); }
+.wallet-chip.chip-bad { color: #ff9a9e; }
 .wallet-spark { display: block; width: 100%; height: 64px; margin-top: 12px; overflow: visible; }
 .spark-prev { fill: none; stroke: rgba(255,255,255,.4); stroke-width: 1.5; stroke-dasharray: 4 4; vector-effect: non-scaling-stroke; }
-.spark-cur { fill: none; stroke: #fff; stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
-.spark-dot { fill: #fff; }
+.spark-cur { fill: none; stroke: var(--hero-accent); stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
+.spark-dot { fill: var(--hero-accent); stroke: var(--hero-1); stroke-width: 2; }
 .wallet-legend { display: flex; gap: 14px; font-size: 12px; opacity: .8; margin-top: 6px; }
 .wallet-legend i { display: inline-block; width: 14px; height: 0; vertical-align: middle; margin-inline-end: 4px; }
-.lg-cur { border-top: 2.5px solid #fff; }
+.lg-cur { border-top: 2.5px solid var(--hero-accent); }
 .lg-prev { border-top: 1.5px dashed rgba(255,255,255,.6); }
 
 .wallet-stats { margin-top: 12px; display: flex; flex-direction: column; gap: 14px; }
@@ -174,7 +205,7 @@ nav { display: flex; flex-direction: column; gap: 4px; }
     display: flex; justify-content: space-between; align-items: center;
     position: sticky; top: 0; z-index: 10;
     padding: calc(env(safe-area-inset-top) + 12px) 16px 10px;
-    background: rgba(15,17,21,.85); backdrop-filter: blur(10px);
+    background: var(--chrome); backdrop-filter: blur(12px);
   }
   .topbar-title { font-size: 17px; font-weight: 800; }
   .topbar-age { font-size: 12px; color: var(--muted); }
@@ -193,7 +224,7 @@ nav { display: flex; flex-direction: column; gap: 4px; }
 
   .tabbar {
     display: flex; flex-direction: row; position: fixed; inset-inline: 0; bottom: 0; z-index: 20;
-    background: rgba(24,27,34,.95); backdrop-filter: blur(10px);
+    background: var(--chrome); backdrop-filter: blur(12px); box-shadow: 0 -4px 20px rgba(15,31,61,.06);
     border-top: 1px solid var(--line);
     padding: 6px 6px calc(6px + env(safe-area-inset-bottom));
   }
@@ -234,9 +265,8 @@ nav { display: flex; flex-direction: column; gap: 4px; }
 .card > .big-num + .list-row, .card > .big-num + .muted { margin-top: 4px; }
 
 /* Syncs page */
-.sync-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 8px; }
-.sync-meta { font-size: 13px; margin-top: 4px; }
-.sync-lag { margin-inline-start: 6px; }
+.sync-value { display: inline-flex; align-items: center; gap: 8px; font-weight: 600; }
+.sync-lag { color: var(--warn); margin-inline-start: 6px; }
 
 /* ---- Mortgage card ------------------------------------------------------ */
 .list-foot.no-rule { border-top: 0; margin-top: 0; padding-top: 8px; }
@@ -283,6 +313,35 @@ nav { display: flex; flex-direction: column; gap: 4px; }
   .mini-stats { grid-template-columns: 1fr 1fr; }
   .wallet-balance { font-size: 36px; }
 }
+
+/* ---- Reference look: greeting, icon tabs, donut ----------------------- */
+.greeting { margin: 4px 0 18px; }
+.greeting h1 { font-size: 24px; font-weight: 800; margin: 0; }
+.greeting p { margin: 2px 0 0; font-size: 14px; }
+.section-title { font-size: 18px; }
+
+@media (max-width: 767px) {
+  .tabbar { padding-top: 4px; }
+  .tab {
+    display: flex; flex-direction: column; align-items: center; gap: 2px;
+    font-size: 11px; font-weight: 600; padding: 6px 2px;
+  }
+  .tab.active { color: var(--accent); background: none; }
+  .tab.active svg { stroke-width: 2.2; }
+}
+
+.donut { display: flex; align-items: center; gap: 16px; }
+.donut-chart { position: relative; width: 150px; flex-shrink: 0; }
+.donut-center {
+  position: absolute; inset: 0; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; pointer-events: none;
+}
+.donut-center span { font-size: 11px; color: var(--muted); }
+.donut-center strong { font-size: 15px; font-variant-numeric: tabular-nums; }
+.donut-legend { list-style: none; margin: 0; padding: 0; flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 7px; }
+.donut-legend li { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+.donut-legend i { width: 9px; height: 9px; border-radius: 3px; flex-shrink: 0; }
+.donut-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* Overview reads as a single feed — keep it phone-shaped on wide screens too. */
 .feed { max-width: 720px; }

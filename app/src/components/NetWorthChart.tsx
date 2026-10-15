@@ -10,7 +10,7 @@ import {
   YAxis,
 } from "recharts";
 import { cashflow, shekel } from "@/lib/data";
-import { C, noAnim, tooltipProps, xAxisProps, yAxisProps } from "./chartTheme";
+import { chartProps, noAnim, useChartColors } from "./chartTheme";
 
 interface Series {
   name: string;
@@ -60,6 +60,8 @@ export default function NetWorthChart({
   height?: number;
   showLoans?: boolean;
 }) {
+  const C = useChartColors();
+  const P = chartProps(C);
   const data = rows();
   if (data.length === 0) return <div className="muted">אין נתוני תחזית להצגה.</div>;
 
@@ -76,8 +78,8 @@ export default function NetWorthChart({
             </linearGradient>
           </defs>
           <CartesianGrid stroke={C.line} vertical={false} />
-          <XAxis dataKey="age" {...xAxisProps} tickFormatter={(a: number) => `${a}`} interval="preserveStartEnd" />
-          <YAxis {...yAxisProps} />
+          <XAxis dataKey="age" {...P.xAxis} tickFormatter={(a: number) => `${a}`} interval="preserveStartEnd" />
+          <YAxis {...P.yAxis} />
           <ReferenceLine y={0} stroke={C.muted} strokeOpacity={0.5} />
           {retireAge != null && (
             <ReferenceLine
@@ -88,7 +90,7 @@ export default function NetWorthChart({
             />
           )}
           <Tooltip
-            {...tooltipProps}
+            {...P.tooltip}
             labelFormatter={(age, p) => `גיל ${age} · ${p?.[0]?.payload?.year ?? ""}`}
             formatter={(v, name) => [shekel(v as number), name === "net" ? "שווי נקי" : "יתרת הלוואות"]}
           />

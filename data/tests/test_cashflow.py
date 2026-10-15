@@ -169,3 +169,29 @@ class TestExpectedForMonth:
     def test_missing_forecast_or_old_format(self):
         assert cashflow.expected_for_month(None, "2026-10") is None
         assert cashflow.expected_for_month({"months": []}, "2026-10") is None
+
+
+class TestCategoryDonut:
+    """Spending-by-category donut on the Overview, month-to-date."""
+
+    def test_october_categories_rank_and_fold_into_other(self):
+        # Real October 2026 rows (abridged): rent transfer, mortgage, loans, dining…
+        pace = cashflow.build_pace([
+            {"date": "2026-10-11", "amount": -6800.0, "description": 'הו"ק לעיין ניהול נכסי', "category": "העברות"},
+            {"date": "2026-10-10", "amount": -5817.25, "category": "משכנתא"},
+            {"date": "2026-10-02", "amount": -1844.42, "category": "הלוואה"},
+            {"date": "2026-10-05", "amount": -120.0, "category": "אוכל בחוץ"},
+            {"date": "2026-10-09", "amount": -12.0, "description": "ביתא", "category": "פנאי"},
+            {"date": "2026-10-07", "amount": -40.0, "category": "קניות"},
+            {"date": "2026-10-08", "amount": -30.0},                              # no category
+            {"date": "2026-10-04", "amount": 26428.43, "is_income": True},        # income ignored
+            {"date": "2026-10-03", "amount": -5000.0, "internal_transfer": True},  # not spending
+        ], "2026-10")
+        cats = pace["current"]["by_category"]
+        assert [c["name"] for c in cats][:3] == ["העברות", "משכנתא", "הלוואה"]
+        assert cats[-1] == {"name": "אחר", "amount": 42.0}   # פנאי 12 + ללא קטגוריה 30
+        assert len(cats) == 6
+
+    def test_top_categories_without_a_tail_has_no_other(self):
+        assert cashflow.top_categories({"משכנתא": 100.0, "פנאי": 5.0}) == [
+            {"name": "משכנתא", "amount": 100.0}, {"name": "פנאי", "amount": 5.0}]

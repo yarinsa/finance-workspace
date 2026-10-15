@@ -2,6 +2,7 @@ import { Card, Kpi, ListRow, Section } from "@/components/ui";
 import NetWorthChart from "@/components/NetWorthChart";
 import WalletHero from "@/components/WalletHero";
 import MortgageCard from "@/components/MortgageCard";
+import SpendingDonut from "@/components/SpendingDonut";
 import { cashflow, daysSince, metricValue, num, pct, shekel, snapshot, type Savings } from "@/lib/data";
 
 const KIND_LABEL: Record<Savings["kind"], string> = {
@@ -11,6 +12,14 @@ const KIND_LABEL: Record<Savings["kind"], string> = {
   savings: "חיסכון",
   bank_deposit: "פיקדון נזיל",
 };
+
+function greeting(hour: number): string {
+  if (hour < 5) return "לילה טוב";
+  if (hour < 12) return "בוקר טוב";
+  if (hour < 17) return "צהריים טובים";
+  if (hour < 21) return "ערב טוב";
+  return "לילה טוב";
+}
 
 /** Long-term savings folded by vehicle kind, largest first. */
 function savingsByKind(savings: Savings[]) {
@@ -54,8 +63,19 @@ export default function Overview() {
         </div>
       )}
 
+      <header className="greeting">
+        <h1>{greeting(new Date().getHours())} 👋</h1>
+        <p className="muted">הכסף שלך, ברור יותר כל יום</p>
+      </header>
+
       <Section title="תזרים" to="/cashflow">
         <WalletHero />
+      </Section>
+
+      <Section title="הוצאות לפי קטגוריה" to="/cashflow">
+        <Card>
+          <SpendingDonut />
+        </Card>
       </Section>
 
       {savings.length > 0 && (

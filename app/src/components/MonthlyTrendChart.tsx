@@ -1,6 +1,6 @@
 import { Bar, CartesianGrid, ComposedChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { cashflow, shekel } from "@/lib/data";
-import { C, noAnim, tooltipProps, xAxisProps, yAxisProps } from "./chartTheme";
+import { chartProps, noAnim, useChartColors } from "./chartTheme";
 
 interface MonthRow {
   month: string;
@@ -18,6 +18,8 @@ const shortMonth = (ym: string) =>
  * because it is partial.
  */
 export default function MonthlyTrendChart({ months = 8, height = 220 }: { months?: number; height?: number }) {
+  const C = useChartColors();
+  const P = chartProps(C);
   const all = (cashflow.months ?? []) as MonthRow[];
   const data = all
     .filter((m) => m.income > 0 || m.expense > 0)
@@ -34,10 +36,10 @@ export default function MonthlyTrendChart({ months = 8, height = 220 }: { months
       <ResponsiveContainer width="100%" height={height}>
         <ComposedChart data={data} margin={{ top: 10, right: 6, left: 0, bottom: 0 }} barGap={2}>
           <CartesianGrid stroke={C.line} vertical={false} />
-          <XAxis dataKey="label" {...xAxisProps} interval={0} />
-          <YAxis {...yAxisProps} />
+          <XAxis dataKey="label" {...P.xAxis} interval={0} />
+          <YAxis {...P.yAxis} />
           <Tooltip
-            {...tooltipProps}
+            {...P.tooltip}
             labelFormatter={(_, p) => p?.[0]?.payload?.month ?? ""}
             formatter={(v, k) => [shekel(v as number), names[k as string] ?? k]}
           />

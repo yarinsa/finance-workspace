@@ -2,9 +2,16 @@ import { useState } from "react";
 import { NavLink, Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { routes } from "./routes";
 import { cashflow, daysSince } from "./lib/data";
+import { CashflowIcon, GoalIcon, HomeIcon, MoreIcon, WalletIcon } from "./components/icons";
 
 /** Paths pinned to the mobile tab bar; the rest live behind "עוד". */
 const TAB_PATHS = ["/overview", "/cashflow", "/goals", "/networth"];
+const TAB_ICON: Record<string, () => JSX.Element> = {
+  "/overview": HomeIcon,
+  "/cashflow": CashflowIcon,
+  "/goals": GoalIcon,
+  "/networth": WalletIcon,
+};
 
 const navClass = ({ isActive }: { isActive: boolean }) => (isActive ? "nav-item active" : "nav-item");
 
@@ -65,13 +72,18 @@ export default function App() {
       )}
 
       <nav className="tabbar">
-        {tabs.map((r) => (
-          <NavLink key={r.path} to={r.path} className={({ isActive }) => (isActive ? "tab active" : "tab")}>
-            {r.label}
-          </NavLink>
-        ))}
+        {tabs.map((r) => {
+          const Icon = TAB_ICON[r.path];
+          return (
+            <NavLink key={r.path} to={r.path} className={({ isActive }) => (isActive ? "tab active" : "tab")}>
+              <Icon />
+              <span>{r.label}</span>
+            </NavLink>
+          );
+        })}
         <button className={inMore || moreOpen ? "tab active" : "tab"} onClick={() => setMoreOpen((o) => !o)}>
-          עוד
+          <MoreIcon />
+          <span>עוד</span>
         </button>
       </nav>
     </div>

@@ -163,6 +163,17 @@ def _days_in_month(ym):
     return (nxt - timedelta(days=1)).day
 
 
+def top_categories(by_cat, n=5):
+    """Largest ``n`` spending categories, the rest folded into "אחר" — sized for a
+    donut. Returns ``[{"name", "amount"}]`` largest first, "אחר" always last."""
+    ranked = sorted(((k, v) for k, v in by_cat.items() if v > 0), key=lambda kv: -kv[1])
+    out = [{"name": k, "amount": round(v, 2)} for k, v in ranked[:n]]
+    rest = sum(v for _, v in ranked[n:])
+    if rest > 0:
+        out.append({"name": "אחר", "amount": round(rest, 2)})
+    return out
+
+
 def build_pace(transactions, current_key):
     """Month-to-date vs. the previous month up to the *same day* — the wallet
     header's "am I ahead or behind" signal.
@@ -202,6 +213,12 @@ def build_pace(transactions, current_key):
                     income += amount
                 else:
                     expense += -amount
+        by_cat = defaultdict(float)
+        for t in rows:
+            if t["date"][:7] == key and int(t["date"][8:10]) <= upto:
+                amount = float(t.get("amount") or 0)
+                if not (t.get("is_income") or amount > 0):
+                    by_cat[(t.get("category") or "").strip() or "ללא קטגוריה"] += -amount
         cum, run = [], 0.0
         for d in daily:
             run += d
@@ -212,6 +229,7 @@ def build_pace(transactions, current_key):
             "expense": round(expense, 2),
             "net": round(income - expense, 2),
             "month_expense": cum[-1] if cum else 0.0,
+            "by_category": top_categories(by_cat),
             "daily_expense": cum,
         }
 

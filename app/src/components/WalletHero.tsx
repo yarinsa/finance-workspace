@@ -22,6 +22,18 @@ function PaceSpark({ cur, prev }: { cur: PaceSide; prev: PaceSide }) {
   const lastY = H - 4 - ((cur.daily_expense[last - 1] ?? 0) / max) * (H - 8);
   return (
     <svg className="wallet-spark" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" aria-hidden>
+      <defs>
+        <linearGradient id="spark-glow" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" style={{ stopColor: "var(--hero-accent)", stopOpacity: 0.35 }} />
+          <stop offset="100%" style={{ stopColor: "var(--hero-accent)", stopOpacity: 0 }} />
+        </linearGradient>
+      </defs>
+      {last > 0 && (
+        <polygon
+          points={`${(0.5 / days) * W},${H} ${pts(cur.daily_expense)} ${((last - 0.5) / days) * W},${H}`}
+          fill="url(#spark-glow)"
+        />
+      )}
       <polyline points={pts(prev.daily_expense)} className="spark-prev" />
       <polyline points={pts(cur.daily_expense)} className="spark-cur" />
       <circle cx={((last - 0.5) / days) * W} cy={lastY} r="3.5" className="spark-dot" />

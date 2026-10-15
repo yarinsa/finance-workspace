@@ -51,6 +51,8 @@ export interface PaceSide {
   month_expense: number;
   /** Cumulative spend per day-of-month. */
   daily_expense: number[];
+  /** Top spending categories to date, "אחר" last. */
+  by_category?: { name: string; amount: number }[];
 }
 
 /** Month-to-date vs. the previous month cut at the same day (cashflow.build_pace). */
