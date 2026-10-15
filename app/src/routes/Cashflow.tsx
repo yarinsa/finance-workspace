@@ -1,12 +1,6 @@
 import { Card, Kpi, PageTitle } from "@/components/ui";
 import NetWorthChart from "@/components/NetWorthChart";
-import { cashflow, shekel, transactions } from "@/lib/data";
-
-function fmtMetric(value: number, units: string): string {
-  if (units === "₪") return shekel(value);
-  if (units === "%") return `${value.toFixed(1)}%`;
-  return value.toLocaleString("he-IL");
-}
+import { cashflow, metricValue, shekel, transactions } from "@/lib/data";
 
 export default function Cashflow() {
   const { metrics, today } = cashflow;
@@ -27,7 +21,7 @@ export default function Cashflow() {
           <Card key={m.key} to="/metrics">
             <Kpi
               label={m.name}
-              value={fmtMetric(m.value, m.units)}
+              value={metricValue(m)}
               rank={m.rank}
               hint={m.description}
             />

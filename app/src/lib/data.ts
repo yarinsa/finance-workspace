@@ -42,6 +42,24 @@ export interface Projection {
   focal_points?: FocalPoint[];
 }
 
+export interface PaceSide {
+  month: string;
+  income: number;
+  expense: number;
+  net: number;
+  /** Whole-month spend (for the previous month: where it ended up). */
+  month_expense: number;
+  /** Cumulative spend per day-of-month. */
+  daily_expense: number[];
+}
+
+/** Month-to-date vs. the previous month cut at the same day (cashflow.build_pace). */
+export interface Pace {
+  as_of_day: number;
+  current: PaceSide;
+  previous: PaceSide;
+}
+
 export interface Cashflow {
   generated_at: string;
   currency: string;
@@ -49,6 +67,7 @@ export interface Cashflow {
   note?: string;
   metrics: Metric[];
   today: Today;
+  pace?: Pace;
   charts?: Record<string, unknown>;
   projection?: Projection;
   months?: unknown[];
@@ -70,7 +89,9 @@ export interface Loan {
  */
 export interface Savings {
   institution: string;
-  kind: "pension" | "study_fund" | "savings";
+  kind: "pension" | "study_fund" | "provident_fund" | "savings" | "bank_deposit";
+  /** Withdrawable today (e.g. a daily deposit) vs. locked until liquidity date. */
+  liquid?: boolean;
   label: string;
   section?: string | null;
   policies_count?: number | null;
@@ -214,27 +235,50 @@ export async function loadData(): Promise<void> {
   goals = g as Goals;
 }
 
+// --- Number formatting ------------------------------------------------------
+// Every figure on screen goes through Intl.NumberFormat (he-IL) so separators,
+// the ₪ position and the minus sign stay consistent. Instances are cached —
+// constructing a formatter per render is the slow part.
+
+const LOCALE = "he-IL";
+const fmtCache = new Map<string, Intl.NumberFormat>();
+function fmt(opts: Intl.NumberFormatOptions): Intl.NumberFormat {
+  const key = JSON.stringify(opts);
+  let f = fmtCache.get(key);
+  if (!f) fmtCache.set(key, (f = new Intl.NumberFormat(LOCALE, opts)));
+  return f;
+}
+
 /** ₪ formatter — ILS, no decimals, RTL-safe. */
 export function shekel(n: number, opts: { decimals?: number } = {}): string {
-  return new Intl.NumberFormat("he-IL", {
-    style: "currency",
-    currency: "ILS",
-    maximumFractionDigits: opts.decimals ?? 0,
-  }).format(n);
+  return fmt({ style: "currency", currency: "ILS", maximumFractionDigits: opts.decimals ?? 0 }).format(n);
+}
+
+/** Signed ₪ for deltas: +₪1,200 / -₪300 (zero stays unsigned). */
+export function shekelSigned(n: number): string {
+  return fmt({ style: "currency", currency: "ILS", maximumFractionDigits: 0, signDisplay: "exceptZero" }).format(n);
 }
 
 /** Compact ₪ for axes/large figures (₪2.6M). */
 export function shekelCompact(n: number): string {
-  return new Intl.NumberFormat("he-IL", {
-    style: "currency",
-    currency: "ILS",
-    notation: "compact",
-    maximumFractionDigits: 1,
-  }).format(n);
+  return fmt({ style: "currency", currency: "ILS", notation: "compact", maximumFractionDigits: 1 }).format(n);
 }
 
+/** Percent from a 0–100 figure (the pipeline's convention): pct(66.6, 1) → "66.6%". */
 export function pct(n: number, decimals = 0): string {
-  return `${n.toFixed(decimals)}%`;
+  return fmt({ style: "percent", maximumFractionDigits: decimals }).format(n / 100);
+}
+
+/** Plain grouped number: 2316 → "2,316". */
+export function num(n: number, decimals = 0): string {
+  return fmt({ maximumFractionDigits: decimals }).format(n);
+}
+
+/** A pipeline Metric's value in its own units. */
+export function metricValue(m: Pick<Metric, "value" | "units">): string {
+  if (m.units === "₪") return shekel(m.value);
+  if (m.units === "%") return pct(m.value, 1);
+  return num(m.value, 1);
 }
 
 /** Days since an ISO timestamp — used for the stale-data nudge. */

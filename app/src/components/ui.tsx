@@ -75,3 +75,61 @@ export function StubNotice({
     </div>
   );
 }
+
+/** A titled block of the Overview feed, with an optional "see all" deep link. */
+export function Section({
+  title,
+  to,
+  linkLabel = "הכל",
+  children,
+}: {
+  title: string;
+  to?: string;
+  linkLabel?: string;
+  children: ReactNode;
+}) {
+  return (
+    <section className="section">
+      <header className="section-head">
+        <h2 className="section-title">{title}</h2>
+        {to && (
+          <Link to={to} className="section-link">
+            {linkLabel} ›
+          </Link>
+        )}
+      </header>
+      {children}
+    </section>
+  );
+}
+
+/** One line in a list card: label (+ optional sub-label) and a right-aligned value. */
+export function ListRow({
+  label,
+  sub,
+  value,
+  share,
+}: {
+  label: ReactNode;
+  sub?: ReactNode;
+  value: ReactNode;
+  /** 0–1: draws a thin proportion bar under the row. */
+  share?: number;
+}) {
+  return (
+    <div className="list-row">
+      <div className="list-row-main">
+        <div className="list-row-text">
+          <span>{label}</span>
+          {sub && <span className="list-row-sub">{sub}</span>}
+        </div>
+        <strong className="list-row-value">{value}</strong>
+      </div>
+      {share != null && (
+        <div className="bar-track thin">
+          <div className="bar-fill" style={{ width: `${Math.max(share * 100, 1)}%` }} />
+        </div>
+      )}
+    </div>
+  );
+}

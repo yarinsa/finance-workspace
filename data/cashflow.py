@@ -149,6 +149,77 @@ def pick_current_month(months):
     return list(months)[-1]
 
 
+# --- Month-to-date pace -----------------------------------------------------
+
+def _prev_month(ym):
+    y, m = int(ym[:4]), int(ym[5:7])
+    return f"{y - 1}-12" if m == 1 else f"{y}-{m - 1:02d}"
+
+
+def _days_in_month(ym):
+    y, m = int(ym[:4]), int(ym[5:7])
+    nxt = datetime(y + (m == 12), m % 12 + 1, 1)
+    return (nxt - timedelta(days=1)).day
+
+
+def build_pace(transactions, current_key):
+    """Month-to-date vs. the previous month up to the *same day* — the wallet
+    header's "am I ahead or behind" signal.
+
+    Comparing a half-month to a whole month always looks like a win, so the
+    previous month is cut at the same day-of-month as the current month's latest
+    ledger date (clamped to the shorter month). The cut-off is the ledger's own
+    latest date, not the wall clock, so stale data still compares like-for-like.
+
+    Uses the same inclusion rules as ``aggregate_by_month`` (no internal
+    transfers, card-bill settlements or savings). ``daily_expense`` is the
+    cumulative spend per day for the sparkline: the current month up to
+    ``as_of_day``, the previous month in full (so its end-of-month is visible).
+    """
+    prev_key = _prev_month(current_key)
+    rows = [t for t in transactions
+            if (t.get("date") or "")[:7] in (current_key, prev_key)
+            and not (t.get("internal_transfer") or t.get("card_bill_payment")
+                     or t.get("savings"))]
+    cur_days = [int(t["date"][8:10]) for t in rows if t["date"][:7] == current_key]
+    as_of_day = max(cur_days) if cur_days else 1
+
+    def side(key, upto):
+        n = _days_in_month(key)
+        daily = [0.0] * n
+        income = expense = 0.0
+        for t in rows:
+            if t["date"][:7] != key:
+                continue
+            day = int(t["date"][8:10])
+            amount = float(t.get("amount") or 0)
+            is_in = t.get("is_income") or amount > 0
+            if not is_in:
+                daily[day - 1] += -amount
+            if day <= upto:
+                if is_in:
+                    income += amount
+                else:
+                    expense += -amount
+        cum, run = [], 0.0
+        for d in daily:
+            run += d
+            cum.append(round(run, 2))
+        return {
+            "month": key,
+            "income": round(income, 2),
+            "expense": round(expense, 2),
+            "net": round(income - expense, 2),
+            "month_expense": cum[-1] if cum else 0.0,
+            "daily_expense": cum,
+        }
+
+    cur = side(current_key, as_of_day)
+    cur["daily_expense"] = cur["daily_expense"][:as_of_day]
+    prev = side(prev_key, min(as_of_day, _days_in_month(prev_key)))
+    return {"as_of_day": as_of_day, "current": cur, "previous": prev}
+
+
 # --- Metrics ----------------------------------------------------------------
 
 def _verdict(value, *, good_above=None, bad_below=None, bad_above=None, good_below=None):
@@ -308,6 +379,7 @@ def build():
         ),
         "metrics": metrics,
         "today": charts["today"],
+        "pace": build_pace(transactions, current),
         "charts": {
             **{k: v for k, v in charts.items() if k != "today"},
             "net_worth": proj["chart"],

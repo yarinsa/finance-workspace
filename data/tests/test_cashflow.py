@@ -96,3 +96,49 @@ class TestPickCurrentMonth:
 
     def test_none_when_empty(self):
         assert cashflow.pick_current_month({}) is None
+
+
+class TestBuildPace:
+    """Wallet header: month-to-date vs. the previous month cut at the same day."""
+
+    def test_previous_month_is_cut_at_same_day_not_compared_in_full(self):
+        # Real case (2026-10-15): October looked ₪40k "better" than September
+        # only because September was compared whole. Cut both at day 15.
+        pace = cashflow.build_pace([
+            {"date": "2026-10-09", "amount": -12.0, "description": "ביתא", "category": "פנאי"},
+            {"date": "2026-10-15", "amount": -500.0, "category": "uncategorized"},
+            {"date": "2026-09-10", "amount": -800.0, "category": "uncategorized"},
+            {"date": "2026-09-28", "amount": -6800.0, "description": 'הו"ק לעיין ניהול נכסי', "category": "דיור"},
+        ], "2026-10")
+        assert pace["as_of_day"] == 15
+        assert pace["current"]["expense"] == 512.0
+        assert pace["previous"]["expense"] == 800.0          # rent on the 28th excluded
+        assert pace["previous"]["month_expense"] == 7600.0   # but still visible as full month
+        assert len(pace["current"]["daily_expense"]) == 15
+        assert len(pace["previous"]["daily_expense"]) == 30
+        assert pace["current"]["daily_expense"][8] == 12.0   # cumulative on the 9th
+
+    def test_transfers_card_bills_and_savings_are_not_pace(self):
+        pace = cashflow.build_pace([
+            {"date": "2026-10-02", "amount": -8000.0, "card_bill_payment": True},
+            {"date": "2026-10-02", "amount": -5000.0, "internal_transfer": True},
+            {"date": "2026-10-03", "amount": -1000.0, "savings": True},
+            {"date": "2026-10-04", "amount": 26428.43, "description": "העברת משכורת", "is_income": True},
+        ], "2026-10")
+        assert pace["current"]["expense"] == 0.0
+        assert pace["current"]["income"] == 26428.43
+
+    def test_day_31_clamps_to_shorter_previous_month(self):
+        pace = cashflow.build_pace([
+            {"date": "2026-10-31", "amount": -10.0},
+            {"date": "2026-09-30", "amount": -20.0},
+        ], "2026-10")
+        assert pace["previous"]["expense"] == 20.0
+
+    def test_january_compares_to_previous_december(self):
+        pace = cashflow.build_pace([
+            {"date": "2027-01-05", "amount": -10.0},
+            {"date": "2026-12-03", "amount": -20.0},
+        ], "2027-01")
+        assert pace["previous"]["month"] == "2026-12"
+        assert pace["previous"]["expense"] == 20.0
