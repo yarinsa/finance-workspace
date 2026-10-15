@@ -34,6 +34,7 @@ SOURCES=(
   "amex|9226|amex|document.title.includes('אזור אישי')"
   "harel|9227|harel|location.href.includes('client-view.aspx')"
   "more|9228|more|location.hostname==='my-account.more.co.il' && !!sessionStorage.getItem('accountData')"
+  "analyst|9229|analyst|location.href.includes('amitim.analyst.co.il/lobby') && !!sessionStorage.getItem('userData')"
 )
 
 # Login URL per source — used only to LAUNCH a window for the user, never to log in.
@@ -45,6 +46,7 @@ declare -A LOGIN_URL=(
   [amex]="https://he.americanexpress.co.il/"
   [harel]="https://www.harel-group.co.il/"
   [more]="https://my-account.more.co.il/personalarea/dashboard"
+  [analyst]="https://amitim.analyst.co.il/lobby"
 )
 
 WANT=("$@")

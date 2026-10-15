@@ -29,6 +29,8 @@ APP = {
     "cal":      (("digital-web.cal-online.co.il/dashboard",), ()),
     "amex":     (("web.americanexpress.co.il",), ("אזור אישי",)),
     "harel":    (("client-view.aspx",), ("הראל שלי",)),
+    "more":     (("my-account.more.co.il/personalarea",), ()),
+    "analyst":  (("amitim.analyst.co.il/lobby",), ("מבט כללי",)),
 }
 LOGIN_HINTS = ("login", "signin", "gate-keeper", "otp")
 

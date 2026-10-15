@@ -5,7 +5,7 @@ description: Refresh every financial data source end to end — checks all sessi
 
 # Refresh everything
 
-Orchestrates the seven per-source refresh skills, then the digest and forecast.
+Orchestrates the eight per-source refresh skills, then the digest and forecast.
 It **delegates** to those skills — it never reimplements their scraping.
 
 ## The one rule that shapes this whole skill
@@ -30,7 +30,7 @@ a time, mid-refresh. It checks everything first and asks once.
   Correct order: **account → mortgage → business**.
 - **Everything else is parallel-safe.** Each institution has its own CDP port
   and profile, so they cannot collide:
-  riseup 9222 · discount 9223 · leumi 9224 · cal 9225 · amex 9226 · harel 9227 · more 9228.
+  riseup 9222 · discount 9223 · leumi 9224 · cal 9225 · amex 9226 · harel 9227 · more 9228 · analyst 9229.
   Only the three Discount apps must be sequential, because they share 9223.
 
 ## Flow
@@ -75,6 +75,7 @@ existing skill:
 | amex | `amex-refresh` |
 | harel | `harel-refresh` |
 | more | `more-refresh` |
+| analyst | `analyst-refresh` |
 
 Tell every agent: **do not run `digest.py` or `forecast.py`** — this skill does
 that once, at the end, after all sources have landed.
