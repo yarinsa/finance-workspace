@@ -1,6 +1,7 @@
 import { BarRow, Card, CardLabel, Kpi, KpiGrid, PageTitle, StatRow } from "@/components/common";
 import NetWorthChart from "@/components/NetWorthChart";
 import MonthlyTrendChart from "@/components/MonthlyTrendChart";
+import FixedExpenses from "@/components/FixedExpenses";
 import { cashflow, shekel, transactions, formatMetric, formatMetricCompact } from "@/lib/data";
 
 export default function Cashflow() {
@@ -30,6 +31,10 @@ export default function Cashflow() {
           </Card>
         ))}
       </KpiGrid>
+
+      <div className="my-3 md:my-3.5">
+        <FixedExpenses />
+      </div>
 
       <div className="my-3 md:my-3.5">
         <Card>

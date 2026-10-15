@@ -229,3 +229,65 @@ class TestTrailingAverage:
     def test_no_history_means_no_average(self):
         pace = cashflow.build_pace([{"date": "2026-10-01", "amount": -10.0}], "2026-10")
         assert pace["average"] is None
+
+
+class TestFixedExpenses:
+    """Cashflow page's "הוצאות קבועות" review — real October 2026 fixed items."""
+
+    FORECAST = {"current_month": {"forecast_month": "2026-10", "expenses": {"fixed_items": [
+        {"name": 'הו"ק לעיין ניהול נכסי,לסניף 20-406', "category": "דיור", "amount": 6800},
+        {"name": "משכנתא — full next installment (due 2026-10-10)", "category": "משכנתא", "amount": 5817.26},
+        {"name": "פרעון הלוואה", "category": "הלוואה", "amount": 1844.42},
+        {"name": "פרטנר תקשורת בע\"מ", "category": "תקשורת", "amount": 135.14},
+        {"name": "APPLE.COM/BILL         CORK          IRL", "category": "דיגיטל", "amount": 117},
+        {"name": "APPLE.COM/BILL         CORK          IRL", "category": "דיגיטל", "amount": 60},
+        {"name": "SpotifyIL", "category": "דיגיטל", "amount": 43.9},
+        {"name": 'אקספון 018 בע"מ', "category": "תקשורת", "amount": 34.9},
+        {"name": "טלזר 019 שירותי תקשורת בינלאומים", "category": "תקשורת", "amount": 10},
+        {"name": "דמי כרטיס /הנפקה", "category": "עמלות", "amount": 98.4},
+        {"name": "ח.י אלקטרוניקה -טרקלין חש", "category": "מוצרי חשמל לבית", "amount": 231},
+    ]}}}
+    LEDGER = [
+        {"date": "2026-10-11", "amount": -10, "description": "טלזר 019 שירותי תקשורת בינלאומים"},
+        {"date": "2026-09-11", "amount": -10, "description": "טלזר 019 שירותי תקשורת בינלאומים"},
+        {"date": "2026-09-09", "amount": -43.9, "description": "SpotifyIL"},
+    ]
+
+    def fx(self):
+        return cashflow.fixed_expenses(self.FORECAST, self.LEDGER, "2026-10")
+
+    def test_groups_in_review_order_cheapest_win_first(self):
+        keys = [g["key"] for g in self.fx()["groups"]]
+        assert keys == ["fees", "subscriptions", "bills", "installments", "committed"]
+
+    def test_rent_and_loans_are_committed_not_cuts(self):
+        committed = next(g for g in self.fx()["groups"] if g["key"] == "committed")
+        assert committed["total"] == 14461.68
+        assert committed["ease"] == "committed"
+
+    def test_cuttable_is_fees_plus_subscriptions(self):
+        assert self.fx()["cuttable_total"] == round(98.4 + 117 + 60 + 43.9, 2)
+
+    def test_repeated_apple_billing_and_two_call_plans_are_duplicates(self):
+        items = {i["name"]: i for g in self.fx()["groups"] for i in g["items"]}
+        assert items["APPLE.COM/BILL CORK IRL"]["duplicate"]
+        assert items['אקספון 018 בע"מ']["duplicate_reason"] == "שיחות לחו״ל"
+        assert items["טלזר 019 שירותי תקשורת בינלאומים"]["duplicate"]
+        assert not items["SpotifyIL"]["duplicate"]
+
+    def test_loans_sharing_a_prefix_are_not_duplicates(self):
+        fx = cashflow.fixed_expenses({"current_month": {"forecast_month": "2026-10", "expenses": {"fixed_items": [
+            {"name": "פרעון הלוואה", "category": "הלוואה", "amount": 1844.42},
+            {"name": "פרעון הלוואה", "category": "הלוואה", "amount": 867.8},
+        ]}}}, [], "2026-10")
+        assert not any(i["duplicate"] for i in fx["groups"][0]["items"])
+
+    def test_last_charged_comes_from_the_ledger(self):
+        items = {i["name"]: i for g in self.fx()["groups"] for i in g["items"]}
+        # 019 was cancelled 2026-10-10 — a charge on 10-11 is worth seeing
+        assert items["טלזר 019 שירותי תקשורת בינלאומים"]["last_charged"] == "2026-10-11"
+        assert items["SpotifyIL"]["last_charged"] == "2026-09-09"
+        assert items["פרטנר תקשורת בע\"מ"]["last_charged"] is None
+
+    def test_stale_forecast_gives_nothing(self):
+        assert cashflow.fixed_expenses(self.FORECAST, [], "2026-11") is None

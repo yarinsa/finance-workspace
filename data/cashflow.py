@@ -418,6 +418,97 @@ def build_charts(months, current_key):
 
 # --- Orchestration ----------------------------------------------------------
 
+# --- Fixed expenses review ---------------------------------------------------
+# The month's recurring bills (forecast.py's fixed envelopes) grouped by how
+# realistically they can be cut — the "easy recurring cuts" lever in CLAUDE.md.
+# Order = review order: cheapest wins first, committed debt last.
+
+FIXED_GROUPS = [
+    # key, label, ease, what to do about it, categories
+    ("fees", "עמלות", "trivial", "לבקש ויתור מהבנק / חברת האשראי",
+     {"עמלות", "דמי כרטיס", "עמלת דמי כרטיס - בנקים"}),
+    ("subscriptions", "מנויים", "easy", "לבטל מה שלא בשימוש ומה שכפול",
+     {"דיגיטל", "ספר"}),
+    ("bills", "חשבונות ושירותים", "moderate", "להשוות ספקים ולמקח מחדש",
+     {"תקשורת", "חשמל", "מים", "גז", "תמי 4", "ביטוח", "בריאות", "רכב"}),
+    ("installments", "תשלומים ורכישות", "wait", "מסתיימים מעצמם — לא לפתוח חדשים",
+     {"מוצרי חשמל לבית"}),
+    ("committed", "דיור והלוואות", "committed", "פירעון מוקדם / מחזור — לא קיצוץ",
+     {"דיור", "משכנתא", "הלוואה", "תשלומים"}),
+]
+
+# International-call plans are the same service from different carriers.
+_SAME_SERVICE = [("שיחות לחו״ל", ("018", "019", "טלזר", "אקספון"))]
+
+
+def _merchant_key(name):
+    """'APPLE.COM/BILL   CORK  IRL' → 'APPLE.COM/BILL' — enough to spot repeats."""
+    return " ".join(str(name).split()[:1]).upper()
+
+
+def _last_charged(name, transactions):
+    """Latest ledger date whose description starts like this bill's name."""
+    probe = " ".join(str(name).split())[:10].lower()
+    dates = [t["date"][:10] for t in transactions
+             if t.get("date") and float(t.get("amount") or 0) < 0
+             and " ".join((t.get("description") or "").split()).lower().startswith(probe)]
+    return max(dates) if dates else None
+
+
+def fixed_expenses(forecast, transactions, month_key):
+    """Group this month's fixed bills for a "what can I cut?" review.
+
+    Each group carries an ``ease`` (trivial → committed) and a one-line lever.
+    Reviewable items (not loans/installments) flag ``duplicate`` when the same
+    merchant bills more than once or two items are the same service (e.g. two international-call plans), and carry
+    ``last_charged`` from the ledger so a cancelled service shows as stale.
+    ``cuttable_total`` sums the fees + subscriptions groups — the low-effort
+    ceiling, not a promise. Returns None without a current-month forecast.
+    """
+    cur = (forecast or {}).get("current_month")
+    if not cur or cur.get("forecast_month") != month_key:
+        return None
+    items = cur["expenses"]["fixed_items"]
+
+    counts = defaultdict(int)
+    for it in items:
+        counts[_merchant_key(it["name"])] += 1
+    same_service = {}
+    for label, needles in _SAME_SERVICE:
+        hits = [it["name"] for it in items if any(n in it["name"] for n in needles)]
+        if len(hits) > 1:
+            same_service.update({h: label for h in hits})
+
+    by_cat = {c: g for g in FIXED_GROUPS for c in g[4]}
+    other = ("other", "אחר", "moderate", "לבדוק אם עדיין נחוץ", set())
+    grouped = defaultdict(list)
+    for it in items:
+        g = by_cat.get((it.get("category") or "").strip(), other)
+        name = " ".join(str(it["name"]).split())
+        # Repeats only mean something for reviewable bills — several loans or
+        # standing orders sharing a "פרעון"/"הו\"ק" prefix are not duplicates.
+        reviewable = g[0] not in ("committed", "installments")
+        dup = reviewable and (counts[_merchant_key(it["name"])] > 1 or it["name"] in same_service)
+        grouped[g[0]].append({
+            "name": name,
+            "category": it.get("category"),
+            "amount": round(float(it["amount"]), 2),
+            "duplicate": dup,
+            "duplicate_reason": same_service.get(it["name"]) or ("אותו ספק כמה פעמים" if dup else None),
+            "last_charged": _last_charged(it["name"], transactions),
+        })
+
+    groups = []
+    for key, label, ease, lever, _ in [*FIXED_GROUPS, other]:
+        rows = sorted(grouped.get(key, []), key=lambda r: -r["amount"])
+        if rows:
+            groups.append({"key": key, "label": label, "ease": ease, "lever": lever,
+                           "total": round(sum(r["amount"] for r in rows), 2), "items": rows})
+    total = round(sum(g["total"] for g in groups), 2)
+    cuttable = round(sum(g["total"] for g in groups if g["key"] in ("fees", "subscriptions")), 2)
+    return {"month": month_key, "total": total, "cuttable_total": cuttable, "groups": groups}
+
+
 def _load_optional(path):
     """Forecast is produced separately; the cashflow model still builds without it."""
     try:
@@ -439,6 +530,7 @@ def build():
     if current is None:
         raise SystemExit("no transactions to build a cashflow from")
 
+    forecast = _load_optional(FORECAST)
     metrics = build_metrics(months[current], snapshot)
     charts = build_charts(months, current)
 
@@ -460,7 +552,8 @@ def build():
         "metrics": metrics,
         "today": charts["today"],
         "pace": {**build_pace(transactions, current),
-                 "expected": expected_for_month(_load_optional(FORECAST), current)},
+                 "expected": expected_for_month(forecast, current)},
+        "fixed_expenses": fixed_expenses(forecast, transactions, current),
         "charts": {
             **{k: v for k, v in charts.items() if k != "today"},
             "net_worth": proj["chart"],

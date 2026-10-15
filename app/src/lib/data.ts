@@ -74,6 +74,32 @@ export interface Pace {
   expected?: { income: number; expense: number; net: number; source: string } | null;
 }
 
+export interface FixedItem {
+  name: string;
+  category?: string | null;
+  amount: number;
+  duplicate: boolean;
+  duplicate_reason?: string | null;
+  /** Latest matching ledger charge (YYYY-MM-DD), null when none was found. */
+  last_charged?: string | null;
+}
+
+/** This month's fixed bills grouped for a "what can I cut?" review (cashflow.fixed_expenses). */
+export interface FixedExpenses {
+  month: string;
+  total: number;
+  /** Fees + subscriptions — the low-effort ceiling. */
+  cuttable_total: number;
+  groups: {
+    key: string;
+    label: string;
+    ease: "trivial" | "easy" | "moderate" | "wait" | "committed";
+    lever: string;
+    total: number;
+    items: FixedItem[];
+  }[];
+}
+
 export interface Cashflow {
   generated_at: string;
   currency: string;
@@ -82,6 +108,7 @@ export interface Cashflow {
   metrics: Metric[];
   today: Today;
   pace?: Pace;
+  fixed_expenses?: FixedExpenses | null;
   charts?: Record<string, unknown>;
   projection?: Projection;
   months?: unknown[];

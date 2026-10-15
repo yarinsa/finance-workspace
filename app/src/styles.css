@@ -262,3 +262,8 @@ body {
 .wstat-avg { display: inline-flex; gap: 3px; align-items: baseline; font-size: 11px; color: var(--lg-muted); }
 .wallet-legend { flex-wrap: wrap; gap: 4px 12px; }
 .wallet-legend span { white-space: nowrap; }
+
+/* Fixed-expenses review */
+.pill-muted { background: var(--lg-panel-2); color: var(--lg-muted); }
+.fixed-group .pill-muted { background: var(--lg-panel); }
+.fixed-group summary::-webkit-details-marker { display: none; }
