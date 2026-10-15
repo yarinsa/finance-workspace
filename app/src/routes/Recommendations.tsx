@@ -1,4 +1,4 @@
-import { Card, PageTitle, StubNotice } from "@/components/ui";
+import { Card, PageTitle, StubNotice } from "@/components/common";
 import { snapshot, shekel } from "@/lib/data";
 
 /** No rules engine yet (PRD 05). Surface 1–2 honest derived nudges from the

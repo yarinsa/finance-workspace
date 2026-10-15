@@ -22,14 +22,14 @@ export interface ChartColors {
 }
 
 const TOKENS: Record<keyof ChartColors, string> = {
-  accent: "--accent",
-  good: "--good",
-  bad: "--bad",
-  warn: "--warn",
-  muted: "--muted",
-  line: "--line",
-  panel: "--panel",
-  text: "--text",
+  accent: "--lg-accent",
+  good: "--lg-good",
+  bad: "--lg-bad",
+  warn: "--lg-warn",
+  muted: "--lg-muted",
+  line: "--lg-line",
+  panel: "--lg-panel",
+  text: "--lg-text",
 };
 
 function readColors(): ChartColors {

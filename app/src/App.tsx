@@ -1,91 +1,105 @@
-import { useState } from "react";
 import { NavLink, Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { routes } from "./routes";
 import { cashflow, daysSince } from "./lib/data";
-import { CashflowIcon, GoalIcon, HomeIcon, MoreIcon, WalletIcon } from "./components/icons";
+import {
+  Sidebar,
+  SidebarContent,
+  SidebarFooter,
+  SidebarGroup,
+  SidebarGroupContent,
+  SidebarHeader,
+  SidebarInset,
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
+  SidebarProvider,
+  useSidebar,
+} from "@/components/ui/sidebar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { TooltipProvider } from "@/components/ui/tooltip";
+import { MobileTabBar } from "@/components/MobileTabBar";
 
-/** Paths pinned to the mobile tab bar; the rest live behind "עוד". */
-const TAB_PATHS = ["/overview", "/cashflow", "/goals", "/networth"];
-const TAB_ICON: Record<string, () => JSX.Element> = {
-  "/overview": HomeIcon,
-  "/cashflow": CashflowIcon,
-  "/goals": GoalIcon,
-  "/networth": WalletIcon,
-};
+/** "Updated N days ago" — tap-able so the stale warning works on touch. */
+function Freshness({ days }: { days: number }) {
+  const stale = days > 7;
+  return (
+    <Popover>
+      <PopoverTrigger className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+        עודכן לפני {days} ימים
+        {stale && <span className="stale-dot" aria-label="נתונים ישנים" />}
+      </PopoverTrigger>
+      <PopoverContent className="w-64 text-sm">
+        {stale
+          ? "הנתונים ישנים משבוע — כדאי לרענן את המקורות ולהריץ digest."
+          : "הנתונים עדכניים."}
+      </PopoverContent>
+    </Popover>
+  );
+}
 
-const navClass = ({ isActive }: { isActive: boolean }) => (isActive ? "nav-item active" : "nav-item");
+function AppSidebar({ days }: { days: number }) {
+  const { pathname } = useLocation();
+  const { setOpenMobile } = useSidebar();
+  return (
+    <Sidebar side="right">
+      <SidebarHeader>
+        <div className="px-2 py-1 text-lg font-bold">תמונת מצב</div>
+      </SidebarHeader>
+      <SidebarContent>
+        <SidebarGroup>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {routes.map(({ path, label, icon: Icon }) => (
+                <SidebarMenuItem key={path}>
+                  <SidebarMenuButton asChild isActive={pathname === path}>
+                    <NavLink to={path} onClick={() => setOpenMobile(false)}>
+                      <Icon />
+                      {label}
+                    </NavLink>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ))}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+      </SidebarContent>
+      <SidebarFooter>
+        <div className="px-2">
+          <Freshness days={days} />
+        </div>
+      </SidebarFooter>
+    </Sidebar>
+  );
+}
 
 export default function App() {
-  const age = daysSince(cashflow.generated_at);
-  const stale = age > 7;
-  const [moreOpen, setMoreOpen] = useState(false);
   const { pathname } = useLocation();
-  const tabs = routes.filter((r) => TAB_PATHS.includes(r.path));
-  const more = routes.filter((r) => !TAB_PATHS.includes(r.path));
-  const inMore = more.some((r) => r.path === pathname);
+  const days = daysSince(cashflow.generated_at);
   const current = routes.find((r) => r.path === pathname);
-
   return (
-    <div className="layout">
-      <aside className="rail">
-        <nav>
-          {routes.map((r) => (
-            <NavLink key={r.path} to={r.path} className={navClass}>
-              {r.label}
-            </NavLink>
-          ))}
-        </nav>
-        <div className="rail-foot">
-          עודכן לפני {age} ימים
-          {stale && <span className="stale-dot" title="נתונים ישנים" />}
-        </div>
-      </aside>
-
-      <header className="topbar">
-        <span className="topbar-title">{current?.label}</span>
-        <span className="topbar-age">
-          {stale && <span className="stale-dot" title="נתונים ישנים" />}
-          עודכן {age === 0 ? "היום" : `לפני ${age} ימים`}
-        </span>
-      </header>
-
-      <main className="content">
-        <Routes>
-          <Route path="/" element={<Navigate to="/overview" replace />} />
-          {routes.map((r) => (
-            <Route key={r.path} path={r.path} element={<r.Component />} />
-          ))}
-          <Route path="*" element={<Navigate to="/overview" replace />} />
-        </Routes>
-      </main>
-
-      {moreOpen && (
-        <div className="sheet-backdrop" onClick={() => setMoreOpen(false)}>
-          <nav className="sheet" onClick={(e) => e.stopPropagation()}>
-            {more.map((r) => (
-              <NavLink key={r.path} to={r.path} className={navClass} onClick={() => setMoreOpen(false)}>
-                {r.label}
-              </NavLink>
-            ))}
-          </nav>
-        </div>
-      )}
-
-      <nav className="tabbar">
-        {tabs.map((r) => {
-          const Icon = TAB_ICON[r.path];
-          return (
-            <NavLink key={r.path} to={r.path} className={({ isActive }) => (isActive ? "tab active" : "tab")}>
-              <Icon />
-              <span>{r.label}</span>
-            </NavLink>
-          );
-        })}
-        <button className={inMore || moreOpen ? "tab active" : "tab"} onClick={() => setMoreOpen((o) => !o)}>
-          <MoreIcon />
-          <span>עוד</span>
-        </button>
-      </nav>
-    </div>
+    <TooltipProvider>
+      <SidebarProvider>
+        <AppSidebar days={days} />
+        <SidebarInset>
+          <header
+            className="sticky top-0 z-30 flex h-12 items-center justify-between border-b bg-background/80 px-4 backdrop-blur-xl md:hidden"
+            style={{ paddingTop: "env(safe-area-inset-top)", boxSizing: "content-box" }}
+          >
+            <span className="font-bold">{current?.label ?? ""}</span>
+            <Freshness days={days} />
+          </header>
+          <main className="content">
+            <Routes>
+              <Route path="/" element={<Navigate to="/overview" replace />} />
+              {routes.map((r) => (
+                <Route key={r.path} path={r.path} element={<r.Component />} />
+              ))}
+              <Route path="*" element={<Navigate to="/overview" replace />} />
+            </Routes>
+          </main>
+        </SidebarInset>
+        <MobileTabBar />
+      </SidebarProvider>
+    </TooltipProvider>
   );
 }

@@ -82,7 +82,7 @@ function Stat({ label, now, before, expected, monthDone, goodWhenUp, money = fal
     <div className="wstat">
       <div className="wstat-line">
         <span className="wstat-label">{label}</span>
-        <strong style={money ? { color: now >= 0 ? "var(--good)" : "var(--bad)" } : undefined}>{shekel(now)}</strong>
+        <strong style={money ? { color: now >= 0 ? "var(--lg-good)" : "var(--lg-bad)" } : undefined}>{shekel(now)}</strong>
       </div>
       {ratio != null && !money && (
         <div className="wstat-bar" aria-label={`${fmtPct(ratio * 100)} מהצפי`}>

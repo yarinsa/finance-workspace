@@ -1,10 +1,9 @@
-// Single source of truth for the digested pipeline outputs. These are imported
-// statically (Vite resolves `@digested` to ../data/digested) so the app always
-// renders whatever the last `python3 data/digest.py` produced.
-import cashflowJson from "@digested/cashflow.json";
-import snapshotJson from "@digested/snapshot.json";
-import transactionsJson from "@digested/transactions.json";
-import goalsJson from "@digested/goals.json";
+// Single source of truth for the digested pipeline outputs. They are fetched at
+// runtime from /data/*.json — never bundled — so the app bundle carries no
+// financial data and can be built and deployed by CI, while the data itself is
+// published separately from the machine that ran `python3 data/digest.py`
+// (`infra/deploy.sh --data-only`). In dev/preview, vite.config.ts serves
+// /data/* straight from ../data/digested.
 
 export type Rank = "good" | "bad" | "warning" | null;
 
@@ -232,51 +231,22 @@ export interface Goals {
   liquid_buffer: number;
 }
 
-/**
- * In dev these come from the Vite `@digested` alias — edit-reload still picks up
- * a fresh `python3 data/digest.py` with no copy step.
- *
- * In a production build they must NOT be bundled: the deployed artifact would
- * then contain every transaction and account number as readable static JS, which
- * no amount of auth in front of it can walk back. Instead `loadData()` fetches
- * them at runtime from /data/*.json in the private bucket, which CloudFront only
- * serves once the edge auth gate has validated a session.
- */
-const BUNDLED = import.meta.env.DEV;
-
-export let cashflow = (BUNDLED ? cashflowJson : {}) as unknown as Cashflow;
-export let snapshot = (BUNDLED ? snapshotJson : {}) as unknown as Snapshot;
-export let transactions = (BUNDLED ? transactionsJson : {}) as unknown as Transactions;
-export let goals = (BUNDLED ? goalsJson : {}) as unknown as Goals;
-
-/**
- * Populate the exports above before the app renders. Called from main.tsx and
- * awaited, so every route can keep importing the data synchronously.
- *
- * A failure here is surfaced, never swallowed: rendering a financial dashboard
- * against silently-empty data would show a plausible-looking ₪0 net worth.
- */
-export async function loadData(): Promise<void> {
-  if (BUNDLED) return;
-
-  const get = async (name: string) => {
-    const res = await fetch(`/data/${name}.json`, { credentials: "same-origin" });
-    if (!res.ok) throw new Error(`${name}.json → HTTP ${res.status}`);
-    return res.json();
-  };
-
-  const [c, s, t, g] = await Promise.all([
-    get("cashflow"),
-    get("snapshot"),
-    get("transactions"),
-    get("goals"),
-  ]);
-
-  cashflow = c as Cashflow;
-  snapshot = s as Snapshot;
-  transactions = t as Transactions;
-  goals = g as Goals;
+async function loadDigested<T>(name: string): Promise<T> {
+  const res = await fetch(`/data/${name}.json`, { cache: "no-store" });
+  // A missing key comes back as the SPA's index.html (CloudFront maps S3's
+  // 403/404 to it), so check the content type, not just the status.
+  if (!res.ok || !res.headers.get("content-type")?.includes("json")) {
+    throw new Error(`data/${name}.json not available — run python3 data/digest.py and publish it`);
+  }
+  return (await res.json()) as T;
 }
+
+export const [cashflow, snapshot, transactions, goals] = await Promise.all([
+  loadDigested<Cashflow>("cashflow"),
+  loadDigested<Snapshot>("snapshot"),
+  loadDigested<Transactions>("transactions"),
+  loadDigested<Goals>("goals"),
+]);
 
 // --- Number formatting ------------------------------------------------------
 // Every figure on screen goes through Intl.NumberFormat (he-IL) so separators,
@@ -307,6 +277,20 @@ export function shekelCompact(n: number): string {
   return fmt({ style: "currency", currency: "ILS", notation: "compact", maximumFractionDigits: 1 }).format(n);
 }
 
+/** Format a cashflow metric by its unit; `null` (not computable yet) renders as "—". */
+export function formatMetric(value: number | null, units: string): string {
+  if (value == null) return "—";
+  if (units === "₪") return shekel(value);
+  if (units === "%") return pct(value, 1);
+  return num(value, 1);
+}
+
+/** Short form of `formatMetric` for narrow tiles (₪1.6M); non-₪ units are already short. */
+export function formatMetricCompact(value: number | null, units: string): string {
+  if (value != null && units === "₪") return shekelCompact(value);
+  return formatMetric(value, units);
+}
+
 /** Percent from a 0–100 figure (the pipeline's convention): pct(66.6, 1) → "66.6%". */
 export function pct(n: number, decimals = 0): string {
   return fmt({ style: "percent", maximumFractionDigits: decimals }).format(n / 100);
@@ -329,9 +313,7 @@ export function monthYear(iso: string): string {
 
 /** A pipeline Metric's value in its own units. */
 export function metricValue(m: Pick<Metric, "value" | "units">): string {
-  if (m.units === "₪") return shekel(m.value);
-  if (m.units === "%") return pct(m.value, 1);
-  return num(m.value, 1);
+  return formatMetric(m.value, m.units);
 }
 
 /** Days since an ISO timestamp — used for the stale-data nudge. */

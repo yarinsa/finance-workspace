@@ -1,4 +1,4 @@
-import { Card, ListRow, PageTitle, StubNotice } from "@/components/ui";
+import { Card, ListRow, PageTitle, StubNotice } from "@/components/common";
 import { daysSince, snapshot, type SourceSync } from "@/lib/data";
 
 const SOURCE_LABEL: Record<string, string> = {

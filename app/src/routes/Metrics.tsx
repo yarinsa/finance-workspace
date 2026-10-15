@@ -1,5 +1,5 @@
-import { Card, PageTitle, RankPill } from "@/components/ui";
-import { cashflow, metricValue } from "@/lib/data";
+import { Card, PageTitle, RankPill } from "@/components/common";
+import { cashflow, formatMetric } from "@/lib/data";
 
 export default function Metrics() {
   return (
@@ -10,7 +10,7 @@ export default function Metrics() {
           <Card key={m.key}>
             <div className="card-title">{m.name}</div>
             <div className="big-num" style={{ fontSize: 26 }}>
-              {metricValue(m)}
+              {formatMetric(m.value, m.units)}
             </div>
             <div style={{ margin: "8px 0" }}>
               <RankPill rank={m.rank} />

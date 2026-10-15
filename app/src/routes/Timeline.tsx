@@ -1,4 +1,4 @@
-import { Card, PageTitle } from "@/components/ui";
+import { Card, PageTitle } from "@/components/common";
 import { cashflow, shekel } from "@/lib/data";
 
 /** Monthly cashflow waterfall. Renders projection focal points as life-horizon

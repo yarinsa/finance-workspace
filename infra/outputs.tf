@@ -27,3 +27,8 @@ output "user_pool_id" {
   description = "Cognito user pool id, for managing users via the CLI."
   value       = aws_cognito_user_pool.users.id
 }
+
+output "github_deploy_role_arn" {
+  description = "Role GitHub Actions assumes (OIDC) to publish the app bundle. Set as the AWS_DEPLOY_ROLE_ARN repo variable."
+  value       = aws_iam_role.github_deploy.arn
+}

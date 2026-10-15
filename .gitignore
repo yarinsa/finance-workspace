@@ -74,3 +74,6 @@ infra/*.tfvars
 .claude/worktrees/
 __pycache__/
 /*.png
+# Dashboard screenshots hold real financial figures — never commit
+.claude/screenshots/
+.claude/skills/dashboard-screenshots/node_modules/

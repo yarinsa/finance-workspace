@@ -23,7 +23,7 @@ describes).
 2. **Deploy:**
 
    ```bash
-   ./infra/deploy.sh --app
+   ./infra/deploy.sh --app-only
    ```
 
    Runs `pnpm install --frozen-lockfile && pnpm build`, syncs hashed assets with

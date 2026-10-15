@@ -1,4 +1,4 @@
-import { Card, PageTitle } from "@/components/ui";
+import { Card, PageTitle } from "@/components/common";
 import { goals, shekel, shekelCompact } from "@/lib/data";
 import type { GeneralGoalCard, PersonalGoal } from "@/lib/data";
 
@@ -14,7 +14,7 @@ function GeneralCard({ c }: { c: GeneralGoalCard }) {
   return (
     <Card>
       <div className="card-title">{c.name}</div>
-      <div className="big-num" style={{ fontSize: 24, color: muted ? "var(--muted)" : undefined }}>
+      <div className="big-num" style={{ fontSize: 24, color: muted ? "var(--lg-muted)" : undefined }}>
         {generalValue(c)}
       </div>
       {c.key === "emergency_fund_coverage" && c.shortfall ? (
@@ -36,7 +36,7 @@ function GeneralCard({ c }: { c: GeneralGoalCard }) {
 function GoalCard({ g }: { g: PersonalGoal }) {
   const prog = g.progress_pct ?? 0;
   const trackColor =
-    g.on_track === false ? "var(--bad)" : g.on_track ? "var(--accent)" : "var(--muted)";
+    g.on_track === false ? "var(--lg-bad)" : g.on_track ? "var(--lg-accent)" : "var(--lg-muted)";
   return (
     <Card>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>

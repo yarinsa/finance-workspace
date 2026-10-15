@@ -1,0 +1,52 @@
+# Ship the dashboard bundle on every merge to master that touches the app.
+#
+# CI never sees financial data: the bundle fetches /data/*.json at runtime, and
+# that data is published separately from the owner's machine with
+# `infra/deploy.sh --data-only`. The deploy role (infra/github-deploy.tf) is
+# denied any access to data/* in the bucket.
+name: Deploy app
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - "app/**"
+      - "infra/deploy.sh"
+      - ".github/workflows/deploy-app.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write # OIDC → AWS, no stored keys
+
+# Never run two deploys at once; a newer merge supersedes a queued one.
+concurrency:
+  group: deploy-app
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: app/package.json
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: app/pnpm-lock.yaml
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: us-east-1
+
+      - name: Build and publish bundle
+        run: infra/deploy.sh --app-only
+        env:
+          BUCKET: ${{ vars.DEPLOY_BUCKET }}
+          DISTRIBUTION_ID: ${{ vars.DEPLOY_DISTRIBUTION_ID }}

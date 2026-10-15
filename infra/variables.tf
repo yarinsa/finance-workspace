@@ -20,3 +20,9 @@ variable "hosted_zone_name" {
   type        = string
   default     = "yarinsa.me"
 }
+
+variable "github_repo" {
+  description = "owner/repo whose master branch may assume the CI deploy role."
+  type        = string
+  default     = "yarinsa/finance-workspace"
+}

@@ -1,4 +1,4 @@
-import { Card, ListRow } from "@/components/ui";
+import { BigNumber, Card, CardLabel, ListRow } from "@/components/common";
 import { monthYear, num, pct, shekel, snapshot, type Loan } from "@/lib/data";
 
 /** Treat Discount's 0.0001% placeholder (subsidised מתווה tracks) as zero. */
@@ -43,8 +43,8 @@ export default function MortgageCard() {
 
   return (
     <Card>
-      <div className="card-title">יתרת משכנתא</div>
-      <div className="big-num">{shekel(profile.balance)}</div>
+      <CardLabel>יתרת משכנתא</CardLabel>
+      <BigNumber>{shekel(profile.balance)}</BigNumber>
 
       <div className="mini-stats">
         <div>

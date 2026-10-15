@@ -28,7 +28,7 @@ raw dumps are already on disk.
 2. **Upload:**
 
    ```bash
-   ./infra/deploy.sh --data
+   ./infra/deploy.sh --data-only
    ```
 
    Uploads each JSON with `no-cache` and invalidates `/data/*`.

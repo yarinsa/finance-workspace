@@ -4,6 +4,15 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>תמונת מצב פיננסית</title>
+    <script>
+      // Follow the OS theme: light by default, `.dark` when the phone is in dark mode.
+      (function () {
+        var mq = window.matchMedia("(prefers-color-scheme: dark)");
+        var apply = function () { document.documentElement.classList.toggle("dark", mq.matches); };
+        apply();
+        mq.addEventListener("change", apply);
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

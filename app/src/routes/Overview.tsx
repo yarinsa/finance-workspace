@@ -1,9 +1,9 @@
-import { Card, Kpi, ListRow, Section } from "@/components/ui";
+import { BigNumber, Card, CardLabel, Kpi, KpiGrid, ListRow, Nudge, Section } from "@/components/common";
 import NetWorthChart from "@/components/NetWorthChart";
 import WalletHero from "@/components/WalletHero";
 import MortgageCard from "@/components/MortgageCard";
 import SpendingDonut from "@/components/SpendingDonut";
-import { cashflow, daysSince, metricValue, num, pct, shekel, snapshot, type Savings } from "@/lib/data";
+import { cashflow, daysSince, formatMetric, formatMetricCompact, num, pct, shekel, snapshot, type Savings } from "@/lib/data";
 
 const KIND_LABEL: Record<Savings["kind"], string> = {
   pension: "קרן פנסיה",
@@ -57,10 +57,9 @@ export default function Overview() {
   return (
     <div className="feed">
       {age > 7 && (
-        <div className="nudge">
-          <span>🕑 הגיע זמן לעדכן את היתרות שלך — הנתונים מלפני {num(age)} ימים.</span>
-          <span className="cta">לעדכון יתרות ▸</span>
-        </div>
+        <Nudge action="לעדכון יתרות ▸">
+          🕑 הגיע זמן לעדכן את היתרות שלך — הנתונים מלפני {num(age)} ימים.
+        </Nudge>
       )}
 
       <header className="greeting">
@@ -81,8 +80,8 @@ export default function Overview() {
       {savings.length > 0 && (
         <Section title="חסכונות" to="/portfolio">
           <Card>
-            <div className="card-title">סה״כ חסכונות</div>
-            <div className="big-num">{shekel(savingsTotal)}</div>
+            <CardLabel>סה״כ חסכונות</CardLabel>
+            <BigNumber>{shekel(savingsTotal)}</BigNumber>
             {savings.map((g) => (
               <ListRow
                 key={g.label}
@@ -100,8 +99,8 @@ export default function Overview() {
 
       <Section title="חובות" to="/networth">
         <Card>
-          <div className="card-title">סה״כ חובות</div>
-          <div className="big-num">{shekel(t.total_debt)}</div>
+          <CardLabel>סה״כ חובות</CardLabel>
+          <BigNumber>{shekel(t.total_debt)}</BigNumber>
           {debts.map((d) => (
             <ListRow
               key={d.label}
@@ -134,8 +133,8 @@ export default function Overview() {
 
       <Section title="שווי נקי" to="/networth">
         <Card>
-          <div className="card-title">שווי נקי נוכחי</div>
-          <div className="big-num">{netToday != null ? shekel(netToday) : "—"}</div>
+          <CardLabel>שווי נקי נוכחי</CardLabel>
+          <BigNumber>{netToday != null ? shekel(netToday) : "—"}</BigNumber>
           {t.net_position_with_savings != null && (
             <div className="muted">כולל חסכונות: {shekel(t.net_position_with_savings)}</div>
           )}
@@ -147,13 +146,19 @@ export default function Overview() {
       </Section>
 
       <Section title="מדדים" to="/metrics">
-        <div className="grid grid-4">
+        <KpiGrid cols={4}>
           {healthMetrics.map((m) => (
             <Card key={m.key} to="/metrics">
-              <Kpi label={m.name} value={metricValue(m)} rank={m.rank} hint={m.description} />
+              <Kpi
+                label={m.name}
+                value={formatMetric(m.value, m.units)}
+                compactValue={formatMetricCompact(m.value, m.units)}
+                rank={m.rank}
+                hint={m.description}
+              />
             </Card>
           ))}
-        </div>
+        </KpiGrid>
       </Section>
     </div>
   );
