@@ -136,3 +136,25 @@ def test_liquid_vs_illiquid_split_in_snapshot_totals():
     assert t["illiquid_savings"] == 359740.0
     assert t["tracked_net_position"] == 1000.0
     assert t["net_position_with_savings"] == round(1000.0 + 359740.0 + 9542.3, 2)
+
+
+def test_legacy_utc_timestamp_maps_to_israel_calendar_date(tmp_path):
+    """As the household, when the legacy Discount dump carries "בנק לאומי משכורת"
+    +26,150 stamped "2026-06-08T21:00:00.000Z" (= 2026-06-09 00:00 Israel time), it
+    should land on 2026-06-09 — the day RiseUp reports it — so the two copies dedup
+    instead of showing the salary twice."""
+    dump = {"accounts": [{"accountNumber": "0123444499", "balance": 0, "txns": [
+        {"identifier": 3975, "date": "2026-06-08T21:00:00.000Z",
+         "processedDate": "2026-06-08T21:00:00.000Z", "originalAmount": 26150,
+         "chargedAmount": 26150, "originalCurrency": "ILS",
+         "description": "בנק לאומי משכורת", "status": "completed"},
+        # Winter (UTC+2): 22:00Z is midnight the next day in Israel.
+        {"identifier": 1, "date": "2026-01-03T22:00:00.000Z",
+         "processedDate": "2026-01-03T22:00:00.000Z", "originalAmount": -10,
+         "chargedAmount": -10, "originalCurrency": "ILS",
+         "description": "x", "status": "completed"},
+    ]}]}
+    out = _load_normalize("discount", {"fetch-transactions_2026-05-01.json": dump}, tmp_path)
+    dates = {r["description"]: (r["date"], r["processed_date"]) for r in out["transactions"]["records"]}
+    assert dates["בנק לאומי משכורת"] == ("2026-06-09", "2026-06-09")
+    assert dates["x"] == ("2026-01-04", "2026-01-04")

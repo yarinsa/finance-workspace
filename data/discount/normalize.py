@@ -20,6 +20,7 @@ Self-contained; safe to re-run after each scrape.
 """
 import json, datetime, glob
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 HERE = Path(__file__).resolve().parent          # .../data/discount
 RAW = HERE / "raw"
@@ -27,6 +28,20 @@ OUT = HERE / "normalized"
 OUT.mkdir(exist_ok=True)
 SOURCE = "discount"
 NOW = datetime.datetime.now().astimezone().isoformat(timespec="seconds")
+
+
+def local_date(ts):
+    """Israel calendar date of a legacy dump timestamp.
+
+    The MCP dumps stamp local midnight as UTC ("2026-06-08T21:00:00.000Z" is
+    2026-06-09 in Israel), so slicing [:10] lands every row a day early and it
+    never dedups against RiseUp's copy.
+    """
+    ts = ts or ""
+    if not ts.endswith("Z"):
+        return ts[:10]
+    utc = datetime.datetime.fromisoformat(ts.replace("Z", "+00:00"))
+    return utc.astimezone(ZoneInfo("Asia/Jerusalem")).date().isoformat()
 
 
 def emit(entity, records):
@@ -81,8 +96,8 @@ for fp in sorted(glob.glob(str(RAW / "fetch-transactions_*.json"))):
             key = (aid, t.get("identifier"))
             txns[key] = {
                 "account_id": aid,
-                "date": (t.get("date") or "")[:10],
-                "processed_date": (t.get("processedDate") or "")[:10],
+                "date": local_date(t.get("date")),
+                "processed_date": local_date(t.get("processedDate")),
                 "amount": round(t.get("chargedAmount", t.get("originalAmount", 0)), 2),
                 "currency": t.get("originalCurrency", "ILS"),
                 "description": t.get("description"),

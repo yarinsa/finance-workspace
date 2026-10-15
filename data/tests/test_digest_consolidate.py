@@ -138,6 +138,50 @@ class TestMergedFlagReevaluation:
         assert row["category"] == "קניות"
 
 
+class TestCrossAccountTransferLegs:
+    """As the household, when the salary lands in Leumi ("העברת משכורת", ₪26,144 on
+    2026-10-08) and is then forwarded to Discount on 2026-10-11 for ₪22,500 —
+    Leumi "העברת משכורת_י" -22,500 / Discount "בנק לאומי,משכורת" +22,500 — the
+    forward must be an internal transfer, not a second ₪22,500 salary. RiseUp tags
+    the Discount leg "משכורת", so October showed ~₪50k income instead of ~₪26k.
+    """
+
+    def test_salary_forward_leumi_to_discount_is_internal(self):
+        ledger = digest.consolidate_transactions([
+            raw("riseup", "2026-10-11", 22500, "בנק לאומי,משכורת",
+                origin="discount", category="משכורת", is_income=True),
+            raw("riseup", "2026-10-11", -22500, "העברת משכור700",
+                origin="leumiBank", category="העברות", is_income=False),
+            raw("leumi", "2026-10-11", -22500, "העברת משכורת_י", account_id="806-6719/63"),
+        ])
+        assert len(ledger) == 1
+        assert ledger[0]["internal_transfer"] is True
+
+    def test_lone_forward_leg_without_the_leumi_side_stays_income(self):
+        # 2026-03-09: only the Discount leg is in the data (no Leumi scrape back
+        # then), so it's the ONLY copy of that month's salary and must count.
+        ledger = digest.consolidate_transactions([
+            raw("riseup", "2026-03-09", 25725, "בנק לאומי,משכורת",
+                origin="discount", category="משכורת", is_income=True),
+        ])
+        assert not ledger[0].get("internal_transfer")
+
+    def test_same_account_refund_and_charge_are_not_a_transfer(self):
+        # Opposite signs at the SAME institution are a charge+refund, not a move.
+        ledger = digest.consolidate_transactions([
+            raw("cal", "2026-06-01", -150.0, "charge"),
+            raw("cal", "2026-06-01", 150.0, "refund"),
+        ])
+        assert not ledger[0].get("internal_transfer")
+
+    def test_card_purchase_and_bank_debit_same_sign_are_not_a_transfer(self):
+        ledger = digest.consolidate_transactions([
+            raw("riseup", "2026-09-10", -300.0, "סופר", origin="cal", category="מזון"),
+            raw("discount", "2026-09-10", -300.0, "העברה"),
+        ])
+        assert not ledger[0].get("internal_transfer")
+
+
 class TestSpendingSummary:
     def test_excluded_rows_are_not_spend(self):
         ledger = digest.consolidate_transactions([

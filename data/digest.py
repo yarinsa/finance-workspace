@@ -42,9 +42,16 @@ def load_entities():
 # (`internal_transfer: true`) rather than drop them — the ledger stays complete
 # and auditable; the spending summary and cashflow exclude them.
 #
+# The other reliable signal is structural: when both legs are in the data, a
+# self-transfer collapses into one bucket holding a DEBIT at one bank and a CREDIT
+# at another (e.g. the monthly salary forward: Leumi "העברת משכורת_י" -22,500 /
+# Discount "בנק לאומי,משכורת" +22,500). RiseUp tags the inbound leg "משכורת", so
+# without this it reads as a second salary. See `_is_cross_bank_pair`.
+#
 # NOTE: tuned to this household. Update OWN_NAMES / OWN_ACCOUNT_HINTS if accounts
-# or holders change. External salary ("העברת משכורת", "בנק לאומי משכורת") does NOT
-# name the holder, so it is correctly kept as real income.
+# or holders change. Salary ("העברת משכורת", "בנק לאומי משכורת") does NOT name the
+# holder, so on its own it is kept as real income — only the paired-legs rule
+# above turns a forward into a transfer.
 OWN_NAMES = ["ירין ששון", "ששון ירין"]
 OWN_ACCOUNT_HINTS = ["806-6719", "806-671963", "10-806", "0034069", "0123444499"]
 # Account-sweep descriptions that don't name the holder but are confirmed self-
@@ -213,6 +220,19 @@ def _canon_tx(r):
     return t
 
 
+def _is_cross_bank_pair(legs):
+    """True if the merged legs include a debit at one of our banks and a credit at
+    a DIFFERENT one — the two sides of a move between our own accounts.
+
+    Same-institution opposite signs (a card charge + refund) don't count, and a
+    lone leg never does, so a forward whose source side we never scraped stays
+    income.
+    """
+    out = {o for o, sign in legs if sign < 0 and o in BANK_ORIGINS}
+    inc = {o for o, sign in legs if sign > 0 and o in BANK_ORIGINS}
+    return any(a != b for a in out for b in inc)
+
+
 def consolidate_transactions(txns):
     """Merge every source's transactions into one deduped ledger.
 
@@ -224,6 +244,7 @@ def consolidate_transactions(txns):
     buckets = {}                                  # (date, abs_amount) -> merged record
     for raw in txns:
         t = _canon_tx(raw)
+        t["_legs"] = {(t["origin"], (t["amount"] > 0) - (t["amount"] < 0))}
         key = (t["date"], round(abs(t["amount"]), 2))
         cur = buckets.get(key)
         if cur is None:
@@ -234,6 +255,7 @@ def consolidate_transactions(txns):
         winner = t if (t["_riseup"] and not cur["_riseup"]) else cur
         other = cur if winner is t else t
         winner["sources"] = merged_sources
+        winner["_legs"] = cur["_legs"] | t["_legs"]
         # backfill anything the winner is missing from the other copy
         for f in ("category", "card_last4", "account_id", "origin"):
             if not winner.get(f) and other.get(f):
@@ -246,7 +268,8 @@ def consolidate_transactions(txns):
         for flag, test in (("internal_transfer", is_internal_transfer),
                            ("card_bill_payment", is_card_bill_payment),
                            ("savings", is_savings_deposit)):
-            if test(winner):
+            if test(winner) or (flag == "internal_transfer"
+                                and _is_cross_bank_pair(winner["_legs"])):
                 winner[flag] = True
             else:
                 winner.pop(flag, None)
@@ -257,6 +280,7 @@ def consolidate_transactions(txns):
     out = []
     for t in buckets.values():
         t.pop("_riseup", None)
+        t.pop("_legs", None)
         out.append({k: v for k, v in t.items() if v is not None})
     out.sort(key=lambda r: r["date"], reverse=True)
     return out
