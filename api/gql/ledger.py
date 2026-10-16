@@ -150,6 +150,11 @@ class Ledger:
     def merchants(self):
         return {t.merchant.name for t in self.rows}
 
+    def invalidate(self):
+        """Forget what was loaded, so reads after a mutation see the write."""
+        for name in ("rows", "by_key", "categories", "tags", "merchants"):
+            self.__dict__.pop(name, None)
+
     def audit(self, txn):
         return self.conn.execute(
             "SELECT id, at, actor, field, old, new FROM override_audit "

@@ -8,6 +8,8 @@ from enum import Enum
 
 from pydantic import Field, field_validator, model_validator
 
+from api.inputs import Patch, TagEdit, TagSet
+
 from .relay import ConnectionArgs, _GraphQLModel, node_id_of
 
 
@@ -95,3 +97,34 @@ class GroupArgs(ConnectionArgs):
     @classmethod
     def blank_is_none(cls, v):
         return (v.strip().casefold() or None) if v is not None else None
+
+
+# --- mutation inputs: the REST bodies plus a node id and Relay's clientMutationId ----------
+# Validated with nulls kept: a field sent as null clears it, a field left out is untouched
+# (`model_fields_set` tells them apart).
+
+class MutationInput(_GraphQLModel):
+    client_mutation_id: str | None = Field(default=None, max_length=100)
+
+
+class UpdateTransactionInput(MutationInput, Patch):
+    id: node_id_of("Transaction")
+
+    def changes(self):
+        return {f: getattr(self, f) for f in self.model_fields_set & set(Patch.model_fields)}
+
+
+class ClearTransactionOverrideInput(MutationInput):
+    id: node_id_of("Transaction")
+
+
+class SetTransactionTagsInput(MutationInput, TagSet):
+    id: node_id_of("Transaction")
+
+
+class UpdateTagInput(MutationInput, TagEdit):
+    id: node_id_of("Tag")
+
+
+class DeleteTagInput(MutationInput):
+    id: node_id_of("Tag")

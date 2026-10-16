@@ -117,9 +117,13 @@ class Connection(_GraphQLModel):
     total_count: int
 
 
-def validated(model, args):
-    """`model` built from resolver `args`; a ValidationError becomes a GraphQLError."""
-    args = {k: v for k, v in args.items() if v is not None}   # an explicit null means "use the default"
+def validated(model, args, keep_null=False):
+    """`model` built from resolver `args`; a ValidationError becomes a GraphQLError.
+
+    For query arguments an explicit null means "use the default"; mutation inputs pass
+    `keep_null`, where null means "clear this field"."""
+    if not keep_null:
+        args = {k: v for k, v in args.items() if v is not None}
     try:
         return model.model_validate(args)
     except ValidationError as e:

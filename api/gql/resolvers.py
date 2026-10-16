@@ -6,6 +6,11 @@
                           edge totals, and an M:M connection to every other group entity
     TransactionResolver   the ledger row itself
 
+Mutations live on the entity they change: a resolver lists them in `mutations()` as
+{field: (input model, method)}, and `NodeResolver.bind` wraps each one (validate the
+input with nulls kept, record the write for the rebuild signal, refresh the ledger,
+echo `clientMutationId`).
+
 A new grouped resource is one GroupResolver subclass in ENTITIES plus its SDL; the
 cross-entity fields (`Merchant.categories`, `Tag.merchants`, …) come for free.
 Every resolver validates its arguments through a Pydantic model (api/gql/inputs.py)
@@ -13,7 +18,9 @@ and reads the per-request `Ledger` from the context. Fields with no resolver rea
 parent's attribute or key in snake_case (`absAmount` -> `abs_amount`).
 """
 import datetime as dt
+import sys
 from decimal import Decimal, InvalidOperation
+from pathlib import Path
 from typing import ClassVar, Generic, TypeVar
 
 from graphql import GraphQLError
@@ -21,9 +28,14 @@ from pydantic import BaseModel
 
 from api.schema_bindings import load_schema, snake
 
-from .inputs import GroupArgs, GroupOrder, TransactionArgs, TransactionOrder
+from .inputs import (ClearTransactionOverrideInput, DeleteTagInput, GroupArgs, GroupOrder, SetTransactionTagsInput,
+                     TransactionArgs, TransactionOrder, UpdateTagInput, UpdateTransactionInput)
 from .ledger import CENT, Ledger, Merchant, Txn, totals
 from .relay import ConnectionArgs, GlobalId, paginate, to_global_id, validated
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "db"))   # the shared write paths
+import overrides  # noqa: E402
+import tags as tag_store  # noqa: E402
 
 T = TypeVar("T")
 
@@ -78,8 +90,30 @@ class NodeResolver(Generic[T]):
     def resolve_id(self, obj, info):
         return to_global_id(self.type_name, self.key(obj))
 
+    def require(self, info, ref) -> T:
+        """The object a mutation input's id names; an error if it does not exist."""
+        obj = self.fetch(ledger(info), ref.key)
+        if obj is None:
+            raise GraphQLError(f"no such {self.type_name.lower()}")
+        return obj
+
+    def mutations(self) -> dict:
+        """{Mutation field: (input model, method(input, info) -> payload dict)}."""
+        return {}
+
+    def _mutation(self, model, method):
+        def resolve(_, info, input):
+            inp = validated(model, input, keep_null=True)
+            payload = method(inp, info)
+            info.context["writes"] += 1
+            ledger(info).invalidate()
+            return {"client_mutation_id": inp.client_mutation_id, **payload()}
+        return resolve
+
     def bind(self, schema):
         schema.type_map[self.type_name].fields["id"].resolve = self.resolve_id
+        for field, (model, method) in self.mutations().items():
+            schema.mutation_type.fields[field].resolve = self._mutation(model, method)
 
 
 class GroupResolver(NodeResolver[T]):
@@ -202,6 +236,23 @@ class TagResolver(GroupResolver):
     def all(self, lg):
         return list(lg.tags.values())
 
+    def mutations(self):
+        return {"updateTag": (UpdateTagInput, self.update), "deleteTag": (DeleteTagInput, self.delete)}
+
+    def update(self, inp, info):
+        tag = self.require(info, inp.id)
+        conn = ledger(info).conn
+        if inp.name and tag_store.tag_name_taken(conn, inp.name, tag.id):
+            raise GraphQLError("a tag with that name already exists")
+        changes = {f: getattr(inp, f) for f in inp.model_fields_set & {"name", "color"} if f != "name" or inp.name}
+        tag_store.update_tag(conn, tag.id, **changes)
+        return lambda: {"tag": self.fetch(ledger(info), str(tag.id))}
+
+    def delete(self, inp, info):
+        tag = self.require(info, inp.id)
+        tag_store.delete_tag(ledger(info).conn, tag.id)
+        return lambda: {"deleted_tag_id": to_global_id(self.type_name, str(tag.id))}
+
 
 class TransactionResolver(NodeResolver[Txn]):
     type_name = "Transaction"
@@ -218,6 +269,32 @@ class TransactionResolver(NodeResolver[Txn]):
             return lg.by_key.get((dt.date.fromisoformat(d), Decimal(a).quantize(CENT)))
         except (ValueError, InvalidOperation):
             return None
+
+    def mutations(self):
+        return {"updateTransaction": (UpdateTransactionInput, self.update),
+                "clearTransactionOverride": (ClearTransactionOverrideInput, self.clear),
+                "setTransactionTags": (SetTransactionTagsInput, self.set_tags)}
+
+    def _refetched(self, info, t):
+        return lambda: {"transaction": ledger(info).by_key[t.key]}
+
+    def update(self, inp, info):
+        t = self.require(info, inp.id)
+        changes = inp.changes()
+        if not changes:
+            raise GraphQLError("send at least one of category, note, excluded, horizon")
+        overrides.patch(ledger(info).conn, t.key, changes, info.context["user"])
+        return self._refetched(info, t)
+
+    def clear(self, inp, info):
+        t = self.require(info, inp.id)
+        overrides.reset(ledger(info).conn, t.key, info.context["user"])
+        return self._refetched(info, t)
+
+    def set_tags(self, inp, info):
+        t = self.require(info, inp.id)
+        tag_store.set_tags(ledger(info).conn, t.key, inp.tags, info.context["user"])
+        return self._refetched(info, t)
 
     def resolve_list(self, direction=None):
         """`Query.transactions` / `expenses` / `incomes`."""
