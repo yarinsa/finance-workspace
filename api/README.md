@@ -24,7 +24,7 @@ curl -H "X-Origin-Secret: $FINANCE_API_ORIGIN_SECRET" http://127.0.0.1:8787/api/
 Without Docker, for development (needs `poetry install --with api,sync`):
 
 ```bash
-FINANCE_API_ORIGIN_SECRET=dev FINANCE_API_DEV_USER=me@example.com \
+FINANCE_API_ORIGIN_SECRET=$(openssl rand -hex 24) FINANCE_API_DEV_USER=me@example.com \
 API_DATABASE_URL=postgresql://finance_api:<password>@127.0.0.1:5432/finance \
   poetry run uvicorn --factory api.app:create_app --port 8787
 ```
