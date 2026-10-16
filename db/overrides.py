@@ -15,9 +15,9 @@ from decimal import Decimal
 
 from psycopg.types.json import Jsonb
 
-FIELDS = ("category", "note", "excluded", "horizon")
-HORIZONS = ("current", "near", "future")   # data/horizons.py
-BLANK = {"category": None, "note": None, "excluded": False, "horizon": None}
+FIELDS = ("category", "note", "excluded", "horizon", "goal_id")
+HORIZONS = ("current", "near", "future")   # data/horizons.py; the `horizons` table's keys
+BLANK = {"category": None, "note": None, "excluded": False, "horizon": None, "goal_id": None}
 
 ROW_SELECT = """
 SELECT s.txn_date, s.abs_amount, s.amount, s.description,
@@ -27,25 +27,30 @@ SELECT s.txn_date, s.abs_amount, s.amount, s.description,
        COALESCE(o.excluded, false)      AS excluded,
        o.txn_date IS NOT NULL           AS overridden,
        s.origin, s.sources,
-       COALESCE(o.horizon, s.record->>'horizon') AS horizon,
+       COALESCE(h.key, s.record->>'horizon') AS horizon,
        s.record->>'horizon'             AS scraped_horizon,
+       g.id                             AS goal_id,
+       g.description                    AS goal,
        (SELECT array_agg(t.name ORDER BY t.name) FROM transaction_tags tt JOIN tags t ON t.id = tt.tag_id
         WHERE (tt.txn_date, tt.abs_amount) = (s.txn_date, s.abs_amount)) AS tags
 FROM scraped_transactions s
 LEFT JOIN transaction_overrides o USING (txn_date, abs_amount)
 LEFT JOIN categories sc ON sc.id = s.category_id
 LEFT JOIN categories c  ON c.id = COALESCE(o.category_id, s.category_id)
+LEFT JOIN horizons h    ON h.id = COALESCE(o.horizon_id, s.horizon_id)
+LEFT JOIN goals g       ON g.id = o.goal_id
 """
 
 
 def _row(r):
     (date, abs_amount, amount, description, category, scraped, note, excluded, overridden, origin, sources,
-     horizon, scraped_horizon, tags) = r
+     horizon, scraped_horizon, goal_id, goal, tags) = r
     return {"date": date.isoformat(), "abs_amount": f"{Decimal(abs_amount):.2f}",
             "amount": float(amount), "description": description, "category": category,
             "scraped_category": scraped, "note": note, "excluded": excluded,
             "overridden": overridden, "origin": origin, "sources": list(sources or []),
-            "horizon": horizon, "scraped_horizon": scraped_horizon, "tags": list(tags or [])}
+            "horizon": horizon, "scraped_horizon": scraped_horizon,
+            "goal_id": goal_id, "goal": goal, "tags": list(tags or [])}
 
 
 def get_row(conn, k):
@@ -74,9 +79,10 @@ def list_rows(conn, date_from=None, date_to=None, excluded="hide"):
 
 
 def get_override(conn, k):
-    """The stored override as {category, note, excluded, horizon}, or None."""
-    r = conn.execute("SELECT c.name, o.note, o.excluded, o.horizon FROM transaction_overrides o "
+    """The stored override as {category, note, excluded, horizon, goal_id}, or None."""
+    r = conn.execute("SELECT c.name, o.note, o.excluded, h.key, o.goal_id FROM transaction_overrides o "
                      "LEFT JOIN categories c ON c.id = o.category_id "
+                     "LEFT JOIN horizons h ON h.id = o.horizon_id "
                      "WHERE (o.txn_date, o.abs_amount) = (%s, %s)", k).fetchone()
     return dict(zip(FIELDS, r)) if r else None
 
@@ -87,7 +93,7 @@ def _audit(conn, actor, k, field, old, new):
 
 
 def patch(conn, k, changes, actor):
-    """Apply `changes` ({category|note|excluded|horizon: value}) to the override for `k`.
+    """Apply `changes` ({category|note|excluded|horizon|goal_id: value}) to the override for `k`.
 
     A None value clears that field (for `excluded`, back to false). Fields whose value
     does not change write nothing. Each real change writes an `override_audit` row with
@@ -98,6 +104,9 @@ def patch(conn, k, changes, actor):
         raise ValueError(f"unknown override fields: {sorted(unknown)}")
     if changes.get("horizon") not in (None, *HORIZONS):
         raise ValueError(f"horizon must be one of {HORIZONS}, not {changes['horizon']!r}")
+    goal = changes.get("goal_id")
+    if goal is not None and not conn.execute("SELECT 1 FROM goals WHERE id = %s", (goal,)).fetchone():
+        raise ValueError(f"no goal with id {goal}")
     with conn.transaction():
         before = get_override(conn, k) or dict(BLANK)
         after = dict(before)
@@ -106,13 +115,15 @@ def patch(conn, k, changes, actor):
         diff = [f for f in FIELDS if before[f] != after[f]]
         if diff:
             conn.execute(
-                """INSERT INTO transaction_overrides (txn_date, abs_amount, category_id, note, excluded, horizon)
-                   VALUES (%s, %s, %s, %s, %s, %s)
+                """INSERT INTO transaction_overrides
+                       (txn_date, abs_amount, category_id, note, excluded, horizon_id, goal_id)
+                   VALUES (%s, %s, %s, %s, %s, (SELECT id FROM horizons WHERE key = %s), %s)
                    ON CONFLICT (txn_date, abs_amount)
                    DO UPDATE SET category_id = EXCLUDED.category_id, note = EXCLUDED.note,
-                                 excluded = EXCLUDED.excluded, horizon = EXCLUDED.horizon,
-                                 updated_at = now()""",
-                (*k, category_id(conn, after["category"]), after["note"], after["excluded"], after["horizon"]))
+                                 excluded = EXCLUDED.excluded, horizon_id = EXCLUDED.horizon_id,
+                                 goal_id = EXCLUDED.goal_id, updated_at = now()""",
+                (*k, category_id(conn, after["category"]), after["note"], after["excluded"], after["horizon"],
+                 after["goal_id"]))
             for field in diff:
                 _audit(conn, actor, k, field, before[field], after[field])
             _prune(conn, k)
@@ -122,7 +133,8 @@ def patch(conn, k, changes, actor):
 def _prune(conn, k):
     """An override with nothing left in it is deleted rather than kept empty."""
     conn.execute("DELETE FROM transaction_overrides WHERE (txn_date, abs_amount) = (%s, %s) "
-                 "AND category_id IS NULL AND note IS NULL AND NOT excluded AND horizon IS NULL", k)
+                 "AND category_id IS NULL AND note IS NULL AND NOT excluded "
+                 "AND horizon_id IS NULL AND goal_id IS NULL", k)
 
 
 def reset(conn, k, actor):

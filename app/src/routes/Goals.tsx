@@ -1,4 +1,8 @@
+import { useState } from "react";
 import { Card, PageTitle } from "@/components/common";
+import { HORIZON_LABEL, HORIZON_SHORT } from "@/components/TransactionEditSheet";
+import { ApiOffline, patchGoal, type Horizon } from "@/lib/api";
+import { useLedgerApi } from "@/lib/useLedgerApi";
 import { goals, shekel, shekelCompact } from "@/lib/data";
 import type { GeneralGoalCard, PersonalGoal } from "@/lib/data";
 
@@ -45,6 +49,54 @@ function GeneralCard({ c }: { c: GeneralGoalCard }) {
   );
 }
 
+/** The goal's horizon as three chips; tapping one reassigns the goal (needs the ledger API). */
+function GoalHorizon({ g }: { g: PersonalGoal }) {
+  const { online, markOffline } = useLedgerApi();
+  const [horizon, setHorizon] = useState<Horizon | null>(g.horizon ?? null);
+  const [busy, setBusy] = useState(false);
+  const editable = online === true && g.goal_id != null && !busy;
+
+  const pick = async (h: Horizon) => {
+    if (g.goal_id == null) return;
+    const next = h === horizon ? null : h;
+    const prev = horizon;
+    setHorizon(next);
+    setBusy(true);
+    try {
+      setHorizon((await patchGoal(g.goal_id, { horizon: next })).horizon);
+    } catch (e) {
+      setHorizon(prev);
+      if (e instanceof ApiOffline) markOffline();
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (!editable && !horizon) return null;
+  return (
+    <div className="mt-2 flex gap-1.5" role="radiogroup" aria-label="אופק">
+      {(Object.keys(HORIZON_SHORT) as Horizon[]).map((h) =>
+        editable || h === horizon ? (
+          <button
+            key={h}
+            type="button"
+            role="radio"
+            aria-checked={horizon === h}
+            title={HORIZON_LABEL[h]}
+            disabled={!editable}
+            onClick={() => void pick(h)}
+            className={`rounded-full border px-2.5 py-0.5 text-xs ${
+              horizon === h ? "border-brand bg-brand/15 font-semibold" : "border-line text-muted-foreground"
+            }`}
+          >
+            {HORIZON_SHORT[h]}
+          </button>
+        ) : null,
+      )}
+    </div>
+  );
+}
+
 function GoalCard({ g }: { g: PersonalGoal }) {
   const prog = Math.min(100, Math.max(0, g.progress_pct ?? 0));
   const trackColor =
@@ -67,6 +119,7 @@ function GoalCard({ g }: { g: PersonalGoal }) {
           {g.days_left != null ? ` · ${g.days_left} ימים` : ""}
         </span>
       </div>
+      <GoalHorizon g={g} />
     </Card>
   );
 }
@@ -91,8 +144,8 @@ export default function Goals() {
       {personal_goals.length === 0 ? (
         <Card>
           <span className="muted">
-            אין יעדים אישיים עדיין. הוסף ל-<code>data/goals/goals.json</code> והרץ{" "}
-            <code>python3 data/goals.py</code>.
+            אין יעדים אישיים עדיין. הוסיפו עם <code>POST /api/goals</code> או{" "}
+            <code>db/goal_store.py import</code>, והריצו <code>data/goals.py</code>.
           </span>
         </Card>
       ) : (

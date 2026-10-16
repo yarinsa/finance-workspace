@@ -172,7 +172,7 @@ def test_get_transaction_shape(client):
         "date": "2026-01-15", "abs_amount": "123.45", "amount": -123.45, "description": "חנות לדוגמה",
         "category": "קניות", "scraped_category": "קניות", "note": None, "excluded": False,
         "overridden": False, "origin": "cal", "sources": ["cal", "riseup"],
-        "horizon": None, "scraped_horizon": None, "tags": []}
+        "horizon": None, "scraped_horizon": None, "goal_id": None, "goal": None, "tags": []}
 
 
 def test_unknown_key_is_404_on_every_verb(client, rebuilder):
@@ -440,3 +440,42 @@ def test_api_role_is_nologin_until_a_password_is_configured(owner):
 def test_short_origin_secret_is_refused():
     with pytest.raises(ConfigError):
         Settings.from_env({"FINANCE_API_ORIGIN_SECRET": "short", "FINANCE_API_DEV_USER": "d@example.com"}).validate()
+
+
+# --- horizons and goals ------------------------------------------------------------
+
+def test_horizons_are_listed_in_order(client):
+    assert [h["key"] for h in client.get("/api/horizons").json()["horizons"]] == ["current", "near", "future"]
+
+
+def test_goal_crud_with_a_horizon_and_a_transaction_assigned(client, rebuilder):
+    # As the household, I add the phone goal under "near", then put the 123.45 charge toward it.
+    r = client.post("/api/goals", json={"description": "החלפת טלפון", "amount": 3000,
+                                        "end_date": "2026-11-23", "horizon": "near"}, headers=WRITE)
+    assert r.status_code == 200
+    g = r.json()
+    assert (g["horizon"], g["amount"], g["end_date"]) == ("near", 3000.0, "2026-11-23")
+    row = client.patch(PURCHASE_URL, json={"goal_id": g["id"]}, headers=WRITE).json()
+    assert (row["goal_id"], row["goal"]) == (g["id"], "החלפת טלפון")
+    [listed] = client.get("/api/goals").json()["goals"]
+    assert listed["transactions"] == 1
+    r = client.patch(f"/api/goals/{g['id']}", json={"horizon": "future"}, headers=WRITE)
+    assert r.json()["horizon"] == "future"
+    assert client.delete(f"/api/goals/{g['id']}", headers=WRITE).json() == {"deleted": g["id"]}
+    assert client.get(PURCHASE_URL).json()["goal_id"] is None
+    assert rebuilder.signals == 4
+
+
+@pytest.mark.parametrize("body", [{"amount": 5}, {"description": "x"}, {"description": "x", "amount": -1},
+                                  {"description": "x", "amount": 1, "horizon": "someday"},
+                                  {"description": "x", "amount": 1, "color": "red"}])
+def test_invalid_goal_bodies_are_422(client, body):
+    assert client.post("/api/goals", json=body, headers=WRITE).status_code == 422
+
+
+def test_goal_writes_need_csrf_and_unknown_goals_are_404_or_422(client):
+    assert client.post("/api/goals", json={"description": "x", "amount": 1}).status_code == 403
+    assert client.patch("/api/goals/999", json={"horizon": "near"}, headers=WRITE).status_code == 404
+    assert client.delete("/api/goals/999", headers=WRITE).status_code == 404
+    assert client.patch(PURCHASE_URL, json={"goal_id": 999}, headers=WRITE).status_code == 422
+    assert client.patch("/api/goals/1", json={"amount": None}, headers=WRITE).status_code == 422

@@ -68,12 +68,15 @@ def orm_session(conn):
     """A SQLAlchemy ORM `Session` on this open psycopg connection (finance/tables.py entities).
 
     Shares the connection, its role and its transaction: `session.commit()` commits `conn`.
-    Closing the session never closes `conn`."""
+    Closing the session never closes `conn`, and never rolls it back: SQLAlchemy would
+    otherwise roll back on first connect and on close, dropping uncommitted psycopg writes
+    made earlier on `conn`. Rolling back on error stays with whoever owns `conn`."""
     from sqlalchemy import create_engine
     from sqlalchemy.pool import StaticPool
     from sqlmodel import Session
     engine = create_engine("postgresql+psycopg://", creator=lambda: conn, poolclass=StaticPool,
                            pool_reset_on_return=None)
+    engine.dialect.do_rollback = lambda dbapi_conn: None
     return Session(engine, expire_on_commit=False)
 
 
@@ -113,15 +116,16 @@ def load(conn, ledger):
               for t in ledger]
     with conn.transaction(), conn.cursor() as cur:
         ids = seed_categories(cur, ledger)
+        horizon_ids = dict(cur.execute("SELECT key, id FROM horizons").fetchall())
         cur.execute("TRUNCATE scraped_transactions")
         cur.executemany(
             """INSERT INTO scraped_transactions
                    (txn_date, abs_amount, amount, description, category, category_id, origin,
-                    sources, position, record)
-               VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
+                    sources, position, record, horizon_id)
+               VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
             [(*key(t["date"], t["amount"]), t["amount"], t.get("description") or "",
               t.get("category"), ids.get(riseup_category(t)), t.get("origin"), t.get("sources") or [], i,
-              Jsonb(t))
+              Jsonb(t), horizon_ids.get(t.get("horizon")))
              for i, t in enumerate(ledger)])
 
 

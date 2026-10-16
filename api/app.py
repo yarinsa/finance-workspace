@@ -21,6 +21,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "db"))   # the shared override code
 import overrides  # noqa: E402
+import goal_store as goals  # noqa: E402
 import tags  # noqa: E402
 
 from .auth import TokenVerifier, check_csrf, check_origin, current_user  # noqa: E402
@@ -42,11 +43,26 @@ class Patch(BaseModel):
     note: str | None = Field(default=None, max_length=500)
     excluded: bool | None = None
     horizon: Literal["current", "near", "future"] | None = None
+    goal_id: int | None = None
 
     @field_validator("category", "note")
     @classmethod
     def blank_clears(cls, v):
         return (v.strip() or None) if v is not None else None
+
+
+class GoalEdit(BaseModel):
+    """A goal's fields (db/goals.py); on create, description and amount are required."""
+    model_config = ConfigDict(extra="forbid")
+
+    description: str | None = Field(default=None, min_length=1, max_length=80)
+    amount: float | None = Field(default=None, ge=0, le=100_000_000)
+    start_date: date | None = None
+    end_date: date | None = None
+    interval: Literal["monthly", "yearly"] | None = None
+    repetitions: int | None = Field(default=None, ge=1, le=1000)
+    rise: float | None = Field(default=None, ge=0, le=100_000_000)
+    horizon: Literal["current", "near", "future"] | None = None
 
 
 class TagSet(BaseModel):
@@ -209,12 +225,15 @@ def create_app(settings=None, pool=None, rebuilder=None, verifier=None):
         except ValidationError as e:
             raise ApiError(422, "invalid", _first_error(e.errors())) from None
         if not body.model_fields_set:
-            raise ApiError(422, "invalid", "send at least one of category, note, excluded, horizon")
+            raise ApiError(422, "invalid", "send at least one of category, note, excluded, horizon, goal_id")
 
         def work():
             with db(request) as conn:
                 found(overrides.get_row(conn, k))
-                return overrides.patch(conn, k, {f: getattr(body, f) for f in body.model_fields_set}, user)
+                try:
+                    return overrides.patch(conn, k, {f: getattr(body, f) for f in body.model_fields_set}, user)
+                except ValueError as e:
+                    raise ApiError(422, "invalid", str(e)) from None
         row = await run_in_threadpool(work)
         await run_in_threadpool(signal_rebuild, request)
         return row
@@ -282,6 +301,55 @@ def create_app(settings=None, pool=None, rebuilder=None, verifier=None):
     def orphaned_tags(request: Request, user=Depends(current_user)):
         with db(request) as conn:
             return {"links": tags.orphaned(conn)}
+
+    @app.get("/api/horizons")
+    def list_horizons(request: Request, user=Depends(current_user)):
+        with db(request) as conn:
+            return {"horizons": goals.horizons(conn)}
+
+    @app.get("/api/goals")
+    def list_goals(request: Request, user=Depends(current_user)):
+        with db(request) as conn:
+            return {"goals": goals.all_goals(conn)}
+
+    @app.post("/api/goals", dependencies=[Depends(check_csrf)])
+    async def create_goal(request: Request, user=Depends(current_user)):
+        body = parse_body(GoalEdit, await read_json_body(request))
+        if body.description is None or body.amount is None:
+            raise ApiError(422, "invalid", "description and amount are required")
+        fields = {f: getattr(body, f) for f in body.model_fields_set if f not in ("description", "amount")}
+
+        def work():
+            with db(request) as conn:
+                return goals.create_goal(conn, body.description.strip(), body.amount, **fields)
+        goal = await run_in_threadpool(work)
+        await run_in_threadpool(signal_rebuild, request)
+        return goal
+
+    @app.patch("/api/goals/{goal_id}", dependencies=[Depends(check_csrf)])
+    async def edit_goal(goal_id: int, request: Request, user=Depends(current_user)):
+        body = parse_body(GoalEdit, await read_json_body(request))
+        if not body.model_fields_set:
+            raise ApiError(422, "invalid", "send at least one goal field")
+        if any(f in body.model_fields_set and getattr(body, f) is None for f in ("description", "amount")):
+            raise ApiError(422, "invalid", "description and amount cannot be cleared")
+
+        def work():
+            with db(request) as conn:
+                return goals.update_goal(conn, goal_id, **{f: getattr(body, f) for f in body.model_fields_set})
+        goal = await run_in_threadpool(work)
+        if goal is None:
+            raise ApiError(404, "not_found", "no such goal")
+        await run_in_threadpool(signal_rebuild, request)
+        return goal
+
+    @app.delete("/api/goals/{goal_id}", dependencies=[Depends(check_csrf)])
+    def remove_goal(goal_id: int, request: Request, user=Depends(current_user)):
+        with db(request) as conn:
+            if not goals.delete_goal(conn, goal_id):
+                raise ApiError(404, "not_found", "no such goal")
+        signal_rebuild(request)
+        return {"deleted": goal_id}
 
     @app.get("/api/overrides/orphaned")
     def orphaned(request: Request, user=Depends(current_user)):

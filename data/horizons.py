@@ -70,13 +70,19 @@ def _pct(part, whole):
     return round(100 * part / whole, 1) if whole > 0 else None
 
 
-def build_horizons(transactions, months=MONTHS):
+def build_horizons(transactions, months=MONTHS, meta=None, goals=None):
     """The ``horizons`` block: the last ``months`` months with data, newest first.
 
     Each month has ``income``, a ``buckets`` entry per horizon (amount, pct of income,
-    gap to target in points, the largest rows) and ``unallocated`` = income minus all
+    gap to its target in points, the largest rows) and ``unallocated`` = income minus all
     three. A row's own ``horizon`` (override or digest default) wins; rows without one
-    fall back to ``default_horizon``."""
+    fall back to ``default_horizon``.
+
+    ``meta`` is the ``horizons`` table (db/goal_store.py ``horizons``: key, name, target_pct);
+    without it every bucket targets ``TARGET_PCT``. ``goals`` (db/goal_store.py ``all_goals``)
+    are listed under the horizon each is assigned to."""
+    targets = {h["key"]: float(h["target_pct"]) for h in meta or []}
+    names = {h["key"]: h["name"] for h in meta or []}
     by_month = defaultdict(lambda: {"income": 0.0, "rows": defaultdict(list)})
     for t in transactions:
         ym = (t.get("date") or "")[:7]
@@ -103,17 +109,23 @@ def build_horizons(transactions, months=MONTHS):
             top = sorted(rows, key=lambda r: float(r["amount"]))[:TOP_PER_BUCKET]
             buckets[h] = {
                 "amount": amount, "pct": pct,
-                "gap_pts": round(pct - TARGET_PCT, 1) if pct is not None else None,
+                "target_pct": targets.get(h, TARGET_PCT),
+                "gap_pts": round(pct - targets.get(h, TARGET_PCT), 1) if pct is not None else None,
                 "count": len(rows),
                 "top": [{"date": r["date"], "description": r.get("description", ""),
                          "amount": r["amount"], "category": r.get("category"),
-                         "overridden": bool(r.get("overridden")), "tags": r.get("tags") or []}
+                         "overridden": bool(r.get("overridden")), "tags": r.get("tags") or [],
+                         "goal": r.get("goal")}
                         for r in top],
             }
         left = round(income - spent, 2)
         out.append({"month": ym, "income": income, "buckets": buckets,
                     "unallocated": {"amount": left, "pct": _pct(left, income)}})
-    return {"target_pct": TARGET_PCT, "horizons": list(HORIZONS), "months": out}
+    by_horizon = {h: [{"id": g.get("goal_id", g["id"]), "description": g["description"], "amount": g["amount"],
+                       "end_date": g.get("end_date")}
+                      for g in goals or [] if g.get("horizon") == h] for h in HORIZONS}
+    return {"target_pct": TARGET_PCT, "horizons": list(HORIZONS), "names": names,
+            "targets": {h: targets.get(h, TARGET_PCT) for h in HORIZONS}, "goals": by_horizon, "months": out}
 
 
 def main():
