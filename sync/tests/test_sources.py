@@ -21,7 +21,7 @@ def run(coro):
 def test_registry_ports_and_scrape_order():
     assert {n: s.port for n, s in sources.SOURCES.items()} == {
         "discount-business": 9223, "discount-mortgage": 0, "discount": 0,  # mortgage + checking log in by themselves: no Chrome
-        "leumi": 9224, "cal": 0, "amex": 9226, "max": 9230, "harel": 9227, "more": 9228, "analyst": 9229,
+        "leumi": 9224, "cal": 0, "amex": 9226, "max": 0, "harel": 9227, "more": 9228, "analyst": 9229,
     }
     assert "riseup" not in sources.SOURCES
     # The Chrome app first; self-login mortgage and checking after it.
@@ -49,6 +49,22 @@ def test_discount_self_login_sources_need_no_chrome(name, script):
     s = sources.get(name)
     assert s.check == sources.SELF and s.port == 0 and not s.playwright and not s.login_group
     assert s.dumps == ((str(Path(__file__).resolve().parents[2] / "scrapers" / "discount" / script),),)
+
+
+def test_max_logs_in_by_itself():
+    s = sources.get("max")
+    assert s.check == sources.SELF and s.port == 0 and not s.playwright
+    assert s.dumps == ((str(Path(__file__).resolve().parents[2] / "scrapers" / "max" / "scrape.mjs"),),)
+    assert Path(s.dumps[0][0]).is_file()
+    assert s.group != sources.get("discount").group  # a refused Max login never skips Discount
+
+
+def test_max_refused_login_is_session_expired(scrape_env):
+    _, results = scrape_env
+    results.append((3, "LOGIN FAILED: INVALID_PASSWORD\n"))
+    with pytest.raises(ApplicationError) as e:
+        run(activities.scrape("max"))
+    assert e.value.type == "SessionExpired" and e.value.non_retryable
 
 
 def test_self_login_sources_share_one_group_so_a_refused_login_is_not_retried():
@@ -283,7 +299,7 @@ def test_discount_dump_argv_is_the_absolute_script(monkeypatch, name, script):
     assert expected.is_file()
 
 
-@pytest.mark.parametrize("name", ["discount", "discount-mortgage"])
+@pytest.mark.parametrize("name", ["discount", "discount-mortgage", "max"])
 def test_self_check_is_live_without_running_anything(monkeypatch, name):
     async def never(*a, **k):
         pytest.fail("a self-login source must not shell out or read tabs")

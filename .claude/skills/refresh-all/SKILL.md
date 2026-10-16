@@ -73,7 +73,7 @@ existing skill:
 | leumi | `leumi-account-refresh` |
 | cal | `cal-refresh` |
 | amex | `amex-refresh` |
-| max | `max-refresh` |
+| max | `max-refresh` (headless self-login from `.env`, no Chrome) |
 | harel | `harel-refresh` |
 | more | `more-refresh` |
 | analyst | `analyst-refresh` |

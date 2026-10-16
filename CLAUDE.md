@@ -175,6 +175,8 @@ after the Chrome app (business) because their login may end the human's telebank
 CAL works the same way: `scrapers/cal/scrape.mjs` logs in headless with
 `CAL_USERNAME`/`CAL_PASSWORD` from `.env` (check mode `self`) and writes the same
 `data/cal/raw` files as `cal-refresh/scripts/dump.sh`; a refused login (or a demanded OTP) is `needs_login`.
+Max does the same: `scrapers/max/scrape.mjs` logs in headless with `MAX_USERNAME`/`MAX_PASSWORD`
+(check mode `self`, its own login group) and writes `data/max/raw/`.
 The source registry is `sync/sources.py`.
 Every source's progress (checking_session → waiting_for_login → scraping → validating →
 digesting → publishing → done, or needs_login / failed / rejected) is published as its own
