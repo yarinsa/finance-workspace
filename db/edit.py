@@ -21,10 +21,12 @@ import sys
 from pathlib import Path
 
 import ledger
+import overrides
 
 REPO = Path(__file__).resolve().parent.parent
 REBUILD = [["digest.py", "--no-normalize"], ["validate.py"], ["forecast.py"], ["cashflow.py"], ["goals.py"]]
 FIELDS = ("category", "note")
+ACTOR = "cli"   # the audit actor for edits made from this script
 
 
 def find(conn, k):
@@ -45,21 +47,8 @@ def exists(conn, k):
 
 
 def set_field(conn, k, field, value):
-    """Upsert one override field; returns nothing. `field` is trusted (from FIELDS/excluded)."""
-    conn.execute(
-        f"""INSERT INTO transaction_overrides (txn_date, abs_amount, {field})
-            VALUES (%s, %s, %s)
-            ON CONFLICT (txn_date, abs_amount)
-            DO UPDATE SET {field} = EXCLUDED.{field}, updated_at = now()""",
-        (*k, value))
-    prune(conn, k)
-
-
-def prune(conn, k):
-    """An override with nothing left in it is deleted rather than kept empty."""
-    conn.execute(
-        "DELETE FROM transaction_overrides WHERE (txn_date, abs_amount) = (%s, %s) "
-        "AND category IS NULL AND note IS NULL AND NOT excluded", k)
+    """Set (or, with None, clear) one override field through the shared override code."""
+    overrides.patch(conn, k, {field: value}, ACTOR)
 
 
 def show(conn, k):
@@ -130,8 +119,7 @@ def main(argv):
             if args:
                 set_field(conn, k, args[0], None)
             else:
-                conn.execute("DELETE FROM transaction_overrides "
-                             "WHERE (txn_date, abs_amount) = (%s, %s)", k)
+                overrides.reset(conn, k, ACTOR)
         else:
             raise SystemExit(__doc__)
         conn.commit()

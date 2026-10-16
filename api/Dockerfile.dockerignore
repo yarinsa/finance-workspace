@@ -1,0 +1,9 @@
+*
+!pyproject.toml
+!poetry.lock
+!finance
+!db
+!api
+**/__pycache__
+**/tests
+**/.pytest_cache

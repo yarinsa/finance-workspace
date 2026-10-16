@@ -4,6 +4,7 @@
 # it would copy the bank credentials into the containers.
 #
 #   docker compose up -d --wait
+#   docker compose up -d api      # the ledger API (profile "api": only starts when asked for)
 name: finance
 
 services:
@@ -28,6 +29,41 @@ services:
               --ui-port, "8233", --db-filename, /data/finance.db]
     ports: ["127.0.0.1:7233:7233", "127.0.0.1:8233:8233"]
     volumes: ["${HOME}/.temporal:/data"]   # keeps the existing schedule + run history
+
+  # The ledger API (api/README.md). Reachable only on 127.0.0.1:8787 (Tailscale Funnel
+  # forwards to it). Gets exactly the variables listed here, no bank or AWS credentials, and
+  # connects to Postgres as the least-privilege role finance_api. FINANCE_API_DEV_USER is
+  # deliberately not passed through. The profile keeps a plain `up -d --wait` from starting
+  # an unconfigured API: `docker compose up -d api`, or set COMPOSE_PROFILES=api.
+  api:
+    profiles: [api]
+    build:
+      context: .
+      dockerfile: api/Dockerfile
+    restart: unless-stopped
+    ports: ["127.0.0.1:8787:8787"]
+    environment:
+      API_DATABASE_URL: postgresql://finance_api:${FINANCE_API_DB_PASSWORD:-}@postgres:5432/${POSTGRES_DB:-finance}
+      TEMPORAL_ADDRESS: temporal:7233
+      FINANCE_API_ORIGIN_SECRET: ${FINANCE_API_ORIGIN_SECRET:-}
+      FINANCE_API_COGNITO_REGION: ${FINANCE_API_COGNITO_REGION:-}
+      FINANCE_API_COGNITO_POOL_ID: ${FINANCE_API_COGNITO_POOL_ID:-}
+      FINANCE_API_COGNITO_CLIENT_ID: ${FINANCE_API_COGNITO_CLIENT_ID:-}
+      FINANCE_API_ALLOWED_EMAILS: ${FINANCE_API_ALLOWED_EMAILS:-}
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    depends_on:
+      postgres: {condition: service_healthy}
+      temporal: {condition: service_started}
+    healthcheck:
+      # 200 with db:true. Temporal being down must not mark the API unhealthy.
+      test: ["CMD", "python", "-c", "import json,os,urllib.request as u; r=u.Request('http://127.0.0.1:8787/api/health', headers={'X-Origin-Secret': os.environ['FINANCE_API_ORIGIN_SECRET']}); assert json.load(u.urlopen(r, timeout=3))['db']"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
 
 volumes:
   pgdata:
