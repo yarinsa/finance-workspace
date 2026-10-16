@@ -23,6 +23,7 @@ fastapi = ">=0.115,<1"
 uvicorn = ">=0.34,<1"
 pyjwt = {version = ">=2.10,<3", extras = ["crypto"]}
 psycopg-pool = ">=3.2,<4"
+graphql-core = ">=3.2.6,<3.3"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^9.1"

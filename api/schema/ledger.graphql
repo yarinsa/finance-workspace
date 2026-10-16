@@ -1,0 +1,152 @@
+# The ledger: transactions and what they point at (merchant, category, tags, audit).
+# Backed by the Postgres `transactions` view (scraped layer + overrides), bound to
+# finance.models.LedgerTransaction. See api/schema_bindings.py.
+
+enum Direction {
+  """Money out (amount < 0)."""
+  EXPENSE
+  """Money in: salary, refunds, transfers in (amount > 0)."""
+  INCOME
+}
+
+"""When the money matters to cashflow (data/horizons.py)."""
+enum Horizon {
+  CURRENT
+  NEAR
+  FUTURE
+}
+
+enum TransactionOrder {
+  DATE_DESC
+  DATE_ASC
+  AMOUNT_DESC
+  AMOUNT_ASC
+}
+
+"""
+One deduplicated ledger row. Its key is (date, absAmount): copies of the same money
+in several sources (a card charge and its RiseUp copy) collapse into one transaction.
+Fields show the effective value: a manual override if there is one, else the raw value.
+"""
+type Transaction implements Node {
+  id: ID!
+  date: Date!
+  amount: Money!
+  absAmount: Money!
+  direction: Direction!
+  description: String!
+  """Derived from the description (data/spending.py `merchant_name`)."""
+  merchant: Merchant!
+  category: Category
+  tags: [Tag!]!
+  note: String
+  excluded: Boolean!
+  overridden: Boolean!
+  horizon: Horizon
+  """Best-effort source of the row (cal, amex, discount, leumi, …)."""
+  origin: String
+  sources: [String!]!
+  accountId: String
+  cardLast4: String
+  isCardBillPayment: Boolean!
+  isInternalTransfer: Boolean!
+  isSavings: Boolean!
+  """The values as scraped, before any manual override."""
+  raw: RawTransactionValues!
+  auditLog(first: Int, after: String): AuditEntryConnection!
+}
+
+type RawTransactionValues {
+  category: Category
+  horizon: Horizon
+}
+
+type TransactionEdge {
+  node: Transaction!
+  cursor: String!
+}
+
+type TransactionConnection {
+  edges: [TransactionEdge!]!
+  pageInfo: PageInfo!
+  """Rows matching the filter, across all pages."""
+  totalCount: Int!
+  """Sum of `amount` over the rows matching the filter, across all pages."""
+  sum: Money!
+}
+
+input TransactionFilter {
+  direction: Direction
+  dateRange: DateRange
+  categoryIds: [ID!]
+  tagIds: [ID!]
+  merchantId: ID
+  """Substring match on the description."""
+  search: String
+  """Rows marked excluded are hidden unless this is true."""
+  includeExcluded: Boolean = false
+  """Card-bill payments and moves between our own accounts are hidden unless this is true."""
+  includeTransfers: Boolean = false
+}
+
+"""A counterparty, derived from transaction descriptions. Not stored."""
+type Merchant implements Node {
+  id: ID!
+  name: String!
+  transactions(first: Int, after: String, last: Int, before: String,
+               filter: TransactionFilter, orderBy: TransactionOrder = DATE_DESC): TransactionConnection!
+}
+
+type MerchantEdge {
+  node: Merchant!
+  cursor: String!
+}
+
+type MerchantConnection {
+  edges: [MerchantEdge!]!
+  pageInfo: PageInfo!
+  totalCount: Int!
+}
+
+type Category implements Node {
+  id: ID!
+  name: String!
+  """Where the category came from: RISEUP (seeded on import) or USER (first assigned by hand)."""
+  source: CategorySource!
+  transactions(first: Int, after: String, last: Int, before: String,
+               filter: TransactionFilter, orderBy: TransactionOrder = DATE_DESC): TransactionConnection!
+}
+
+enum CategorySource {
+  RISEUP
+  USER
+}
+
+"""A free-form label; a transaction can carry several."""
+type Tag implements Node {
+  id: ID!
+  name: String!
+  """"#rrggbb", or null for the default color."""
+  color: String
+  transactions(first: Int, after: String, last: Int, before: String,
+               filter: TransactionFilter, orderBy: TransactionOrder = DATE_DESC): TransactionConnection!
+}
+
+"""One field change on a transaction's override."""
+type AuditEntry {
+  at: DateTime!
+  actor: String!
+  field: String
+  old: JSON
+  new: JSON
+}
+
+type AuditEntryEdge {
+  node: AuditEntry!
+  cursor: String!
+}
+
+type AuditEntryConnection {
+  edges: [AuditEntryEdge!]!
+  pageInfo: PageInfo!
+}

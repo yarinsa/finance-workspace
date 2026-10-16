@@ -76,6 +76,35 @@ Key: a transaction is `(date, abs_amount)` — ISO date and the absolute amount 
 Errors: `{"error":"<code>","message":"…"}` with 400/401/403/404/413/422/503.
 Any successful PATCH/DELETE signals a rebuild.
 
+### GraphQL (schema-first, replacing the REST routes)
+
+The contract is the SDL in **`api/schema/*.graphql`**. Write the schema change first,
+then the code. It follows Relay: `Node` + `Query.node(id)` for refetching, cursor
+connections (`edges`/`node`/`cursor`/`pageInfo`) for every list, and mutations
+that take one `input` and echo `clientMutationId`.
+
+- **IDs** are opaque global IDs (`base64("Transaction:2026-01-15:123.45")`). A
+  transaction's ID still wraps the `(date, abs_amount)` key.
+- **Cursors** are keyset cursors over that key, so a page doesn't shift when an edit lands.
+- **`Money`** is a 2-decimal string with the sign (money out is negative), never a Float.
+- **Expense / income** is one `Transaction` type with `direction`; `Query.expenses` and
+  `Query.incomes` are the filtered connections.
+- **`raw`** holds the scraped values before any override (REST's `scraped_*` fields).
+- **`Merchant`** is derived from the description (`data/spending.py` `merchant_name`),
+  not stored.
+
+Each object type is bound to its Pydantic model in `api/schema_bindings.py`. Then
+`api/tests/test_graphql_schema.py` fails when the SDL and the models drift:
+
+- an SDL field has no model field;
+- a model field is neither exposed nor `hidden`;
+- a non-null SDL field sits on an optional model field;
+- an enum disagrees with its `Literal` or CHECK constraint.
+
+The same safety rules apply: same edge auth and origin secret, the CSRF headers on any
+request that carries a mutation, POST only, depth and `first` limits, and introspection
+off in production. The client compiles against the committed SDL.
+
 ### Rebuild workflow (Temporal)
 
 - Type `LedgerRebuildWorkflow`, id **`ledger-rebuild`**, task queue `finance-sync`,

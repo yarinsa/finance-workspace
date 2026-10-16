@@ -1,0 +1,91 @@
+type Query {
+  node(id: ID!): Node
+
+  transactions(first: Int, after: String, last: Int, before: String,
+               filter: TransactionFilter, orderBy: TransactionOrder = DATE_DESC): TransactionConnection!
+  """`transactions` with `filter.direction = EXPENSE`."""
+  expenses(first: Int, after: String, last: Int, before: String,
+           filter: TransactionFilter, orderBy: TransactionOrder = DATE_DESC): TransactionConnection!
+  """`transactions` with `filter.direction = INCOME`."""
+  incomes(first: Int, after: String, last: Int, before: String,
+          filter: TransactionFilter, orderBy: TransactionOrder = DATE_DESC): TransactionConnection!
+
+  merchants(first: Int, after: String, search: String): MerchantConnection!
+  categories: [Category!]!
+  tags: [Tag!]!
+
+  snapshot: Snapshot!
+}
+
+# Relay mutation convention: one `input`, one payload, `clientMutationId` echoed back.
+# Every mutation needs the CSRF headers and signals a ledger rebuild on success.
+
+type Mutation {
+  """Set any of the override fields; a null field clears that override."""
+  updateTransaction(input: UpdateTransactionInput!): UpdateTransactionPayload!
+  """Drop every override on a transaction, back to its raw values."""
+  clearTransactionOverride(input: ClearTransactionOverrideInput!): ClearTransactionOverridePayload!
+  """Replace the full set of tags on a transaction; unknown names are created."""
+  setTransactionTags(input: SetTransactionTagsInput!): SetTransactionTagsPayload!
+  updateTag(input: UpdateTagInput!): UpdateTagPayload!
+  deleteTag(input: DeleteTagInput!): DeleteTagPayload!
+}
+
+input UpdateTransactionInput {
+  clientMutationId: String
+  id: ID!
+  """Category name; a new name is added as a USER category."""
+  category: String
+  note: String
+  excluded: Boolean
+  horizon: Horizon
+}
+
+type UpdateTransactionPayload {
+  clientMutationId: String
+  transaction: Transaction!
+}
+
+input ClearTransactionOverrideInput {
+  clientMutationId: String
+  id: ID!
+}
+
+type ClearTransactionOverridePayload {
+  clientMutationId: String
+  transaction: Transaction!
+}
+
+input SetTransactionTagsInput {
+  clientMutationId: String
+  id: ID!
+  tags: [String!]!
+}
+
+type SetTransactionTagsPayload {
+  clientMutationId: String
+  transaction: Transaction!
+}
+
+input UpdateTagInput {
+  clientMutationId: String
+  id: ID!
+  name: String
+  """"#rrggbb"; null clears it."""
+  color: String
+}
+
+type UpdateTagPayload {
+  clientMutationId: String
+  tag: Tag!
+}
+
+input DeleteTagInput {
+  clientMutationId: String
+  id: ID!
+}
+
+type DeleteTagPayload {
+  clientMutationId: String
+  deletedTagId: ID!
+}

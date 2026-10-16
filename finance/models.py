@@ -166,6 +166,22 @@ class LedgerTransaction(Record):
     overridden: bool | None = None
 
 
+class SnapshotTotals(BaseModel):
+    """`totals` in data/digested/snapshot.json (written by digest.py)."""
+    bank_balances_sum: float
+    credit_card_debt: float
+    mortgage_balance: float
+    consumer_loan_balance: float
+    total_debt: float
+    tracked_net_position: float          # liquid position vs debt; excludes savings
+    long_term_savings: float
+    liquid_savings: float
+    illiquid_savings: float
+    net_position_with_savings: float
+    monthly_loan_service: float
+    detected_monthly_salary: float | None = None
+
+
 def validate_records(entity, records):
     """Validate dict records as `entity`; returns JSON-ready dicts (unset fields omitted)."""
     model = ENTITIES[entity]

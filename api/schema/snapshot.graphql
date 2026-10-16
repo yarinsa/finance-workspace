@@ -1,0 +1,83 @@
+# The headline position, read-only from data/digested/snapshot.json.
+# Each type is bound to its normalized entity in finance/models.py.
+
+type Snapshot {
+  generatedAt: DateTime!
+  totals: SnapshotTotals!
+  bankAccounts: [BankAccount!]!
+  creditCards: [CreditCard!]!
+  loans: [Loan!]!
+  """Long-term savings: assets, never cashflow."""
+  savings: [Savings!]!
+  incomeSources: [IncomeSource!]!
+}
+
+type SnapshotTotals {
+  bankBalancesSum: Money!
+  creditCardDebt: Money!
+  mortgageBalance: Money!
+  consumerLoanBalance: Money!
+  totalDebt: Money!
+  """Liquid position vs debt; excludes savings."""
+  trackedNetPosition: Money!
+  longTermSavings: Money!
+  liquidSavings: Money!
+  illiquidSavings: Money!
+  """What we are worth: tracked net position plus savings."""
+  netPositionWithSavings: Money!
+  monthlyLoanService: Money!
+  detectedMonthlySalary: Money
+}
+
+type BankAccount {
+  institution: String!
+  accountId: String!
+  kind: String!
+  label: String
+  balance: Money!
+  availableBalance: Money
+  overdraftLimit: Money
+}
+
+type CreditCard {
+  issuer: String!
+  last4: String!
+  name: String
+  holder: String
+  active: Boolean
+  owed: Money
+}
+
+type Loan {
+  lender: String!
+  loanId: String
+  name: String
+  category: String!
+  balance: Money!
+  originalAmount: Money
+  ratePct: Float
+  rateType: String
+  indexLinked: Boolean
+  paymentsRemaining: Int
+  paymentsTotal: Int
+  monthlyPayment: Money
+  finalDate: Date
+}
+
+type Savings {
+  institution: String!
+  kind: String!
+  label: String
+  balance: Money!
+  liquid: Boolean
+  liquidityDate: Date
+  maturityDate: Date
+  asOf: Date
+  managementFee: Float
+  yieldYtd: Float
+}
+
+type IncomeSource {
+  label: String!
+  monthlyAmount: Money!
+}
