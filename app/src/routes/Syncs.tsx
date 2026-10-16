@@ -42,8 +42,9 @@ function txnLagDays(s: SourceSync): number | null {
 
 function SyncRow({ s }: { s: SourceSync }) {
   const days = daysSince(s.last_synced);
-  const f = freshness(days);
   const lag = txnLagDays(s);
+  // A fresh scrape that returned only old transactions isn't fresh data.
+  const f = lag != null && days <= 1 ? { text: "חסרות עסקאות", cls: "pill-warn" } : freshness(days);
 
   return (
     <ListRow
