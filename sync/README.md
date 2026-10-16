@@ -12,6 +12,11 @@ Runs the AMEX refresh daily at 07:30 Asia/Jerusalem on this Mac:
 notification and waits up to 12h for you. No credentials, OTPs, Keychain reads
 or keep-alive pings.
 
+The scheduled workflow decides what to scrape with `data/freshness.py`
+`due_sources(now)` (per-source freshness targets, see CLAUDE.md "Freshness
+targets"), rather than hard-coding the source list. Sources with no target
+(RiseUp) are never returned.
+
 ## Layout
 
 - `activities.py` subprocess wrappers (amex-refresh scripts, `data/*.py`, `infra/deploy.sh --data-only`, osascript)

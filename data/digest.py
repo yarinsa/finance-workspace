@@ -10,6 +10,8 @@ Run `python3 digest.py --no-normalize` to combine existing normalized output onl
 import json, datetime, glob, re, subprocess, sys
 from pathlib import Path
 
+import freshness
+
 ROOT = Path(__file__).resolve().parent          # .../Finance/data
 OUT = ROOT / "digested"
 OUT.mkdir(exist_ok=True)
@@ -542,9 +544,9 @@ def source_syncs(root=ROOT):
     out = []
     for raw in sorted(root.glob("*/raw")):
         files = [f for f in raw.rglob("*") if f.is_file() and not f.name.startswith(".")]
-        if not files:
+        newest = freshness.raw_mtime(raw)
+        if newest is None:
             continue
-        newest = max(f.stat().st_mtime for f in files)
         entities, latest_txn = {}, None
         for fp in sorted((raw.parent / "normalized").glob("*.json")):
             env = json.load(open(fp, encoding="utf-8"))
@@ -584,6 +586,7 @@ def main():
     snapshot = build_snapshot(entities)
     snapshot["spending"] = summary
     snapshot["syncs"] = source_syncs()
+    snapshot["freshness"] = freshness.status()
     (OUT / "snapshot.json").write_text(json.dumps(snapshot, ensure_ascii=False, indent=2))
     write_markdown(snapshot)
     print(f"wrote {OUT / 'transactions.json'} ({len(ledger)} deduped txns)")
