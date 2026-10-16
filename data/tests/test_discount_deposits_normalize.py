@@ -158,3 +158,35 @@ def test_legacy_utc_timestamp_maps_to_israel_calendar_date(tmp_path):
     dates = {r["description"]: (r["date"], r["processed_date"]) for r in out["transactions"]["records"]}
     assert dates["בנק לאומי משכורת"] == ("2026-06-09", "2026-06-09")
     assert dates["x"] == ("2026-01-04", "2026-01-04")
+
+
+def test_cdp_transactions_dump_is_read_not_just_legacy_fetch_files(tmp_path):
+    """As the household, when the Discount refresh skill writes transactions.json
+    (CurrentAccountLastTransactions) with a ₪1,000 cash withdrawal on 2026-10-13
+    and a ₪1,000 Paybox credit on 2026-09-29, both should appear in the ledger.
+    Only the legacy fetch-transactions_*.json files were read, so Discount's
+    newest transaction stayed frozen at 2026-06-12 while the balance updated.
+    Scheduled FutureTransactionEntry rows (not yet posted) must NOT be ingested."""
+    cdp = {"CurrentAccountLastTransactions": {
+        "OperationEntry": [
+            {"OperationDate": "20260929", "OperationDescription": "מפייבוקס ש",
+             "OperationDescription2": "", "OperationAmount": 1000, "OperationNumber": 4167},
+            {"OperationDate": "20261013", "OperationDescription": "משיכת מזומן ללא כרטיס",
+             "OperationDescription2": "", "OperationAmount": -1000, "OperationNumber": 4196},
+        ],
+        "FutureTransactionsBlock": {"FutureTransactionEntry": [
+            {"OperationDate": "20261012", "OperationDescription": "חיוב לכרטיס ויזה 7843",
+             "OperationAmount": -65.62, "Urn": "MC2026-11-101486394610027843"},
+        ]},
+    }}
+    legacy = {"accounts": [{"accountNumber": "0123444499", "balance": 0, "txns": [
+        {"identifier": 4167, "date": "2026-09-28T21:00:00.000Z", "chargedAmount": 1000,
+         "originalAmount": 1000, "description": "מפייבוקס ש", "status": "completed"},
+    ]}]}
+    out = _load_normalize("discount", {"transactions.json": cdp,
+                                       "fetch-transactions_2026-05-01.json": legacy}, tmp_path)
+    got = sorted((r["date"], r["amount"], r["description"])
+                 for r in out["transactions"]["records"])
+    # the 09-29 Paybox row appears once even though both dumps carry it
+    assert got == [("2026-09-29", 1000, "מפייבוקס ש"),
+                   ("2026-10-13", -1000, "משיכת מזומן ללא כרטיס")]

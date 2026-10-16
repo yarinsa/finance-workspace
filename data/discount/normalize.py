@@ -104,6 +104,37 @@ for fp in sorted(glob.glob(str(RAW / "fetch-transactions_*.json"))):
                 "status": t.get("status"),
             }
 
+# The refresh skill's CDP scrape writes transactions.json (recent posted activity,
+# YYYYMMDD dates, signed OperationAmount). It overlaps the legacy dumps on the
+# days both cover; a row already seen there (same number, date and amount) is
+# skipped so the account doesn't double up. Scheduled FutureTransactionEntry rows
+# haven't posted yet and are deliberately ignored.
+cdp_fp = RAW / "transactions.json"
+if cdp_fp.exists():
+    seen = {(t["date"], t["amount"], k[1]) for k, t in txns.items()}
+    cdp_aid = next(iter(accounts), "discount")
+    entries = (json.load(open(cdp_fp, encoding="utf-8"))
+               .get("CurrentAccountLastTransactions", {}).get("OperationEntry", []))
+    for e in entries:
+        d = str(e.get("OperationDate") or "")
+        date = f"{d[:4]}-{d[4:6]}-{d[6:8]}" if len(d) == 8 else d[:10]
+        amount = round(e.get("OperationAmount", 0), 2)
+        num = e.get("OperationNumber")
+        if (date, amount, num) in seen:
+            continue
+        desc = " ".join(p for p in (e.get("OperationDescription"),
+                                    e.get("OperationDescription2"),
+                                    e.get("OperationDescription3")) if p)
+        txns[(cdp_aid, f"op-{num}")] = {
+            "account_id": cdp_aid,
+            "date": date,
+            "processed_date": date,
+            "amount": amount,
+            "currency": "ILS",
+            "description": desc,
+            "status": "completed",
+        }
+
 emit("accounts", list(accounts.values()))
 emit("transactions", sorted(txns.values(), key=lambda r: r["date"]))
 
