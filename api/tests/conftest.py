@@ -28,7 +28,7 @@ from api.app import create_app  # noqa: E402
 from api.auth import COOKIE, TokenVerifier  # noqa: E402
 from api.config import Settings  # noqa: E402
 
-SECRET = "test-origin-secret"
+SECRET = "test-origin-secret-0123456789abcdef"
 CLIENT_ID = "test-client"
 POOL_ID = "eu-west-1_TESTPOOL"
 REGION = "eu-west-1"

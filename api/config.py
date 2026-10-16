@@ -33,6 +33,8 @@ class Settings:
         """Raise ConfigError for anything that would leave the API open or unusable."""
         if not self.origin_secret:
             raise ConfigError("FINANCE_API_ORIGIN_SECRET is not set: refusing to start without an origin secret")
+        if len(self.origin_secret) < 32:
+            raise ConfigError("FINANCE_API_ORIGIN_SECRET is shorter than 32 characters: use `terraform output -raw api_origin_secret`")
         if self.dev_user:
             log.warning("FINANCE_API_DEV_USER is set: JWT checks are bypassed (the origin secret is still "
                         "required). Never use this outside local development.")

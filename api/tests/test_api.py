@@ -46,8 +46,8 @@ def test_api_refuses_to_start_without_an_origin_secret():
 
 def test_api_refuses_to_start_without_jwt_config_unless_dev_user():
     with pytest.raises(ConfigError, match="COGNITO"):
-        Settings.from_env({"FINANCE_API_ORIGIN_SECRET": "s"})
-    assert Settings.from_env({"FINANCE_API_ORIGIN_SECRET": "s", "FINANCE_API_DEV_USER": "d@example.com"}).dev_user
+        Settings.from_env({"FINANCE_API_ORIGIN_SECRET": "s" * 32})
+    assert Settings.from_env({"FINANCE_API_ORIGIN_SECRET": "s" * 32, "FINANCE_API_DEV_USER": "d@example.com"}).dev_user
 
 
 # --- JWT -------------------------------------------------------------------------------
@@ -389,3 +389,8 @@ def test_api_role_is_nologin_until_a_password_is_configured(owner):
     row = owner.execute("SELECT rolcanlogin, rolsuper, rolcreatedb, rolcreaterole FROM pg_roles "
                         "WHERE rolname = 'finance_api'").fetchone()
     assert row[1:] == (False, False, False)
+
+
+def test_short_origin_secret_is_refused():
+    with pytest.raises(ConfigError):
+        Settings.from_env({"FINANCE_API_ORIGIN_SECRET": "short", "FINANCE_API_DEV_USER": "d@example.com"}).validate()

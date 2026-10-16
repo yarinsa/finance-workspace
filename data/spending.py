@@ -120,7 +120,10 @@ def build_spending(transactions, months=MONTHS, today=None):
         b["cats"][cat][1] += 1
         b["merchants"][merchant][0] += spent
         b["merchants"][merchant][1] += 1
-        b["tx"].append({"date": d, "merchant": merchant, "amount": round(spent, 2), "category": cat})
+        row = {"date": d, "merchant": merchant, "amount": round(spent, 2), "category": cat}
+        if t.get("overridden"):
+            row["overridden"] = True          # edited in the ledger DB; the app marks it
+        b["tx"].append(row)
 
     this_month = today.isoformat()[:7] if today else None
     out = []
