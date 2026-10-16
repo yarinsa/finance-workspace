@@ -91,6 +91,10 @@ for fp in sorted(glob.glob(str(RAW / "fetch-transactions_*.json"))):
                 "currency": "ILS",
             }
         for t in acc.get("txns", []):
+            # Scheduled debits are estimates with no identifier (they'd all collide on
+            # (aid, None)); the CDP path ignores FutureTransactionEntry for the same reason.
+            if t.get("status") == "pending":
+                continue
             key = (aid, t.get("identifier"))
             txns[key] = {
                 "account_id": aid,

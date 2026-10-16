@@ -157,14 +157,20 @@ source (discount, discount-mortgage, discount-business, leumi, cal, amex, harel,
 analyst; RiseUp is out of scope) with the Temporal dev server in Docker Compose
 (`docker-compose.yml`) and the worker under launchd. It checks **every** session
 first, sends **one** macOS notification listing
-the dead logins (grouped: the three Discount apps are one login), and waits up to 12h
+the dead logins (grouped: the Discount mortgage and business apps are one login), and waits up to 12h
 for `poetry run python sync/resume.py [source|group ...]`; still-dead sources are skipped as
 `needs_login`, never fatal. Live sources are scraped one at a time in registry order
-(Discount **account → mortgage → business**, business always last), each followed by
+(Discount **mortgage → business → account**: the Chrome apps first, business after
+mortgage, then checking), each followed by
 a `data/validate.py dump <source>` gate (skipped while that file doesn't exist); one
 failing source never stops the rest. Then digest chain once and
 `infra/deploy.sh --data-only` once (when `SYNC_PUBLISH=1`; withheld if a dump was
-rejected). It **never authenticates**. The source registry is `sync/sources.py`.
+rejected). It never authenticates a Chrome session. **One exception:** Discount
+checking is scraped by `scrapers/discount/scrape.mjs`, which logs in headless with
+`DISCOUNT_ID`/`DISCOUNT_PASSWORD`/`DISCOUNT_NUM` from `.env` (check mode `self`, no
+Chrome) and writes the same raw files as the CDP `dump.sh`; a refused login becomes
+`needs_login`. It runs after the Chrome apps because its login may end the human's
+telebank session. The source registry is `sync/sources.py`.
 Every source's progress (checking_session → waiting_for_login → scraping → validating →
 digesting → publishing → done, or needs_login / failed / rejected) is published as its own
 entry to `data/sync-status.json`, which the app polls for a live status on `/syncs`, the

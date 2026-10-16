@@ -5,10 +5,11 @@ import it deterministically. The values mirror what the human-run skills use:
 ports and login URLs from refresh-all/scripts/check_sessions.sh, app-tab matching
 from refresh-all/scripts/app_tab_index.py (matched by `tab_key`, not duplicated here).
 
-Registry order IS the scrape order. The three Discount apps share ONE Chrome
-(port 9223, profile ~/.chrome-cdp-discount) and ONE login, and the business (SME)
-app rebinds the server session and blocks the mortgage endpoints
-(`actionRequired: stepup`), so it must stay after account and mortgage.
+Registry order IS the scrape order. The two Discount Chrome apps (mortgage, business)
+share ONE Chrome (port 9223, profile ~/.chrome-cdp-discount) and ONE login, and the
+business (SME) app rebinds the server session and blocks the mortgage endpoints
+(`actionRequired: stepup`), so it must stay after mortgage. Discount checking logs in
+headless by itself (check=SELF) and runs after both.
 """
 from dataclasses import dataclass
 from pathlib import Path
@@ -17,7 +18,10 @@ from pathlib import Path
 #   verdict  - the source's own check_session.sh VERDICT: LIVE|LOGGED_OUT (strongest; AMEX only)
 #   sessions - refresh-all/scripts/check_sessions.sh <check_name>: in-page signal, then tab URL
 #   tabs     - open-tab URL/title only, read from CDP /json/list (no playwright attach)
-VERDICT, SESSIONS, TABS = "verdict", "sessions", "tabs"
+#   self     - the dump logs in by itself (credentials in .env); no Chrome to check
+VERDICT, SESSIONS, TABS, SELF = "verdict", "sessions", "tabs", "self"
+
+REPO_ROOT = Path(__file__).resolve().parent.parent
 
 
 @dataclass(frozen=True)
@@ -38,6 +42,10 @@ class Source:
 
     @property
     def group(self) -> str:
+        # A self-login source has its own login: never the group of a Chrome app that
+        # happens to share its name (checking "discount" vs the Discount Chrome group).
+        if self.check == SELF:
+            return f"{self.name}-self"
         return self.login_group or self.name
 
     @property
@@ -69,14 +77,18 @@ _DISCOUNT = dict(port=9223, login_url="https://start.telebank.co.il/apollo/retai
                  app_host="telebank.co.il", login_group="discount", chrome="discount")
 
 _ALL = [
-    Source(name="discount", check=SESSIONS, **_DISCOUNT,
-           dumps=(("discount-account-refresh/scripts/dump.sh", "{session}"),)),
     Source(name="discount-mortgage", check=SESSIONS, tab_key="discount", **_DISCOUNT,
            dumps=(("discount-mortgage-refresh/scripts/dump.sh", "{session}"),)),
     # LAST of the Discount chain. No tab sits on business2 until the human opens one,
     # so the preflight can only look (TABS), and the scrape opens the app itself.
     Source(name="discount-business", check=TABS, app_url="https://start.telebank.co.il/apollo/business2/",
            **_DISCOUNT, dumps=(("discount-business-refresh/scripts/dump.sh", "{session}"),)),
+    # Checking logs in headless by itself (scrapers/discount/scrape.mjs), so it needs no
+    # Chrome and is not in the "discount" login group. It runs AFTER the Chrome apps: its
+    # own login may end the human's telebank session that mortgage and business ride on.
+    Source(name="discount", port=0, login_url="https://start.telebank.co.il/login/",
+           app_host="telebank.co.il", check=SELF, playwright=False,
+           dumps=((str(REPO_ROOT / "scrapers" / "discount" / "scrape.mjs"),),)),
     # dump.sh first (it needs the live SessionID); dump-loans.sh navigates the tab.
     Source(name="leumi", port=9224, login_url="https://hb2.bankleumi.co.il/", app_host="bankleumi.co.il",
            check=SESSIONS, dumps=(("leumi-account-refresh/scripts/dump.sh", "{session}"),
@@ -86,6 +98,10 @@ _ALL = [
     Source(name="amex", port=9226, login_url="https://www.americanexpress.co.il/", app_host="americanexpress.co.il",
            tab_url="https://web.americanexpress.co.il/", check=VERDICT,
            dumps=(("amex-refresh/scripts/dump.sh", "{session}"),)),
+    # Max (ex-Leumi Card). No in-page liveness signal is wired yet, so the preflight
+    # reads the open tab only (TABS), like discount-business.
+    Source(name="max", port=9230, login_url="https://www.max.co.il/", app_host="max.co.il",
+           check=TABS, dumps=(("max-refresh/scripts/dump.sh", "{session}"),)),
     Source(name="harel", port=9227, login_url="https://www.harel-group.co.il/", app_host="harel-group.co.il",
            check=SESSIONS, dumps=(("harel-refresh/scripts/dump.sh", "{session}"),)),
     Source(name="more", port=9228, login_url="https://my-account.more.co.il/personalarea/dashboard",
@@ -104,6 +120,7 @@ LABEL_HE = {
     "leumi": "לאומי",
     "cal": "כאל",
     "amex": "אמריקן אקספרס",
+    "max": "מקס",
     "harel": "הראל",
     "more": "מור",
     "analyst": "אנליסט",

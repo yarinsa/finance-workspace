@@ -30,15 +30,19 @@ commands, session-check strategy). Registry order is the scrape order.
 | `leumi` | 9224 | leumi | `check_sessions.sh leumi` |
 | `cal` | 9225 | cal | `check_sessions.sh cal` |
 | `amex` | 9226 | amex | `check_session.sh` VERDICT (cookies + `/IsLoggedIn`) |
+| `max` | 9230 | max | open tabs only (`www.max.co.il/homepage`) |
 | `harel` | 9227 | harel | `check_sessions.sh harel` |
 | `more` | 9228 | more | `check_sessions.sh more` |
 | `analyst` | 9229 | analyst | `check_sessions.sh analyst` |
 
-The three Discount apps share **one** Chrome (`~/.chrome-cdp-discount`) and **one**
-login, so they are announced as one entry and re-checked together. The order
-**account → mortgage → business** is enforced whatever order `sources` was passed in:
-the business (SME) app rebinds the server session and blocks the mortgage endpoints
-(`actionRequired: stepup`), so it always goes last. Leumi runs `dump.sh` and then
+The Discount mortgage and business apps share **one** Chrome (`~/.chrome-cdp-discount`)
+and **one** login, so they are announced as one entry and re-checked together.
+**mortgage → business** is enforced whatever order `sources` was passed in: the
+business (SME) app rebinds the server session and blocks the mortgage endpoints
+(`actionRequired: stepup`). Discount **checking** needs no Chrome: its dump
+(`scrapers/discount/scrape.mjs`) logs in headless from `.env` (check mode `self`,
+always "live" in the preflight; a refused login surfaces as `needs_login`). It runs
+after business, since its login may end the human's telebank session. Leumi runs `dump.sh` and then
 `dump-loans.sh`. App-tab matching comes from `refresh-all/scripts/app_tab_index.py`
 (loaded, not copied); a `discount-business` entry was added to it.
 
