@@ -95,6 +95,8 @@ def test_duplicate_service_is_low():
     a = by_id(build(), "dup:")[0]
     assert a["id"] == "dup:APPLE.COM/BILL CORK IRL:2026-10" and a["severity"] == "low"
     assert a["amount"] == 109.4
+    # Duplicates are flagged in FixedExpenses on /monthly; /cashflow never shows them.
+    assert a["cta"]["to"] == "/monthly"
 
 
 NOON = datetime(2026, 10, 16, 12, 0, tzinfo=timezone(timedelta(hours=3)))

@@ -142,7 +142,7 @@ def _duplicate_actions(fixed):
         out.append(_action(f"dup:{key}:{month}", "low", f"שירות כפול: {key}",
                            names if key != items[0]["name"] else
                            f"{GENERIC_DUP_REASON} · " + " + ".join(shekel(i["amount"]) for i in items),
-                           ("לבדיקה", "/cashflow"), total))
+                           ("לבדיקה", "/monthly"), total))
     return out
 
 
