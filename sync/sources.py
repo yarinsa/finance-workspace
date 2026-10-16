@@ -107,10 +107,11 @@ _ALL = [
     Source(name="amex", port=9226, login_url="https://www.americanexpress.co.il/", app_host="americanexpress.co.il",
            tab_url="https://web.americanexpress.co.il/", check=VERDICT,
            dumps=(("amex-refresh/scripts/dump.sh", "{session}"),)),
-    # Max (ex-Leumi Card). No in-page liveness signal is wired yet, so the preflight
-    # reads the open tab only (TABS), like discount-business.
-    Source(name="max", port=9230, login_url="https://www.max.co.il/", app_host="max.co.il",
-           check=TABS, dumps=(("max-refresh/scripts/dump.sh", "{session}"),)),
+    # Max (ex-Leumi Card) logs in headless by itself (scrapers/max/scrape.mjs, MAX_USERNAME /
+    # MAX_PASSWORD from .env): no Chrome, and a refused login is needs_login, never retried.
+    Source(name="max", port=0, login_url="https://www.max.co.il/", app_host="max.co.il",
+           check=SELF, playwright=False,
+           dumps=((str(REPO_ROOT / "scrapers" / "max" / "scrape.mjs"),),)),
     Source(name="harel", port=9227, login_url="https://www.harel-group.co.il/", app_host="harel-group.co.il",
            check=SESSIONS, dumps=(("harel-refresh/scripts/dump.sh", "{session}"),)),
     Source(name="more", port=9228, login_url="https://my-account.more.co.il/personalarea/dashboard",

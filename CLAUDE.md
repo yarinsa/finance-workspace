@@ -172,6 +172,8 @@ Discount mortgage and checking are scraped by `scrapers/discount/scrape-mortgage
 Chrome) and write the same raw files as the CDP `dump.sh` scripts; a refused login becomes
 `needs_login` (and skips the other self-login source, which shares the credentials). They run
 after the Chrome app (business) because their login may end the human's telebank session.
+Max does the same: `scrapers/max/scrape.mjs` logs in headless with `MAX_USERNAME`/`MAX_PASSWORD`
+(check mode `self`, its own login group) and writes `data/max/raw/`.
 The source registry is `sync/sources.py`.
 Every source's progress (checking_session → waiting_for_login → scraping → validating →
 digesting → publishing → done, or needs_login / failed / rejected) is published as its own
