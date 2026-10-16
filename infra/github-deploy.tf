@@ -13,6 +13,11 @@ data "aws_iam_openid_connect_provider" "github" {
   url = "https://token.actions.githubusercontent.com"
 }
 
+locals {
+  github_owner     = split("/", var.github_repo)[0]
+  github_repo_name = split("/", var.github_repo)[1]
+}
+
 data "aws_iam_policy_document" "github_assume" {
   statement {
     effect  = "Allow"
@@ -30,10 +35,15 @@ data "aws_iam_policy_document" "github_assume" {
     }
 
     // Only the master branch of this repo — not PRs, not forks, not tags.
+    //
+    // The repo uses GitHub's immutable OIDC subject, which embeds the numeric
+    // owner and repo IDs: repo:<owner>@<owner_id>/<repo>@<repo_id>:ref:...
+    // A plain repo:owner/repo:... subject never matches. Check the format with
+    // `gh api repos/<owner>/<repo>/actions/oidc/customization/sub`.
     condition {
       test     = "StringEquals"
       variable = "token.actions.githubusercontent.com:sub"
-      values   = ["repo:${var.github_repo}:ref:refs/heads/master"]
+      values   = ["repo:${local.github_owner}@${var.github_owner_id}/${local.github_repo_name}@${var.github_repo_id}:ref:refs/heads/master"]
     }
   }
 }
