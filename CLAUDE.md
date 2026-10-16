@@ -87,6 +87,23 @@ notification and a wait for `python3 sync/resume.py` after the human logs in
 http://localhost:8233. Details in `sync/README.md`. Only `sync/` needs
 `temporalio`; `data/` stays stdlib-only.
 
+### Freshness targets
+
+`data/freshness.py` holds a per-source target (max age + grace) instead of one
+global staleness rule: banks and cards **daily** (24h + 12h), the mortgage/loans
+**weekly** (7d + 2d), pension/study/gemel **monthly** (30d + 7d). RiseUp has no
+target and is never listed. Age is the newest `raw/` file mtime (what
+`digest.source_syncs` calls `last_synced`). State is `fresh` -> `due` (past target,
+inside grace) -> `overdue` (past grace; raises the home "נתונים לא עדכניים"
+action, naming how late each source is) or `never`.
+
+- `python3 data/freshness.py` prints the table (`--json` for the list; `--root DIR`
+  reads another checkout's dumps read-only). `digest.py` writes the same list to
+  `snapshot.json` -> `freshness`.
+- `due_sources(now)` is the pure "scrape these today" list for the scheduled sync,
+  in Discount-safe order (account -> mortgage -> business). A new source must be
+  added to `TARGETS` (a test enforces it).
+
 ### Cashflow forecast
 
 `python3 data/forecast.py` writes `data/digested/forecast.{json,md}` — a
