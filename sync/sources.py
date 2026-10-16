@@ -13,7 +13,7 @@ login may end the human's telebank session that business rides on. Mortgage and 
 come after business and need no ordering between themselves: the old "mortgage before
 business" rule existed because the business app rebinds the *Chrome* server session
 (`actionRequired: stepup` on the mortgage endpoints); each headless run is its own fresh
-login/session, so business's rebinding cannot touch it. Mortgage runs before checking
+login/session, so business's rebinding cannot touch it. Mortgage runs before checking.
 If a headless login is refused (INVALID_PASSWORD / CHANGE_PASSWORD) the later self-login
 sources are skipped as needs_login (they share the .env credentials, see Source.group).
 """
