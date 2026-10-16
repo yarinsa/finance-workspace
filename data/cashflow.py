@@ -82,6 +82,12 @@ def _income_bucket(category):
 
 # --- Monthly aggregation ----------------------------------------------------
 
+def is_non_cashflow(t):
+    """Money moving between our own accounts, and card-bill settlements (the
+    underlying purchases are already in the ledger) — not income or spend."""
+    return bool(t.get("internal_transfer") or t.get("card_bill_payment"))
+
+
 def aggregate_by_month(transactions):
     """Group transactions by ``YYYY-MM`` into income/expense/net + bucketed splits.
 
@@ -100,7 +106,7 @@ def aggregate_by_month(transactions):
     for t in transactions:
         # Not cashflow: money moving between our own accounts, and card-bill
         # settlements (the underlying purchases are already in the ledger).
-        if t.get("internal_transfer") or t.get("card_bill_payment"):
+        if is_non_cashflow(t):
             continue
         date = t.get("date")
         if not date or len(date) < 7:
@@ -564,6 +570,9 @@ def build():
     bills_block = bills.build_bills(budget_doc, transactions, _local_today())
     budgets_block = budgets.build_budgets(budget_doc, _local_today(), budgets.load_overrides())
     spending_block = spending.build_spending(transactions, today=_local_today())
+    import months_view
+    months_view_block = months_view.build_months_view(
+        transactions, forecast, budgets.load_history(), _local_today())
 
     model = {
         "generated_at": datetime.now(timezone.utc)
@@ -596,6 +605,7 @@ def build():
         "bills": bills_block,
         "budgets": budgets_block,
         "spending": spending_block,
+        "months_view": months_view_block,
         "actions": actions.build_actions(
             runway_block, bills_block, budgets_block,
             fixed_expenses(forecast, transactions, current),

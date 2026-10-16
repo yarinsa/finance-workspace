@@ -1,5 +1,5 @@
 import { NavLink, Navigate, Route, Routes, useLocation } from "react-router-dom";
-import { groups, routes } from "./routes";
+import { groups, redirects, routes } from "./routes";
 import { cashflow, daysSince } from "./lib/data";
 import {
   Sidebar,
@@ -99,6 +99,9 @@ export default function App() {
               <Route path="/" element={<Navigate to="/overview" replace />} />
               {routes.map((r) => (
                 <Route key={r.path} path={r.path} element={<r.Component />} />
+              ))}
+              {redirects.map((r) => (
+                <Route key={r.from} path={r.from} element={<Navigate to={r.to} replace />} />
               ))}
               <Route path="*" element={<Navigate to="/overview" replace />} />
             </Routes>

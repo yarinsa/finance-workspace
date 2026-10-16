@@ -1,5 +1,6 @@
 import { BarRow, Card, CardLabel, PageTitle, Section } from "@/components/common";
 import BillsCard from "@/components/BillsCard";
+import FixedExpenses from "@/components/FixedExpenses";
 import BudgetsTeaser from "@/components/BudgetsTeaser";
 import WalletHero from "@/components/WalletHero";
 import GroupLinks from "@/components/GroupLinks";
@@ -42,6 +43,7 @@ export default function Monthly() {
         </Section>
       )}
       <BillsCard />
+      <FixedExpenses />
       <Section title="הוצאות" to="/spending">
         <SpendingSummary />
       </Section>

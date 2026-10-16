@@ -1,76 +1,41 @@
-import { BarRow, Card, CardLabel, Kpi, KpiGrid, PageTitle, StatRow } from "@/components/common";
-import NetWorthChart from "@/components/NetWorthChart";
-import MonthlyTrendChart from "@/components/MonthlyTrendChart";
-import FixedExpenses from "@/components/FixedExpenses";
-import { cashflow, monthYear, shekel, transactions, formatMetric, formatMetricCompact } from "@/lib/data";
+import { useState } from "react";
+import { Card, PageTitle } from "@/components/common";
+import MonthStrip from "@/components/cashflow/MonthStrip";
+import { CashflowLinks, MonthCategories, MonthResult, PlanVsActual } from "@/components/cashflow/MonthDetail";
+import { cashflow } from "@/lib/data";
 
+/**
+ * "תזרים" hub: one month-by-month screen — month strip, the selected month's
+ * income/expense/net, plan vs actual, and where the money went. Deep pages
+ * (runway, timeline, metrics) hang off the link row at the bottom.
+ */
 export default function Cashflow() {
-  const { metrics, today } = cashflow;
-  const kpis = metrics.slice(0, 5);
-  const expenseCats = Object.entries(transactions.summary.by_category)
-    .map(([k, v]) => [k, Math.abs(v)] as const)
-    .filter(([, v]) => v > 0)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 6);
-  const maxCat = expenseCats[0]?.[1] ?? 1;
-  // summary.by_category covers the whole ledger, not one month — say which span.
-  const dates = transactions.transactions.map((t) => t.date).sort();
-  const period = dates.length ? `${monthYear(dates[0])} – ${monthYear(dates[dates.length - 1])}` : "";
+  const view = cashflow.months_view;
+  const [picked, setPicked] = useState<string | null>(null);
+
+  if (!view || !view.months.length) {
+    return (
+      <div className="space-y-4">
+        <PageTitle>תזרים</PageTitle>
+        <Card>
+          <div className="text-muted-foreground">אין עדיין תצוגה חודשית — הריצו את הפייפליין ופרסמו מחדש.</div>
+        </Card>
+        <CashflowLinks />
+      </div>
+    );
+  }
+
+  const selected = view.months.some((m) => m.month === picked) ? picked! : view.current;
+  const m = view.months.find((x) => x.month === selected) ?? view.months[view.months.length - 1];
 
   return (
     <div className="space-y-4 md:space-y-[18px]">
-      <PageTitle>תזרים כספי</PageTitle>
-
-      <KpiGrid cols={5}>
-        {kpis.map((m) => (
-          <Card key={m.key} to="/metrics">
-            <Kpi
-              label={m.name}
-              value={formatMetric(m.value, m.units)}
-              compactValue={formatMetricCompact(m.value, m.units)}
-              rank={m.rank}
-              hint={m.description}
-            />
-          </Card>
-        ))}
-      </KpiGrid>
-
-      <div className="my-3 md:my-3.5">
-        <FixedExpenses />
-      </div>
-
-      <div className="my-3 md:my-3.5">
-        <Card>
-          <CardLabel>תזרים חודשי</CardLabel>
-          <MonthlyTrendChart />
-        </Card>
-      </div>
-
-      {/* Phones: this month's numbers first — they're what you open the screen for. */}
-      <div className="grid gap-3 md:grid-cols-2 md:gap-3.5">
-        <Card to="/networth" className="max-md:order-2">
-          <CardLabel>שווי נקי — לאורך החיים (כולל חיסכון ארוך טווח)</CardLabel>
-          <NetWorthChart />
-        </Card>
-
-        <Card>
-          <CardLabel>התזרים — נכון לחודש זה</CardLabel>
-          <StatRow label="הכנסות" value={shekel(today.income)} />
-          <StatRow label="הוצאות" value={shekel(today.expense)} />
-          <StatRow
-            label="תזרים"
-            value={shekel(today.net)}
-            tone={today.net >= 0 ? "good" : "bad"}
-          />
-        </Card>
-      </div>
-
-      <Card>
-        <CardLabel>הוצאות לפי קטגוריה · סה״כ {period}</CardLabel>
-        {expenseCats.map(([cat, amt]) => (
-          <BarRow key={cat} label={cat} value={shekel(amt)} fraction={amt / maxCat} />
-        ))}
-      </Card>
+      <PageTitle>תזרים</PageTitle>
+      <MonthStrip months={view.months} selected={m.month} onSelect={setPicked} />
+      <MonthResult m={m} />
+      <PlanVsActual m={m} />
+      <MonthCategories m={m} />
+      <CashflowLinks />
     </div>
   );
 }
