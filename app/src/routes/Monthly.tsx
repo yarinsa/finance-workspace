@@ -1,6 +1,7 @@
 import { BarRow, Card, CardLabel, PageTitle, Section } from "@/components/common";
 import BillsCard from "@/components/BillsCard";
 import BudgetsTeaser from "@/components/BudgetsTeaser";
+import WalletHero from "@/components/WalletHero";
 import GroupLinks from "@/components/GroupLinks";
 import { cashflow, monthYear, shekel } from "@/lib/data";
 
@@ -34,6 +35,7 @@ export default function Monthly() {
   return (
     <div className="feed">
       <PageTitle>החודש</PageTitle>
+      <WalletHero />
       {cashflow.budgets && (
         <Section title="תקציב" to="/budgets">
           <BudgetsTeaser budgets={cashflow.budgets} />
