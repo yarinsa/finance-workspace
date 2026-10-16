@@ -114,15 +114,25 @@ records, then the fix.
   balances, credit-card debt, loans/mortgage, detected salary, totals, and a
   `spending` summary. Query this for net-worth/debt questions.
 
+### Transactions database (Postgres)
+
+A local Postgres (Docker Compose) holds the ledger in two layers: `scraped_transactions`
+(replaced on every digest run) and `transaction_overrides` (manual category/note/excluded
+edits, kept forever), read through the `transactions` view. When `DATABASE_URL` is set,
+`data/digest.py` pipes the ledger through `db/ledger.py sync`, so `transactions.json`
+reflects edits. Edit with `db/edit.py` (it rebuilds `data/digested/`); push with `sync-data`.
+Setup, the orphaned-override rule and the `.env` rule are in **db/README.md**.
+
 ### Automated sync (Temporal) — POC
 
-**Proof of concept** (local dev server, no persistence guarantees); see
+**Proof of concept** (dev server, no persistence guarantees); see
 `sync/README.md` for status. Not yet the only refresh path — `refresh-all` remains.
 
 `sync/` runs `FinanceSyncWorkflow` daily at 07:30 Asia/Jerusalem over every scraped
 source (discount, discount-mortgage, discount-business, leumi, cal, amex, harel, more,
-analyst; RiseUp is out of scope) with a local Temporal dev server + worker under
-launchd. It checks **every** session first, sends **one** macOS notification listing
+analyst; RiseUp is out of scope) with the Temporal dev server in Docker Compose
+(`docker-compose.yml`) and the worker under launchd. It checks **every** session
+first, sends **one** macOS notification listing
 the dead logins (grouped: the three Discount apps are one login), and waits up to 12h
 for `python3 sync/resume.py [source|group ...]`; still-dead sources are skipped as
 `needs_login`, never fatal. Live sources are scraped one at a time in registry order

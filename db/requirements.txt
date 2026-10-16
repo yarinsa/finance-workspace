@@ -1,0 +1,3 @@
+# Only db/ needs this. data/ (the pipeline) stays stdlib-only and reaches the
+# database through `db/ledger.py sync` in a subprocess.
+psycopg[binary]==3.3.6
