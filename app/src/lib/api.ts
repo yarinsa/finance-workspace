@@ -144,6 +144,34 @@ export class ApiError extends Error {
 /** Gateway statuses that mean "the origin isn't there" (tunnel down, API stopped). */
 const OFFLINE_STATUSES = new Set([502, 503, 504]);
 
+/** sessionStorage key holding when we last reloaded for a 401 (ms since epoch). */
+const AUTH_RELOAD_KEY = "ledger-api-401-reload-at";
+/** A second 401 within this window means reloading won't help (no edge auth, user not allow-listed). */
+const AUTH_RELOAD_WINDOW_MS = 60_000;
+
+/**
+ * Handle a 401 from the API. The first one reloads the page so CloudFront's edge auth
+ * can re-authenticate an expired Cognito session. A repeat within a minute means the
+ * reload didn't help (locally there is no edge; in prod the API may reject an email
+ * that isn't allow-listed), so instead of looping it returns `ApiOffline` and the UI
+ * falls back to read-only. Without sessionStorage the guard can't persist, so it never
+ * reloads. Returns the error for the caller to throw.
+ */
+export function unauthenticated(): Error {
+  const now = Date.now();
+  try {
+    const last = Number(sessionStorage.getItem(AUTH_RELOAD_KEY));
+    if (!(now - last < AUTH_RELOAD_WINDOW_MS)) {
+      sessionStorage.setItem(AUTH_RELOAD_KEY, String(now));
+      globalThis.location.reload();
+      return new ApiError(401, "unauthenticated", "session expired");
+    }
+  } catch {
+    /* storage unavailable: fall through to read-only rather than risk a reload loop */
+  }
+  return new ApiOffline("unauthenticated (HTTP 401)");
+}
+
 /** The key the API addresses a transaction by: ISO date + absolute amount to 2 decimals. */
 export interface LedgerKey {
   date: string;
@@ -168,7 +196,8 @@ export function keyId(key: LedgerKey): string {
  * Perform one API call and map every failure mode onto a typed error:
  * - network failure, 502/503/504, or a non-JSON body (CloudFront falls back to
  *   index.html when the API origin is missing) -> `ApiOffline`
- * - 401 -> the Cognito session expired; reload so the edge redirects to login
+ * - 401 -> the Cognito session expired; reload once so the edge redirects to login,
+ *   then `ApiOffline` if it keeps happening (see `unauthenticated`)
  * - any other non-2xx -> `ApiError` carrying the API's error code and message
  *
  * Writes carry the CSRF headers the API requires (JSON content type plus
@@ -190,10 +219,7 @@ export async function request<T>(method: string, path: string, body?: unknown): 
     throw new ApiOffline(err instanceof Error ? err.message : "network error");
   }
 
-  if (res.status === 401) {
-    globalThis.location.reload();
-    throw new ApiError(401, "unauthenticated", "session expired");
-  }
+  if (res.status === 401) throw unauthenticated();
   if (OFFLINE_STATUSES.has(res.status)) throw new ApiOffline(`HTTP ${res.status}`);
 
   if (!res.headers.get("content-type")?.includes("json")) throw new ApiOffline("non-JSON response");
