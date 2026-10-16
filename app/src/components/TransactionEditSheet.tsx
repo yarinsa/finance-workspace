@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Input } from "@/components/ui/input";
+import OptionChips from "@/components/OptionChips";
 import {
   ApiError,
   ApiOffline,
@@ -105,7 +106,10 @@ function Body({ tx, onClose }: { tx: EditTarget; onClose: () => void }) {
   const shownHorizon = form.horizon === "clear" ? (base?.scraped_horizon ?? null) : (form.horizon ?? null);
   const patch = buildPatch(baseline, form);
   const savedTags = base?.tags ?? tx.tags ?? [];
-  const tagsDirty = !sameTags(tags, savedTags);
+  // A name typed but not yet confirmed with Enter still counts when saving.
+  const draft = tagDraft.trim().slice(0, 40);
+  const finalTags = draft && !tags.includes(draft) ? [...tags, draft].sort((x, y) => x.localeCompare(y, "he")) : tags;
+  const tagsDirty = !sameTags(finalTags, savedTags);
   const dirty = Object.keys(patch).length > 0 || tagsDirty;
 
   const addTag = (raw: string) => {
@@ -118,7 +122,7 @@ function Body({ tx, onClose }: { tx: EditTarget; onClose: () => void }) {
   const save = async (): Promise<Row> => {
     let r: Row | null = null;
     if (Object.keys(patch).length > 0) r = await patchTransaction(key, patch);
-    if (tagsDirty) r = await putTags(key, tags);
+    if (tagsDirty) r = await putTags(key, finalTags);
     return r ?? getTransaction(key);
   };
 
@@ -163,17 +167,19 @@ function Body({ tx, onClose }: { tx: EditTarget; onClose: () => void }) {
         <label className="block">
           <span className="mb-1 block text-xs text-muted-foreground">קטגוריה</span>
           <Input
-            list="ledger-categories"
             value={form.category}
             disabled={disabled}
             maxLength={64}
             onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))}
           />
-          <datalist id="ledger-categories">
-            {categories.map((c) => (
-              <option key={c} value={c} />
-            ))}
-          </datalist>
+          <OptionChips
+            label="קטגוריות"
+            options={categories}
+            query={form.category}
+            selected={form.category}
+            disabled={disabled}
+            onPick={(c) => setForm((f) => ({ ...f, category: c }))}
+          />
           {base && base.scraped_category && base.scraped_category !== form.category && (
             <span className="mt-1 block text-xs text-muted-foreground">מקור: {base.scraped_category}</span>
           )}
@@ -197,19 +203,13 @@ function Body({ tx, onClose }: { tx: EditTarget; onClose: () => void }) {
               </span>
             ))}
             <input
-              list="ledger-tags"
               value={tagDraft}
               disabled={disabled}
               maxLength={40}
               placeholder={tags.length ? "" : "הוסיפו תגית (Enter)"}
               aria-label="תגית חדשה"
               className="min-w-[90px] flex-1 bg-transparent py-0.5 text-sm outline-none"
-              onChange={(e) => {
-                const v = e.target.value;
-                // Picking a datalist option fills the whole value at once: add it straight away.
-                if (tagNames.includes(v) && !tags.includes(v)) addTag(v);
-                else setTagDraft(v);
-              }}
+              onChange={(e) => setTagDraft(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === "Enter" || e.key === ",") {
                   e.preventDefault();
@@ -218,16 +218,15 @@ function Body({ tx, onClose }: { tx: EditTarget; onClose: () => void }) {
                   setTags((ts) => ts.slice(0, -1));
                 }
               }}
-              onBlur={() => tagDraft && addTag(tagDraft)}
             />
-            <datalist id="ledger-tags">
-              {tagNames
-                .filter((t) => !tags.includes(t))
-                .map((t) => (
-                  <option key={t} value={t} />
-                ))}
-            </datalist>
           </div>
+          <OptionChips
+            label="תגיות קיימות"
+            options={tagNames.filter((t) => !tags.includes(t))}
+            query={tagDraft}
+            disabled={disabled}
+            onPick={addTag}
+          />
         </div>
 
         <label className="block">
