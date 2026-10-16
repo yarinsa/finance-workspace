@@ -26,7 +26,12 @@ CDP_VERSION_URL = f"http://127.0.0.1:{CDP_PORT}/json/version"  # 127.0.0.1, neve
 CHROME_BIN = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
 CHROME_PROFILE = Path.home() / ".chrome-cdp-amex"
 AMEX_URL = "https://www.americanexpress.co.il/"
+AMEX_TAB_URL = "https://web.americanexpress.co.il/"  # opened when the profile has no AMEX tab
+AMEX_HOST = "americanexpress.co.il"
+CDP_LIST_URL = f"http://127.0.0.1:{CDP_PORT}/json/list"
+CDP_NEW_URL = f"http://127.0.0.1:{CDP_PORT}/json/new?{AMEX_TAB_URL}"
 PW_SESSION = "amex"
+PW_TIMEOUT = 30.0  # playwright-cli / check_session.sh can hang forever on a wedged Chrome
 
 SESSION_EXPIRED = "SessionExpired"
 SCRAPE_FAILED = "ScrapeFailed"
@@ -55,11 +60,13 @@ def _heartbeat(detail=None):
         pass
 
 
-async def run_cmd(args, *, env=None, heartbeat_every=10.0, tail_lines=40):
+async def run_cmd(args, *, env=None, heartbeat_every=10.0, tail_lines=40, timeout=None):
     """Run a command in the repo root, heartbeating while it runs.
 
     Returns (returncode, tail) where tail is the last `tail_lines` lines of
     merged stdout+stderr. The process is killed if the activity is cancelled.
+    With `timeout` (seconds) a command that overruns is killed and a retryable
+    ApplicationError is raised, so a hung playwright-cli fails fast.
     """
     proc = await asyncio.create_subprocess_exec(
         *args,
@@ -76,14 +83,24 @@ async def run_cmd(args, *, env=None, heartbeat_every=10.0, tail_lines=40):
             tail.append(line.decode("utf-8", "replace").rstrip())
 
     reader = asyncio.ensure_future(pump())
+    loop = asyncio.get_running_loop()
+    deadline = None if timeout is None else loop.time() + timeout
     try:
         while not reader.done():
-            await asyncio.wait({reader}, timeout=heartbeat_every)
+            wait = heartbeat_every
+            if deadline is not None:
+                wait = min(wait, max(deadline - loop.time(), 0))
+            await asyncio.wait({reader}, timeout=wait)
             _heartbeat(tail[-1] if tail else None)
+            if deadline is not None and not reader.done() and loop.time() >= deadline:
+                raise ApplicationError(
+                    f"{' '.join(str(a) for a in args[:3])} timed out after {timeout:g}s:\n" + "\n".join(tail)
+                )
         await proc.wait()
     except BaseException:
         if proc.returncode is None:
             proc.kill()
+            await asyncio.shield(proc.wait())
         reader.cancel()
         raise
     return proc.returncode, "\n".join(tail)
@@ -125,6 +142,44 @@ def _launch_chrome():
     )
 
 
+def _cdp_pages() -> list:
+    """Page targets from CDP /json/list (no playwright attach needed)."""
+    with urllib.request.urlopen(CDP_LIST_URL, timeout=3) as r:
+        targets = json.loads(r.read())
+    return [t for t in targets if t.get("type") == "page"]
+
+
+def _open_amex_tab():
+    # /json/new needs PUT on modern Chrome; GET is rejected with 405.
+    req = urllib.request.Request(CDP_NEW_URL, method="PUT")
+    with urllib.request.urlopen(req, timeout=5) as r:
+        r.read()
+
+
+def _amex_tab_index(pages) -> int | None:
+    """Index of the first AMEX page among the user-facing tabs, or None.
+    chrome:// internals (browser_ui, omnibox popup) are not tabs playwright lists."""
+    tabs = [p for p in pages if not p.get("url", "").startswith(("chrome://", "chrome-untrusted://", "devtools://", "chrome-extension://"))]
+    for i, p in enumerate(tabs):
+        if AMEX_HOST in p.get("url", ""):
+            return i
+    return None
+
+
+async def _ensure_amex_tab() -> int:
+    """Make sure an AMEX tab exists (open one if not) and return its tab index.
+    Opening the login page is not authenticating."""
+    pages = await asyncio.to_thread(_cdp_pages)
+    idx = _amex_tab_index(pages)
+    if idx is None:
+        await asyncio.to_thread(_open_amex_tab)
+        await asyncio.sleep(1)
+        idx = _amex_tab_index(await asyncio.to_thread(_cdp_pages))
+    if idx is None:
+        raise ApplicationError("no AMEX tab in Chrome after opening one")
+    return idx
+
+
 @activity.defn
 async def ensure_chrome() -> str:
     """Make sure the AMEX Chrome (CDP 9226, persisted profile) is up and that a
@@ -140,11 +195,15 @@ async def ensure_chrome() -> str:
                 break
         else:
             raise ApplicationError(f"Chrome did not open CDP port {CDP_PORT}")
+    # Without an AMEX tab attach/run-code hang (2026-10-16), so create one first.
+    tab = await _ensure_amex_tab()
     # Attaching is not authenticating; it only binds playwright-cli to the window.
-    rc, tail = await run_cmd(["playwright-cli", f"-s={PW_SESSION}", "attach", f"--cdp=http://127.0.0.1:{CDP_PORT}"])
+    rc, tail = await run_cmd(
+        ["playwright-cli", f"-s={PW_SESSION}", "attach", f"--cdp=http://127.0.0.1:{CDP_PORT}"], timeout=PW_TIMEOUT
+    )
     if rc != 0:
         raise ApplicationError(f"playwright-cli attach failed (rc={rc}):\n{tail}")
-    await run_cmd(["playwright-cli", f"-s={PW_SESSION}", "tab-select", "0"])
+    await run_cmd(["playwright-cli", f"-s={PW_SESSION}", "tab-select", str(tab)], timeout=PW_TIMEOUT)
     return state
 
 
@@ -152,7 +211,7 @@ async def ensure_chrome() -> str:
 async def check_amex_session() -> bool:
     """True when check_session.sh prints VERDICT: LIVE. False for LOGGED_OUT.
     A missing verdict is an infrastructure problem and raises (retryable)."""
-    rc, tail = await run_cmd([str(SKILL_SCRIPTS / "check_session.sh"), PW_SESSION])
+    rc, tail = await run_cmd([str(SKILL_SCRIPTS / "check_session.sh"), PW_SESSION], timeout=PW_TIMEOUT)
     live = parse_verdict(tail)
     if live is None:
         raise ApplicationError(f"check_session.sh printed no VERDICT (rc={rc}):\n{tail}")
