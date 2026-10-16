@@ -30,7 +30,7 @@ for i in $(seq 1 10); do sleep 2; curl -s http://127.0.0.1:9228/json/version | g
 
 ```bash
 .claude/skills/more-refresh/scripts/dump.sh [PORT]   # default 9228
-python3 data/more/normalize.py
+poetry run python data/more/normalize.py
 ```
 
 ## How the data is obtained (and why not a fetch)

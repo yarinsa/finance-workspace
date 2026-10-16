@@ -1,13 +1,18 @@
--- Transactions database. Applied idempotently by db/ledger.py on every connect.
---
--- Two layers, named for who writes them, plus the view everything reads:
---   scraped_transactions   machine layer: the digested ledger, replaced in full on each import
---   transaction_overrides  human layer: sparse edits, kept forever
---   transactions           the ledger: scraped rows with overrides applied
---
--- Both tables are keyed on the ledger's dedup key, (date, abs(amount)), which is
--- unique per row after digest.consolidate_transactions.
+"""Baseline: the schema db/schema.sql used to apply on every connect.
 
+Idempotent (IF NOT EXISTS), so a database created before Alembic upgrades in place.
+Tables must match finance/tables.py; db/tests/test_schema.py checks that.
+
+Revision ID: 0001
+"""
+from alembic import op
+
+revision = "0001"
+down_revision = None
+branch_labels = None
+depends_on = None
+
+SQL = r"""
 CREATE TABLE IF NOT EXISTS scraped_transactions (
     txn_date     date          NOT NULL,
     abs_amount   numeric(12,2) NOT NULL,
@@ -63,3 +68,13 @@ SELECT o.*
 FROM transaction_overrides o
 LEFT JOIN scraped_transactions s USING (txn_date, abs_amount)
 WHERE s.txn_date IS NULL;
+"""
+
+
+def upgrade():
+    op.execute(SQL)
+
+
+def downgrade():
+    op.execute("DROP VIEW IF EXISTS orphaned_overrides; DROP VIEW IF EXISTS transactions; "
+               "DROP TABLE IF EXISTS transaction_overrides; DROP TABLE IF EXISTS scraped_transactions;")

@@ -28,7 +28,7 @@ Logged in = tab on `https://amitim.analyst.co.il/lobby`, title `אנליסט - �
 
 ```bash
 .claude/skills/analyst-refresh/scripts/dump.sh [PORT]   # default 9229
-python3 data/analyst/normalize.py
+poetry run python data/analyst/normalize.py
 ```
 
 `dump.sh` takes the port as its first arg and only touches the tab whose URL

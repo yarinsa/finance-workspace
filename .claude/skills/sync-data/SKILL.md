@@ -17,7 +17,7 @@ raw dumps are already on disk.
    read what `digest` writes, and `cashflow` turns validation failures into actions:
 
    ```bash
-   python3 data/digest.py && python3 data/validate.py && python3 data/forecast.py && python3 data/cashflow.py && python3 data/goals.py
+   poetry run python data/digest.py && poetry run python data/validate.py && poetry run python data/forecast.py && poetry run python data/cashflow.py && poetry run python data/goals.py
    ```
 
    Stop and report if any step fails — don't upload a half-rebuilt set.

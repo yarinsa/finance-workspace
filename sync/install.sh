@@ -11,10 +11,9 @@ LABELS=(me.yarinsa.finance-worker)
 docker info >/dev/null 2>&1 || { echo "Docker daemon is not running: start Docker Desktop" >&2; exit 1; }
 mkdir -p "$AGENTS" "$LOGS" "$HOME/.temporal"
 
-# Python env for the worker (data/ stays stdlib-only; only sync/ needs this).
-[ -x "$REPO/.venv/bin/python" ] || python3 -m venv "$REPO/.venv"
-"$REPO/.venv/bin/pip" install -q -r "$REPO/sync/requirements.txt"
-"$REPO/.venv/bin/pip" install -q -r "$REPO/db/requirements.txt"
+# One Poetry env (in-project .venv, see poetry.toml) for the pipeline, db and worker.
+command -v poetry >/dev/null || { echo "poetry not found: brew install poetry" >&2; exit 1; }
+(cd "$REPO" && poetry install -q --with sync)
 
 # Temporal now runs in Docker Compose; drop the legacy launchd agent.
 launchctl bootout "gui/$UID/me.yarinsa.temporal" 2>/dev/null || true

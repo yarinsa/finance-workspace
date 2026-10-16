@@ -37,12 +37,10 @@ def apply_overrides(ledger):
     view: your category/note edits applied, excluded rows removed. A no-op when
     DATABASE_URL is unset or with --no-db. When the database is configured but
     unreachable we stop rather than publish numbers that silently drop the edits.
-    data/ stays stdlib-only: the psycopg side runs in the repo venv.
     """
     if "--no-db" in sys.argv or not database_url():
         return ledger
-    py = ROOT.parent / ".venv" / "bin" / "python"
-    res = subprocess.run([str(py), str(ROOT.parent / "db" / "ledger.py"), "sync"],
+    res = subprocess.run([sys.executable, str(ROOT.parent / "db" / "ledger.py"), "sync"],
                          input=json.dumps(ledger, ensure_ascii=False),
                          capture_output=True, text=True)
     sys.stderr.write(res.stderr)

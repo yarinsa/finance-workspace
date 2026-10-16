@@ -40,7 +40,7 @@ data/<source>/raw/  --(<source>/normalize.py)-->  data/<source>/normalized/*.jso
 3. **Digest** — `data/digest.py` runs every `*/normalize.py`, then combines all
    `normalized/*.json` into the consolidated outputs in `data/digested/`.
 
-Run `python3 data/digest.py` (or `--no-normalize` to combine existing normalized
+Run `poetry run python data/digest.py` (or `--no-normalize` to combine existing normalized
 output without re-scraping).
 
 ### Refreshing everything
@@ -88,9 +88,9 @@ found because a bank ledger has a hole (or predates it) is reported as a
 failures.
 
 ```
-python3 data/validate.py                  # all checks -> data/digested/validation.{json,md}
-python3 data/validate.py dump <source>    # exit 0 = ok, 1 = REJECT (run before trusting a scrape)
-python3 data/validate.py --data-dir D --out-dir O --as-of 2026-10-16 [--strict]
+poetry run python data/validate.py                  # all checks -> data/digested/validation.{json,md}
+poetry run python data/validate.py dump <source>    # exit 0 = ok, 1 = REJECT (run before trusting a scrape)
+poetry run python data/validate.py --data-dir D --out-dir O --as-of 2026-10-16 [--strict]
 ```
 
 `--data-dir` / `FINANCE_DATA_DIR` reads another checkout's data read-only;
@@ -134,7 +134,7 @@ analyst; RiseUp is out of scope) with the Temporal dev server in Docker Compose
 (`docker-compose.yml`) and the worker under launchd. It checks **every** session
 first, sends **one** macOS notification listing
 the dead logins (grouped: the three Discount apps are one login), and waits up to 12h
-for `python3 sync/resume.py [source|group ...]`; still-dead sources are skipped as
+for `poetry run python sync/resume.py [source|group ...]`; still-dead sources are skipped as
 `needs_login`, never fatal. Live sources are scraped one at a time in registry order
 (Discount **account → mortgage → business**, business always last), each followed by
 a `data/validate.py dump <source>` gate (skipped while that file doesn't exist); one
@@ -145,8 +145,8 @@ Every source's progress (checking_session → waiting_for_login → scraping →
 digesting → publishing → done, or needs_login / failed / rejected) is published as its own
 entry to `data/sync-status.json`, which the app polls for a live status on `/syncs`, the
 header dot and the home list.
-Install with `sync/install.sh`; UI at http://localhost:8233. Only `sync/` needs
-`temporalio`; `data/` stays stdlib-only.
+Install with `sync/install.sh`; UI at http://localhost:8233. `temporalio` is in the
+Poetry `sync` group.
 
 ### Freshness targets
 
@@ -158,7 +158,7 @@ target and is never listed. Age is the newest `raw/` file mtime (what
 inside grace) -> `overdue` (past grace; raises the home "נתונים לא עדכניים"
 action, naming how late each source is) or `never`.
 
-- `python3 data/freshness.py` prints the table (`--json` for the list; `--root DIR`
+- `poetry run python data/freshness.py` prints the table (`--json` for the list; `--root DIR`
   reads another checkout's dumps read-only). `digest.py` writes the same list to
   `snapshot.json` -> `freshness`.
 - `due_sources(now)` is the pure "scrape these today" list for the scheduled sync,
@@ -167,7 +167,7 @@ action, naming how late each source is) or `never`.
 
 ### Cashflow forecast
 
-`python3 data/forecast.py` writes `data/digested/forecast.{json,md}` — a
+`poetry run python data/forecast.py` writes `data/digested/forecast.{json,md}` — a
 multi-month cashflow projection (`HORIZON` months, currently 6) built from
 RiseUp's forward-looking budget envelopes (not ledger extrapolation, which the
 dedup key makes unreliable), with CAL/AMEX committed billings as a non-summed
@@ -199,7 +199,7 @@ upcoming card bills, duplicate services, stale syncs) from those blocks, with pe
 
 **Budget overrides.** Each budget category carries `history` (spend of the last 4
 RiseUp cycles, from `data/riseup/raw/budget_YYYY-MM_6.json`). To change a planned
-amount: `python3 data/budgets.py set "<category>" <amount>`, `unset "<category>"`, or
+amount: `poetry run python data/budgets.py set "<category>" <amount>`, `unset "<category>"`, or
 `list`; it edits gitignored `data/budgets/budgets.json`, reruns `cashflow.py` and
 prints the new line. The app's budget editor sheet is read-only and only shows this
 command; push the result with `sync-data`.
@@ -212,7 +212,7 @@ patterns per feature, what the app has vs. lacks, and the design principles
 
 ### Long-range projection
 
-`python3 data/projection.py` writes a net-worth projection to retirement/end age.
+`poetry run python data/projection.py` writes a net-worth projection to retirement/end age.
 `current_age` is derived from `BIRTH_DATE` at the top of the file (not in scraped
 data). **If `BIRTH_DATE` is missing or looks wrong, ask the user for their birth
 date** rather than guessing — a wrong age shifts every loan-payoff and retirement
@@ -293,13 +293,33 @@ debt-bearing cards for totals and enriches them with the roster names by last4.
 ## Conventions
 
 - **Money out is negative**, income/refunds positive, across all normalized output.
-- Each `normalize.py` must stay self-contained and idempotent — re-runnable after
+- Each `normalize.py` must stay self-contained (its only shared import is
+  `finance.models`) and idempotent — re-runnable after
   any scrape with no external state.
 - Adding a source: scaffold with `add-bank-source`, write its `normalize.py` to the
   common envelope, emit a `transactions` entity if it has one, and `digest.py` picks
   it up automatically (no wiring needed). If the source overlaps RiseUp, add its
   origin name to `RISEUP_ORIGIN`.
 - Credentials live in `.env` / `.mcp.json` (gitignored) — never commit secrets.
+
+## Python environment and models (Poetry + Pydantic + SQLModel)
+
+One Poetry project (`pyproject.toml`, in-project `.venv`) covers `data/`, `db/` and
+`sync/`; run everything with `poetry run python …` (or `.venv/bin/python`). Plain
+`python3` no longer works for normalizers or digest.
+
+- **`finance/models.py`** — Pydantic models for every normalized entity
+  (`Transaction`, `Account`, `CreditCard`, `Loan`, `Savings`, `Income`,
+  `Subscription`) and the digested `LedgerTransaction`. Every `normalize.py` writes
+  through `write_envelope`, which validates; records are `extra="forbid"`, so a
+  **new field must be declared in the model first**. Dates are typed (ISO,
+  ISO datetime and Discount's `YYYYMMDD` all parse; `""` is null).
+- **`finance/tables.py`** — the Postgres tables as SQLModel classes; the schema's
+  source of truth. Migrations are Alembic (`db/migrations/`), applied by
+  `db/ledger.py` on every connect. Changing a table:
+  `poetry run alembic -c db/alembic.ini revision --autogenerate -m "…"`, review,
+  commit. `db/tests/test_schema.py` fails when the migrated DB and the models drift.
+  The full procedure is the `schema-change` skill.
 
 ## Testing
 
@@ -310,8 +330,8 @@ import the scripts directly (`import digest`, `import cashflow`); `data/conftest
 puts `data/` on the path. Run them with:
 
 ```
-python3 -m venv .venv && .venv/bin/pip install pytest   # first time only
-.venv/bin/python -m pytest                              # run the suite
+poetry install --with sync,dev   # first time only (in-project .venv, see poetry.toml)
+poetry run pytest                # run the suite
 ```
 
 Current coverage: `digest.py` classifiers (internal-transfer / card-bill /

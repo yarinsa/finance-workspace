@@ -1,0 +1,27 @@
+[project]
+name = "finance"
+version = "0.1.0"
+description = "Household finance workspace: scrape -> normalize -> digest -> Postgres ledger"
+requires-python = ">=3.13,<4"
+dependencies = [
+    "pydantic (>=2.11,<3)",
+    "sqlmodel (>=0.0.24,<0.1)",
+    "alembic (>=1.16,<2)",
+    "psycopg[binary] (>=3.3.6,<4)",
+]
+
+[tool.poetry]
+# finance/ holds the shared models: the pipeline (data/), the database (db/) and the
+# migrations all import from it, so one definition drives the JSON and the schema.
+packages = [{ include = "finance" }]
+
+[tool.poetry.group.sync.dependencies]
+temporalio = "1.34.0"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^9.1"
+pytest-asyncio = "^1.4"
+
+[build-system]
+requires = ["poetry-core>=2.0,<3"]
+build-backend = "poetry.core.masonry.api"

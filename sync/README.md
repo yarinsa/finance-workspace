@@ -73,7 +73,7 @@ login is already expected).
    `validate_dump`. One failing source never stops the others. If a session expires
    mid-scrape, the rest of that login group is skipped as `needs_login` instead of
    hammering the bank with a dead login.
-4. **Validation gate.** `validate_dump(source)` runs `python3 data/validate.py dump
+4. **Validation gate.** `validate_dump(source)` runs `poetry run python data/validate.py dump
    <source>` when that file exists (exit 0 = good; non-zero rejects, with the output in
    the result detail) and passes while the file doesn't exist yet. A rejected source
    has status `rejected` and does not count as scraped.
@@ -106,7 +106,7 @@ targets"), rather than hard-coding the source list. Sources with no target
 ## Start / stop
 
 ```bash
-sync/install.sh      # venv deps, Temporal container, worker launchd agent, schedule
+sync/install.sh      # poetry install --with sync, Temporal container, worker launchd agent, schedule
 sync/uninstall.sh    # unload worker, stop Temporal container (keeps ~/.temporal/finance.db)
 docker compose up -d --wait   # Temporal (+ Postgres) alone, from the repo root
 ```
@@ -119,10 +119,10 @@ Desktop to start at login, otherwise the 07:30 run has no server.
 Temporal UI: http://localhost:8233 (namespace `default`, task queue `finance-sync`).
 
 ```bash
-.venv/bin/python sync/schedule.py                      # create/update the schedule (every source)
-.venv/bin/python sync/schedule.py --sources amex,cal   # ...only these
-.venv/bin/python sync/schedule.py --trigger            # run now
-.venv/bin/python sync/schedule.py --pause              # / --unpause
+poetry run python sync/schedule.py                      # create/update the schedule (every source)
+poetry run python sync/schedule.py --sources amex,cal   # ...only these
+poetry run python sync/schedule.py --trigger            # run now
+poetry run python sync/schedule.py --pause              # / --unpause
 ```
 
 The schedule id is `finance-sync` (workflow `FinanceSyncWorkflow`, daily 07:30
@@ -165,8 +165,8 @@ You get one notification listing every dead login, grouped, e.g. "discount
 amex (profile ~/.chrome-cdp-amex)". Log in in each of those Chrome windows, then:
 
 ```bash
-python3 sync/resume.py                     # re-check every dead source
-python3 sync/resume.py discount amex       # re-check only these (a source name or a login group)
+poetry run python sync/resume.py                     # re-check every dead source
+poetry run python sync/resume.py discount amex       # re-check only these (a source name or a login group)
 ```
 
 This signals every running sync workflow. After 12h without a signal, or for sources
@@ -180,5 +180,5 @@ Per-run detail (command output tails) is in the Temporal UI event history.
 
 ## Tests
 
-`.venv/bin/python -m pytest sync/tests` (time-skipping Temporal test server, mocked
+`poetry run pytest sync/tests` (time-skipping Temporal test server, mocked
 activities; nothing touches Chrome or a bank).

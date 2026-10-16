@@ -11,6 +11,7 @@ Common envelope: {"source", "entity", "generated_at", "records": [...]}
 Self-contained; safe to re-run after each scrape.
 """
 import json, datetime
+from finance.models import write_envelope
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent          # .../data/discount-mortgage
@@ -60,8 +61,4 @@ try:
 except FileNotFoundError:
     pass
 
-path = OUT / "loans.json"
-path.write_text(json.dumps(
-    {"source": SOURCE, "entity": "loans", "generated_at": NOW, "records": records},
-    ensure_ascii=False, indent=2))
-print(f"  {SOURCE}/{path.name}: {len(records)} records")
+write_envelope(OUT, SOURCE, "loans", NOW, records)

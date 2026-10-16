@@ -1,2 +1,0 @@
-# Orchestration only. data/ (the pipeline) stays stdlib-only.
-temporalio==1.34.0

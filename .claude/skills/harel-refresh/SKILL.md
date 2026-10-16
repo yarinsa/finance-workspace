@@ -67,7 +67,7 @@ data/
 5. **Normalize:**
 
    ```bash
-   python3 data/harel/normalize.py     # or just run data/digest.py
+   poetry run python data/harel/normalize.py     # or just run data/digest.py
    ```
 
 ## Endpoints captured
