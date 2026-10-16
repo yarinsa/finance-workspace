@@ -105,11 +105,37 @@ Any successful PATCH/DELETE signals a rebuild.
   `X-Origin-Secret` custom header. The behavior and origin exist only when
   `api_origin_domain` is set.
 - SPA routing moves from distribution-wide `custom_error_response` (which would turn
-  API 403/404s into `index.html`) to a CloudFront Function on the default behavior
-  that rewrites extension-less paths to `/index.html`.
-- `infra/tunnel.sh` sets up `tailscale funnel --bg` for `127.0.0.1:8787` under
-  `/api` and prints the hostname to put in `terraform.tfvars`. The user installs
-  Tailscale and logs in; no agent authenticates.
+  API 403/404s into `index.html`) into the edge-auth Lambda: after auth passes, any
+  non-`/api/` URI whose last segment has no `.` is rewritten to `/index.html`. (A
+  CloudFront Function would have been the obvious choice, but a behavior cannot have a
+  CloudFront Function *and* Lambda@Edge on viewer-request, and the Lambda is needed
+  there for auth.) Files with an extension (`/data/*.json`, `/assets/*`) are untouched,
+  so a genuinely missing asset is still S3's 403. Tests: `node --test infra/edge-auth/edge-auth.test.js`.
+- `infra/tunnel.sh` sets up `tailscale funnel --bg --https=443 --set-path=/api
+  http://127.0.0.1:8787/api` (the mount prefix is stripped, hence `/api` in the target)
+  and prints the hostname to put in `terraform.tfvars`. `--off` turns it off. The user
+  installs Tailscale, logs in, and allows Funnel for the machine via `nodeAttrs` in the
+  tailnet policy; no agent authenticates.
+- `random_password.api_origin_secret` exists only while `api_origin_domain` is set
+  (re-enabling after a rollback rotates it); read it with
+  `terraform output -raw api_origin_secret`.
+
+### Rollout steps
+
+1. Install Tailscale, log in, and enable Funnel for this machine in the tailnet policy (you).
+2. `infra/tunnel.sh` - prints the Funnel hostname.
+3. Set `api_origin_domain = "<host>"` in `infra/terraform.tfvars`, then `terraform apply`.
+   (The first apply also swaps the SPA error-response routing for the Lambda rewrite;
+   with the variable empty that is the only change.)
+4. Put the secret in `.env`: `FINANCE_API_ORIGIN_SECRET=$(terraform output -raw api_origin_secret)`.
+5. `docker compose up -d api`; check `https://my-finance.yarinsa.me/api/health` while signed in.
+
+### Rollback
+
+- Quick kill switch: `docker compose stop api` and/or `infra/tunnel.sh --off`. The UI goes read-only.
+- Full: unset `api_origin_domain` (or set it to `""`) and `terraform apply` - removes the
+  origin, the `/api/*` behavior and the secret. Then `tailscale funnel reset` to clear
+  all Funnel config on the node.
 
 ## UI
 
