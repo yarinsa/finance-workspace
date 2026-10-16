@@ -177,7 +177,7 @@ def top_categories(by_cat, n=5):
     return out
 
 
-def build_pace(transactions, current_key):
+def build_pace(transactions, current_key, today=None):
     """Month-to-date vs. the previous month up to the *same day* — the wallet
     header's "am I ahead or behind" signal.
 
@@ -194,14 +194,23 @@ def build_pace(transactions, current_key):
     transfers, card-bill settlements or savings). ``daily_expense`` is the
     cumulative spend per day for the sparkline: the current month up to
     ``as_of_day``, the previous month in full (so its end-of-month is visible).
+
+    ``today`` (a ``date``) drops rows dated after it: RiseUp emits card purchases
+    at their future billing date (e.g. on 10-15, rows dated 10-22 and 10-29), and
+    money that hasn't moved yet is not month-to-date. That also caps
+    ``as_of_day`` at today, so the previous month and the average are cut at the
+    same day. A stale ledger still uses its own latest date. ``None`` = no cap
+    (pure, for tests); ``build()`` passes the local date.
     """
     prev_key = _prev_month(current_key)
     trailing = [prev_key]                      # the 12 months before this one
     for _ in range(AVG_MONTHS - 1):
         trailing.append(_prev_month(trailing[-1]))
     keys = {current_key, *trailing}
+    cutoff = today.isoformat() if today else None
     rows = [t for t in transactions
             if (t.get("date") or "")[:7] in keys
+            and not (cutoff and t["date"][:10] > cutoff)
             and not (t.get("internal_transfer") or t.get("card_bill_payment")
                      or t.get("savings"))]
     cur_days = [int(t["date"][8:10]) for t in rows if t["date"][:7] == current_key]
@@ -320,9 +329,9 @@ def build_metrics(month, snapshot):
     overdraft = totals.get("bank_balances_sum")
 
     debt_repayment_pct = round(loan_service / expense * 100, 1) if expense else None
-    # Savings% proxy: net cashflow as a share of income. True net-worth-delta
-    # savings needs snapshot history (phase 2); flagged in `note`.
-    savings_pct = round(max(net, 0) / income * 100, 1) if income else None
+    # Savings% proxy: net cashflow as a share of income — negative when the month
+    # overspent. True net-worth-delta savings needs snapshot history (phase 2).
+    savings_pct = round(net / income * 100, 1) if income else None
 
     metrics = [
         {
@@ -354,7 +363,7 @@ def build_metrics(month, snapshot):
         {
             "key": "savings_pct", "name": "אחוז חיסכון", "value": savings_pct, "units": "%",
             "rank": _verdict(savings_pct, good_above=15, bad_below=5), "higher_is_better": True,
-            "description": "אומדן: התזרים החיובי כאחוז מההכנסה (אומדן — דורש היסטוריית שווי נקי לחישוב מדויק)",
+            "description": "אומדן: התזרים כאחוז מההכנסה, שלילי כשההוצאות עולות על ההכנסות (אומדן — דורש היסטוריית שווי נקי לחישוב מדויק)",
             "estimated": True,
         },
         {
@@ -518,6 +527,11 @@ def _load_optional(path):
         return None
 
 
+def _local_today():
+    """Today in Israel (UTC+3, matching ``generated_at``) — the pace cut-off."""
+    return datetime.now(timezone(timedelta(hours=3))).date()
+
+
 def build():
     with open(TRANSACTIONS, encoding="utf-8") as f:
         tx_doc = json.load(f)
@@ -551,7 +565,7 @@ def build():
         ),
         "metrics": metrics,
         "today": charts["today"],
-        "pace": {**build_pace(transactions, current),
+        "pace": {**build_pace(transactions, current, today=_local_today()),
                  "expected": expected_for_month(forecast, current)},
         "fixed_expenses": fixed_expenses(forecast, transactions, current),
         "charts": {

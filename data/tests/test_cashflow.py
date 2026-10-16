@@ -1,4 +1,6 @@
 """Real-case tests for cashflow.py bucketing and monthly aggregation."""
+from datetime import date
+
 import cashflow
 
 
@@ -142,6 +144,69 @@ class TestBuildPace:
         ], "2027-01")
         assert pace["previous"]["month"] == "2026-12"
         assert pace["previous"]["expense"] == 20.0
+
+
+class TestPaceFutureDatedRows:
+    """As the household, on 2026-10-15 the Overview said "נכון ל-29 באוקטובר ·
+    94% מהחודש עבר": RiseUp emits October rows dated later in the month (card
+    billing dates), and as_of_day was taken from the latest row in the ledger."""
+
+    TODAY = date(2026, 10, 15)
+    ROWS = [
+        {"date": "2026-10-04", "amount": 26428.43, "description": "העברת משכורת", "is_income": True},
+        {"date": "2026-10-15", "amount": -500.0, "category": "uncategorized"},
+        {"date": "2026-10-22", "amount": 250.29, "description": "מטרו"},
+        {"date": "2026-10-29", "amount": -230.75, "description": "ח.י אלקטרוניקה -טרקלין חש"},
+        {"date": "2026-10-29", "amount": -105.0, "description": "מחסני חשמל-אילת"},
+        {"date": "2026-09-10", "amount": -800.0, "category": "uncategorized"},
+        {"date": "2026-09-28", "amount": -6800.0, "description": 'הו"ק לעיין ניהול נכסי'},
+        {"date": "2026-08-12", "amount": -400.0, "category": "uncategorized"},
+        {"date": "2026-08-20", "amount": -3000.0, "category": "uncategorized"},
+    ]
+
+    def pace(self, rows=None, key="2026-10", today=TODAY):
+        return cashflow.build_pace(self.ROWS if rows is None else rows, key, today=today)
+
+    def test_as_of_day_is_capped_at_today(self):
+        p = self.pace()
+        assert p["as_of_day"] == 15
+        assert len(p["current"]["daily_expense"]) == 15
+
+    def test_future_dated_rows_are_not_month_to_date_yet(self):
+        cur = self.pace()["current"]
+        assert cur["expense"] == 500.0            # not + 230.75 + 105 (29th)
+        assert cur["income"] == 26428.43          # not + 250.29 מטרו (22nd)
+        assert cur["month_expense"] == 500.0
+
+    def test_previous_and_average_cut_at_the_capped_day(self):
+        p = self.pace()
+        assert p["previous"]["expense"] == 800.0   # rent on 09-28 is after day 15
+        assert p["average"]["expense"] == 600.0    # (800 + 400) / 2, both cut at 15
+
+    def test_stale_ledger_still_uses_its_own_latest_date(self):
+        # Last scrape cleared through the 10th — compare 1–10, not 1–15.
+        rows = [{"date": "2026-10-10", "amount": -50.0}, {"date": "2026-09-12", "amount": -20.0}]
+        p = self.pace(rows)
+        assert p["as_of_day"] == 10
+        assert p["previous"]["expense"] == 0.0
+
+    def test_past_month_shown_is_not_capped(self):
+        # Fallback to a completed month (e.g. first hour of November).
+        p = self.pace([{"date": "2026-10-29", "amount": -105.0}], today=date(2026, 11, 1))
+        assert p["as_of_day"] == 29
+        assert p["current"]["expense"] == 105.0
+
+
+class TestSavingsPct:
+    """As the household, with October income 27,741.45 and expense 28,245.34
+    (net -503.89) the savings% tile showed 0% — it should show the real ≈ -1.8%."""
+
+    def test_negative_net_gives_negative_savings_pct(self):
+        metrics = cashflow.build_metrics(
+            {"income": 27741.45, "expense": 28245.34, "net": -503.89}, {})
+        m = next(m for m in metrics if m["key"] == "savings_pct")
+        assert m["value"] == -1.8
+        assert m["rank"] == "bad"
 
 
 class TestExpectedForMonth:
