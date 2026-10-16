@@ -26,3 +26,15 @@ variable "github_repo" {
   type        = string
   default     = "yarinsa/finance-workspace"
 }
+
+variable "github_owner_id" {
+  description = "Numeric GitHub ID of the github_repo owner; part of the immutable OIDC subject. `gh api repos/<owner>/<repo> --jq .owner.id`"
+  type        = string
+  default     = "44482362"
+}
+
+variable "github_repo_id" {
+  description = "Numeric GitHub ID of github_repo; part of the immutable OIDC subject. `gh api repos/<owner>/<repo> --jq .id`"
+  type        = string
+  default     = "1312600753"
+}
