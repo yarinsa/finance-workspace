@@ -4,6 +4,7 @@ One definition of what an override or tag edit may contain, so both paths valida
 """
 import sys
 from pathlib import Path
+from datetime import date
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -20,11 +21,26 @@ class Patch(BaseModel):
     note: str | None = Field(default=None, max_length=500)
     excluded: bool | None = None
     horizon: Literal["current", "near", "future"] | None = None
+    goal_id: int | None = None
 
     @field_validator("category", "note")
     @classmethod
     def blank_clears(cls, v):
         return (v.strip() or None) if v is not None else None
+
+
+class GoalEdit(BaseModel):
+    """A goal's fields (db/goals.py); on create, description and amount are required."""
+    model_config = ConfigDict(extra="forbid")
+
+    description: str | None = Field(default=None, min_length=1, max_length=80)
+    amount: float | None = Field(default=None, ge=0, le=100_000_000)
+    start_date: date | None = None
+    end_date: date | None = None
+    interval: Literal["monthly", "yearly"] | None = None
+    repetitions: int | None = Field(default=None, ge=1, le=1000)
+    rise: float | None = Field(default=None, ge=0, le=100_000_000)
+    horizon: Literal["current", "near", "future"] | None = None
 
 
 class TagSet(BaseModel):

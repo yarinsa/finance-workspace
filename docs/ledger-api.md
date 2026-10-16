@@ -66,15 +66,22 @@ Key: a transaction is `(date, abs_amount)` — ISO date and the absolute amount 
 | GET | `/api/health` | — | `{"ok":true,"db":true,"temporal":true}` |
 | GET | `/api/transactions` | `?from=&to=` (ISO dates), `&excluded=include\|only` (default: hide) | `{"transactions":[Row]}` |
 | GET | `/api/transactions/{date}/{abs_amount}` | — | `Row` or 404 |
-| PATCH | `/api/transactions/{date}/{abs_amount}` | any of `{"category":str\|null,"note":str\|null,"excluded":bool}`; `null` clears that field | `Row` (empty overrides are pruned) |
+| PATCH | `/api/transactions/{date}/{abs_amount}` | any of `{"category":str\|null,"note":str\|null,"excluded":bool,"horizon":"current\|near\|future"\|null,"goal_id":int\|null}`; `null` clears that field (unknown `goal_id` → 422) | `Row` (empty overrides are pruned) |
 | DELETE | `/api/transactions/{date}/{abs_amount}/override` | — | `Row` back to scraped values |
 | GET | `/api/categories` | — | `{"categories":[str]}` (distinct, scraped + overrides, sorted) |
+| PUT | `/api/transactions/{date}/{abs_amount}/tags` | `{"tags":[str]}` (≤20, replaces the set) | `Row` |
+| GET | `/api/tags` | — | `{"tags":[{id,name,color,count}]}` |
+| GET | `/api/horizons` | — | `{"horizons":[{id,key,name,target_pct,position}]}` (fixed, seeded by migration 0006) |
+| GET | `/api/goals` | — | `{"goals":[Goal]}` — `{id,slug,description,amount,start_date,end_date,interval,repetitions,rise,from_asset_id,horizon,transactions}` |
+| POST | `/api/goals` | `{"description","amount",…, "horizon"?}` | `Goal` |
+| PATCH | `/api/goals/{id}` | any goal field; `"horizon":null` unassigns | `Goal` or 404 |
+| DELETE | `/api/goals/{id}` | — | `{"deleted":id}`; its transactions are unassigned |
 | GET | `/api/overrides/orphaned` | — | `{"overrides":[{date,abs_amount,category,note,excluded}]}` |
 | GET | `/api/audit` | `?limit=50` | `{"entries":[{at,actor,date,abs_amount,field,old,new}]}` |
 | GET | `/api/rebuild` | — | `{"state":"idle\|pending\|running","last_published_at":iso\|null,"last_error":str\|null}` |
 
 Errors: `{"error":"<code>","message":"…"}` with 400/401/403/404/413/422/503.
-Any successful PATCH/DELETE signals a rebuild.
+Any successful write (POST/PUT/PATCH/DELETE) signals a rebuild.
 
 ### GraphQL (schema-first, replacing the REST routes)
 

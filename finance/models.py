@@ -161,6 +161,9 @@ class LedgerTransaction(Record):
     internal_transfer: bool | None = None
     savings: bool | None = None
     horizon: Literal["current", "near", "future"] | None = None   # data/horizons.py default; overridable
+    horizon_id: int | None = None    # set by the transactions view: id in the `horizons` table
+    goal_id: int | None = None       # set by the transactions view: the goal this money went to
+    goal: str | None = None          # ... and that goal's description
     # set by the transactions view when a manual override applies
     note: str | None = None
     overridden: bool | None = None

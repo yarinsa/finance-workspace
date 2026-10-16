@@ -175,12 +175,27 @@ export interface HorizonBucket {
   /** pct minus target_pct, in percentage points. */
   gap_pts: number;
   count: number;
-  top: { date: string; description: string; amount: number; category?: string | null; overridden: boolean; tags?: string[] }[];
+  /** The target share of income for this horizon (the `horizons` table), in percent. */
+  target_pct?: number;
+  top: { date: string; description: string; amount: number; category?: string | null; overridden: boolean; tags?: string[]; goal?: string | null }[];
+}
+
+/** A goal as listed under the horizon it is assigned to. */
+export interface HorizonGoal {
+  id: number | string;
+  description: string;
+  amount: number;
+  end_date?: string | null;
 }
 
 export interface Horizons {
   target_pct: number;
   horizons: ("current" | "near" | "future")[];
+  /** Labels from the `horizons` table; empty without the database. */
+  names?: Partial<Record<"current" | "near" | "future", string>>;
+  targets?: Record<"current" | "near" | "future", number>;
+  /** Goals assigned to each horizon. */
+  goals?: Record<"current" | "near" | "future", HorizonGoal[]>;
   /** Newest first. */
   months: {
     month: string;
@@ -359,6 +374,9 @@ export interface GeneralGoalCard {
 
 export interface PersonalGoal {
   id?: string;
+  /** The `goals` table id (editable through the API); absent when read from the JSON store. */
+  goal_id?: number | null;
+  horizon?: "current" | "near" | "future" | null;
   description: string;
   amount: number;
   end_date?: string | null;

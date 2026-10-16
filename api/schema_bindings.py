@@ -42,7 +42,8 @@ BINDINGS: dict[str, Binding] = {
                  "isSavings": "savings"},
         resolved=frozenset({"id", "absAmount", "direction", "merchant", "category", "tags", "excluded",
                             "raw", "auditLog"}),
-        hidden=frozenset({"category_id", "is_income"}),   # exposed as `category` and `direction`
+        hidden=frozenset({"category_id", "is_income",   # exposed as `category` and `direction`
+                          "horizon_id", "goal_id", "goal"}),   # not in the SDL yet (REST only)
         never_null=frozenset({"card_bill_payment", "internal_transfer", "savings", "overridden"}),
     ),
     "Category": Binding(tables.Category, resolved=frozenset({"id", "source", "transactions", "merchants", "tags"}),

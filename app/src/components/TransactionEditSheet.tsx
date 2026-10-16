@@ -6,7 +6,9 @@ import {
   ApiError,
   ApiOffline,
   getCategories,
+  getGoals,
   getTags,
+  type Goal,
   getTransaction,
   ledgerKey,
   patchTransaction,
@@ -24,7 +26,7 @@ export const HORIZON_LABEL: Record<Horizon, string> = {
   near: "אני של העתיד הקרוב",
   future: "אני של העתיד (פרישה)",
 };
-const HORIZON_SHORT: Record<Horizon, string> = { current: "היום", near: "עתיד קרוב", future: "פרישה" };
+export const HORIZON_SHORT: Record<Horizon, string> = { current: "היום", near: "עתיד קרוב", future: "פרישה" };
 
 /** What the static data knows about a transaction before the API is asked. */
 export interface EditTarget {
@@ -67,7 +69,14 @@ function Body({ tx, onClose }: { tx: EditTarget; onClose: () => void }) {
   const [tagNames, setTagNames] = useState<string[]>([]);
   const [tags, setTags] = useState<string[]>(known?.tags ?? tx.tags ?? []);
   const [tagDraft, setTagDraft] = useState("");
-  const [form, setForm] = useState<{ category: string; note: string; excluded: boolean; horizon?: Horizon | "clear" }>({
+  const [goals, setGoals] = useState<Goal[]>([]);
+  const [form, setForm] = useState<{
+    category: string;
+    note: string;
+    excluded: boolean;
+    horizon?: Horizon | "clear";
+    goal_id?: number | null;
+  }>({
     category: tx.category,
     note: "",
     excluded: false,
@@ -82,14 +91,15 @@ function Body({ tx, onClose }: { tx: EditTarget; onClose: () => void }) {
   useEffect(() => {
     if (online !== true) return;
     let live = true;
-    void Promise.all([getTransaction(key), getCategories(), getTags()])
-      .then(([r, cats, allTags]) => {
+    void Promise.all([getTransaction(key), getCategories(), getTags(), getGoals().catch(() => [] as Goal[])])
+      .then(([r, cats, allTags, allGoals]) => {
         if (!live) return;
         setRow(r);
         setCategories(cats);
         setTagNames(allTags.map((t) => t.name));
+        setGoals(allGoals);
         setTags(r.tags ?? []);
-        setForm({ category: r.category, note: r.note ?? "", excluded: r.excluded, horizon: r.horizon ?? undefined });
+        setForm({ category: r.category, note: r.note ?? "", excluded: r.excluded, horizon: r.horizon ?? undefined, goal_id: r.goal_id ?? null });
       })
       .catch((e) => {
         if (!live) return;
@@ -102,7 +112,11 @@ function Body({ tx, onClose }: { tx: EditTarget; onClose: () => void }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [online, key.date, key.abs_amount]);
 
-  const baseline = base ?? { category: tx.category, note: null, excluded: false, horizon: null, scraped_horizon: null };
+  const baseline = base ?? { category: tx.category, note: null, excluded: false, horizon: null, scraped_horizon: null, goal_id: null };
+  const shownGoal = form.goal_id === undefined ? (base?.goal_id ?? null) : form.goal_id;
+  // Picking a goal also files the money under that goal's horizon.
+  const pickGoal = (g: Goal | null) =>
+    setForm((f) => ({ ...f, goal_id: g?.id ?? null, ...(g?.horizon ? { horizon: g.horizon } : {}) }));
   const shownHorizon = form.horizon === "clear" ? (base?.scraped_horizon ?? null) : (form.horizon ?? null);
   const patch = buildPatch(baseline, form);
   const savedTags = base?.tags ?? tx.tags ?? [];
@@ -271,6 +285,30 @@ function Body({ tx, onClose }: { tx: EditTarget; onClose: () => void }) {
             </button>
           )}
         </div>
+
+        {goals.length > 0 && (
+          <div>
+            <span className="mb-1 block text-xs text-muted-foreground">הכסף הלך ליעד…</span>
+            <div className="flex flex-wrap gap-1.5" role="radiogroup" aria-label="יעד">
+              {[null, ...goals].map((g) => (
+                <button
+                  key={g?.id ?? "none"}
+                  type="button"
+                  role="radio"
+                  aria-checked={shownGoal === (g?.id ?? null)}
+                  disabled={disabled}
+                  onClick={() => pickGoal(g)}
+                  className={`rounded-full border px-3 py-1 text-sm disabled:opacity-40 ${
+                    shownGoal === (g?.id ?? null) ? "border-brand bg-brand/15 font-semibold" : "border-line"
+                  }`}
+                >
+                  {g ? g.description : "ללא יעד"}
+                  {g?.horizon && <span className="ms-1 text-xs text-muted-foreground">· {HORIZON_SHORT[g.horizon]}</span>}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         <label className="flex items-center gap-3 text-sm">
           <input

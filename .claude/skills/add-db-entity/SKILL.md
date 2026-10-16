@@ -68,3 +68,18 @@ Views (`transactions`, `orphaned_overrides`) are plain SQL and depend on the col
   then verify with the `app` preview.
 - Restart the API container if its SQL changed (`docker compose up -d --build api`). Publishing data
   (`sync-data`) and deploying (`deploy-app`) are separate, user-approved steps.
+
+## Worked examples beyond categories
+
+- `0005_tags.py` — many-to-many by ledger key (`transaction_tags`), ORM module `db/tags.py`.
+- `0006_horizons_goals.py` — a fixed seeded list (`horizons`, addressed by `key`; API stays
+  key-based) plus a user entity (`goals`, ORM module `db/goal_store.py`) that itself points at
+  it, and a second FK on overrides (`goal_id`). Name a db/ module so it never shadows a
+  `data/` script (`goal_store`, not `goals`): pytest puts both dirs on the path.
+
+## Gotcha: `ledger.orm_session` on a connection with pending writes
+
+The session shares the psycopg connection and its transaction. SQLAlchemy rolls back on
+first connect and on session close, which would silently drop uncommitted psycopg writes
+made earlier on `conn`; `orm_session` disables that rollback (the connection's owner rolls
+back on error). Don't re-enable it.

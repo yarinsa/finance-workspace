@@ -6,8 +6,8 @@ import type { Horizon, Row, RowPatch } from "./api";
  * `horizon: "clear"` drops a horizon override so the rules decide again.
  */
 export function buildPatch(
-  base: Pick<Row, "category" | "note" | "excluded" | "horizon" | "scraped_horizon">,
-  form: { category: string; note: string; excluded: boolean; horizon?: Horizon | "clear" },
+  base: Pick<Row, "category" | "note" | "excluded" | "horizon" | "scraped_horizon" | "goal_id">,
+  form: { category: string; note: string; excluded: boolean; horizon?: Horizon | "clear"; goal_id?: number | null },
 ): RowPatch {
   const patch: RowPatch = {};
   const category = form.category.trim();
@@ -18,5 +18,6 @@ export function buildPatch(
   if (form.horizon === "clear") {
     if ((base.horizon ?? null) !== (base.scraped_horizon ?? null)) patch.horizon = null;
   } else if (form.horizon !== undefined && form.horizon !== base.horizon) patch.horizon = form.horizon;
+  if (form.goal_id !== undefined && form.goal_id !== (base.goal_id ?? null)) patch.goal_id = form.goal_id;
   return patch;
 }

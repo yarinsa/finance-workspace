@@ -87,6 +87,14 @@ describe("requests", () => {
 describe("buildPatch", () => {
   const base = { category: "מסעדות", note: null, excluded: false };
 
+  it("sends goal_id only when the goal changes, and null to unassign", () => {
+    const f = { category: "מסעדות", note: "", excluded: false };
+    expect(buildPatch(base, { ...f, goal_id: 3 })).toEqual({ goal_id: 3 });
+    expect(buildPatch({ ...base, goal_id: 3 }, { ...f, goal_id: 3 })).toEqual({});
+    expect(buildPatch({ ...base, goal_id: 3 }, { ...f, goal_id: null })).toEqual({ goal_id: null });
+    expect(buildPatch({ ...base, goal_id: 3 }, f)).toEqual({});
+  });
+
   it("contains only the changed fields", () => {
     expect(buildPatch(base, { category: "מסעדות", note: "", excluded: false })).toEqual({});
     expect(buildPatch(base, { category: "קפה", note: "", excluded: false })).toEqual({ category: "קפה" });

@@ -38,6 +38,7 @@ Read-only over scraped data; only writes its own digest. Safe to re-run.
 Run: python3 data/goals.py
 """
 import json
+import sys
 from datetime import date, datetime
 from pathlib import Path
 
@@ -253,6 +254,8 @@ def per_goal(goal, buffer, monthly_surplus=None):
         "remaining": remaining,
         "required_monthly": required_monthly,
         "on_track": on_track,
+        "goal_id": goal.get("goal_id"),     # the `goals` table id when read from the database
+        "horizon": goal.get("horizon"),     # current | near | future, from the `horizons` table
     }
 
 
@@ -325,8 +328,49 @@ def build(store, snapshot, cashflow):
     }
 
 
+def database_url():
+    """DATABASE_URL from the environment, else from .env (as data/digest.py reads it)."""
+    import digest
+    return digest.database_url()
+
+
+def _from_db(read):
+    """`read(goal_store, conn)` against the database (db/goal_store.py); None when no
+    database is configured or it is unreachable (callers then fall back to their defaults)."""
+    url = database_url()
+    if not url:
+        return None
+    db = str(ROOT.parent / "db")
+    sys.path.insert(0, db)
+    try:
+        import goal_store
+        from ledger import connect
+        with connect(url) as conn:
+            return read(goal_store, conn)
+    except Exception as e:   # noqa: BLE001 — a dead DB must not stop the digest
+        print(f"goals: database unavailable ({e})", file=sys.stderr)
+        return None
+    finally:
+        sys.path.remove(db)
+
+
+def goals_from_db():
+    """The personal goals from the `goals` table, shaped like the JSON store's list, or None."""
+    rows = _from_db(lambda m, conn: m.all_goals(conn))
+    return None if rows is None else [{**g, "id": g["slug"], "goal_id": g["id"]} for g in rows]
+
+
+def horizons_from_db():
+    """The `horizons` table (key, name, target_pct, ...) in order, or None."""
+    return _from_db(lambda m, conn: m.horizons(conn))
+
+
 def main():
-    out = build(load(STORE), load(SNAPSHOT), load(CASHFLOW))
+    store = load(STORE)
+    from_db = goals_from_db()
+    if from_db is not None:
+        store["goals"] = from_db
+    out = build(store, load(SNAPSHOT), load(CASHFLOW))
     general, goals = out["general"], out["personal_goals"]
     OUT_JSON.write_text(json.dumps(out, ensure_ascii=False, indent=2), encoding="utf-8")
 

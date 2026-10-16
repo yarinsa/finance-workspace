@@ -91,7 +91,7 @@ ROWS = """
 SELECT s.txn_date, s.abs_amount, s.amount, s.description, s.origin, s.sources,
        c.id, c.name, c.source, sc.id, sc.name, sc.source,
        o.note, COALESCE(o.excluded, false), o.txn_date IS NOT NULL,
-       COALESCE(o.horizon, s.record->>'horizon'), s.record->>'horizon',
+       COALESCE(h.key, s.record->>'horizon'), s.record->>'horizon',
        s.record->>'account_id', s.record->>'card_last4',
        COALESCE((s.record->>'card_bill_payment')::boolean, false),
        COALESCE((s.record->>'internal_transfer')::boolean, false),
@@ -100,6 +100,7 @@ FROM scraped_transactions s
 LEFT JOIN transaction_overrides o USING (txn_date, abs_amount)
 LEFT JOIN categories sc ON sc.id = s.category_id
 LEFT JOIN categories c  ON c.id = COALESCE(o.category_id, s.category_id)
+LEFT JOIN horizons h    ON h.id = COALESCE(o.horizon_id, s.horizon_id)
 ORDER BY s.position
 """
 
