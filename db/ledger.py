@@ -99,16 +99,30 @@ def load(conn, ledger):
     ledger = [LedgerTransaction.model_validate(t).model_dump(mode="json", exclude_unset=True)
               for t in ledger]
     with conn.transaction(), conn.cursor() as cur:
+        ids = seed_categories(cur, ledger)
         cur.execute("TRUNCATE scraped_transactions")
         cur.executemany(
             """INSERT INTO scraped_transactions
-                   (txn_date, abs_amount, amount, description, category, origin,
+                   (txn_date, abs_amount, amount, description, category, category_id, origin,
                     sources, position, record)
-               VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)""",
+               VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
             [(*key(t["date"], t["amount"]), t["amount"], t.get("description") or "",
-              t.get("category"), t.get("origin"), t.get("sources") or [], i,
+              t.get("category"), ids.get(riseup_category(t)), t.get("origin"), t.get("sources") or [], i,
               Jsonb(t))
              for i, t in enumerate(ledger)])
+
+
+def riseup_category(t):
+    """The row's category when RiseUp assigned it (RiseUp wins the merge), else None."""
+    return t.get("category") or None if "riseup" in (t.get("sources") or []) else None
+
+
+def seed_categories(cur, ledger):
+    """Add every RiseUp category in the ledger to `categories`; returns {name: id} for all."""
+    names = sorted({c for t in ledger if (c := riseup_category(t))})
+    cur.executemany("INSERT INTO categories (name, source) VALUES (%s, 'riseup') "
+                    "ON CONFLICT (name) DO NOTHING", [(n,) for n in names])
+    return dict(cur.execute("SELECT name, id FROM categories").fetchall())
 
 
 def materialize(conn):

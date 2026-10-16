@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Section } from "@/components/common";
+import CategoryTag from "@/components/CategoryTag";
 import TransactionEditSheet, { type EditTarget } from "@/components/TransactionEditSheet";
 import { cashflow, shekel, transactions } from "@/lib/data";
 import { applyOverlay } from "@/lib/ledgerOverlay";
@@ -46,8 +47,9 @@ export default function RecentTransactions() {
           >
             <div className="min-w-0 flex-1">
               <div className="truncate font-semibold">{r.merchant}</div>
-              <div className="truncate text-xs text-muted-foreground">
-                {[r.category, shortDate(r.date)].filter(Boolean).join(" · ")}
+              <div className="mt-0.5 flex items-center gap-1.5 text-xs text-muted-foreground">
+                <CategoryTag name={r.category} />
+                <span>{shortDate(r.date)}</span>
               </div>
             </div>
             <strong className="shrink-0 tabular-nums">{shekel(-r.amount)}</strong>

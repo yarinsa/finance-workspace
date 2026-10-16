@@ -106,7 +106,8 @@ def build_horizons(transactions, months=MONTHS):
                 "gap_pts": round(pct - TARGET_PCT, 1) if pct is not None else None,
                 "count": len(rows),
                 "top": [{"date": r["date"], "description": r.get("description", ""),
-                         "amount": r["amount"], "overridden": bool(r.get("overridden"))}
+                         "amount": r["amount"], "category": r.get("category"),
+                         "overridden": bool(r.get("overridden"))}
                         for r in top],
             }
         left = round(income - spent, 2)

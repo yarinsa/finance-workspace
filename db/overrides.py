@@ -21,8 +21,8 @@ BLANK = {"category": None, "note": None, "excluded": False, "horizon": None}
 
 ROW_SELECT = """
 SELECT s.txn_date, s.abs_amount, s.amount, s.description,
-       COALESCE(o.category, s.category) AS category,
-       s.category                       AS scraped_category,
+       c.name                           AS category,
+       sc.name                          AS scraped_category,
        o.note,
        COALESCE(o.excluded, false)      AS excluded,
        o.txn_date IS NOT NULL           AS overridden,
@@ -31,6 +31,8 @@ SELECT s.txn_date, s.abs_amount, s.amount, s.description,
        s.record->>'horizon'             AS scraped_horizon
 FROM scraped_transactions s
 LEFT JOIN transaction_overrides o USING (txn_date, abs_amount)
+LEFT JOIN categories sc ON sc.id = s.category_id
+LEFT JOIN categories c  ON c.id = COALESCE(o.category_id, s.category_id)
 """
 
 
@@ -71,8 +73,9 @@ def list_rows(conn, date_from=None, date_to=None, excluded="hide"):
 
 def get_override(conn, k):
     """The stored override as {category, note, excluded, horizon}, or None."""
-    r = conn.execute("SELECT category, note, excluded, horizon FROM transaction_overrides "
-                     "WHERE (txn_date, abs_amount) = (%s, %s)", k).fetchone()
+    r = conn.execute("SELECT c.name, o.note, o.excluded, o.horizon FROM transaction_overrides o "
+                     "LEFT JOIN categories c ON c.id = o.category_id "
+                     "WHERE (o.txn_date, o.abs_amount) = (%s, %s)", k).fetchone()
     return dict(zip(FIELDS, r)) if r else None
 
 
@@ -101,13 +104,13 @@ def patch(conn, k, changes, actor):
         diff = [f for f in FIELDS if before[f] != after[f]]
         if diff:
             conn.execute(
-                """INSERT INTO transaction_overrides (txn_date, abs_amount, category, note, excluded, horizon)
+                """INSERT INTO transaction_overrides (txn_date, abs_amount, category_id, note, excluded, horizon)
                    VALUES (%s, %s, %s, %s, %s, %s)
                    ON CONFLICT (txn_date, abs_amount)
-                   DO UPDATE SET category = EXCLUDED.category, note = EXCLUDED.note,
+                   DO UPDATE SET category_id = EXCLUDED.category_id, note = EXCLUDED.note,
                                  excluded = EXCLUDED.excluded, horizon = EXCLUDED.horizon,
                                  updated_at = now()""",
-                (*k, after["category"], after["note"], after["excluded"], after["horizon"]))
+                (*k, category_id(conn, after["category"]), after["note"], after["excluded"], after["horizon"]))
             for field in diff:
                 _audit(conn, actor, k, field, before[field], after[field])
             _prune(conn, k)
@@ -117,7 +120,7 @@ def patch(conn, k, changes, actor):
 def _prune(conn, k):
     """An override with nothing left in it is deleted rather than kept empty."""
     conn.execute("DELETE FROM transaction_overrides WHERE (txn_date, abs_amount) = (%s, %s) "
-                 "AND category IS NULL AND note IS NULL AND NOT excluded AND horizon IS NULL", k)
+                 "AND category_id IS NULL AND note IS NULL AND NOT excluded AND horizon IS NULL", k)
 
 
 def reset(conn, k, actor):
@@ -132,13 +135,18 @@ def reset(conn, k, actor):
     return get_row(conn, k)
 
 
+def category_id(conn, name):
+    """The id of category `name`, adding it as a "user" category if new. None for None."""
+    if name is None:
+        return None
+    conn.execute("INSERT INTO categories (name, source) VALUES (%s, 'user') ON CONFLICT (name) DO NOTHING",
+                 (name,))
+    return conn.execute("SELECT id FROM categories WHERE name = %s", (name,)).fetchone()[0]
+
+
 def categories(conn):
-    """Distinct categories, scraped and overridden, sorted."""
-    rows = conn.execute(
-        "SELECT category FROM scraped_transactions WHERE category IS NOT NULL AND category <> '' "
-        "UNION SELECT category FROM transaction_overrides WHERE category IS NOT NULL AND category <> '' "
-        "ORDER BY 1").fetchall()
-    return [r[0] for r in rows]
+    """Every category in the `categories` table, by name."""
+    return [r[0] for r in conn.execute("SELECT name FROM categories ORDER BY name").fetchall()]
 
 
 def orphaned(conn):
