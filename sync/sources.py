@@ -102,8 +102,9 @@ _ALL = [
     Source(name="leumi", port=9224, login_url="https://hb2.bankleumi.co.il/", app_host="bankleumi.co.il",
            check=SESSIONS, dumps=(("leumi-account-refresh/scripts/dump.sh", "{session}"),
                                   ("leumi-account-refresh/scripts/dump-loans.sh", "{session}"))),
-    Source(name="cal", port=9225, login_url="https://www.cal-online.co.il/", app_host="cal-online.co.il",
-           check=SESSIONS, dumps=(("cal-refresh/scripts/dump.sh", "{session}"),)),
+    # CAL logs in headless by itself (scrapers/cal/scrape.mjs, CAL_USERNAME/CAL_PASSWORD in .env).
+    Source(name="cal", port=0, login_url="https://www.cal-online.co.il/", app_host="cal-online.co.il",
+           check=SELF, playwright=False, dumps=((str(REPO_ROOT / "scrapers" / "cal" / "scrape.mjs"),),)),
     Source(name="amex", port=9226, login_url="https://www.americanexpress.co.il/", app_host="americanexpress.co.il",
            tab_url="https://web.americanexpress.co.il/", check=VERDICT,
            dumps=(("amex-refresh/scripts/dump.sh", "{session}"),)),

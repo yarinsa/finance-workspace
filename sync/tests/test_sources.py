@@ -21,7 +21,7 @@ def run(coro):
 def test_registry_ports_and_scrape_order():
     assert {n: s.port for n, s in sources.SOURCES.items()} == {
         "discount-business": 9223, "discount-mortgage": 0, "discount": 0,  # mortgage + checking log in by themselves: no Chrome
-        "leumi": 9224, "cal": 9225, "amex": 9226, "max": 9230, "harel": 9227, "more": 9228, "analyst": 9229,
+        "leumi": 9224, "cal": 0, "amex": 9226, "max": 9230, "harel": 9227, "more": 9228, "analyst": 9229,
     }
     assert "riseup" not in sources.SOURCES
     # The Chrome app first; self-login mortgage and checking after it.
@@ -126,40 +126,40 @@ def _fake_cmd(monkeypatch, output, seen=None):
 
 def test_check_uses_single_source_mode_and_timeout(monkeypatch):
     seen = []
-    _fake_cmd(monkeypatch, "cal          9225   live\n", seen)
-    assert run(activities.check_session("cal")) == "live"
+    _fake_cmd(monkeypatch, "harel        9227   live\n", seen)
+    assert run(activities.check_session("harel")) == "live"
     args, kw = seen[0]
-    assert args[0].endswith("refresh-all/scripts/check_sessions.sh") and args[1] == "cal"
+    assert args[0].endswith("refresh-all/scripts/check_sessions.sh") and args[1] == "harel"
     assert kw["timeout"] == activities.SESSIONS_TIMEOUT
 
 
 def test_unknown_stays_unknown_without_a_login_page(monkeypatch):
-    _fake_cmd(monkeypatch, "cal          9225   unknown (no tab on this app)\n")
+    _fake_cmd(monkeypatch, "harel        9227   unknown (no tab on this app)\n")
     monkeypatch.setattr(activities, "_cdp_pages", lambda src: [{"type": "page", "url": "https://example.com/"}])
-    assert run(activities.check_session("cal")) == "unknown"
+    assert run(activities.check_session("harel")) == "unknown"
 
 
 def test_unknown_with_login_page_open_is_dead(monkeypatch):
-    _fake_cmd(monkeypatch, "cal          9225   unknown (no tab on this app)\n")
+    _fake_cmd(monkeypatch, "harel        9227   unknown (no tab on this app)\n")
     monkeypatch.setattr(activities, "_cdp_pages",
-                        lambda src: [{"type": "page", "url": "https://digital-web.cal-online.co.il/login"}])
-    assert run(activities.check_session("cal")) == "dead"
+                        lambda src: [{"type": "page", "url": "https://digital-web.harel-group.co.il/login"}])
+    assert run(activities.check_session("harel")) == "dead"
 
 
 def test_unreadable_tabs_are_unknown_not_dead(monkeypatch):
-    _fake_cmd(monkeypatch, "cal          9225   unknown (no tab on this app)\n")
+    _fake_cmd(monkeypatch, "harel        9227   unknown (no tab on this app)\n")
 
     def boom(src):
         raise OSError("connection refused")
 
     monkeypatch.setattr(activities, "_cdp_pages", boom)
-    assert run(activities.check_session("cal")) == "unknown"
+    assert run(activities.check_session("harel")) == "unknown"
 
 
 def test_missing_row_is_an_infrastructure_error(monkeypatch):
     _fake_cmd(monkeypatch, "playwright-cli: command not found\n")
     with pytest.raises(ApplicationError):
-        run(activities.check_session("cal"))
+        run(activities.check_session("harel"))
 
 
 def test_business_check_is_tabs_only(monkeypatch):
@@ -335,3 +335,21 @@ def test_ensure_chrome_is_a_no_op_for_self_login_sources(monkeypatch):
     monkeypatch.setattr(activities, "_launch_chrome", lambda src: pytest.fail("no Chrome for a self-login source"))
     run(activities.ensure_chrome("discount"))
     run(activities.ensure_chrome("discount-mortgage"))
+
+
+def test_cal_logs_in_by_itself(monkeypatch):
+    s = sources.get("cal")
+    assert s.check == sources.SELF and s.port == 0 and not s.playwright and not s.login_group
+    assert s.group == "cal-online.co.il-self" != sources.get("discount").group
+    seen = []
+
+    async def fake_run(args, **kw):
+        seen.append(list(args))
+        return 1, "LOGIN FAILED: INVALID_PASSWORD\n"
+
+    monkeypatch.setattr(activities, "run_cmd", fake_run)
+    with pytest.raises(ApplicationError) as e:
+        run(activities.scrape("cal"))
+    assert e.value.type == "SessionExpired" and e.value.non_retryable
+    script = Path(__file__).resolve().parents[2] / "scrapers" / "cal" / "scrape.mjs"
+    assert seen == [[str(script)]] and script.is_file()
