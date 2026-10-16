@@ -3,6 +3,8 @@ import { goals, shekel, shekelCompact } from "@/lib/data";
 import type { GeneralGoalCard, PersonalGoal } from "@/lib/data";
 
 function generalValue(c: GeneralGoalCard): string {
+  // No real retirement target → coverage is undefined, not 100%.
+  if (c.key === "retirement_coverage" && c.status === "needs_input") return "הגדירו יעד פרישה";
   if (c.status === "needs_input" || c.value == null) return "חסר קלט";
   if (c.units === "%") return `${c.value}%`;
   // large ₪ figures (inheritance) read better compact
@@ -20,13 +22,23 @@ function GeneralCard({ c }: { c: GeneralGoalCard }) {
       {c.key === "emergency_fund_coverage" && c.shortfall ? (
         <div className="muted" style={{ fontSize: 13 }}>חוסר {shekel(c.shortfall)}</div>
       ) : null}
+      {c.key === "emergency_fund_coverage" && c.meets_target != null ? (
+        <div className="muted" style={{ fontSize: 13 }}>
+          {c.meets_target ? "✓ קרן החירום מלאה" : "קרן החירום מתחת ליעד"}
+        </div>
+      ) : null}
+      {c.key === "retirement_coverage" && c.meets_target != null ? (
+        <div className="muted" style={{ fontSize: 13 }}>
+          {c.meets_target ? "✓ עומד ביעד הפרישה" : "מתחת ליעד הפרישה"}
+        </div>
+      ) : null}
       {c.key === "inheritance_amount" && c.meets_target != null ? (
         <div className="muted" style={{ fontSize: 13 }}>
           {c.meets_target ? "✓ עומד ביעד ההורשה" : "מתחת ליעד ההורשה"}
         </div>
       ) : null}
-      {c.target_derived ? (
-        <div className="muted" style={{ fontSize: 12 }}>יעד נגזר מהתחזית — הזן יעד פרישה לדיוק</div>
+      {c.key === "retirement_coverage" && c.status === "needs_input" ? (
+        <div className="muted" style={{ fontSize: 12 }}>ללא יעד פרישה אין מול מה למדוד את התחזית</div>
       ) : null}
       <div className="muted" style={{ fontSize: 12, marginTop: 8 }}>{c.description}</div>
     </Card>
@@ -34,7 +46,7 @@ function GeneralCard({ c }: { c: GeneralGoalCard }) {
 }
 
 function GoalCard({ g }: { g: PersonalGoal }) {
-  const prog = g.progress_pct ?? 0;
+  const prog = Math.min(100, Math.max(0, g.progress_pct ?? 0));
   const trackColor =
     g.on_track === false ? "var(--lg-bad)" : g.on_track ? "var(--lg-accent)" : "var(--lg-muted)";
   return (

@@ -9,7 +9,10 @@ Goals are *user intent*, not scraped bank data, so this reads a user-owned store
                                    emergency-fund card
   data/digested/cashflow.json   -> projection.net_worth_at_retirement and the
                                    end-of-life estate (last focal point) for the
-                                   retirement / inheritance cards
+                                   retirement / inheritance cards, and the
+                                   forecast month net (pace.expected.net, else
+                                   today.net) as the monthly surplus that funds
+                                   personal goals
 
 and writes:
 
@@ -22,12 +25,14 @@ This mirrors the PRD's phased build:
   - Phase 2 (reuse projection):   אחוז עמידה ביעד פרישה + סכום להורשה, from the
     projection's retirement / end-of-life net worth vs the user targets.
   - Phase 3 (per-goal):           each personal goal's progress (accrued ÷ amount,
-    approximated by liquid buffer share) + a deterministic on-track verdict, and
-    overall אחוז עמידה ביעדים / חתיכה חסרה (gap to fund all goals).
+    approximated by liquid buffer share) + a deterministic on-track verdict
+    (see per_goal), and overall אחוז עמידה ביעדים / חתיכה חסרה (gap to fund all
+    goals).
 
 A target of 0 in the store means "not set" — the matching card is emitted with
 status "needs_input" and value None, so the UI degrades honestly rather than
-showing a fake 100%/0%.
+showing a fake 100%/0%. `status` only says whether the card has data; whether
+the target is actually met is the separate `meets_target` flag.
 
 Read-only over scraped data; only writes its own digest. Safe to re-run.
 Run: python3 data/goals.py
@@ -44,15 +49,19 @@ OUT_JSON = ROOT / "digested" / "goals.json"
 OUT_MD = ROOT / "digested" / "goals.md"
 
 
+DAYS_PER_MONTH = 365.25 / 12
+
+
 def load(path):
     return json.loads(path.read_text(encoding="utf-8"))
 
 
 def pct(part, whole):
-    """Coverage % capped at 100, or None if the denominator is unset (0)."""
+    """Coverage % clamped to 0–100, or None if the denominator is unset (0).
+    A negative part (overdrawn checking) reads 0%, never a negative coverage."""
     if not whole:
         return None
-    return round(min(1.0, part / whole) * 100, 1)
+    return round(max(0.0, min(1.0, part / whole)) * 100, 1)
 
 
 def parse_date(s):
@@ -137,6 +146,14 @@ def remove_goal(store, goal_id):
 
 
 def emergency_fund_card(buffer, target):
+    """Emergency-fund coverage = liquid buffer ÷ target, clamped to 0–100%.
+
+    shortfall is clamped to [0, target]: an overdrawn buffer reads as "nothing
+    saved yet" (shortfall = target), not target + overdraft. The overdraft is a
+    debt already carried by the snapshot / cashflow overdraft view; folding it in
+    here would count it twice and make the fund look bigger than its target.
+    `status` = data present; `meets_target` = the fund is actually full.
+    """
     coverage = pct(buffer, target)
     return {
         "key": "emergency_fund_coverage",
@@ -144,19 +161,30 @@ def emergency_fund_card(buffer, target):
         "units": "%",
         "value": coverage,
         "status": "ok" if target else "needs_input",
-        "shortfall": round(max(0.0, target - buffer), 2) if target else None,
+        "shortfall": round(min(target, max(0.0, target - buffer)), 2) if target else None,
+        "meets_target": (buffer >= target) if target else None,
+        "target": target or None,
         "description": "כיסוי קרן החירום — היתרה הנזילה חלקי יעד קרן החירום.",
     }
 
 
-def retirement_card(net_worth_at_retirement, target):
-    coverage = pct(net_worth_at_retirement, target)
+def retirement_card(net_worth_at_retirement, target, target_derived=False):
+    """Retirement coverage = projected net worth at retirement ÷ target.
+
+    A target derived from the projection itself is 100% by definition, so in
+    that case (or with no target / no projection) the card is "needs_input"
+    with value None rather than a fake 100%.
+    """
+    usable = bool(target) and not target_derived and net_worth_at_retirement is not None
     return {
         "key": "retirement_coverage",
         "name": "אחוז עמידה ביעד פרישה",
         "units": "%",
-        "value": coverage,
-        "status": "ok" if target else "needs_input",
+        "value": pct(net_worth_at_retirement, target) if usable else None,
+        "status": "ok" if usable else "needs_input",
+        "meets_target": (net_worth_at_retirement >= target) if usable else None,
+        "target": target if usable else None,
+        "target_derived": target_derived,
         "description": "כיסוי יעד הפרישה — השווי הנקי הצפוי בפרישה חלקי יעד הפרישה.",
     }
 
@@ -176,24 +204,45 @@ def inheritance_card(estate, target):
     }
 
 
-def per_goal(goal, buffer):
+def per_goal(goal, buffer, monthly_surplus=None):
     """Deterministic per-goal render (PRD §4b). Probability is modelled in
-    Plangram; for v1 we ship a transparent on-track verdict instead:
-      - progress = accrued ÷ amount (accrued approximated as the liquid buffer,
-        shared evenly is out of scope — we attribute the full buffer as the pool);
-      - on_track = there is still runway to end_date and progress is plausible.
+    Plangram; for v1 we ship a transparent on-track verdict instead.
+
+    - accrued = liquid buffer clamped to [0, amount] (the full buffer is the pool;
+      splitting it between goals is out of scope). An overdrawn buffer accrues 0,
+      so progress_pct is always 0–100.
+    - remaining = amount − accrued; required_monthly = remaining ÷ months left to
+      end_date (months = days ÷ 365.25/12).
+    - on_track rule:
+        True  if the goal is already fully accrued (regardless of date);
+        False if end_date has passed (or is today) and it is not funded;
+        None  if the monthly surplus is unknown (we can't tell — never "on track");
+        else  required_monthly ≤ monthly_surplus, i.e. a *positive* surplus covers
+              the saving needed. A zero/negative surplus funds nothing.
+      Runway alone never makes a goal on track. `build` passes each goal only the
+      surplus left after earlier-dated goals, so one surplus isn't spent twice.
     """
     amount = goal.get("amount") or 0
-    accrued = min(buffer, amount) if amount else 0
+    accrued = max(0.0, min(buffer, amount)) if amount else 0.0
+    remaining = round(amount - accrued, 2) if amount else 0.0
     progress = round((accrued / amount) * 100, 1) if amount else None
     end = parse_date(goal.get("end_date"))
     days_left = (end - date.today()).days if end else None
+
+    required_monthly = None
+    if amount and remaining <= 0:
+        required_monthly = 0.0
+    elif amount and days_left is not None and days_left > 0:
+        required_monthly = round(remaining / (days_left / DAYS_PER_MONTH), 2)
+
     on_track = None
     if amount:
-        if progress is not None and progress >= 100:
+        if remaining <= 0:
             on_track = True
-        elif days_left is not None:
-            on_track = days_left > 0
+        elif days_left is not None and days_left <= 0:
+            on_track = False
+        elif required_monthly is not None and monthly_surplus is not None:
+            on_track = monthly_surplus > 0 and required_monthly <= monthly_surplus
     return {
         "id": goal.get("id"),
         "description": goal.get("description", ""),
@@ -201,15 +250,23 @@ def per_goal(goal, buffer):
         "end_date": goal.get("end_date"),
         "days_left": days_left,
         "progress_pct": progress,
+        "remaining": remaining,
+        "required_monthly": required_monthly,
         "on_track": on_track,
     }
 
 
-def main():
-    store = load(STORE)
-    snapshot = load(SNAPSHOT)
-    cashflow = load(CASHFLOW)
+def monthly_surplus_from(cashflow):
+    """The month's forecast net (pace.expected.net), falling back to the
+    month-to-date net (today.net). None if neither is present."""
+    expected = ((cashflow.get("pace") or {}).get("expected") or {}).get("net")
+    if expected is not None:
+        return expected
+    return (cashflow.get("today") or {}).get("net")
 
+
+def build(store, snapshot, cashflow):
+    """Pure goals digest: store + snapshot + cashflow -> the goals.json dict."""
     buffer = snapshot.get("totals", {}).get("bank_balances_sum", 0) or 0
     ef_target = store.get("emergency_fund_target", 0) or 0
     inh_target = store.get("inheritance_target", 0) or 0
@@ -219,18 +276,28 @@ def main():
     focals = proj.get("focal_points") or []
     estate = focals[-1].get("net_val") if focals else None
 
-    # Retirement target: PRD §8 open question. Until the user enters one, we use
-    # the projected retirement net worth as the target so coverage reads 100%
-    # *and* flag it as derived, rather than inventing a number.
-    retirement_target = store.get("retirement_target", 0) or nw_retirement or 0
-    retirement_target_derived = not (store.get("retirement_target", 0) or 0)
+    # Retirement target: PRD §8 open question. Until the user enters one, the
+    # card is "needs_input" (falling back to the projection would read 100% by
+    # definition).
+    retirement_target = store.get("retirement_target", 0) or 0
+    retirement_target_derived = not retirement_target
 
-    goals = [per_goal(g, buffer) for g in store.get("goals", [])]
-    funded = sum(1 for g in goals if g["on_track"])
+    # Fund goals earliest end_date first out of one shared monthly surplus.
+    surplus = monthly_surplus_from(cashflow)
+    available = None if surplus is None else max(0.0, surplus)
+    raw = store.get("goals", [])
+    order = sorted(range(len(raw)), key=lambda i: parse_date(raw[i].get("end_date")) or date.max)
+    rendered = {}
+    for i in order:
+        g = per_goal(raw[i], buffer, available)
+        if g["on_track"] and available is not None and g["required_monthly"]:
+            available = max(0.0, available - g["required_monthly"])
+        rendered[i] = g
+    goals = [rendered[i] for i in range(len(raw))]
+
+    funded = sum(1 for g in goals if g["on_track"] is True)
     overall = round((funded / len(goals)) * 100, 1) if goals else None
-    missing_piece = round(
-        sum(max(0.0, (g["amount"] or 0) - min(buffer, g["amount"] or 0)) for g in goals), 2
-    )
+    missing_piece = round(sum(g["remaining"] or 0 for g in goals), 2)
 
     general = [
         {
@@ -242,14 +309,11 @@ def main():
             "description": "עמידה כללית ביעדים — שיעור היעדים שהתוכנית מממנת.",
         },
         emergency_fund_card(buffer, ef_target),
-        {
-            **retirement_card(nw_retirement, retirement_target),
-            "target_derived": retirement_target_derived,
-        },
+        retirement_card(nw_retirement, retirement_target, retirement_target_derived),
         inheritance_card(estate, inh_target),
     ]
 
-    out = {
+    return {
         "generated_at": datetime.now().isoformat(timespec="seconds"),
         "currency": "ILS",
         "note": "Goals digest — see docs/plangram-prd/04-goals.md. Targets from data/goals/goals.json (user-owned).",
@@ -257,7 +321,13 @@ def main():
         "personal_goals": goals,
         "missing_piece": missing_piece,
         "liquid_buffer": round(buffer, 2),
+        "monthly_surplus": round(surplus, 2) if surplus is not None else None,
     }
+
+
+def main():
+    out = build(load(STORE), load(SNAPSHOT), load(CASHFLOW))
+    general, goals = out["general"], out["personal_goals"]
     OUT_JSON.write_text(json.dumps(out, ensure_ascii=False, indent=2), encoding="utf-8")
 
     lines = ["# יעדים — Goals digest", ""]
@@ -274,7 +344,8 @@ def main():
         lines += ["", "## יעדים אישיים"]
         for g in goals:
             prog = f"{g['progress_pct']}%" if g["progress_pct"] is not None else "—"
-            lines.append(f"- {g['description']} — ₪{g['amount']:,.0f} ({prog})")
+            track = {True: "בכיוון", False: "לא בכיוון"}.get(g["on_track"], "—")
+            lines.append(f"- {g['description']} — ₪{g['amount']:,.0f} ({prog}, {track})")
     OUT_MD.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
     print(f"wrote {OUT_JSON.relative_to(ROOT.parent)} and {OUT_MD.relative_to(ROOT.parent)}")
@@ -286,7 +357,7 @@ def cli(argv=None):
     p = argparse.ArgumentParser(description="Goals store editor + digest. No flags = digest only.")
     p.add_argument("--set-emergency", type=float, metavar="AMOUNT", help="set emergency_fund_target (₪)")
     p.add_argument("--set-inheritance", type=float, metavar="AMOUNT", help="set inheritance_target (₪)")
-    p.add_argument("--set-retirement", type=float, metavar="AMOUNT", help="set retirement_target (₪; 0 = derive)")
+    p.add_argument("--set-retirement", type=float, metavar="AMOUNT", help="set retirement_target (₪; 0 = not set)")
     p.add_argument("--add", metavar="DESCRIPTION", help="add a personal goal (needs --amount --by)")
     p.add_argument("--amount", type=float, help="goal target amount (₪)")
     p.add_argument("--by", metavar="YYYY-MM-DD", help="goal end date")

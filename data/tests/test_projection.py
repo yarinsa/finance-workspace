@@ -89,3 +89,150 @@ class TestSimulateLoanPaydown:
     def test_every_loan_retires_as_a_payoff_event(self):
         events = [f for f in _sim()["focal_points"] if f["name"].startswith("סיום הלוואה")]
         assert len(events) == len(LOANS)
+
+
+# ---------------------------------------------------------------------------
+# User story (2026-10-15): as the household, with net worth at -₪1,540,121, a
+# forecast month of -₪1,026 and ₪46.2k/mo spending against ₪35.6k income, the
+# lifetime chart showed ₪6.56M at retirement, ₪21.9M at age 90, "growth 7.1%"
+# and "balance score 90". The projection ignored the monthly deficit, had no
+# living cost after retirement, and left out ₪646,524 of pension/study funds.
+# ---------------------------------------------------------------------------
+
+# snapshot.json totals as digested 2026-10-15.
+HOUSEHOLD_TOTALS = {
+    "bank_balances_sum": -2979.12,
+    "credit_card_debt": 3859.65,
+    "total_debt": 1537142.29,
+    "tracked_net_position": -1540121.41,
+    "long_term_savings": 646524.08,
+    "liquid_savings": 2490.2,
+    "illiquid_savings": 644033.88,
+    "monthly_loan_service": 9504.45,
+    "detected_monthly_salary": 22500,
+}
+HOUSEHOLD = {"totals": HOUSEHOLD_TOTALS, "loans": LOANS}
+
+# forecast.json current_month (RiseUp budget 2026-10): income ₪27,163.80,
+# expenses ₪28,189.56 -> expected net -₪1,025.76 (= cashflow.json pace.expected).
+FORECAST = {"current_month": {"forecast_month": "2026-10", "based_on_budget": "2026-10",
+                              "income": {"total": 27163.8},
+                              "expenses": {"total": 28189.56}}}
+
+# Fixed age so results don't drift with today's date.
+BASE_CFG = {**projection.CONFIG, "current_age": 28}
+
+
+def _cfg(**over):
+    return {**BASE_CFG, **over}
+
+
+def _household(**over):
+    return projection.build(copy.deepcopy(HOUSEHOLD), _cfg(**over), forecast=FORECAST)
+
+
+def _metric(p, key):
+    return next(m for m in p["metrics"] if m["key"] == key)
+
+
+class TestBaselineSurplus:
+    def test_surplus_defaults_to_forecast_expected_net(self):
+        cfg = projection.resolve_config(BASE_CFG, HOUSEHOLD, FORECAST)
+        assert cfg["monthly_surplus"] == -1025.76
+
+    def test_injected_surplus_wins_over_forecast(self):
+        cfg = projection.resolve_config(_cfg(monthly_surplus=500), HOUSEHOLD, FORECAST)
+        assert cfg["monthly_surplus"] == 500
+
+    def test_negative_surplus_erodes_liquid_balance(self):
+        # Same snapshot, only the surplus differs: a -₪1,026/mo month must leave
+        # the liquid pool at least 12 × ₪1,026 lower after the first year.
+        flat = projection.simulate(copy.deepcopy(HOUSEHOLD), _cfg(monthly_surplus=0))
+        short = projection.simulate(copy.deepcopy(HOUSEHOLD), _cfg(monthly_surplus=-1025.76))
+        y1 = lambda s: s["timeline"][0]["invested"]
+        assert y1(flat) - y1(short) >= 12 * 1025
+
+    def test_overdraft_costs_interest(self):
+        # No loans, no savings, -₪1,000/mo: after a year the debt must exceed the
+        # ₪12,000 of raw deficit because the negative balance is borrowed.
+        snap = {"totals": {"bank_balances_sum": 0, "credit_card_debt": 0}, "loans": []}
+        sim = projection.simulate(snap, _cfg(monthly_surplus=-1000, borrow_rate=0.08))
+        assert sim["timeline"][0]["invested"] < -12_300
+
+
+class TestLongTermSavings:
+    def test_savings_are_in_todays_net_worth(self):
+        # -1,540,121.41 tracked + 646,524.08 long-term savings.
+        assert _household()["net_worth_today"] == -893597
+
+    def test_savings_grow_at_real_return(self):
+        snap = {"totals": {"bank_balances_sum": 0, "credit_card_debt": 0,
+                           "long_term_savings": 644033.88, "liquid_savings": 0},
+                "loans": []}
+        sim = projection.simulate(snap, _cfg(monthly_surplus=0, real_return=0.04))
+        y10 = sim["timeline"][9]
+        assert abs(y10["savings"] - 644033.88 * (1 + 0.04 / 12) ** 120) < 1
+
+
+class TestRetirementDrawdown:
+    def test_default_drawdown_is_todays_spending_minus_loan_service(self):
+        # Loans are gone by 67, so living cost = ₪28,189.56 - ₪9,504.45.
+        cfg = projection.resolve_config(BASE_CFG, HOUSEHOLD, FORECAST)
+        assert cfg["retirement_drawdown"] == 18685.11
+
+    def test_estate_shrinks_after_retirement(self):
+        p = _household()
+        estate = p["focal_points"][-1]["net_val"]
+        assert estate < p["net_worth_at_retirement"]
+
+
+class TestHouseholdRegression:
+    def test_retirement_figure_reflects_the_deficit(self):
+        # The -₪1,025.76/mo forecast month must cost at least its undiscounted
+        # sum over the 468 working months (it was ignored entirely before).
+        with_deficit = _household()["net_worth_at_retirement"]
+        no_deficit = _household(monthly_surplus=0)["net_worth_at_retirement"]
+        assert no_deficit - with_deficit >= 1025.76 * 468
+        assert with_deficit < 6_562_692  # the old figure, deficit-blind
+
+    def test_age_90_estate_is_not_compounding_unchecked(self):
+        # Was ₪21.9M = 3.3× the retirement figure: no living cost after 67. A
+        # ₪18.7k/mo drawdown over 23 years must eat at least the pot's return.
+        p = _household()
+        assert p["focal_points"][-1]["net_val"] <= p["net_worth_at_retirement"]
+        assert p["focal_points"][-1]["net_val"] < 21_903_065 / 3
+
+    def test_deficit_household_does_not_score_good(self):
+        score = _metric(_household(), "balance_score")
+        assert score["value"] < 70 and score["rank"] != "good"  # was 90 / good
+
+    def test_property_is_flagged_as_not_modelled(self):
+        limits = " ".join(_household()["config"]["limitations"])
+        assert "property" in limits.lower()
+
+
+class TestMetricsOnDecline:
+    """A household whose net worth falls must never read as growing/balanced."""
+
+    def _declining(self):
+        snap = {"totals": {"bank_balances_sum": 50_000, "credit_card_debt": 0}, "loans": []}
+        return projection.build(snap, _cfg(monthly_surplus=-5_000, retirement_drawdown=5_000),
+                                forecast=None)
+
+    def test_growth_is_negative_and_not_good(self):
+        g = _metric(self._declining(), "growth")
+        assert g["value"] < 0 and g["rank"] != "good"
+
+    def test_balance_score_is_not_good(self):
+        s = _metric(self._declining(), "balance_score")
+        assert s["value"] < 70 and s["rank"] != "good"
+
+    def test_growth_is_measured_from_today(self):
+        # 5 years of -₪5,000/mo from +₪50,000 at 8% overdraft cost: from today the
+        # slope is about -(300k + interest)/50k/5 ≈ -130%/yr, not from year 1.
+        sim = projection.simulate(
+            {"totals": {"bank_balances_sum": 50_000, "credit_card_debt": 0}, "loans": []},
+            _cfg(monthly_surplus=-5_000))
+        g = _metric({"metrics": projection.metrics(sim, _cfg())}, "growth")
+        y5 = next(p for p in sim["timeline"] if p["month"] == 60)["net_val"]
+        assert g["value"] == round((y5 - 50_000) / 50_000 / 5 * 100, 1)
