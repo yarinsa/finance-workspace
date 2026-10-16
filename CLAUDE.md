@@ -172,6 +172,9 @@ Discount mortgage and checking are scraped by `scrapers/discount/scrape-mortgage
 Chrome) and write the same raw files as the CDP `dump.sh` scripts; a refused login becomes
 `needs_login` (and skips the other self-login source, which shares the credentials). They run
 after the Chrome app (business) because their login may end the human's telebank session.
+CAL works the same way: `scrapers/cal/scrape.mjs` logs in headless with
+`CAL_USERNAME`/`CAL_PASSWORD` from `.env` (check mode `self`) and writes the same
+`data/cal/raw` files as `cal-refresh/scripts/dump.sh`; a refused login (or a demanded OTP) is `needs_login`.
 The source registry is `sync/sources.py`.
 Every source's progress (checking_session → waiting_for_login → scraping → validating →
 digesting → publishing → done, or needs_login / failed / rejected) is published as its own

@@ -1,0 +1,10 @@
+{
+  "name": "cal-scraper",
+  "private": true,
+  "type": "module",
+  "description": "CAL (cal-online) credit-card scraper: headless own login, same raw files as cal-refresh dump.sh",
+  "dependencies": {
+    "dotenv": "^16.6.1",
+    "puppeteer": "^24.43.1"
+  }
+}

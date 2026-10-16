@@ -23,7 +23,29 @@ data/
     raw/        <- one JSON file per endpoint
 ```
 
-## The flow
+## Preferred: headless self-login (no Chrome)
+
+`scrapers/cal/scrape.mjs` logs in by itself (puppeteer, same flow as
+israeli-bank-scrapers' visaCal: `#ccLoginDesktopBtn` → `connect` iframe →
+`#regular-login` → username/password) with `CAL_USERNAME` / `CAL_PASSWORD`
+from the repo `.env` (the user fills these; agents never type them). It reads
+the `CALAuthScheme` token from `sessionStorage["auth-module"]` after login,
+takes the card / account ids from its own `account/init` response, and writes
+the **same files** listed below with the same stub guard. The sync runs it as
+`check=self`.
+
+```bash
+cd scrapers/cal && npm install   # first time
+node scrapers/cal/scrape.mjs [--out DIR]   # from repo root
+poetry run python data/validate.py dump cal
+```
+
+Exit codes: 0 ok · 1 failure (retryable) · 2 missing env · 3 `LOGIN FAILED:`
+INVALID_PASSWORD / CHANGE_PASSWORD / OTP_REQUIRED (needs a human, never retried).
+
+## Fallback: manual Chrome login (CDP)
+
+### The flow
 
 1. **Launch Chrome with a CDP debug port** (port **9225**, dedicated
    profile so login persists):
