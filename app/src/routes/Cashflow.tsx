@@ -1,12 +1,12 @@
 import { useState } from "react";
 import { Card, PageTitle } from "@/components/common";
 import MonthStrip from "@/components/cashflow/MonthStrip";
-import { CashflowLinks, MonthCategories, MonthResult, PlanVsActual } from "@/components/cashflow/MonthDetail";
+import { CashflowLinks, MonthSummary } from "@/components/cashflow/MonthDetail";
 import { cashflow } from "@/lib/data";
 
 /**
  * "תזרים" hub: one month-by-month screen — month strip, the selected month's
- * income/expense/net, plan vs actual, and where the money went. Deep pages
+ * net and plan vs actual in one card, linking to that month's spending. Deep pages
  * (runway, timeline, metrics) hang off the link row at the bottom.
  */
 export default function Cashflow() {
@@ -32,9 +32,7 @@ export default function Cashflow() {
     <div className="space-y-4 md:space-y-[18px]">
       <PageTitle>תזרים</PageTitle>
       <MonthStrip months={view.months} selected={m.month} onSelect={setPicked} />
-      <MonthResult m={m} />
-      <PlanVsActual m={m} />
-      <MonthCategories m={m} />
+      <MonthSummary m={m} />
       <CashflowLinks />
     </div>
   );
