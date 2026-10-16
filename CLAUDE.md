@@ -116,17 +116,26 @@ records, then the fix.
 
 ### Automated sync (Temporal) — POC
 
-**Proof of concept** (AMEX only, local dev server); see `sync/README.md` for status.
+**Proof of concept** (local dev server, no persistence guarantees); see
+`sync/README.md` for status. Not yet the only refresh path — `refresh-all` remains.
 
-`sync/` runs the AMEX refresh on a schedule (daily 07:30 Asia/Jerusalem) with a
-local Temporal dev server + worker under launchd: ensure Chrome -> check session
--> `dump.sh` -> digest chain -> `infra/deploy.sh --data-only` (when
-`SYNC_PUBLISH=1`). It **never authenticates** — a dead session triggers a macOS
-notification and a wait for `python3 sync/resume.py` after the human logs in
-(12h, then `needs_login`). Install with `sync/install.sh`; UI at
-http://localhost:8233. Every workflow step is also published to
-`data/sync-status.json`, which the app polls for a live status on `/syncs`, the
-header dot and the home list. Details in `sync/README.md`. Only `sync/` needs
+`sync/` runs `FinanceSyncWorkflow` daily at 07:30 Asia/Jerusalem over every scraped
+source (discount, discount-mortgage, discount-business, leumi, cal, amex, harel, more,
+analyst; RiseUp is out of scope) with a local Temporal dev server + worker under
+launchd. It checks **every** session first, sends **one** macOS notification listing
+the dead logins (grouped: the three Discount apps are one login), and waits up to 12h
+for `python3 sync/resume.py [source|group ...]`; still-dead sources are skipped as
+`needs_login`, never fatal. Live sources are scraped one at a time in registry order
+(Discount **account → mortgage → business**, business always last), each followed by
+a `data/validate.py dump <source>` gate (skipped while that file doesn't exist); one
+failing source never stops the rest. Then digest chain once and
+`infra/deploy.sh --data-only` once (when `SYNC_PUBLISH=1`; withheld if a dump was
+rejected). It **never authenticates**. The source registry is `sync/sources.py`.
+Every source's progress (checking_session → waiting_for_login → scraping → validating →
+digesting → publishing → done, or needs_login / failed / rejected) is published as its own
+entry to `data/sync-status.json`, which the app polls for a live status on `/syncs`, the
+header dot and the home list.
+Install with `sync/install.sh`; UI at http://localhost:8233. Only `sync/` needs
 `temporalio`; `data/` stays stdlib-only.
 
 ### Freshness targets

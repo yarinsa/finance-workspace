@@ -9,6 +9,9 @@ import pytest
 from temporalio.exceptions import ApplicationError
 
 import activities
+import sources
+
+AMEX = sources.get("amex")
 
 INCIDENT_TARGETS = [
     {"type": "page", "url": "chrome://omnibox-popup.top-chrome/"},
@@ -25,20 +28,18 @@ def _run(coro):
 
 
 def test_no_amex_tab_in_incident_profile():
-    assert activities._amex_tab_index(INCIDENT_TARGETS) is None
+    assert activities._tab_index(AMEX, INCIDENT_TARGETS) is None
 
 
 def test_amex_tab_index_skips_internal_targets():
     pages = INCIDENT_TARGETS + [{"type": "page", "url": "https://web.americanexpress.co.il/login"}]
     pages = [p for p in pages if p["type"] == "page"]
-    assert activities._amex_tab_index(pages) == 2  # after More and Harel, not browser_ui/omnibox
+    assert activities._tab_index(AMEX, pages) == 2  # after More and Harel, not browser_ui/omnibox
 
 
 def test_ensure_chrome_opens_amex_tab_and_selects_it(monkeypatch):
-    listings = [
-        [t for t in INCIDENT_TARGETS if t["type"] == "page"],
-        [t for t in INCIDENT_TARGETS if t["type"] == "page"] + [{"type": "page", "url": "https://web.americanexpress.co.il/"}],
-    ]
+    pages = [t for t in INCIDENT_TARGETS if t["type"] == "page"]
+    listings = [pages, pages + [{"type": "page", "url": "https://web.americanexpress.co.il/"}]]
     opened, calls = [], []
 
     async def no_sleep(_):
@@ -48,24 +49,63 @@ def test_ensure_chrome_opens_amex_tab_and_selects_it(monkeypatch):
         calls.append((args, kw))
         return 0, ""
 
-    monkeypatch.setattr(activities, "_cdp_up", lambda: True)
-    monkeypatch.setattr(activities, "_cdp_pages", lambda: listings.pop(0))
-    monkeypatch.setattr(activities, "_open_amex_tab", lambda: opened.append(1))
+    monkeypatch.setattr(activities, "_cdp_up", lambda src: True)
+    monkeypatch.setattr(activities, "_cdp_pages", lambda src: listings.pop(0))
+    monkeypatch.setattr(activities, "_open_tab", lambda src, url: opened.append(url))
     monkeypatch.setattr(activities, "run_cmd", fake_run_cmd)
     monkeypatch.setattr(activities.asyncio, "sleep", no_sleep)
 
-    assert _run(activities.ensure_chrome()) == "already_running"
-    assert opened == [1]
+    assert _run(activities.ensure_chrome("amex")) == "already_running"
+    assert opened == ["https://web.americanexpress.co.il/"]
     attach, select = calls
     assert "attach" in attach[0] and attach[1]["timeout"] == activities.PW_TIMEOUT
+    assert "--cdp=http://127.0.0.1:9226" in attach[0]
     assert select[0][-2:] == ["tab-select", "2"] and select[1]["timeout"] == activities.PW_TIMEOUT
 
 
 def test_existing_amex_tab_is_not_reopened(monkeypatch):
     pages = [{"type": "page", "url": "https://web.americanexpress.co.il/x"}]
-    monkeypatch.setattr(activities, "_cdp_pages", lambda: pages)
-    monkeypatch.setattr(activities, "_open_amex_tab", lambda: pytest.fail("must not open a second tab"))
-    assert _run(activities._ensure_amex_tab()) == 0
+    monkeypatch.setattr(activities, "_cdp_pages", lambda src: pages)
+    monkeypatch.setattr(activities, "_open_tab", lambda src, url: pytest.fail("must not open a second tab"))
+    assert _run(activities._ensure_tab(AMEX)) == 0
+
+
+def test_raw_cdp_sources_get_a_tab_but_no_playwright_session(monkeypatch):
+    calls = []
+
+    async def fake_run_cmd(args, **kw):
+        calls.append(args)
+        return 0, ""
+
+    pages = [{"type": "page", "url": "https://my-account.more.co.il/personalarea/dashboard"}]
+    monkeypatch.setattr(activities, "_cdp_up", lambda src: True)
+    monkeypatch.setattr(activities, "_cdp_pages", lambda src: pages)
+    monkeypatch.setattr(activities, "run_cmd", fake_run_cmd)
+    assert _run(activities.ensure_chrome("more")) == "already_running"
+    assert calls == []  # more/analyst dump over raw CDP; attaching playwright has hung on shared Chrome
+
+
+def test_ensure_chrome_launches_with_the_sources_own_port_and_profile(monkeypatch):
+    launched, up = [], []
+
+    async def no_sleep(_):
+        pass
+
+    def fake_launch(src):
+        launched.append(src.name)
+        up.append(True)
+
+    async def fake_run_cmd(args, **kw):
+        return 0, ""
+
+    monkeypatch.setattr(activities, "_cdp_up", lambda src: bool(up))
+    monkeypatch.setattr(activities, "_launch_chrome", fake_launch)
+    monkeypatch.setattr(activities, "_cdp_pages", lambda src: [{"type": "page", "url": "https://hb2.bankleumi.co.il/x"}])
+    monkeypatch.setattr(activities, "run_cmd", fake_run_cmd)
+    monkeypatch.setattr(activities.asyncio, "sleep", no_sleep)
+    assert _run(activities.ensure_chrome("leumi")) == "launched"
+    assert launched == ["leumi"]
+    assert sources.get("leumi").port == 9224 and sources.get("leumi").profile.name == ".chrome-cdp-leumi"
 
 
 def test_run_cmd_kills_hung_command_and_raises():
@@ -91,5 +131,5 @@ def test_check_session_hang_is_bounded(monkeypatch):
         return 0, "VERDICT: LIVE"
 
     monkeypatch.setattr(activities, "run_cmd", fake_run_cmd)
-    assert _run(activities.check_amex_session()) is True
+    assert _run(activities.check_session("amex")) == "live"
     assert seen["timeout"] == activities.PW_TIMEOUT

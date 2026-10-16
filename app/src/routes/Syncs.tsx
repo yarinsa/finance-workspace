@@ -56,7 +56,7 @@ function LiveRow({ source, s }: { source: string; s: SourceStatus }) {
         sub={
           <>
             {d === "stale" ? "העדכון האחרון מהסנכרון התקבל מזמן — ייתכן שה-worker נפל" : s.message}
-            {s.error && d === "failed" && <span className="sync-lag">{s.error}</span>}
+            {s.error && (d === "failed" || d === "rejected") && <span className="sync-lag">{s.error}</span>}
           </>
         }
         value={

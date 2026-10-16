@@ -1,16 +1,26 @@
-"""AmexSyncWorkflow: scrape AMEX -> digest -> publish, without ever logging in.
+"""FinanceSyncWorkflow: refresh every requested source -> digest -> publish, without
+ever logging in.
 
-If the session is dead the workflow notifies the human and waits (up to 12h) for
-the `session_refreshed` signal (sent by sync/resume.py after they log in).
+  preflight   check every requested session first
+  login       if any are dead, ONE notification listing them (grouped by login), then wait
+              up to 12h for the `session_refreshed` signal (sync/resume.py)
+  scrape      live (and unknown) sources in registry order; one failing never stops the rest
+  gate        validate_dump after each scrape; a rejected dump does not count
+  finish      digest once, publish once, if at least one source scraped
 
-Every status change is also published (publish_status) to sync-status.json, which
-the dashboard polls to show what the sync is doing right now.
+Every source's progress is also published (publish_status) as its own entry in
+sync-status.json, which the dashboard polls: checking_session -> waiting_for_login ->
+scraping -> validating -> digesting -> publishing -> done, or needs_login / failed /
+rejected. Publishing is best-effort and never fails the sync.
 """
 from datetime import timedelta
 
 from temporalio import workflow
 from temporalio.common import RetryPolicy
 from temporalio.exceptions import ActivityError, ApplicationError
+
+with workflow.unsafe.imports_passed_through():
+    import sources
 
 TASK_QUEUE = "finance-sync"
 LOGIN_WAIT = timedelta(hours=12)
@@ -24,6 +34,11 @@ SCRAPE = dict(
     start_to_close_timeout=timedelta(minutes=10),
     heartbeat_timeout=timedelta(seconds=60),
     retry_policy=RetryPolicy(maximum_attempts=2, non_retryable_error_types=["SessionExpired", "ScrapeFailed"]),
+)
+VALIDATE = dict(
+    start_to_close_timeout=timedelta(minutes=3),
+    heartbeat_timeout=timedelta(seconds=60),
+    retry_policy=RetryPolicy(maximum_attempts=1),
 )
 DIGEST = dict(
     start_to_close_timeout=timedelta(minutes=10),
@@ -45,51 +60,85 @@ STATUS = dict(
     retry_policy=RetryPolicy(maximum_attempts=1),
 )
 
-SOURCE = "amex"
-TOTAL_STEPS = 4
-# status -> (step, short text shown on the dashboard)
+# Per-source statuses in the result dict.
+OK, NEEDS_LOGIN, FAILED, REJECTED, PENDING = "ok", "needs_login", "failed", "rejected", "pending"
+LOGIN_TITLE = "Finance sync - login needed"
+
+TOTAL_STEPS = 5
+# status -> (step, short Hebrew text shown on the dashboard; {name} is the source's label)
 STEPS = {
-    "checking_session": (1, "בודק חיבור לאמריקן אקספרס"),
-    "waiting_for_login": (1, "ממתין שתתחבר לאמריקן אקספרס ב-Chrome במק"),
-    "scraping": (2, "מוריד עסקאות מאמריקן אקספרס"),
-    "digesting": (3, "בונה מחדש את הנתונים"),
-    "publishing": (4, "מפרסם לדשבורד"),
-    "done": (4, "הסנכרון הושלם"),
-    "needs_login": (1, "לא בוצע סנכרון — נדרשת התחברות"),
-    "failed": (None, "הסנכרון נכשל"),
+    "checking_session": (1, "{name}: בודק חיבור"),
+    "waiting_for_login": (1, "{name}: ממתין שתתחבר ב-Chrome במק"),
+    "scraping": (2, "{name}: מוריד נתונים"),
+    "validating": (3, "{name}: בודק את הנתונים"),
+    "digesting": (4, "{name}: בונה מחדש את הנתונים"),
+    "publishing": (5, "{name}: מפרסם לדשבורד"),
+    "done": (5, "{name}: הסנכרון הושלם"),
+    "needs_login": (1, "{name}: לא בוצע סנכרון — נדרשת התחברות"),
+    "rejected": (3, "{name}: הנתונים נדחו בבדיקה"),
+    "failed": (None, "{name}: הסנכרון נכשל"),
 }
-TERMINAL = {"done", "needs_login", "failed"}
-
-RESUME_HINT = ("AMEX session expired - log in in the AMEX Chrome window, "
-               "then run `python3 sync/resume.py`")
+TERMINAL = {"done", "needs_login", "rejected", "failed"}
 
 
-@workflow.defn
-class AmexSyncWorkflow:
+def _cause(e: ActivityError):
+    c = e.cause
+    return (c.type, c.message) if isinstance(c, ApplicationError) else (None, str(c))
+
+
+def _detail(e: ActivityError, limit=600) -> str:
+    """The activity's message plus its details (command output tail), trimmed."""
+    c = e.cause
+    extra = "\n".join(str(d) for d in getattr(c, "details", ()) or ())
+    return (f"{_cause(e)[1]}\n{extra}".strip())[-limit:]
+
+
+def _reason(e: BaseException, lines: int = 1) -> str:
+    """One short line for the dashboard: the root cause's message (first `lines` lines), no tracebacks."""
+    while isinstance(e, ActivityError) and e.cause is not None:
+        e = e.cause
+    return " · ".join((str(e).splitlines() or [type(e).__name__])[:lines])[:200]
+
+
+class _FinanceSync:
+    """The sync's state and flow, shared by FinanceSyncWorkflow and the AMEX-only wrapper."""
+
     def __init__(self) -> None:
+        self._phase = "starting"
+        self._results: dict = {}
+        self._published: dict = {}  # source -> last status sent to the dashboard
+        self._steps: dict = {}
         self._resumed = False
-        self._status = "starting"
-        self._step = None
+        self._all = False  # a signal without names re-checks every dead source
+        self._named: set = set()
 
-    @workflow.signal
-    def session_refreshed(self) -> None:
+    def refreshed(self, names=None) -> None:
         self._resumed = True
+        if not names:
+            self._all = True
+        for n in names or ():
+            try:
+                self._named |= sources.resolve([n])
+            except ValueError:
+                pass  # a mistyped name must not wedge the workflow task
 
-    @workflow.query
-    def status(self) -> str:
-        return self._status
+    def status(self) -> dict:
+        return {"phase": self._phase, "sources": {k: dict(v) for k, v in self._results.items()}}
 
-    async def _set(self, status: str, message: str | None = None, error: str | None = None) -> None:
-        """Change status and publish it. Publishing never fails the workflow."""
-        self._status = status
+    def _res(self, source: str, status: str, detail: str = "") -> None:
+        self._results[source] = {"status": status, "detail": detail}
+
+    async def _set(self, source: str, status: str, message: str | None = None, error: str | None = None) -> None:
+        """Publish one source's status to the dashboard. Never fails the workflow."""
+        self._published[source] = status
         step, text = STEPS[status]
         if step is not None:
-            self._step = step
+            self._steps[source] = step
         info = workflow.info()
         entry = {
             "status": status,
-            "message": message or text,
-            "step": self._step,
+            "message": message or text.format(name=sources.LABEL_HE[source]),
+            "step": self._steps.get(source),
             "total_steps": TOTAL_STEPS,
             "workflow_id": info.workflow_id,
             "run_id": info.run_id,
@@ -98,67 +147,215 @@ class AmexSyncWorkflow:
             "error": error,
         }
         try:
-            await workflow.execute_activity("publish_status", args=[SOURCE, entry], **STATUS)
+            await workflow.execute_activity("publish_status", args=[source, entry], **STATUS)
         except ActivityError:
             pass
-
-    async def _live(self) -> bool:
-        await self._set("checking_session")
-        await workflow.execute_activity("ensure_chrome", **QUICK)
-        return await workflow.execute_activity("check_amex_session", **QUICK)
 
     async def _say(self, title: str, message: str) -> None:
         await workflow.execute_activity("notify", args=[title, message], **NOTIFY)
 
-    @workflow.run
-    async def run(self) -> dict:
+    async def _probe(self, source: str) -> str:
+        """ensure_chrome + check_session -> "live" | "dead" | "unknown" | "failed".
+        A check that cannot run is unknown, never dead: only a positive logged-out signal pages the human."""
         try:
-            return await self._run()
+            await workflow.execute_activity("ensure_chrome", source, **QUICK)
+        except ActivityError as e:
+            self._res(source, FAILED, f"Chrome unavailable: {_detail(e)}")
+            await self._set(source, "failed", error=f"Chrome unavailable: {_reason(e)}")
+            return "failed"
+        try:
+            return await workflow.execute_activity("check_session", source, **QUICK)
+        except ActivityError:
+            return "unknown"
+
+    def _login_message(self, dead: list) -> str:
+        groups = sources.login_groups(dead)
+        lines = []
+        for group, members in groups.items():
+            profile = sources.get(members[0]).profile
+            lines.append(f"{group} ({', '.join(members)}; profile {profile})" if len(members) > 1
+                         else f"{group} (profile {profile})")
+        return ("Log in in these Chrome windows: " + "; ".join(lines)
+                + ". Then run `python3 sync/resume.py`.")
+
+    def _was_named(self, source: str) -> bool:
+        return self._all or source in self._named
+
+    async def _scrape_one(self, source: str, unverified: bool) -> str:
+        """scrape + validate. Returns "ok" | "needs_login" | "failed" | "rejected"."""
+        name = sources.LABEL_HE[source]
+        self._res(source, "scraping")
+        await self._set(source, "scraping")
+        try:
+            await workflow.execute_activity("scrape", source, **SCRAPE)
+        except ActivityError as e:
+            kind, _ = _cause(e)
+            if kind == "SessionExpired":
+                self._res(source, NEEDS_LOGIN, "session expired during scrape")
+                await self._set(source, "needs_login", f"{name}: החיבור פג באמצע ההורדה — התחבר והפעל שוב")
+                return NEEDS_LOGIN
+            self._res(source, FAILED, _detail(e))
+            await self._set(source, "failed", f"{name}: ההורדה נכשלה", error=_reason(e))
+            return FAILED
+        self._res(source, "validating")
+        await self._set(source, "validating")
+        try:
+            gate = await workflow.execute_activity("validate_dump", source, **VALIDATE)
+        except ActivityError as e:
+            self._res(source, REJECTED, _detail(e))
+            await self._set(source, "rejected", error=_reason(e, lines=3))
+            return REJECTED
+        note = "session unverified; " if unverified else ""
+        self._res(source, OK, f"{note}scraped, validation {gate}")
+        return OK
+
+    async def run(self, requested=None) -> dict:
+        try:
+            return await self._run(requested)
         except Exception as e:
-            # Anything not already reported (digest/publish failures, Chrome
-            # never coming up) still reaches the dashboard as `failed`.
-            if self._status not in TERMINAL:
-                await self._set("failed", error=_reason(e))
+            # Anything not already reported (digest/publish failures) still reaches
+            # the dashboard as `failed` for every source that was mid-run.
+            for s, status in list(self._published.items()):
+                if status not in TERMINAL:
+                    await self._set(s, "failed", error=_reason(e))
             raise
 
-    async def _run(self) -> dict:
-        if not await self._live():
-            await self._set("waiting_for_login")
-            await self._say("Finance sync", RESUME_HINT)
+    async def _run(self, requested=None) -> dict:
+        try:
+            order = sources.ordered(requested)
+        except ValueError as e:
+            raise ApplicationError(str(e), non_retryable=True)
+        self._results = {s: {"status": PENDING, "detail": ""} for s in order}
+
+        # 1. Preflight: every session, before anything is scraped.
+        self._phase = "preflight"
+        state = {}
+        for s in order:
+            await self._set(s, "checking_session")
+            state[s] = await self._probe(s)
+
+        # 2. One grouped notification, one wait. The human logs in once per group.
+        dead = [s for s in order if state[s] == "dead"]
+        if dead:
+            self._phase = "waiting_for_login"
+            for s in order:
+                if state[s] == "dead":
+                    await self._set(s, "waiting_for_login")
+                elif state[s] in ("live", "unknown"):  # connected, but queued behind the wait
+                    await self._set(s, "checking_session", f"{sources.LABEL_HE[s]}: החיבור תקין — בתור לסנכרון")
+            await self._say(LOGIN_TITLE, self._login_message(dead))
             try:
                 await workflow.wait_condition(lambda: self._resumed, timeout=LOGIN_WAIT)
             except TimeoutError:
                 pass
-            if not self._resumed or not await self._live():
-                await self._set("needs_login")
-                await self._say("Finance sync", "AMEX still logged out - sync skipped")
-                return {"status": "needs_login"}
+            if self._resumed:
+                self._phase = "rechecking"
+                for s in (d for d in dead if self._was_named(d)):
+                    await self._set(s, "checking_session")
+                    state[s] = await self._probe(s)
+            for s in dead:
+                if state[s] == "dead":
+                    self._res(s, NEEDS_LOGIN, "still logged out" if self._resumed else "no login within 12h")
+                    await self._set(s, "needs_login")
 
-        try:
-            await self._set("scraping")
-            await workflow.execute_activity("scrape_amex", **SCRAPE)
-        except ActivityError as e:
-            cause = e.cause
-            if isinstance(cause, ApplicationError) and cause.type == "SessionExpired":
-                await self._set("needs_login", "החיבור לאמריקן אקספרס פג באמצע ההורדה — התחבר והפעל שוב")
-                await self._say("Finance sync", "AMEX session died mid-scrape - log in and re-trigger")
-                return {"status": "needs_login", "reason": "session expired during scrape"}
-            await self._set("failed", "ההורדה מאמריקן אקספרס נכשלה", error=_reason(e))
-            await self._say("Finance sync", "AMEX scrape failed - see Temporal UI (localhost:8233)")
-            raise
+        # 3. Scrape in registry order (Discount: account -> mortgage -> business).
+        self._phase = "scraping"
+        expired_groups: dict = {}
+        for s in order:
+            if state[s] not in ("live", "unknown"):
+                continue
+            group = sources.get(s).group
+            if group in expired_groups:
+                self._res(s, NEEDS_LOGIN, f"login expired while scraping {expired_groups[group]}")
+                await self._set(s, "needs_login")
+                continue
+            if await self._scrape_one(s, unverified=state[s] == "unknown") == NEEDS_LOGIN:
+                expired_groups[group] = s
 
-        await self._set("digesting")
-        summary = await workflow.execute_activity("digest", **DIGEST)
-        await self._set("publishing")
-        published = await workflow.execute_activity("publish_data", **PUBLISH)
-        n = (summary or {}).get("transactions")
-        await self._set("done", f"הסנכרון הושלם · {n:,} עסקאות" if n else None)
-        await self._say("Finance sync", f"AMEX synced ({published})" + (f", {n} transactions" if n else ""))
-        return {"status": "ok", "published": published, "digest": summary}
+        # 4. Digest and publish once. A rejected dump is already on disk and the digest
+        #    reads it, so the numbers are not published until that source is sorted out.
+        scraped = [s for s in order if self._results[s]["status"] == OK]
+        rejected = [s for s in order if self._results[s]["status"] == REJECTED]
+        finish = None
+        if scraped:
+            try:
+                self._phase = "digesting"
+                for s in scraped:
+                    await self._set(s, "digesting")
+                summary = await workflow.execute_activity("digest", **DIGEST)
+                if rejected:
+                    published = f"withheld (rejected: {', '.join(rejected)})"
+                else:
+                    self._phase = "publishing"
+                    for s in scraped:
+                        await self._set(s, "publishing")
+                    published = await workflow.execute_activity("publish_data", **PUBLISH)
+            except ActivityError:
+                self._phase = "failed"
+                await self._say("Finance sync", "Digest/publish failed - see Temporal UI (localhost:8233)")
+                raise
+            finish = {"digest": summary, "published": published}
+            n = (summary or {}).get("transactions")
+            for s in scraped:
+                msg = f"{sources.LABEL_HE[s]}: הסנכרון הושלם" + (f" · {n:,} עסקאות" if n else "")
+                if rejected:  # scraped fine, but the numbers are not pushed while a bad dump is on disk
+                    msg += " · הפרסום לדשבורד הוחזק (נתונים שנדחו)"
+                await self._set(s, "done", msg)
+
+        self._phase = "done"
+        await self._say("Finance sync", self._summary(order, finish))
+        results = {s: dict(self._results[s]) for s in order}
+        if finish:
+            results["_finish"] = finish
+        return results
+
+    def _summary(self, order: list, finish) -> str:
+        by = {}
+        for s in order:
+            by.setdefault(self._results[s]["status"], []).append(s)
+        parts = [f"{status}: {', '.join(names)}" for status, names in by.items()]
+        if finish:
+            parts.append(f"published: {finish['published']}")
+        n = ((finish or {}).get("digest") or {}).get("transactions")
+        return "; ".join(parts) + (f" ({n} transactions)" if n else "")
 
 
-def _reason(e: BaseException) -> str:
-    """One short line for the dashboard: the root cause's message, no tracebacks."""
-    while isinstance(e, ActivityError) and e.cause is not None:
-        e = e.cause
-    return (str(e).splitlines() or [type(e).__name__])[0][:200]
+@workflow.defn
+class FinanceSyncWorkflow:
+    def __init__(self) -> None:
+        self._sync = _FinanceSync()
+
+    @workflow.signal
+    def session_refreshed(self, names: list[str] | None = None) -> None:
+        """The human logged in again. Optionally name sources or login groups ("discount"
+        covers all three Discount apps); without names every dead source is re-checked."""
+        self._sync.refreshed(names)
+
+    @workflow.query
+    def status(self) -> dict:
+        return self._sync.status()
+
+    @workflow.run
+    async def run(self, sources: list[str] | None = None) -> dict:
+        return await self._sync.run(sources)
+
+
+@workflow.defn
+class AmexSyncWorkflow:
+    """The original AMEX-only workflow, kept so existing schedules and runs still resolve.
+    It is FinanceSyncWorkflow(["amex"]); the result is the same per-source dict."""
+
+    def __init__(self) -> None:
+        self._sync = _FinanceSync()
+
+    @workflow.signal
+    def session_refreshed(self, names: list[str] | None = None) -> None:
+        self._sync.refreshed(names)
+
+    @workflow.query
+    def status(self) -> dict:
+        return self._sync.status()
+
+    @workflow.run
+    async def run(self) -> dict:
+        return await self._sync.run(["amex"])
