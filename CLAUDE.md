@@ -84,7 +84,9 @@ local Temporal dev server + worker under launchd: ensure Chrome -> check session
 `SYNC_PUBLISH=1`). It **never authenticates** — a dead session triggers a macOS
 notification and a wait for `python3 sync/resume.py` after the human logs in
 (12h, then `needs_login`). Install with `sync/install.sh`; UI at
-http://localhost:8233. Details in `sync/README.md`. Only `sync/` needs
+http://localhost:8233. Every workflow step is also published to
+`data/sync-status.json`, which the app polls for a live status on `/syncs`, the
+header dot and the home list. Details in `sync/README.md`. Only `sync/` needs
 `temporalio`; `data/` stays stdlib-only.
 
 ### Cashflow forecast
