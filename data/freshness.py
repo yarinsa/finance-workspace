@@ -44,6 +44,7 @@ TARGETS = {
     "leumi":             (1 * DAY, 12 * HOUR),   # bank: daily
     "cal":               (1 * DAY, 12 * HOUR),   # card: daily
     "amex":              (1 * DAY, 12 * HOUR),   # card: daily
+    "max":               (1 * DAY, 12 * HOUR),   # card: daily
     "harel":             (30 * DAY, 7 * DAY),    # savings: monthly
     "more":              (30 * DAY, 7 * DAY),    # savings: monthly
     "analyst":           (30 * DAY, 7 * DAY),    # savings: monthly

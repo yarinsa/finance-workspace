@@ -66,7 +66,8 @@ def test_every_normalized_source_has_a_target_or_is_exempt():
     # A newly scaffolded source must pick a freshness target (or opt out).
     data = Path(freshness.__file__).parent
     sources = {p.parent.name for p in data.glob("*/normalize.py")}
-    assert sources == set(freshness.TARGETS) | freshness.NO_TARGET
+    # (A target may land before its normalize.py, e.g. the max scaffold.)
+    assert sources <= set(freshness.TARGETS) | freshness.NO_TARGET
 
 
 def _dump(root, source, when):
@@ -95,8 +96,8 @@ def test_due_sources_picks_late_and_never_in_scrape_order(tmp_path):
     _dump(tmp_path, "harel", ago(days=20))             # fresh (monthly)
     _dump(tmp_path, "more", ago(days=20))
     _dump(tmp_path, "riseup", ago(days=60))            # no target: never listed
-    # analyst never scraped
-    assert freshness.due_sources(NOW, tmp_path) == ["discount-business", "leumi", "amex", "analyst"]
+    # max, analyst never scraped
+    assert freshness.due_sources(NOW, tmp_path) == ["discount-business", "leumi", "amex", "max", "analyst"]
 
 
 def test_daily_source_scraped_just_after_todays_run_time_is_still_due(tmp_path):

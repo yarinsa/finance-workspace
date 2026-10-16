@@ -46,7 +46,8 @@ Existing examples to copy from (read the closest one first):
 | 9227 | `~/.chrome-cdp-harel` | Harel (הראל) — pension + study funds (savings, not cashflow) |
 | 9228 | `~/.chrome-cdp-more` | More Investment House (מור) — study funds (savings, not cashflow) |
 | 9229 | `~/.chrome-cdp-analyst` | Analyst (אנליסט) — old self-employed קופת גמל (savings, not cashflow) |
-| **9230+** | `~/.chrome-cdp-<source>` | **← next new source** |
+| 9230 | `~/.chrome-cdp-max` | Max (מקס, ex-Leumi Card) credit cards |
+| **9231+** | `~/.chrome-cdp-<source>` | **← next new source** |
 
 > Sources behind the **same login** can share a port/profile (as the three
 > Discount apps do). A genuinely separate institution gets its own.

@@ -30,7 +30,7 @@ a time, mid-refresh. It checks everything first and asks once.
   Correct order: **account → mortgage → business**.
 - **Everything else is parallel-safe.** Each institution has its own CDP port
   and profile, so they cannot collide:
-  riseup 9222 · discount 9223 · leumi 9224 · cal 9225 · amex 9226 · harel 9227 · more 9228 · analyst 9229.
+  riseup 9222 · discount 9223 · leumi 9224 · cal 9225 · amex 9226 · harel 9227 · more 9228 · analyst 9229 · max 9230.
   Only the three Discount apps must be sequential, because they share 9223.
 
 ## Flow
@@ -73,6 +73,7 @@ existing skill:
 | leumi | `leumi-account-refresh` |
 | cal | `cal-refresh` |
 | amex | `amex-refresh` |
+| max | `max-refresh` |
 | harel | `harel-refresh` |
 | more | `more-refresh` |
 | analyst | `analyst-refresh` |

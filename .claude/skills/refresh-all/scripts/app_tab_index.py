@@ -30,6 +30,7 @@ APP = {
     "leumi":    (("#/hpsummary",), ()),
     "cal":      (("digital-web.cal-online.co.il/dashboard",), ()),
     "amex":     (("web.americanexpress.co.il",), ("אזור אישי",)),
+    "max":      (("www.max.co.il/homepage",), ()),
     "harel":    (("client-view.aspx",), ("הראל שלי",)),
     "more":     (("my-account.more.co.il/personalarea",), ()),
     "analyst":  (("amitim.analyst.co.il/lobby",), ("מבט כללי",)),
