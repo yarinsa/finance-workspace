@@ -5,11 +5,17 @@ import it deterministically. The values mirror what the human-run skills use:
 ports and login URLs from refresh-all/scripts/check_sessions.sh, app-tab matching
 from refresh-all/scripts/app_tab_index.py (matched by `tab_key`, not duplicated here).
 
-Registry order IS the scrape order. The two Discount Chrome apps (mortgage, business)
-share ONE Chrome (port 9223, profile ~/.chrome-cdp-discount) and ONE login, and the
-business (SME) app rebinds the server session and blocks the mortgage endpoints
-(`actionRequired: stepup`), so it must stay after mortgage. Discount checking logs in
-headless by itself (check=SELF) and runs after both.
+Registry order IS the scrape order. The only Discount Chrome app left is business (SME,
+port 9223, profile ~/.chrome-cdp-discount, one human login). Discount mortgage and checking
+log in headless by themselves (check=SELF, scrapers/discount/), so they need no Chrome and
+sit in no login group. Self-login sources run AFTER discount-business because a headless
+login may end the human's telebank session that business rides on. Mortgage and checking
+come after business and need no ordering between themselves: the old "mortgage before
+business" rule existed because the business app rebinds the *Chrome* server session
+(`actionRequired: stepup` on the mortgage endpoints); each headless run is its own fresh
+login/session, so business's rebinding cannot touch it. Mortgage runs before checking.
+If a headless login is refused (INVALID_PASSWORD / CHANGE_PASSWORD) the later self-login
+sources are skipped as needs_login (they share the .env credentials, see Source.group).
 """
 from dataclasses import dataclass
 from pathlib import Path
@@ -30,7 +36,7 @@ class Source:
     port: int
     login_url: str            # opened for the human (never used to authenticate)
     app_host: str             # substring of the host: any tab here belongs to this bank
-    check: str                # VERDICT | SESSIONS | TABS
+    check: str                # VERDICT | SESSIONS | TABS | SELF
     dumps: tuple              # argv tuples under .claude/skills/; {session} / {port} are substituted
     login_group: str = ""     # sources sharing a login are announced and re-checked together
     chrome: str = ""          # Chrome/profile/playwright-session id, shared by a login group's apps
@@ -42,10 +48,12 @@ class Source:
 
     @property
     def group(self) -> str:
-        # A self-login source has its own login: never the group of a Chrome app that
-        # happens to share its name (checking "discount" vs the Discount Chrome group).
+        # Self-login sources never join a Chrome login group (checking "discount" vs the
+        # Discount Chrome group), but they all use the same .env credentials: one group per
+        # bank host, so a refused login skips the rest instead of retrying bad credentials
+        # (repeated failed logins can lock the account).
         if self.check == SELF:
-            return f"{self.name}-self"
+            return f"{self.app_host}-self"
         return self.login_group or self.name
 
     @property
@@ -77,15 +85,16 @@ _DISCOUNT = dict(port=9223, login_url="https://start.telebank.co.il/apollo/retai
                  app_host="telebank.co.il", login_group="discount", chrome="discount")
 
 _ALL = [
-    Source(name="discount-mortgage", check=SESSIONS, tab_key="discount", **_DISCOUNT,
-           dumps=(("discount-mortgage-refresh/scripts/dump.sh", "{session}"),)),
-    # LAST of the Discount chain. No tab sits on business2 until the human opens one,
-    # so the preflight can only look (TABS), and the scrape opens the app itself.
+    # The one Discount Chrome app. No tab sits on business2 until the human opens one, so the
+    # preflight can only look (TABS), and the scrape opens the app itself.
     Source(name="discount-business", check=TABS, app_url="https://start.telebank.co.il/apollo/business2/",
            **_DISCOUNT, dumps=(("discount-business-refresh/scripts/dump.sh", "{session}"),)),
-    # Checking logs in headless by itself (scrapers/discount/scrape.mjs), so it needs no
-    # Chrome and is not in the "discount" login group. It runs AFTER the Chrome apps: its
-    # own login may end the human's telebank session that mortgage and business ride on.
+    # Mortgage and checking log in headless by themselves (scrapers/discount/scrape-mortgage.mjs,
+    # scrape.mjs), so they need no Chrome and are not in the "discount" login group. They run
+    # AFTER the Chrome app: their own login may end the human's telebank session.
+    Source(name="discount-mortgage", port=0, login_url="https://start.telebank.co.il/login/",
+           app_host="telebank.co.il", check=SELF, playwright=False,
+           dumps=((str(REPO_ROOT / "scrapers" / "discount" / "scrape-mortgage.mjs"),),)),
     Source(name="discount", port=0, login_url="https://start.telebank.co.il/login/",
            app_host="telebank.co.il", check=SELF, playwright=False,
            dumps=((str(REPO_ROOT / "scrapers" / "discount" / "scrape.mjs"),),)),
@@ -139,7 +148,7 @@ def get(name: str) -> Source:
 
 def ordered(names=None) -> list:
     """Requested names (default: all) de-duplicated and in registry order, so the
-    Discount chain is always account -> mortgage -> business whatever the caller passed."""
+    Discount chain is always business -> mortgage -> checking whatever the caller passed."""
     if names is None:
         return list(SYNC_ORDER)
     wanted = {get(n).name for n in names}

@@ -258,7 +258,7 @@ class _FinanceSync:
                     self._res(s, NEEDS_LOGIN, "still logged out" if self._resumed else "no login within 12h")
                     await self._set(s, "needs_login")
 
-        # 3. Scrape in registry order (Discount: account -> mortgage -> business).
+        # 3. Scrape in registry order (Discount: business -> mortgage -> checking).
         self._phase = "scraping"
         expired_groups: dict = {}
         for s in order:

@@ -5,7 +5,7 @@ dump.sh, refresh-all's session checks, the digest chain, infra/deploy.sh) in a
 subprocess. Which port, profile and dump to use comes from sources.py.
 Nothing here authenticates a Chrome session: no OTPs, no Keychain. A dead session
 is reported, never repaired. The one exception is a source whose own dump logs in
-headless from .env (check=SELF, Discount checking); its refused login is reported
+headless from .env (check=SELF, Discount mortgage and checking); its refused login is reported
 as needs_login like a dead session.
 """
 import asyncio
@@ -48,7 +48,7 @@ VALIDATION_FAILED = "ValidationFailed"
 EXPIRED_MARKERS = (
     "session not live", "VERDICT: LOGGED_OUT", "LOGIN-SHELL HTML", "actionRequired", "stepup",
     "קלט לא תקין", "session likely", "probably logged out", "No logged-in", "No amitim",
-    # self-login scrapers (scrapers/discount): the bank refused the .env credentials
+    # self-login scrapers (scrapers/discount: mortgage, checking): the bank refused the .env credentials
     "LOGIN FAILED: INVALID_PASSWORD", "LOGIN FAILED: CHANGE_PASSWORD",
 )
 

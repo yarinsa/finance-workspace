@@ -24,9 +24,9 @@ commands, session-check strategy). Registry order is the scrape order.
 
 | Source | CDP port | Login group | Session check |
 |---|---|---|---|
-| `discount` | 9223 | discount | `check_sessions.sh discount` |
-| `discount-mortgage` | 9223 | discount | `check_sessions.sh discount` |
 | `discount-business` | 9223 | discount | open tabs only (business2 tab) |
+| `discount-mortgage` | none | (self-login) | `self`: always live; its dump logs in headless |
+| `discount` | none | (self-login) | `self`: always live; its dump logs in headless |
 | `leumi` | 9224 | leumi | `check_sessions.sh leumi` |
 | `cal` | 9225 | cal | `check_sessions.sh cal` |
 | `amex` | 9226 | amex | `check_session.sh` VERDICT (cookies + `/IsLoggedIn`) |
@@ -35,14 +35,17 @@ commands, session-check strategy). Registry order is the scrape order.
 | `more` | 9228 | more | `check_sessions.sh more` |
 | `analyst` | 9229 | analyst | `check_sessions.sh analyst` |
 
-The Discount mortgage and business apps share **one** Chrome (`~/.chrome-cdp-discount`)
-and **one** login, so they are announced as one entry and re-checked together.
-**mortgage → business** is enforced whatever order `sources` was passed in: the
-business (SME) app rebinds the server session and blocks the mortgage endpoints
-(`actionRequired: stepup`). Discount **checking** needs no Chrome: its dump
-(`scrapers/discount/scrape.mjs`) logs in headless from `.env` (check mode `self`,
-always "live" in the preflight; a refused login surfaces as `needs_login`). It runs
-after business, since its login may end the human's telebank session. Leumi runs `dump.sh` and then
+Discount **business** is the only Chrome app left (`~/.chrome-cdp-discount`, one
+human login). Discount **mortgage** and **checking** need no Chrome: their dumps
+(`scrapers/discount/scrape-mortgage.mjs`, `scrapers/discount/scrape.mjs`, sharing
+`lib.mjs`) log in headless from `.env` (check mode `self`, always "live" in the
+preflight; a refused login surfaces as `needs_login`, and because both use the same
+credentials the second one is then skipped rather than retrying them). Order is
+**business → mortgage → checking**: the self-login sources run after business
+because a headless login may end the human's telebank session. The old "mortgage
+before business" rule is gone: it existed because the SME app rebinds the shared
+Chrome server session (`actionRequired: stepup` on the mortgage endpoints), and each
+headless run is its own fresh session. Leumi runs `dump.sh` and then
 `dump-loans.sh`. App-tab matching comes from `refresh-all/scripts/app_tab_index.py`
 (loaded, not copied); a `discount-business` entry was added to it.
 
@@ -59,8 +62,7 @@ bank's login page open in its window with nothing on the app.
 unreachable), so for everything except AMEX a lapsed session usually shows up as
 `unknown` and is caught at scrape time instead (`SessionExpired`, below). The
 business app can only be judged by whether a `business2` tab is open; if none is,
-the scrape opens `…/apollo/business2/` itself (it runs last, so rebinding the shared
-login is already expected).
+the scrape opens `…/apollo/business2/` itself.
 
 ## Workflow
 
@@ -190,7 +192,7 @@ updated for 15 minutes shows as "לא ידוע" (unknown): the worker probably d
 ## Session expired
 
 You get one notification listing every dead login, grouped, e.g. "discount
-(discount, discount-mortgage, discount-business; profile ~/.chrome-cdp-discount),
+(discount-business; profile ~/.chrome-cdp-discount),
 amex (profile ~/.chrome-cdp-amex)". Log in in each of those Chrome windows, then:
 
 ```bash
