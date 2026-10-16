@@ -28,7 +28,9 @@ SELECT s.txn_date, s.abs_amount, s.amount, s.description,
        o.txn_date IS NOT NULL           AS overridden,
        s.origin, s.sources,
        COALESCE(o.horizon, s.record->>'horizon') AS horizon,
-       s.record->>'horizon'             AS scraped_horizon
+       s.record->>'horizon'             AS scraped_horizon,
+       (SELECT array_agg(t.name ORDER BY t.name) FROM transaction_tags tt JOIN tags t ON t.id = tt.tag_id
+        WHERE (tt.txn_date, tt.abs_amount) = (s.txn_date, s.abs_amount)) AS tags
 FROM scraped_transactions s
 LEFT JOIN transaction_overrides o USING (txn_date, abs_amount)
 LEFT JOIN categories sc ON sc.id = s.category_id
@@ -38,12 +40,12 @@ LEFT JOIN categories c  ON c.id = COALESCE(o.category_id, s.category_id)
 
 def _row(r):
     (date, abs_amount, amount, description, category, scraped, note, excluded, overridden, origin, sources,
-     horizon, scraped_horizon) = r
+     horizon, scraped_horizon, tags) = r
     return {"date": date.isoformat(), "abs_amount": f"{Decimal(abs_amount):.2f}",
             "amount": float(amount), "description": description, "category": category,
             "scraped_category": scraped, "note": note, "excluded": excluded,
             "overridden": overridden, "origin": origin, "sources": list(sources or []),
-            "horizon": horizon, "scraped_horizon": scraped_horizon}
+            "horizon": horizon, "scraped_horizon": scraped_horizon, "tags": list(tags or [])}
 
 
 def get_row(conn, k):

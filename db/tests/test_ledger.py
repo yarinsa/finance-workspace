@@ -5,6 +5,7 @@ property under test is the reason the database exists: a re-import of the scrape
 """
 import edit
 import ledger
+import tags
 
 # Made-up rows in the digested ledger's shape.
 CAL_PURCHASE = {"date": "2026-01-15", "amount": -123.45, "description": "חנות לדוגמה",
@@ -99,3 +100,50 @@ def test_manual_category_is_added_as_a_user_category(conn):
     ledger.load(conn, LEDGER)
     edit.set_field(conn, k(CAL_PURCHASE), "category", "אלקטרוניקה")
     assert conn.execute("SELECT source FROM categories WHERE name = 'אלקטרוניקה'").fetchone()[0] == "user"
+
+
+# --- tags ----------------------------------------------------------------------------
+
+def test_tags_survive_reimport_and_reach_the_ledger_sorted(conn):
+    # As the household, I tag the 123.45 charge for a trip; the next scrape keeps it.
+    ledger.load(conn, LEDGER)
+    assert tags.set_tags(conn, k(CAL_PURCHASE), ["טיול", "החזר"], "cli") == ["החזר", "טיול"]
+    out = ledger.sync(conn, LEDGER)
+    assert out[0]["tags"] == ["החזר", "טיול"]
+    assert "tags" not in out[1]                     # untagged rows don't grow a field
+    assert plain([{f: v for f, v in r.items() if f != "tags"} for r in out]) == LEDGER
+
+
+def test_set_tags_replaces_the_set_and_audits_each_change(conn):
+    ledger.load(conn, LEDGER)
+    tags.set_tags(conn, k(CAL_PURCHASE), ["טיול", "החזר"], "cli")
+    tags.set_tags(conn, k(CAL_PURCHASE), ["טיול", "עבודה"], "cli")
+    assert tags.tags_of(conn, k(CAL_PURCHASE)) == ["טיול", "עבודה"]
+    audit = conn.execute("SELECT old, new FROM override_audit WHERE field = 'tags' ORDER BY id").fetchall()
+    assert audit == [(None, "החזר"), (None, "טיול"), ("החזר", None), (None, "עבודה")]
+    assert {t["name"]: t["count"] for t in tags.all_tags(conn)} == {"החזר": 0, "טיול": 1, "עבודה": 1}
+
+
+def test_a_tag_is_shared_between_transactions_and_deleting_it_unlinks_both(conn):
+    ledger.load(conn, LEDGER)
+    tags.set_tags(conn, k(CAL_PURCHASE), ["טיול"], "cli")
+    tags.set_tags(conn, k(SALARY), ["טיול"], "cli")
+    [tag] = tags.all_tags(conn)
+    assert tag["count"] == 2
+    assert tags.delete_tag(conn, tag["id"])
+    assert conn.execute("SELECT count(*) FROM transaction_tags").fetchone()[0] == 0
+    assert all("tags" not in r for r in ledger.materialize(conn))
+
+
+def test_tag_whose_transaction_vanished_is_reported_orphaned(conn):
+    # The bank corrects the charge to 123.40: the tag is kept, and listed as orphaned.
+    ledger.load(conn, LEDGER)
+    tags.set_tags(conn, k(CAL_PURCHASE), ["טיול"], "cli")
+    ledger.sync(conn, [{**CAL_PURCHASE, "amount": -123.40}, SALARY, CARD_BILL])
+    assert tags.orphaned(conn) == [{"date": "2026-01-15", "abs_amount": "123.45", "tag": "טיול"}]
+
+
+def test_orm_session_shares_the_connection_and_never_closes_it(conn):
+    s = ledger.orm_session(conn)
+    s.close()
+    assert conn.execute("SELECT 1").fetchone() == (1,)

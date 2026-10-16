@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Section } from "@/components/common";
 import CategoryTag from "@/components/CategoryTag";
+import TagChips from "@/components/TagChips";
 import TransactionEditSheet, { type EditTarget } from "@/components/TransactionEditSheet";
 import { cashflow, shekel, transactions } from "@/lib/data";
 import { applyOverlay } from "@/lib/ledgerOverlay";
@@ -11,6 +12,7 @@ interface Row {
   merchant: string;
   category: string;
   overridden?: boolean;
+  tags?: string[];
   /** Positive ₪ spent. */
   amount: number;
 }
@@ -22,7 +24,7 @@ function recent(overlay: ReturnType<typeof useLedgerApi>["overlay"]): Row[] {
     .filter((t) => t.amount < 0 && !t.card_bill_payment && !t.internal_transfer && !t.savings)
     .sort((a, b) => b.date.localeCompare(a.date))
     .slice(0, 5)
-    .map((t) => ({ date: t.date, merchant: t.description ?? "—", category: t.category ?? "", amount: -t.amount }));
+    .map((t) => ({ date: t.date, merchant: t.description ?? "—", category: t.category ?? "", tags: t.tags, amount: -t.amount }));
 }
 
 function shortDate(iso: string): string {
@@ -49,6 +51,7 @@ export default function RecentTransactions() {
               <div className="truncate font-semibold">{r.merchant}</div>
               <div className="mt-0.5 flex items-center gap-1.5 text-xs text-muted-foreground">
                 <CategoryTag name={r.category} />
+                <TagChips tags={r.tags} />
                 <span>{shortDate(r.date)}</span>
               </div>
             </div>

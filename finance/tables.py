@@ -5,7 +5,7 @@ This is the schema's source of truth: Alembic (db/migrations) autogenerates from
 and these classes disagree. Columns pulled out of a ledger row are typed from
 `finance.models.LedgerTransaction`; the full row is kept in `record`.
 
-The `transactions` and `orphaned_overrides` views are plain SQL in the migrations.
+The `transactions`, `orphaned_overrides` and `orphaned_tags` views are plain SQL in the migrations.
 """
 import datetime as dt
 from decimal import Decimal
@@ -59,6 +59,11 @@ class ScrapedTransaction(SQLModel, table=True):
     imported_at: dt.datetime | None = Field(default=None, sa_column=_now())
 
     category_ref: Category | None = Relationship(back_populates="scraped_transactions")
+    tags: list["Tag"] = Relationship(sa_relationship_kwargs={
+        "secondary": "transaction_tags", "viewonly": True, "order_by": "Tag.name",
+        "primaryjoin": "and_(ScrapedTransaction.txn_date == foreign(TransactionTag.txn_date), "
+                       "ScrapedTransaction.abs_amount == foreign(TransactionTag.abs_amount))",
+        "secondaryjoin": "Tag.id == foreign(TransactionTag.tag_id)"})
 
 
 class TransactionOverride(SQLModel, table=True):
@@ -96,3 +101,39 @@ class OverrideAudit(SQLModel, table=True):
     field: str | None = Field(default=None, sa_type=Text)
     old: object | None = Field(default=None, sa_column=Column(JSONB))
     new: object | None = Field(default=None, sa_column=Column(JSONB))
+
+
+class Tag(SQLModel, table=True):
+    """A label the household puts on transactions (a trip, a project, "reimbursable").
+
+    Free-form and many-to-many, unlike a category: a transaction can carry several."""
+    __tablename__ = "tags"
+
+    id: int | None = Field(default=None, primary_key=True)
+    name: str = Field(sa_column=Column(Text, nullable=False, unique=True))
+    color: str | None = Field(default=None, sa_type=Text)   # "#rrggbb", or null for the default
+    created_at: dt.datetime | None = Field(default=None, sa_column=_now())
+
+    links: list["TransactionTag"] = Relationship(
+        back_populates="tag_ref", sa_relationship_kwargs={"cascade": "all, delete-orphan", "passive_deletes": True})
+
+
+class TransactionTag(SQLModel, table=True):
+    """A tag on a transaction, by ledger key — human layer, kept forever like an override.
+
+    No FK to scraped_transactions (replaced on every import): a link whose transaction
+    vanished is reported by the `orphaned_tags` view, never deleted."""
+    __tablename__ = "transaction_tags"
+    __table_args__ = (CheckConstraint("abs_amount >= 0", name="transaction_tags_abs_amount_check"),)
+
+    txn_date: dt.date = Field(primary_key=True)
+    abs_amount: Decimal = Field(primary_key=True, sa_type=Money)
+    tag_id: int = Field(sa_column=Column(Integer, ForeignKey("tags.id", ondelete="CASCADE"),
+                                         primary_key=True, index=True))
+    created_at: dt.datetime | None = Field(default=None, sa_column=_now())
+
+    tag_ref: Tag = Relationship(back_populates="links")
+    transaction: ScrapedTransaction | None = Relationship(sa_relationship_kwargs={
+        "viewonly": True,
+        "primaryjoin": "and_(foreign(TransactionTag.txn_date) == ScrapedTransaction.txn_date, "
+                       "foreign(TransactionTag.abs_amount) == ScrapedTransaction.abs_amount)"})

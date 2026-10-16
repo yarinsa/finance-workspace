@@ -1,4 +1,5 @@
 import CategoryTag from "@/components/CategoryTag";
+import TagChips from "@/components/TagChips";
 import { useSearchParams } from "react-router-dom";
 import { useMemo, useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
@@ -43,6 +44,7 @@ export default function Spending() {
   const [tab, setTab] = useState("transactions");
   const [cat, setCat] = useState<string | null>(params.get("cat"));
   const [merchant, setMerchant] = useState<string | null>(null);
+  const [tag, setTag] = useState<string | null>(params.get("tag"));
   const [query, setQuery] = useState("");
 
   if (!months.length) {
@@ -68,6 +70,7 @@ export default function Spending() {
     (t) =>
       (!selected || t.category === selected.name) &&
       (!merchant || t.merchant === merchant) &&
+      (!tag || (t.tags ?? []).includes(tag)) &&
       matchesQuery(t, query),
   );
   const maxCat = m.by_category[0]?.amount || 1;
@@ -78,6 +81,7 @@ export default function Spending() {
     setCat(null);
     setMerchant(null);
   };
+  const tagTotal = tag ? txs.reduce((s, t) => s + t.amount, 0) : 0;
   const pickMerchant = (name: string) => {
     setMerchant(name);
     setCat(null);
@@ -224,6 +228,15 @@ export default function Spending() {
               aria-label="חיפוש תנועות"
               className="mb-2"
             />
+            {tag ? (
+              <button
+                type="button"
+                onClick={() => setTag(null)}
+                className="mb-2 me-1.5 rounded-full border border-brand/40 px-3 py-1 text-xs text-brand"
+              >
+                #{tag} · {shekel(tagTotal)} ✕
+              </button>
+            ) : null}
             {selected || merchant ? (
               <button
                 type="button"
@@ -252,6 +265,7 @@ export default function Spending() {
                         <div className="truncate">{t.merchant}</div>
                         <div className="mt-0.5 flex items-center gap-1.5 text-xs text-muted-foreground">
                           <CategoryTag name={t.category} />
+                          <TagChips tags={t.tags} onPick={setTag} />
                           <span>{dayLabel(t.date)}</span>
                           {t.overridden || overlayFor(overlay, t)?.overridden ? (
                             <span className="ms-1.5 rounded-full bg-brand/15 px-1.5 py-px text-[10px] font-semibold">נערך</span>

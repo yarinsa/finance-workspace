@@ -153,6 +153,7 @@ class LedgerTransaction(Record):
     origin: str | None = None
     category: str | None = None
     category_id: int | None = None   # set by the transactions view: id in the `categories` table
+    tags: list[str] | None = None    # set by the transactions view: names from `transaction_tags`, sorted
     is_income: bool | None = None
     account_id: str | None = None
     card_last4: str | None = None

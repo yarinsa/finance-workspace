@@ -172,7 +172,7 @@ def test_get_transaction_shape(client):
         "date": "2026-01-15", "abs_amount": "123.45", "amount": -123.45, "description": "חנות לדוגמה",
         "category": "קניות", "scraped_category": "קניות", "note": None, "excluded": False,
         "overridden": False, "origin": "cal", "sources": ["cal", "riseup"],
-        "horizon": None, "scraped_horizon": None}
+        "horizon": None, "scraped_horizon": None, "tags": []}
 
 
 def test_unknown_key_is_404_on_every_verb(client, rebuilder):
@@ -302,6 +302,42 @@ def test_orphaned_overrides_listed(client, owner):
         {"date": "2026-01-15", "abs_amount": "123.45", "category": "אלקטרוניקה", "note": None, "excluded": False,
          "horizon": None}]}
     assert client.get(PURCHASE_URL).status_code == 404
+
+
+def test_put_tags_replaces_the_set_creates_tags_and_signals(client, owner, rebuilder):
+    # As the household, I tag the 123.45 charge for a trip, then swap one tag.
+    r = client.put(PURCHASE_URL + "/tags", json={"tags": ["טיול", " החזר "]}, headers=WRITE)
+    assert r.status_code == 200 and r.json()["tags"] == ["החזר", "טיול"]
+    row = client.put(PURCHASE_URL + "/tags", json={"tags": ["טיול"]}, headers=WRITE).json()
+    assert row["tags"] == ["טיול"] and rebuilder.signals == 2
+    assert [(a, f, o, n) for a, f, o, n in audit(owner)] == [
+        (ME, "tags", None, "החזר"), (ME, "tags", None, "טיול"), (ME, "tags", "החזר", None)]
+    listed = client.get("/api/tags").json()["tags"]
+    assert [(t["name"], t["count"]) for t in listed] == [("החזר", 0), ("טיול", 1)]
+
+
+@pytest.mark.parametrize("body", [{"tags": [""]}, {"tags": ["x" * 41]}, {"tags": "טיול"},
+                                  {"tags": ["a"] * 21}, {"tag": ["a"]}])
+def test_invalid_tag_bodies_are_422(client, body):
+    assert client.put(PURCHASE_URL + "/tags", json=body, headers=WRITE).status_code == 422
+
+
+def test_tag_writes_need_csrf_and_a_real_transaction(client):
+    assert client.put(PURCHASE_URL + "/tags", json={"tags": ["a"]}).status_code == 403
+    r = client.put("/api/transactions/2026-01-15/999.99/tags", json={"tags": ["a"]}, headers=WRITE)
+    assert r.status_code == 404
+
+
+def test_rename_recolor_and_delete_a_tag(client):
+    client.put(PURCHASE_URL + "/tags", json={"tags": ["טיול", "עבודה"]}, headers=WRITE)
+    ids = {t["name"]: t["id"] for t in client.get("/api/tags").json()["tags"]}
+    r = client.patch(f"/api/tags/{ids['טיול']}", json={"name": "טיול ליוון", "color": "#22aa88"}, headers=WRITE)
+    assert r.json() == {"id": ids["טיול"], "name": "טיול ליוון", "color": "#22aa88"}
+    assert client.patch(f"/api/tags/{ids['טיול']}", json={"name": "עבודה"}, headers=WRITE).status_code == 409
+    assert client.patch(f"/api/tags/{ids['טיול']}", json={"color": "red"}, headers=WRITE).status_code == 422
+    assert client.delete(f"/api/tags/{ids['עבודה']}", headers=WRITE).status_code == 200
+    assert client.get(PURCHASE_URL).json()["tags"] == ["טיול ליוון"]
+    assert client.delete(f"/api/tags/{ids['עבודה']}", headers=WRITE).status_code == 404
 
 
 def test_horizon_override_wins_and_rejects_unknown(client, rebuilder):

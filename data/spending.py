@@ -123,6 +123,8 @@ def build_spending(transactions, months=MONTHS, today=None):
         row = {"date": d, "merchant": merchant, "amount": round(spent, 2), "category": cat}
         if t.get("overridden"):
             row["overridden"] = True          # edited in the ledger DB; the app marks it
+        if t.get("tags"):
+            row["tags"] = t["tags"]           # from the ledger DB's transaction_tags
         b["tx"].append(row)
 
     this_month = today.isoformat()[:7] if today else None

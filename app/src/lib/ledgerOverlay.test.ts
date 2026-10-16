@@ -81,4 +81,13 @@ describe("applyOverlay", () => {
     expect(month.total).toBe(300);
     expect(month.transactions).toHaveLength(3);
   });
+
+  it("shows tags saved this session, and an emptied set clears them", () => {
+    const [tagged] = applyOverlay([month], overlayOf(row({ tags: ["טיול"] })));
+    expect(tagged.transactions[0].tags).toEqual(["טיול"]);
+    expect(tagged.total).toBe(300);
+    const before = { ...month, transactions: [{ ...month.transactions[0], tags: ["טיול"] }, ...month.transactions.slice(1)] };
+    const [cleared] = applyOverlay([before], overlayOf(row({ tags: [] })));
+    expect(cleared.transactions[0].tags).toEqual([]);
+  });
 });

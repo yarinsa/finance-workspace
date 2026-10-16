@@ -24,6 +24,17 @@ export interface Row {
   horizon?: Horizon | null;
   /** What the horizon rules picked before any override. */
   scraped_horizon?: Horizon | null;
+  /** Tag names on this transaction, sorted. */
+  tags?: string[];
+}
+
+/** A tag in the `tags` table, with how many transactions carry it. */
+export interface Tag {
+  id: number;
+  name: string;
+  /** "#rrggbb", or null for the default chip colour. */
+  color: string | null;
+  count: number;
 }
 
 /** Whose money a transaction serves: current me, near-future me, or future (retirement) me. */
@@ -192,6 +203,20 @@ export const resetTransaction = (key: LedgerKey) => request<Row>("DELETE", `${tx
 export async function getCategories(): Promise<string[]> {
   return (await request<{ categories: string[] }>("GET", "/categories")).categories;
 }
+
+export async function getTags(): Promise<Tag[]> {
+  return (await request<{ tags: Tag[] }>("GET", "/tags")).tags;
+}
+
+/** Replace the full set of tags on a transaction; unknown names become new tags. */
+export const putTags = (key: LedgerKey, tags: string[]) => request<Row>("PUT", `${txPath(key)}/tags`, { tags });
+
+/** Rename and/or recolour a tag (`color: null` clears it). 409 when the name is taken. */
+export const patchTag = (id: number, patch: { name?: string; color?: string | null }) =>
+  request<Omit<Tag, "count">>("PATCH", `/tags/${id}`, patch);
+
+/** Delete a tag and remove it from every transaction. */
+export const deleteTag = (id: number) => request<{ deleted: number }>("DELETE", `/tags/${id}`);
 
 export async function getOrphanedOverrides(): Promise<OrphanedOverride[]> {
   return (await request<{ overrides: OrphanedOverride[] }>("GET", "/overrides/orphaned")).overrides;
