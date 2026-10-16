@@ -55,7 +55,19 @@ async function login(page) {
   await page.waitForSelector('input[placeholder="שם משתמש"]', { visible: true });
   await page.type('input[placeholder="שם משתמש"]', process.env.LEUMI_USERNAME);
   await page.type('input[placeholder="סיסמה"]', process.env.LEUMI_PASSWORD);
-  await page.click('button[type="submit"]');
+  // The gate-keeper page (2026-10) ignores a click on the first button[type=submit]: submit with
+  // the enabled "כניסה לחשבון" button itself, else Enter in the password field (one attempt only).
+  await sleep(500);
+  const submitted = await page.evaluate(() => {
+    const b = [...document.querySelectorAll('button')]
+      .find((el) => el.innerText.trim() === 'כניסה לחשבון' && !el.disabled && el.offsetParent !== null);
+    if (b) b.click();
+    return !!b;
+  });
+  if (!submitted) {
+    await page.focus('input[placeholder="סיסמה"]');
+    await page.keyboard.press('Enter');
+  }
 
   for (let i = 0; i < 60; i++) {
     await sleep(1000);
