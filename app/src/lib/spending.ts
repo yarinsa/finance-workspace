@@ -19,6 +19,8 @@ export interface SpendingTransaction {
   /** Positive ₪ spent. */
   amount: number;
   category: string;
+  /** True when a manual override exists for this transaction (ledger API). */
+  overridden?: boolean;
 }
 
 export interface ExcludedBucket {

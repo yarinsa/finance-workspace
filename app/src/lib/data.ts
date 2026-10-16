@@ -5,6 +5,8 @@
 // (`infra/deploy.sh --data-only`). In dev/preview, vite.config.ts serves
 // /data/* straight from ../data/digested.
 
+import { useSyncExternalStore } from "react";
+
 export type Rank = "good" | "bad" | "warning" | null;
 
 export interface Metric {
@@ -381,13 +383,45 @@ async function loadOptional<T>(name: string): Promise<T | null> {
   }
 }
 
-export const [cashflow, snapshot, transactions, goals, forecast] = await Promise.all([
-  loadDigested<Cashflow>("cashflow"),
-  loadDigested<Snapshot>("snapshot"),
-  loadDigested<Transactions>("transactions"),
-  loadDigested<Goals>("goals"),
-  loadOptional<Forecast>("forecast"),
-]);
+function loadAll() {
+  return Promise.all([
+    loadDigested<Cashflow>("cashflow"),
+    loadDigested<Snapshot>("snapshot"),
+    loadDigested<Transactions>("transactions"),
+    loadDigested<Goals>("goals"),
+    loadOptional<Forecast>("forecast"),
+  ]);
+}
+
+// `let` exports are live bindings: importers see the new value after reloadData().
+export let [cashflow, snapshot, transactions, goals, forecast] = await loadAll();
+
+let dataVersion = 0;
+const dataListeners = new Set<() => void>();
+
+/**
+ * Re-fetch every digested JSON and swap the exported bindings (used after the ledger
+ * API's rebuild publishes new data). On failure the old data stays. Components that
+ * call `useDataVersion()` re-render; pages that cache values at module level keep the
+ * old ones until a full reload.
+ */
+export async function reloadData(): Promise<void> {
+  const next = await loadAll();
+  [cashflow, snapshot, transactions, goals, forecast] = next;
+  dataVersion += 1;
+  dataListeners.forEach((l) => l());
+}
+
+/** Subscribe a component to `reloadData()`; returns a counter that bumps on every reload. */
+export function useDataVersion(): number {
+  return useSyncExternalStore(
+    (cb) => {
+      dataListeners.add(cb);
+      return () => void dataListeners.delete(cb);
+    },
+    () => dataVersion,
+  );
+}
 
 // --- Number formatting ------------------------------------------------------
 // Every figure on screen goes through Intl.NumberFormat (he-IL) so separators,

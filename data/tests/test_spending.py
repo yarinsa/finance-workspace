@@ -92,3 +92,12 @@ class TestMonths:
         txs = spending.build_spending(many)["months"][0]["transactions"]
         assert len(txs) == spending.MAX_TX_PER_MONTH
         assert txs[0]["date"] >= txs[-1]["date"]
+
+
+def test_overridden_flag_reaches_the_month_rows():
+    # A row recategorised in the ledger DB keeps its "edited" marker in the app.
+    edited = {**GROCERY, "category": "מסעדות", "overridden": True}
+    month = next(m for m in spending.build_spending([edited, APPLE_CORK])["months"] if m["month"] == "2026-09")
+    rows = {t["merchant"]: t for t in month["transactions"]}
+    assert rows[spending.merchant_name(GROCERY["description"])]["overridden"] is True
+    assert "overridden" not in rows[spending.merchant_name(APPLE_CORK["description"])]

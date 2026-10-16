@@ -49,6 +49,17 @@ resource "random_id" "suffix" {
   byte_length = 4
 }
 
+// Shared secret between CloudFront and the ledger API (X-Origin-Secret). The
+// Funnel URL is public, so this is what makes it useless to anyone but our
+// distribution. Only exists while the API is enabled; re-enabling after a
+// rollback therefore rotates it. No special characters: it is pasted into .env
+// and an HTTP header.
+resource "random_password" "api_origin_secret" {
+  count   = var.api_origin_domain != "" ? 1 : 0
+  length  = 48
+  special = false
+}
+
 locals {
   name   = "plangram"
   bucket = "${local.name}-${random_id.suffix.hex}"
@@ -509,6 +520,27 @@ resource "aws_cloudfront_distribution" "site" {
     origin_access_control_id = aws_cloudfront_origin_access_control.site.id
   }
 
+  // Ledger API behind a Tailscale Funnel. Absent unless api_origin_domain is set.
+  dynamic "origin" {
+    for_each = var.api_origin_domain != "" ? [1] : []
+    content {
+      domain_name = var.api_origin_domain
+      origin_id   = "api"
+
+      custom_origin_config {
+        http_port              = 80
+        https_port             = 443
+        origin_protocol_policy = "https-only"
+        origin_ssl_protocols   = ["TLSv1.2"]
+      }
+
+      custom_header {
+        name  = "X-Origin-Secret"
+        value = random_password.api_origin_secret[0].result
+      }
+    }
+  }
+
   default_cache_behavior {
     target_origin_id       = "s3"
     viewer_protocol_policy = "redirect-to-https"
@@ -528,21 +560,39 @@ resource "aws_cloudfront_distribution" "site" {
     }
   }
 
-  // SPA routing: unknown paths return index.html so client-side routes work.
-  // 403 is what a private S3 origin returns for a missing key.
-  custom_error_response {
-    error_code            = 403
-    response_code         = 200
-    response_page_path    = "/index.html"
-    error_caching_min_ttl = 0
+  // /api/* gets the same edge-auth gate (which answers 401 JSON instead of a
+  // login redirect for this prefix). Never cached; every viewer header, cookie
+  // and query string is forwarded except Host, which must stay the origin's.
+  dynamic "ordered_cache_behavior" {
+    for_each = var.api_origin_domain != "" ? [1] : []
+    content {
+      path_pattern           = "/api/*"
+      target_origin_id       = "api"
+      viewer_protocol_policy = "redirect-to-https"
+      allowed_methods        = ["GET", "HEAD", "OPTIONS", "PUT", "POST", "PATCH", "DELETE"]
+      cached_methods         = ["GET", "HEAD"]
+      compress               = true
+
+      // CachingDisabled
+      cache_policy_id = "4135ea2d-6df8-44a3-9df3-4b5a84be39ad"
+      // AllViewerExceptHostHeader
+      origin_request_policy_id = "b689b0a8-53d0-40ab-baf2-68738e2966ac"
+
+      lambda_function_association {
+        event_type   = "viewer-request"
+        lambda_arn   = aws_lambda_function.edge_auth.qualified_arn
+        include_body = false
+      }
+    }
   }
 
-  custom_error_response {
-    error_code            = 404
-    response_code         = 200
-    response_page_path    = "/index.html"
-    error_caching_min_ttl = 0
-  }
+  // SPA routing is NOT done with distribution-wide custom_error_response (the
+  // old 403/404 -> /index.html mapping): that applies to every behavior, so an
+  // API 403/404 from /api/* would be turned into a 200 index.html and the UI
+  // could never see a real error. Instead the edge-auth Lambda rewrites
+  // extension-less, non-/api URIs to /index.html after auth passes (a behavior
+  // cannot also carry a CloudFront Function on viewer-request). A missing real
+  // asset (has an extension) is still the plain S3 403.
 
   restrictions {
     geo_restriction {

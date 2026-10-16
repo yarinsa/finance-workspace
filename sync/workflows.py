@@ -359,3 +359,101 @@ class AmexSyncWorkflow:
     @workflow.run
     async def run(self) -> dict:
         return await self._sync.run(["amex"])
+
+
+# --- LedgerRebuildWorkflow ----------------------------------------------------------------
+# Defaults; tests (and anyone who needs to) override them through the optional `opts` arg of
+# run(), because the workflow sandbox re-imports this module and ignores monkeypatching.
+REBUILD_ID = "ledger-rebuild"
+REBUILD_DEBOUNCE = timedelta(seconds=20)
+REBUILD_IDLE = timedelta(minutes=10)
+REBUILD_MAX_PASSES = 5  # continue-as-new after this many passes so history stays small
+
+
+@workflow.defn(name="LedgerRebuildWorkflow")
+class LedgerRebuildWorkflow:
+    """Debounced rebuild after ledger edits (docs/ledger-api.md, "Rebuild workflow").
+
+    The API signal-with-starts this under id `ledger-rebuild` on every edit. It waits until
+    REBUILD_DEBOUNCE passes with no new `edited` signal, then runs `digest` (no re-normalize:
+    an edit only changes overrides) and `publish_data`. Signals that arrive during a run queue
+    exactly one more pass. After REBUILD_IDLE with no signals it returns, so the next
+    signal-with-start begins a fresh run. A failed pass records `last_error` and goes idle; it
+    never crashes the workflow, and the activities' RetryPolicies are bounded.
+
+    `status` query -> {"state": "idle"|"pending"|"running", "last_published_at": iso|null,
+    "last_error": str|null}.
+    """
+
+    def __init__(self) -> None:
+        self._signals = 0  # total `edited` signals seen this run
+        self._handled = 0  # signals covered by a pass that has started
+        self._state = "idle"
+        self._last_published_at: str | None = None
+        self._last_error: str | None = None
+
+    @workflow.signal
+    def edited(self) -> None:
+        self._signals += 1
+        if self._state == "idle":
+            self._state = "pending"
+
+    @workflow.query
+    def status(self) -> dict:
+        return {
+            "state": self._state,
+            "last_published_at": self._last_published_at,
+            "last_error": self._last_error,
+        }
+
+    async def _debounce(self, quiet: timedelta) -> None:
+        """Return once `quiet` passes with no new signal."""
+        while True:
+            seen = self._signals
+            try:
+                await workflow.wait_condition(lambda: self._signals != seen, timeout=quiet)
+            except TimeoutError:
+                return
+
+    async def _pass(self) -> None:
+        self._state = "running"
+        self._handled = self._signals
+        try:
+            await workflow.execute_activity("digest", args=[False], **DIGEST)
+            await workflow.execute_activity("publish_data", **PUBLISH)
+            self._last_published_at = workflow.now().isoformat()
+            self._last_error = None
+        except ActivityError as e:
+            cause = e.cause
+            self._last_error = str(getattr(cause, "message", None) or cause or e)
+        finally:
+            # A signal that landed mid-run stays "pending"; otherwise we are idle.
+            self._state = "pending" if self._signals > self._handled else "idle"
+
+    @workflow.run
+    async def run(self, opts: dict | None = None) -> dict:
+        """`opts` is optional (the API sends none): debounce_seconds, idle_seconds,
+        max_passes override the constants; last_published_at / last_error are carried
+        across continue-as-new."""
+        opts = dict(opts or {})
+        quiet = timedelta(seconds=opts.get("debounce_seconds", REBUILD_DEBOUNCE.total_seconds()))
+        idle = timedelta(seconds=opts.get("idle_seconds", REBUILD_IDLE.total_seconds()))
+        max_passes = opts.get("max_passes", REBUILD_MAX_PASSES)
+        self._last_published_at = opts.get("last_published_at")
+        self._last_error = opts.get("last_error")
+        passes = 0
+
+        while True:
+            try:
+                await workflow.wait_condition(lambda: self._signals > self._handled, timeout=idle)
+            except TimeoutError:
+                return {"passes": passes, **self.status()}
+            self._state = "pending"
+            await self._debounce(quiet)
+            await self._pass()
+            passes += 1
+            if passes >= max_passes and self._signals == self._handled:
+                workflow.continue_as_new(opts | {
+                    "last_published_at": self._last_published_at,
+                    "last_error": self._last_error,
+                })

@@ -1,14 +1,16 @@
 import { useSearchParams } from "react-router-dom";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Cell, Pie, PieChart, ResponsiveContainer } from "recharts";
 import { BarRow, Card, PageTitle } from "@/components/common";
 import ExcludedSpendingCard from "@/components/ExcludedSpendingCard";
 import { noAnim, useChartColors } from "@/components/chartTheme";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { cashflow, monthYear, pct, shekel } from "@/lib/data";
-
-const spending = cashflow.spending;
+import TransactionEditSheet, { type EditTarget } from "@/components/TransactionEditSheet";
+import HiddenTransactionsSheet from "@/components/HiddenTransactionsSheet";
+import { cashflow, monthYear, pct, shekel, useDataVersion } from "@/lib/data";
+import { applyOverlay, overlayFor } from "@/lib/ledgerOverlay";
+import { useLedgerApi } from "@/lib/useLedgerApi";
 
 function dayLabel(iso: string): string {
   return `${iso.slice(8, 10)}/${iso.slice(5, 7)}`;
@@ -17,6 +19,12 @@ function dayLabel(iso: string): string {
 /** Month spending explorer (PRD 12 Phase 3): donut, transactions / categories / merchants. */
 export default function Spending() {
   const C = useChartColors();
+  useDataVersion(); // re-render when a published rebuild is re-fetched
+  const { overlay, updating, rebuild } = useLedgerApi();
+  const [editing, setEditing] = useState<EditTarget | null>(null);
+  const [hiddenOpen, setHiddenOpen] = useState(false);
+  const spending = cashflow.spending;
+  const months = useMemo(() => applyOverlay(spending?.months ?? [], overlay), [spending, overlay]);
   // ?month=YYYY-MM&cat=<name> deep-links from the cashflow screen.
   const [params] = useSearchParams();
   const linked = (spending?.months ?? []).findIndex((m) => m.month === params.get("month"));
@@ -24,7 +32,6 @@ export default function Spending() {
   const [tab, setTab] = useState("transactions");
   const [cat, setCat] = useState<string | null>(params.get("cat"));
 
-  const months = spending?.months ?? [];
   if (!months.length) {
     return (
       <div className="space-y-4">
@@ -67,7 +74,15 @@ export default function Spending() {
 
   return (
     <div className="space-y-4 md:space-y-[18px]">
-      <PageTitle>הוצאות החודש</PageTitle>
+      <div className="flex items-center justify-between gap-2">
+        <PageTitle>הוצאות החודש</PageTitle>
+        <div className="flex items-center gap-3 text-xs text-muted-foreground">
+          {updating ? <span>מתעדכן…</span> : rebuild.last_error ? <span className="text-bad">העדכון נכשל</span> : null}
+          <button type="button" className="underline" onClick={() => setHiddenOpen(true)}>
+            מוסתרות
+          </button>
+        </div>
+      </div>
 
       <Card>
         <div className="mb-3 flex items-center justify-between">
@@ -190,15 +205,24 @@ export default function Spending() {
             ) : (
               <ul className="divide-y divide-line">
                 {txs.map((t, i) => (
-                  <li key={`${t.date}-${i}`} className="flex items-center gap-3 py-2.5">
-                    <i className="size-2.5 shrink-0 rounded-full" style={{ background: catColor(t.category) }} />
-                    <div className="min-w-0 flex-1">
-                      <div className="truncate">{t.merchant}</div>
-                      <div className="text-xs text-muted-foreground">
-                        {dayLabel(t.date)} · {t.category}
+                  <li key={`${t.date}-${i}`}>
+                    <button
+                      type="button"
+                      onClick={() => setEditing(t)}
+                      className="flex w-full items-center gap-3 py-2.5 text-start"
+                    >
+                      <i className="size-2.5 shrink-0 rounded-full" style={{ background: catColor(t.category) }} />
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate">{t.merchant}</div>
+                        <div className="text-xs text-muted-foreground">
+                          {dayLabel(t.date)} · {t.category}
+                          {t.overridden || overlayFor(overlay, t)?.overridden ? (
+                            <span className="ms-1.5 rounded-full bg-brand/15 px-1.5 py-px text-[10px] font-semibold">נערך</span>
+                          ) : null}
+                        </div>
                       </div>
-                    </div>
-                    <strong className="shrink-0 tabular-nums">{shekel(t.amount)}</strong>
+                      <strong className="shrink-0 tabular-nums">{shekel(t.amount)}</strong>
+                    </button>
                   </li>
                 ))}
               </ul>
@@ -231,6 +255,8 @@ export default function Spending() {
       </Card>
 
       <ExcludedSpendingCard excluded={m.excluded} />
+      <TransactionEditSheet tx={editing} onClose={() => setEditing(null)} />
+      <HiddenTransactionsSheet open={hiddenOpen} onClose={() => setHiddenOpen(false)} />
     </div>
   );
 }

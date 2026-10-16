@@ -38,3 +38,9 @@ variable "github_repo_id" {
   type        = string
   default     = "1312600753"
 }
+
+variable "api_origin_domain" {
+  description = "Tailscale Funnel hostname (<mac>.<tailnet>.ts.net) serving the ledger API. Empty disables everything API-related (origin, /api/* behavior, origin secret). Set by infra/tunnel.sh's instructions."
+  type        = string
+  default     = ""
+}

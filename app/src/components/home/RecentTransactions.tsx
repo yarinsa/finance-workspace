@@ -1,16 +1,21 @@
+import { useState } from "react";
 import { Section } from "@/components/common";
+import TransactionEditSheet, { type EditTarget } from "@/components/TransactionEditSheet";
 import { cashflow, shekel, transactions } from "@/lib/data";
+import { applyOverlay } from "@/lib/ledgerOverlay";
+import { useLedgerApi } from "@/lib/useLedgerApi";
 
 interface Row {
   date: string;
   merchant: string;
   category: string;
+  overridden?: boolean;
   /** Positive ₪ spent. */
   amount: number;
 }
 
-function recent(): Row[] {
-  const fromSpending = cashflow.spending?.months?.[0]?.transactions;
+function recent(overlay: ReturnType<typeof useLedgerApi>["overlay"]): Row[] {
+  const fromSpending = applyOverlay(cashflow.spending?.months ?? [], overlay)[0]?.transactions;
   if (fromSpending?.length) return fromSpending.slice(0, 5);
   return transactions.transactions
     .filter((t) => t.amount < 0 && !t.card_bill_payment && !t.internal_transfer && !t.savings)
@@ -25,13 +30,20 @@ function shortDate(iso: string): string {
 
 /** The last five spending transactions, newest first. */
 export default function RecentTransactions() {
-  const rows = recent();
+  const { overlay } = useLedgerApi();
+  const [editing, setEditing] = useState<EditTarget | null>(null);
+  const rows = recent(overlay);
   if (rows.length === 0) return null;
   return (
     <Section title="תנועות אחרונות" to="/spending">
       <div className="overflow-hidden rounded-[20px] border border-line bg-panel shadow-[var(--shadow)]">
         {rows.map((r, i) => (
-          <div key={`${r.date}-${r.merchant}-${i}`} className="flex items-center gap-3 border-b border-line px-4 py-2.5 last:border-b-0">
+          <button
+            type="button"
+            key={`${r.date}-${r.merchant}-${i}`}
+            onClick={() => setEditing(r)}
+            className="flex w-full items-center gap-3 border-b border-line px-4 py-2.5 text-start last:border-b-0"
+          >
             <div className="min-w-0 flex-1">
               <div className="truncate font-semibold">{r.merchant}</div>
               <div className="truncate text-xs text-muted-foreground">
@@ -39,9 +51,10 @@ export default function RecentTransactions() {
               </div>
             </div>
             <strong className="shrink-0 tabular-nums">{shekel(-r.amount)}</strong>
-          </div>
+          </button>
         ))}
       </div>
+      <TransactionEditSheet tx={editing} onClose={() => setEditing(null)} />
     </Section>
   );
 }

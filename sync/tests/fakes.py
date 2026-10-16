@@ -7,7 +7,7 @@ from temporalio.exceptions import ApplicationError
 from temporalio.testing import WorkflowEnvironment
 from temporalio.worker import Worker
 
-from workflows import AmexSyncWorkflow, FinanceSyncWorkflow
+from workflows import AmexSyncWorkflow, FinanceSyncWorkflow, LedgerRebuildWorkflow
 
 QUEUE = "test-queue"
 
@@ -37,13 +37,15 @@ class Fake:
     """
 
     def __init__(self, sessions=None, scrape_errors=None, validate_errors=None, check_errors=(), chrome_errors=(),
-                 digest_error=None, status_error=False):
+                 digest_error=None, status_error=False, digest_delay=0.0):
         self.sessions = {k: list(v) if isinstance(v, list) else [v] for k, v in (sessions or {}).items()}
         self.scrape_errors = scrape_errors or {}
         self.validate_errors = validate_errors or {}
         self.check_errors = set(check_errors)
         self.chrome_errors = set(chrome_errors)
         self.digest_error = digest_error
+        self.digest_delay = digest_delay  # real seconds the digest activity takes
+        self.digest_args = []  # the `normalize` flag of each digest call
         self.status_error = status_error
         self.calls = []
         self.statuses = []  # every publish_status (source, entry), in order
@@ -93,8 +95,11 @@ class Fake:
             return "ok"
 
         @activity.defn(name="digest")
-        async def digest() -> dict:
+        async def digest(normalize: bool = True) -> dict:
             self.calls.append(("digest",))
+            self.digest_args.append(normalize)
+            if self.digest_delay:
+                await asyncio.sleep(self.digest_delay)
             if self.digest_error:
                 raise self.digest_error
             return {"transactions": 42}
@@ -121,7 +126,7 @@ class Fake:
 def run(fake, scenario, workflow=FinanceSyncWorkflow, args=()):
     async def go():
         async with await WorkflowEnvironment.start_time_skipping() as env:
-            async with Worker(env.client, task_queue=QUEUE, workflows=[FinanceSyncWorkflow, AmexSyncWorkflow],
+            async with Worker(env.client, task_queue=QUEUE, workflows=[FinanceSyncWorkflow, AmexSyncWorkflow, LedgerRebuildWorkflow],
                               activities=fake.activities()):
                 handle = await env.client.start_workflow(
                     workflow.run, args=list(args), id=f"wf-{uuid.uuid4()}", task_queue=QUEUE)

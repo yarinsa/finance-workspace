@@ -18,9 +18,16 @@ packages = [{ include = "finance" }]
 [tool.poetry.group.sync.dependencies]
 temporalio = "1.34.0"
 
+[tool.poetry.group.api.dependencies]
+fastapi = ">=0.115,<1"
+uvicorn = ">=0.34,<1"
+pyjwt = {version = ">=2.10,<3", extras = ["crypto"]}
+psycopg-pool = ">=3.2,<4"
+
 [tool.poetry.group.dev.dependencies]
 pytest = "^9.1"
 pytest-asyncio = "^1.4"
+httpx2 = ">=2.13,<3"
 
 [build-system]
 requires = ["poetry-core>=2.0,<3"]

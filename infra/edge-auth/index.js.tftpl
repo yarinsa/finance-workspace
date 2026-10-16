@@ -182,6 +182,43 @@ function redirectToPasskeyEnrolment() {
   return redirect(target.toString());
 }
 
+/**
+ * True for the ledger API (/api/...). Those requests come from fetch(), not a
+ * navigation, so they must get a machine-readable status instead of a redirect
+ * to an HTML login page.
+ */
+function isApiPath(uri) {
+  return uri.startsWith("/api/");
+}
+
+function unauthenticatedJson() {
+  return {
+    status: "401",
+    statusDescription: "Unauthorized",
+    headers: {
+      "content-type": [{ key: "Content-Type", value: "application/json" }],
+      "cache-control": [{ key: "Cache-Control", value: "no-store" }],
+    },
+    body: JSON.stringify({ error: "unauthenticated" }),
+  };
+}
+
+/**
+ * SPA routing. A URI whose last segment has no "." is a client-side route
+ * (/spending, /runway/…), so serve the app shell. Anything with an extension
+ * (/data/cashflow.json, /assets/app.js) is a real object and is left alone, so
+ * a genuinely missing asset is still the S3 403.
+ *
+ * This lives here, after the auth check, rather than in a CloudFront Function
+ * because a behavior may not have both a CloudFront Function and Lambda@Edge on
+ * viewer-request. Mutating the URI only after authentication also means an
+ * unauthenticated caller never learns which paths exist.
+ */
+function rewriteSpaRoute(request) {
+  const last = request.uri.split("/").pop();
+  if (!last.includes(".")) request.uri = "/index.html";
+}
+
 function denied(reason) {
   return {
     status: "403",
@@ -285,16 +322,24 @@ exports.handler = async (event) => {
     };
   }
 
+  const api = isApiPath(request.uri);
+  const reject = () => (api ? unauthenticatedJson() : redirectToLogin(host));
+
   const cookies = parseCookies(headers);
   const token = cookies[CONFIG.cookie_name];
-  if (!token) return redirectToLogin(host);
+  if (!token) return reject();
 
   const claims = await verify(token);
-  if (!claims) return redirectToLogin(host);
+  if (!claims) return reject();
+
+  // Authenticated API call: straight through to the origin, untouched.
+  if (api) return request;
 
   // Signed-in only: enrolling a passkey is a privileged action.
   if (request.uri === "/_passkey") return redirectToPasskeyEnrolment();
 
-  // Authenticated: let the request through to S3 untouched.
+  // Authenticated: serve the app shell for client-side routes, else pass
+  // through to S3 untouched.
+  rewriteSpaRoute(request);
   return request;
 };

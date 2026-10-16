@@ -122,6 +122,30 @@ edits, kept forever), read through the `transactions` view. When `DATABASE_URL` 
 `data/digest.py` pipes the ledger through `db/ledger.py sync`, so `transactions.json`
 reflects edits. Edit with `db/edit.py` (it rebuilds `data/digested/`); push with `sync-data`.
 Setup, the orphaned-override rule and the `.env` rule are in **db/README.md**.
+Override logic lives in `db/overrides.py` (shared by `edit.py` and the API); every change
+writes an `override_audit` row (actor, field, old, new).
+
+### Ledger API (editing from the dashboard)
+
+The dashboard edits transactions through `api/` (FastAPI, compose service `api`, profile
+`api`, `127.0.0.1:8787`), reached as `/api/*` on the same CloudFront domain via a Tailscale
+Funnel to the Mac. Design, contract and rollout: **docs/ledger-api.md**; run/env: `api/README.md`.
+Rules that keep it cheap and safe — keep them when changing anything here:
+
+- **Every layer checks.** Edge-auth (Cognito) gates `/api/*` (401 JSON, not a redirect);
+  the API requires CloudFront's `X-Origin-Secret` (≥32 chars), re-verifies the
+  `plangram_session` id token, allow-lists emails, and needs the CSRF headers on writes.
+- **The internet-facing process has no power.** The API container is non-root, read-only,
+  gets only explicit env (never `env_file: .env`), and connects as Postgres role
+  `finance_api` (overrides + audit only, never migrates). It holds no AWS or bank creds.
+- **Publishing stays on the Mac.** An edit signals `LedgerRebuildWorkflow` (id
+  `ledger-rebuild`, debounced 20 s) in the host worker, which runs the digest chain with
+  `--no-normalize` and `publish_data`. Digests take `data/digested/.lock`.
+- **Mac off = read-only.** The UI falls back to the static JSON and disables editing.
+  Kill switch: `docker compose stop api` or `infra/tunnel.sh --off`.
+- **The user does the outward steps**: installing/logging in to Tailscale, enabling Funnel,
+  `terraform apply`, copying the secret into `.env`. SPA routing lives in the edge-auth
+  Lambda (not CloudFront error responses, which would swallow API 403/404s).
 
 ### Automated sync (Temporal) — POC
 

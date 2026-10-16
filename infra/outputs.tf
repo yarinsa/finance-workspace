@@ -32,3 +32,9 @@ output "github_deploy_role_arn" {
   description = "Role GitHub Actions assumes (OIDC) to publish the app bundle. Set as the AWS_DEPLOY_ROLE_ARN repo variable."
   value       = aws_iam_role.github_deploy.arn
 }
+
+output "api_origin_secret" {
+  description = "Shared secret CloudFront sends as X-Origin-Secret. Copy to .env as FINANCE_API_ORIGIN_SECRET: `terraform output -raw api_origin_secret`. Empty while api_origin_domain is unset."
+  value       = try(random_password.api_origin_secret[0].result, "")
+  sensitive   = true
+}

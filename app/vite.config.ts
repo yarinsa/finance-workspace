@@ -1,4 +1,4 @@
-import { defineConfig, type Connect, type Plugin } from "vite";
+import { defineConfig, loadEnv, type Connect, type Plugin, type ProxyOptions } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import { readFile } from "node:fs/promises";
@@ -31,11 +31,30 @@ function serveDigested(): Plugin {
   };
 }
 
-export default defineConfig({
+// Dev/preview forward /api to the local ledger API (docker compose, 127.0.0.1:8787).
+// The API demands the origin secret that CloudFront adds in production, so it is
+// injected here, server-side, from the repo-root .env. loadEnv(..., "") is only
+// called in this Node config: values without a VITE_ prefix never reach
+// import.meta.env, so the secret can't end up in the bundle.
+function apiProxy(mode: string): Record<string, ProxyOptions> {
+  const env = loadEnv(mode, resolve(__dirname, ".."), "");
+  const secret = process.env.FINANCE_API_ORIGIN_SECRET ?? env.FINANCE_API_ORIGIN_SECRET;
+  return {
+    "/api": {
+      target: "http://127.0.0.1:8787",
+      changeOrigin: true,
+      headers: secret ? { "X-Origin-Secret": secret } : {},
+    },
+  };
+}
+
+export default defineConfig(({ mode }) => ({
   plugins: [react(), tailwindcss(), serveDigested()],
+  server: { proxy: apiProxy(mode) },
+  preview: { proxy: apiProxy(mode) },
   resolve: {
     alias: {
       "@": resolve(__dirname, "src"),
     },
   },
-});
+}));

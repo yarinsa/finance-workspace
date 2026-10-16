@@ -14,6 +14,7 @@ ledger code is in `db/ledger.py`, the edit CLI is `db/edit.py`. The tables are S
 |---|---|---|---|
 | `scraped_transactions` | machine | `ledger.py sync` (from `data/digest.py`) | replaced in full on every digest run |
 | `transaction_overrides` | human | `edit.py` | kept forever; sparse (only the fields you changed) |
+| `override_audit` | audit | `overrides.py` (CLI and API) | append-only: who changed which field, old and new value |
 | `transactions` (view) | read | nothing | scraped rows with overrides applied; excluded rows hidden |
 | `orphaned_overrides` (view) | read | nothing | overrides whose transaction no longer exists |
 
@@ -55,6 +56,21 @@ poetry run python db/edit.py list [--orphaned]
 Every change rebuilds `data/digested/` (digest, validate, forecast, cashflow, goals), so
 the JSON the app reads picks it up. Pass `--no-rebuild` to skip the rebuild. Then
 push the result to the dashboard with the `sync-data` skill.
+
+Edits go through `db/overrides.py` (get, list, patch, reset, categories, orphaned,
+audit). Every change that alters a field writes an `override_audit` row; the CLI's actor is
+`cli`, the API's is the signed-in email. A `null` value clears a field, and an override left
+empty is pruned.
+
+## The `finance_api` role
+
+Migration `0002` creates `finance_api` (NOLOGIN) for the [ledger API](../api/README.md). It can
+SELECT `scraped_transactions` and the views, SELECT/INSERT/UPDATE/DELETE `transaction_overrides`,
+and SELECT/INSERT `override_audit`. It cannot truncate, delete or update the scraped layer, or
+rewrite the audit log, and it never migrates. To let it log in, put `FINANCE_API_DB_PASSWORD`
+in `.env` (URL-safe characters) and run `poetry run python db/ledger.py migrate`. Every
+`ledger.connect()` (so every digest) re-applies the password. Roles are cluster-wide, so the
+one role serves every database on the server, including `finance_test`.
 
 ## How digest uses it
 
