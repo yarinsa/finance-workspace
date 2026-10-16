@@ -74,12 +74,22 @@ Chrome profiles persist logins, so this costs a login only when one lapses.
   balances, credit-card debt, loans/mortgage, detected salary, totals, and a
   `spending` summary. Query this for net-worth/debt questions.
 
+### Transactions database (Postgres)
+
+A local Postgres (Docker Compose) holds the ledger in two layers: `scraped_transactions`
+(replaced on every digest run) and `transaction_overrides` (manual category/note/excluded
+edits, kept forever), read through the `transactions` view. When `DATABASE_URL` is set,
+`data/digest.py` pipes the ledger through `db/ledger.py sync`, so `transactions.json`
+reflects edits. Edit with `db/edit.py` (it rebuilds `data/digested/`); push with `sync-data`.
+Setup, the orphaned-override rule and the `.env` rule are in **db/README.md**.
+
 ### Automated sync (Temporal) — POC
 
-**Proof of concept** (AMEX only, local dev server); see `sync/README.md` for status.
+**Proof of concept** (AMEX only); see `sync/README.md` for status.
 
-`sync/` runs the AMEX refresh on a schedule (daily 07:30 Asia/Jerusalem) with a
-local Temporal dev server + worker under launchd: ensure Chrome -> check session
+`sync/` runs the AMEX refresh on a schedule (daily 07:30 Asia/Jerusalem): the Temporal
+dev server runs in Docker Compose (`docker-compose.yml`), the worker runs under launchd
+on this Mac. Flow: ensure Chrome -> check session
 -> `dump.sh` -> digest chain -> `infra/deploy.sh --data-only` (when
 `SYNC_PUBLISH=1`). It **never authenticates** — a dead session triggers a macOS
 notification and a wait for `python3 sync/resume.py` after the human logs in

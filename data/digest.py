@@ -6,13 +6,48 @@ Pipeline:  raw/  --(each source's normalize.py)-->  normalized/  --(this)-->  di
 By default this runs every <source>/normalize.py first, then combines all
 <source>/normalized/*.json envelopes into one consolidated snapshot.
 Run `python3 digest.py --no-normalize` to combine existing normalized output only.
+With DATABASE_URL set, the ledger goes through Postgres (db/) to apply your edits;
+`--no-db` skips that.
 """
-import json, datetime, glob, re, subprocess, sys
+import json, datetime, glob, os, re, subprocess, sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent          # .../Finance/data
 OUT = ROOT / "digested"
 OUT.mkdir(exist_ok=True)
+
+
+def database_url(env_file=ROOT.parent / ".env"):
+    """DATABASE_URL from the environment, else from .env (read literally)."""
+    if os.environ.get("DATABASE_URL"):
+        return os.environ["DATABASE_URL"]
+    if env_file.exists():
+        for line in env_file.read_text().splitlines():
+            if line.startswith("DATABASE_URL="):
+                return line.split("=", 1)[1].strip().strip("'\"") or None
+    return None
+
+
+def apply_overrides(ledger):
+    """Round-trip the ledger through the transactions database (db/ledger.py).
+
+    It is stored as `scraped_transactions` and comes back as the `transactions`
+    view: your category/note edits applied, excluded rows removed. A no-op when
+    DATABASE_URL is unset or with --no-db. When the database is configured but
+    unreachable we stop rather than publish numbers that silently drop the edits.
+    data/ stays stdlib-only: the psycopg side runs in the repo venv.
+    """
+    if "--no-db" in sys.argv or not database_url():
+        return ledger
+    py = ROOT.parent / ".venv" / "bin" / "python"
+    res = subprocess.run([str(py), str(ROOT.parent / "db" / "ledger.py"), "sync"],
+                         input=json.dumps(ledger, ensure_ascii=False),
+                         capture_output=True, text=True)
+    sys.stderr.write(res.stderr)
+    if res.returncode != 0:
+        raise SystemExit("db sync failed (is `docker compose up -d` running?); "
+                         "rerun with --no-db to digest without the database")
+    return json.loads(res.stdout)
 
 
 def run_normalizers():
@@ -570,6 +605,7 @@ def main():
 
     # one deduped, queryable transaction ledger across every source
     ledger = consolidate_transactions(entities.get("transactions", []))
+    ledger = apply_overrides(ledger)              # human edits from Postgres, if configured
     summary = spending_summary(ledger)
     (OUT / "transactions.json").write_text(json.dumps(
         {"generated_at": datetime.datetime.now().astimezone().isoformat(timespec="seconds"),

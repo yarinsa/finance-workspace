@@ -17,14 +17,20 @@ or keep-alive pings.
 - `activities.py` subprocess wrappers (amex-refresh scripts, `data/*.py`, `infra/deploy.sh --data-only`, osascript)
 - `workflows.py` `AmexSyncWorkflow` (query `status`, signal `session_refreshed`)
 - `worker.py` task queue `finance-sync`; `schedule.py` schedule `amex-sync`; `resume.py`
-- `launchd/` plist templates; `install.sh` / `uninstall.sh`
+- `launchd/` worker plist template; `install.sh` / `uninstall.sh`
 
 ## Start / stop
 
 ```bash
-sync/install.sh      # venv deps, launchd agents (Temporal dev server + worker), schedule
-sync/uninstall.sh    # unload agents (keeps ~/.temporal/finance.db)
+sync/install.sh      # venv deps, Temporal container, worker launchd agent, schedule
+sync/uninstall.sh    # unload worker, stop Temporal container (keeps ~/.temporal/finance.db)
+docker compose up -d --wait   # Temporal (+ Postgres) alone, from the repo root
 ```
+
+Temporal runs in Docker Compose (the `temporal` service); its history stays in
+`~/.temporal/finance.db`, bind-mounted into the container. The worker stays a
+launchd agent on the Mac (it needs Chrome, osascript and aws). Set Docker
+Desktop to start at login, otherwise the 07:30 run has no server.
 
 Temporal UI: http://localhost:8233 (namespace `default`, task queue `finance-sync`).
 
@@ -74,7 +80,8 @@ amex-refresh skill triage table).
 
 ## Logs
 
-`~/Library/Logs/finance-sync/{temporal,worker}.log` and `.err.log`.
+Worker: `~/Library/Logs/finance-sync/worker.log` and `.err.log`.
+Temporal: `docker compose logs temporal`.
 Per-run detail (command output tails) is in the Temporal UI event history.
 
 ## Tests
