@@ -1,0 +1,188 @@
+import { useEffect, useState } from "react";
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Input } from "@/components/ui/input";
+import {
+  ApiError,
+  ApiOffline,
+  getCategories,
+  getTransaction,
+  ledgerKey,
+  patchTransaction,
+  resetTransaction,
+  type Row,
+} from "@/lib/api";
+import { shekel } from "@/lib/data";
+import { buildPatch } from "@/lib/editPatch";
+import { useLedgerApi } from "@/lib/useLedgerApi";
+
+/** What the static data knows about a transaction before the API is asked. */
+export interface EditTarget {
+  date: string;
+  /** Signed or positive; only the magnitude is used for the key. */
+  amount: number;
+  merchant: string;
+  category: string;
+  overridden?: boolean;
+}
+
+/**
+ * Bottom sheet for editing one transaction through the ledger API: category (picker
+ * from `/api/categories` plus free text), note, hide/unhide, and reset to scraped.
+ * When the API is unreachable it opens read-only. Writes go to the shared overlay
+ * (`useLedgerApi().recordEdit`) so lists and totals update before the rebuild publishes.
+ */
+export default function TransactionEditSheet({ tx, onClose }: { tx: EditTarget | null; onClose: () => void }) {
+  return (
+    <Sheet open={tx != null} onOpenChange={(o) => !o && onClose()}>
+      <SheetContent side="bottom" className="max-h-[90vh] overflow-y-auto" dir="rtl">
+        {tx && <Body key={`${tx.date}/${tx.amount}`} tx={tx} onClose={onClose} />}
+      </SheetContent>
+    </Sheet>
+  );
+}
+
+function Body({ tx, onClose }: { tx: EditTarget; onClose: () => void }) {
+  const { online, overlay, recordEdit, markOffline, updating } = useLedgerApi();
+  const key = ledgerKey(tx);
+  const known = overlay.get(`${key.date}/${key.abs_amount}`);
+
+  const [row, setRow] = useState<Row | null>(null);
+  const [categories, setCategories] = useState<string[]>([]);
+  const [form, setForm] = useState({ category: tx.category, note: "", excluded: false });
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const readOnly = online !== true;
+  const base: Row | null = row ?? known ?? null;
+
+  // Load the authoritative row (sources, scraped category, note, flags) and the picker values.
+  useEffect(() => {
+    if (online !== true) return;
+    let live = true;
+    void Promise.all([getTransaction(key), getCategories()])
+      .then(([r, cats]) => {
+        if (!live) return;
+        setRow(r);
+        setCategories(cats);
+        setForm({ category: r.category, note: r.note ?? "", excluded: r.excluded });
+      })
+      .catch((e) => {
+        if (!live) return;
+        if (e instanceof ApiOffline) markOffline();
+        else if (e instanceof ApiError && e.status !== 404) setError(e.message);
+      });
+    return () => {
+      live = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [online, key.date, key.abs_amount]);
+
+  const baseline = base ?? { category: tx.category, note: null, excluded: false };
+  const patch = buildPatch(baseline, form);
+  const dirty = Object.keys(patch).length > 0;
+
+  const run = async (call: () => Promise<Row>) => {
+    setBusy(true);
+    setError(null);
+    try {
+      recordEdit(await call());
+      onClose();
+    } catch (e) {
+      if (e instanceof ApiOffline) markOffline();
+      setError(e instanceof ApiOffline ? "אין חיבור למחשב הביתי" : e instanceof Error ? e.message : "השמירה נכשלה");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const overridden = base?.overridden ?? tx.overridden ?? false;
+  const disabled = readOnly || busy;
+
+  return (
+    <>
+      <SheetHeader>
+        <SheetTitle className="text-lg font-bold">{base?.description || tx.merchant}</SheetTitle>
+        <SheetDescription className="tabular-nums">
+          {key.date.split("-").reverse().join("/")} · {shekel(-Math.abs(tx.amount), { decimals: 2 })}
+          {base?.sources?.length ? ` · ${base.sources.join(", ")}` : ""}
+          {overridden && (
+            <span className="ms-2 rounded-full bg-brand/15 px-2 py-0.5 text-xs font-semibold">נערך</span>
+          )}
+        </SheetDescription>
+      </SheetHeader>
+
+      <div className="space-y-4 px-4 pb-4">
+        {readOnly && (
+          <div className="rounded-xl border border-line bg-panel-2 p-3 text-sm text-muted-foreground">
+            עריכה זמינה כשהמחשב הביתי פועל
+          </div>
+        )}
+        {updating && <div className="text-xs text-muted-foreground">מתעדכן…</div>}
+
+        <label className="block">
+          <span className="mb-1 block text-xs text-muted-foreground">קטגוריה</span>
+          <Input
+            list="ledger-categories"
+            value={form.category}
+            disabled={disabled}
+            maxLength={64}
+            onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))}
+          />
+          <datalist id="ledger-categories">
+            {categories.map((c) => (
+              <option key={c} value={c} />
+            ))}
+          </datalist>
+          {base && base.scraped_category && base.scraped_category !== form.category && (
+            <span className="mt-1 block text-xs text-muted-foreground">מקור: {base.scraped_category}</span>
+          )}
+        </label>
+
+        <label className="block">
+          <span className="mb-1 block text-xs text-muted-foreground">הערה</span>
+          <Input
+            value={form.note}
+            disabled={disabled}
+            maxLength={500}
+            placeholder="אפשר להוסיף הערה"
+            onChange={(e) => setForm((f) => ({ ...f, note: e.target.value }))}
+          />
+        </label>
+
+        <label className="flex items-center gap-3 text-sm">
+          <input
+            type="checkbox"
+            className="size-4"
+            checked={form.excluded}
+            disabled={disabled}
+            onChange={(e) => setForm((f) => ({ ...f, excluded: e.target.checked }))}
+          />
+          הסתר תנועה (לא תיכלל בסכומים וברשימות)
+        </label>
+
+        {error && <div className="text-sm text-bad">{error}</div>}
+
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            disabled={disabled || !dirty}
+            onClick={() => void run(() => patchTransaction(key, patch))}
+            className="flex-1 rounded-lg bg-brand px-3 py-2.5 text-sm font-semibold text-white disabled:opacity-40"
+          >
+            {busy ? "שומר…" : "שמירה"}
+          </button>
+          {overridden && (
+            <button
+              type="button"
+              disabled={disabled}
+              onClick={() => void run(() => resetTransaction(key))}
+              className="rounded-lg border border-line px-3 py-2.5 text-sm disabled:opacity-40"
+            >
+              החזר למקור
+            </button>
+          )}
+        </div>
+      </div>
+    </>
+  );
+}

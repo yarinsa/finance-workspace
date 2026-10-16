@@ -1,6 +1,7 @@
 import { NavLink, Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { groups, redirects, routes } from "./routes";
-import { cashflow, daysSince } from "./lib/data";
+import { cashflow, daysSince, useDataVersion } from "./lib/data";
+import { LedgerApiProvider, useLedgerApi } from "./lib/useLedgerApi";
 import { displayState, headline, STATE_PILL, useSyncStatus } from "./lib/syncStatus";
 import {
   Sidebar,
@@ -100,15 +101,29 @@ function AppSidebar({ days }: { days: number }) {
   );
 }
 
+/** Shown only while the API runs with its dev auth bypass, so it can't be mistaken for prod. */
+function DevBanner() {
+  const { dev } = useLedgerApi();
+  if (!dev) return null;
+  return (
+    <div className="bg-warn/20 px-4 py-1 text-center text-xs font-semibold" role="status">
+      מצב פיתוח: אימות המשתמש ב-API כבוי
+    </div>
+  );
+}
+
 export default function App() {
+  useDataVersion(); // re-render everything below after a published rebuild is re-fetched
   const { pathname } = useLocation();
   const days = daysSince(cashflow.generated_at);
   const current = routes.find((r) => r.path === pathname);
   return (
+    <LedgerApiProvider>
     <TooltipProvider>
       <SidebarProvider>
         <AppSidebar days={days} />
         <SidebarInset>
+          <DevBanner />
           <header
             className="sticky top-0 z-30 flex h-12 items-center justify-between border-b bg-background/80 px-4 backdrop-blur-xl md:hidden"
             style={{ paddingTop: "env(safe-area-inset-top)", boxSizing: "content-box" }}
@@ -132,5 +147,6 @@ export default function App() {
         <MobileTabBar />
       </SidebarProvider>
     </TooltipProvider>
+    </LedgerApiProvider>
   );
 }
