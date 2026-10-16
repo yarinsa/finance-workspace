@@ -12,6 +12,9 @@ import {
   PieChart,
   Sparkles,
   Target,
+  CalendarCheck,
+  Compass,
+  Ellipsis,
   type LucideIcon,
   Receipt,
   Wallet,
@@ -30,30 +33,67 @@ import Syncs from "./Syncs";
 import Runway from "./Runway";
 import Budgets from "./Budgets";
 import Spending from "./Spending";
+import Monthly from "./Monthly";
+import Forecast from "./Forecast";
+import Plan from "./Plan";
+
+/** Navigation hubs, Mint-style: each is one bottom tab (and one sidebar section). */
+export type RouteGroup = "overview" | "monthly" | "forecast" | "plan" | "more";
 
 export interface RouteDef {
   path: string;
   label: string; // Hebrew nav label
   icon: LucideIcon;
-  /** Pinned to the mobile tab bar; the rest live behind "More". */
-  primary?: boolean;
+  /** Which hub the route belongs to; drives the tab bar and sidebar sections. */
+  group: RouteGroup;
+  /** The group's landing page — the one its bottom tab links to. */
+  hub?: boolean;
   Component: ComponentType;
 }
 
-/** The 10 PRD features in docs/plangram-prd, plus data freshness. Order = nav order. */
-export const routes: RouteDef[] = [
-  { path: "/overview", label: "מבט על", icon: House, primary: true, Component: Overview },
-  { path: "/cashflow", label: "תזרים כספי", icon: ArrowLeftRight, primary: true, Component: Cashflow },
-  { path: "/runway", label: "יתרה צפויה", icon: CalendarClock, Component: Runway },
-  { path: "/budgets", label: "תקציב", icon: Wallet, Component: Budgets },
-  { path: "/spending", label: "הוצאות החודש", icon: Receipt, Component: Spending },
-  { path: "/summary", label: "סיכום התוכנית", icon: ClipboardList, Component: Summary },
-  { path: "/goals", label: "יעדים", icon: Target, primary: true, Component: Goals },
-  { path: "/recommendations", label: "המלצות", icon: Lightbulb, Component: Recommendations },
-  { path: "/networth", label: "שווי נקי", icon: Landmark, primary: true, Component: Networth },
-  { path: "/portfolio", label: "השקעות", icon: PieChart, Component: Portfolio },
-  { path: "/metrics", label: "התקדמות", icon: Gauge, Component: Metrics },
-  { path: "/timeline", label: "ציר זמן", icon: CalendarRange, Component: Timeline },
-  { path: "/my-plan", label: "תכנון פלוס", icon: Sparkles, Component: MyPlan },
-  { path: "/syncs", label: "סנכרונים", icon: RefreshCw, Component: Syncs },
+export interface GroupDef {
+  key: RouteGroup;
+  label: string;
+  icon: LucideIcon;
+  /** Pinned to the mobile tab bar; `more` lives behind the round button. */
+  tab: boolean;
+}
+
+/** Group order = tab order = sidebar section order. */
+export const groups: GroupDef[] = [
+  { key: "overview", label: "מבט על", icon: House, tab: true },
+  { key: "monthly", label: "החודש", icon: CalendarCheck, tab: true },
+  { key: "forecast", label: "תזרים", icon: ArrowLeftRight, tab: true },
+  { key: "plan", label: "יעדים ותכנון", icon: Compass, tab: true },
+  { key: "more", label: "עוד", icon: Ellipsis, tab: false },
 ];
+
+/** Every page keeps its own path (deep links); `group` only decides where it is listed. */
+export const routes: RouteDef[] = [
+  { path: "/overview", label: "מבט על", icon: House, group: "overview", hub: true, Component: Overview },
+  { path: "/networth", label: "שווי נקי", icon: Landmark, group: "overview", Component: Networth },
+
+  { path: "/monthly", label: "החודש", icon: CalendarCheck, group: "monthly", hub: true, Component: Monthly },
+  { path: "/budgets", label: "תקציב", icon: Wallet, group: "monthly", Component: Budgets },
+  { path: "/spending", label: "הוצאות החודש", icon: Receipt, group: "monthly", Component: Spending },
+
+  { path: "/forecast", label: "תזרים", icon: ArrowLeftRight, group: "forecast", hub: true, Component: Forecast },
+  { path: "/runway", label: "יתרה צפויה", icon: CalendarClock, group: "forecast", Component: Runway },
+  { path: "/cashflow", label: "תזרים כספי", icon: ArrowLeftRight, group: "forecast", Component: Cashflow },
+  { path: "/timeline", label: "ציר זמן", icon: CalendarRange, group: "forecast", Component: Timeline },
+
+  { path: "/plan", label: "יעדים ותכנון", icon: Compass, group: "plan", hub: true, Component: Plan },
+  { path: "/goals", label: "יעדים", icon: Target, group: "plan", Component: Goals },
+  { path: "/summary", label: "סיכום התוכנית", icon: ClipboardList, group: "plan", Component: Summary },
+  { path: "/recommendations", label: "המלצות", icon: Lightbulb, group: "plan", Component: Recommendations },
+  { path: "/my-plan", label: "תכנון פלוס", icon: Sparkles, group: "plan", Component: MyPlan },
+  { path: "/metrics", label: "התקדמות", icon: Gauge, group: "plan", Component: Metrics },
+  { path: "/portfolio", label: "השקעות", icon: PieChart, group: "plan", Component: Portfolio },
+
+  { path: "/syncs", label: "סנכרונים", icon: RefreshCw, group: "more", hub: true, Component: Syncs },
+];
+
+/** The group a pathname belongs to (undefined for unknown paths). */
+export function groupOf(pathname: string): RouteGroup | undefined {
+  return routes.find((r) => r.path === pathname)?.group;
+}

@@ -19,12 +19,16 @@ Pure `build_budgets` is called from cashflow.build(); the module is also
 importable on its own. Read-only over scraped data.
 """
 import json
+import subprocess
+import sys
 from datetime import date, timedelta
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
 BUDGET = ROOT / "riseup" / "raw" / "budget_current.json"
 OVERRIDES = ROOT / "budgets" / "budgets.json"
+RAW = ROOT / "riseup" / "raw"
+HISTORY_CYCLES = 4
 
 
 def load_budget(path=BUDGET):
@@ -42,6 +46,48 @@ def load_overrides(path=OVERRIDES):
     except (OSError, ValueError):
         return {}
     return {str(k): float(v) for k, v in data.items() if isinstance(v, (int, float))}
+
+
+def load_history(raw_dir=RAW):
+    """All budget docs from the budget_YYYY-MM_6.json history dumps (each is a
+    list of ~7 monthly docs), de-duplicated by budgetDate keeping the freshest."""
+    docs = {}
+    for f in sorted(Path(raw_dir).glob("budget_20*_6.json")):
+        try:
+            data = json.loads(f.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        for d in data if isinstance(data, list) else [data]:
+            key = d.get("budgetDate") if isinstance(d, dict) else None
+            if key and (key not in docs or (d.get("lastUpdatedAt") or "") >= (docs[key].get("lastUpdatedAt") or "")):
+                docs[key] = d
+    return list(docs.values())
+
+
+def _category_totals(budget):
+    """{name: {"planned", "spent"}} for the trackingCategory envelopes of one doc."""
+    cats = {}
+    for e in budget.get("envelopes") or []:
+        if e.get("type") != "trackingCategory":
+            continue
+        name = ((e.get("details") or {}).get("trackingCategory") or {}).get("name", "").strip()
+        if not name or name.startswith("__"):
+            continue
+        c = cats.setdefault(name, {"planned": 0.0, "spent": 0.0})
+        c["planned"] += float(e.get("originalAmount") or 0)
+        c["spent"] += _spent(e)
+    return cats
+
+
+def category_history(history_docs, current_month, n=HISTORY_CYCLES):
+    """{name: [{cycle, spent}, ...]} oldest->newest for the last `n` cycles
+    before `current_month` ('YYYY-MM'). A category absent from a cycle counts 0."""
+    docs = sorted((d for d in history_docs or [] if (d.get("budgetDate") or "") < current_month),
+                  key=lambda d: d["budgetDate"])[-n:]
+    per = [(d["budgetDate"], _category_totals(d)) for d in docs]
+    names = {name for _, t in per for name in t}
+    return {name: [{"cycle": m, "spent": round(t.get(name, {}).get("spent", 0.0), 2)} for m, t in per]
+            for name in names}
 
 
 def _start_in(year, month, day):
@@ -68,26 +114,21 @@ def _spent(envelope):
     return total
 
 
-def build_budgets(budget, as_of, overrides=None):
+def build_budgets(budget, as_of, overrides=None, history_docs=None):
     """Budget block for the app, or None when there is no budget doc.
 
     `as_of` is a date. Categories are merged by name and sorted by planned desc.
+    `history_docs` are earlier monthly budget docs (see load_history) feeding each
+    category's `history`; None loads them from the raw dumps (cashflow.py relies
+    on this), pass [] to skip.
     """
     if not budget:
         return None
     overrides = overrides or {}
-    start, end = cycle_bounds(budget.get("budgetDate") or as_of.strftime("%Y-%m"),
-                              int(budget.get("cashflowStartDay") or 1))
-    cats = {}
-    for e in budget.get("envelopes") or []:
-        if e.get("type") != "trackingCategory":
-            continue
-        name = ((e.get("details") or {}).get("trackingCategory") or {}).get("name", "").strip()
-        if not name or name.startswith("__"):
-            continue
-        c = cats.setdefault(name, {"planned": 0.0, "spent": 0.0})
-        c["planned"] += float(e.get("originalAmount") or 0)
-        c["spent"] += _spent(e)
+    month = budget.get("budgetDate") or as_of.strftime("%Y-%m")
+    start, end = cycle_bounds(month, int(budget.get("cashflowStartDay") or 1))
+    cats = _category_totals(budget)
+    hist = category_history(load_history() if history_docs is None else history_docs, month)
 
     rows = []
     for name, c in cats.items():
@@ -102,6 +143,7 @@ def build_budgets(budget, as_of, overrides=None):
             "pct": round(spent / planned * 100, 1) if planned > 0 else None,
             "over": spent > planned,
             "source": source,
+            "history": hist.get(name, []),
         })
     rows.sort(key=lambda r: -r["planned"])
 
@@ -121,6 +163,69 @@ def build_budgets(budget, as_of, overrides=None):
     }
 
 
+def save_overrides(overrides, path=OVERRIDES):
+    """Write the `{category: amount}` store, creating the directory if missing."""
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(overrides, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+
+def set_override(overrides, category, amount):
+    """New overrides dict with `category` planned at `amount` (pure)."""
+    return {**overrides, category: float(amount)}
+
+
+def unset_override(overrides, category):
+    """New overrides dict without `category` (pure)."""
+    return {k: v for k, v in overrides.items() if k != category}
+
+
+def _rebuild():
+    """Regenerate cashflow.json so the app picks up the change."""
+    subprocess.run([sys.executable, str(ROOT / "cashflow.py")], check=True)
+
+
+def _print_line(category):
+    b = build_budgets(load_budget(), date.today(), load_overrides())
+    c = next((c for c in (b or {}).get("categories", []) if c["name"] == category), None)
+    if not c:
+        print(f"{category}: no such category in the current budget")
+        return
+    tag = " (override)" if c["source"] == "override" else ""
+    print(f"{c['name']}: planned {c['planned']:g}{tag}, spent {c['spent']:g}, left {c['left']:g}")
+
+
+def main(argv, store=OVERRIDES, rebuild=_rebuild, show=_print_line):
+    """CLI: `set <category> <amount>` | `unset <category>` | `list`."""
+    usage = "usage: budgets.py set <category> <amount> | unset <category> | list"
+    cmd = argv[0] if argv else ""
+    ov = load_overrides(store)
+    if cmd == "list" and len(argv) == 1:
+        for k, v in sorted(ov.items()):
+            print(f"{k}: {v:g}")
+        return 0
+    if cmd == "set" and len(argv) == 3:
+        try:
+            amount = float(argv[2])
+        except ValueError:
+            print(usage)
+            return 2
+        if amount < 0:
+            print("amount must be >= 0")
+            return 2
+        save_overrides(set_override(ov, argv[1], amount), store)
+    elif cmd == "unset" and len(argv) == 2:
+        save_overrides(unset_override(ov, argv[1]), store)
+    else:
+        print(usage)
+        return 2
+    rebuild()
+    show(argv[1])
+    return 0
+
+
 if __name__ == "__main__":
+    if len(sys.argv) > 1:
+        sys.exit(main(sys.argv[1:]))
     b = build_budgets(load_budget(), date.today(), load_overrides())
     print(json.dumps(b, ensure_ascii=False, indent=2) if b else "no budget doc")

@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { BigNumber, Card, CardLabel, Kpi, KpiGrid, ListRow, Nudge, Section } from "@/components/common";
 import NetWorthChart from "@/components/NetWorthChart";
 import RunwayTeaser from "@/components/RunwayTeaser";
@@ -35,6 +36,69 @@ function savingsByKind(savings: Savings[]) {
   return [...groups.values()].sort((a, b) => b.balance - a.balance);
 }
 
+/** Mint-style hero: toggles between net worth and this month's spending vs. last month. */
+function Hero({ netToday }: { netToday: number | null }) {
+  const [view, setView] = useState<"net" | "spend">("net");
+  const pace = cashflow.pace;
+  const net = snapshot.totals.net_position_with_savings ?? netToday;
+  const spend = pace?.current.expense ?? null;
+  const prev = pace?.previous.expense ?? null;
+  const diff = spend != null && prev != null ? spend - prev : null;
+  return (
+    <Card>
+      <div className="mb-3 inline-flex rounded-full bg-panel-2 p-0.5 text-sm font-semibold" role="tablist">
+        {([["net", "שווי נקי"], ["spend", "הוצאות"]] as const).map(([k, l]) => (
+          <button
+            key={k}
+            type="button"
+            role="tab"
+            aria-selected={view === k}
+            onClick={() => setView(k)}
+            className={`rounded-full px-4 py-1 ${view === k ? "bg-background shadow-sm" : "text-muted-foreground"}`}
+          >
+            {l}
+          </button>
+        ))}
+      </div>
+      {view === "net" ? (
+        <>
+          <BigNumber tone={net != null && net < 0 ? "bad" : undefined}>{net != null ? shekel(net) : "—"}</BigNumber>
+          <div className="mt-1 text-sm text-muted-foreground">כולל חסכונות</div>
+        </>
+      ) : (
+        <>
+          <BigNumber>{spend != null ? shekel(spend) : "—"}</BigNumber>
+          {diff != null && (
+            <div className="mt-1 text-sm text-muted-foreground">
+              {shekel(Math.abs(diff))} {diff <= 0 ? "פחות" : "יותר"} מאותה נקודה בחודש שעבר
+            </div>
+          )}
+        </>
+      )}
+    </Card>
+  );
+}
+
+/** Cash / credit cards / loans — the three account-type cards. */
+function AccountTypes() {
+  const t = snapshot.totals;
+  const items = [
+    { label: "מזומן", value: t.bank_balances_sum, to: "/runway", bad: t.bank_balances_sum < 0 },
+    { label: "כרטיסי אשראי", value: -t.credit_card_debt, to: "/cashflow", bad: false },
+    { label: "הלוואות ומשכנתא", value: -(t.mortgage_balance + t.consumer_loan_balance), to: "/networth", bad: false },
+  ];
+  return (
+    <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-3">
+      {items.map((i) => (
+        <Card key={i.label} to={i.to}>
+          <CardLabel>{i.label}</CardLabel>
+          <div className={`text-[22px] font-extrabold tabular-nums ${i.bad ? "text-bad" : ""}`}>{shekel(i.value)}</div>
+        </Card>
+      ))}
+    </div>
+  );
+}
+
 export default function Overview() {
   const { metrics, projection } = cashflow;
   const t = snapshot.totals;
@@ -68,6 +132,9 @@ export default function Overview() {
         <h1>{greeting(new Date().getHours())} 👋</h1>
         <p className="muted">הכסף שלך, ברור יותר כל יום</p>
       </header>
+
+      <Hero netToday={netToday} />
+      <AccountTypes />
 
       {cashflow.runway && <RunwayTeaser runway={cashflow.runway} />}
       {cashflow.budgets && <BudgetsTeaser budgets={cashflow.budgets} />}

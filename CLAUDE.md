@@ -115,6 +115,13 @@ from RiseUp's current budget the same way and written to `cashflow.json`:
 optional overrides in gitignored `data/budgets/budgets.json`), and `spending.py`
 (per-month category/merchant/transaction breakdown with excluded buckets, `/spending`).
 
+**Budget overrides.** Each budget category carries `history` (spend of the last 4
+RiseUp cycles, from `data/riseup/raw/budget_YYYY-MM_6.json`). To change a planned
+amount: `python3 data/budgets.py set "<category>" <amount>`, `unset "<category>"`, or
+`list`; it edits gitignored `data/budgets/budgets.json`, reruns `cashflow.py` and
+prints the new line. The app's budget editor sheet is read-only and only shows this
+command; push the result with `sync-data`.
+
 ### UX references
 
 Before designing a dashboard screen, read `docs/ux-references.md`: Mobbin

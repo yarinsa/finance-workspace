@@ -1,5 +1,5 @@
 import { NavLink, Navigate, Route, Routes, useLocation } from "react-router-dom";
-import { routes } from "./routes";
+import { groups, routes } from "./routes";
 import { cashflow, daysSince } from "./lib/data";
 import {
   Sidebar,
@@ -7,6 +7,7 @@ import {
   SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
+  SidebarGroupLabel,
   SidebarHeader,
   SidebarInset,
   SidebarMenu,
@@ -46,22 +47,27 @@ function AppSidebar({ days }: { days: number }) {
         <div className="px-2 py-1 text-lg font-bold">תמונת מצב</div>
       </SidebarHeader>
       <SidebarContent>
-        <SidebarGroup>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {routes.map(({ path, label, icon: Icon }) => (
-                <SidebarMenuItem key={path}>
-                  <SidebarMenuButton asChild isActive={pathname === path}>
-                    <NavLink to={path} onClick={() => setOpenMobile(false)}>
-                      <Icon />
-                      {label}
-                    </NavLink>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
+        {groups.map((g) => (
+          <SidebarGroup key={g.key}>
+            <SidebarGroupLabel>{g.label}</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {routes
+                  .filter((r) => r.group === g.key)
+                  .map(({ path, label, icon: Icon, hub }) => (
+                    <SidebarMenuItem key={path} className={hub ? undefined : "ps-3"}>
+                      <SidebarMenuButton asChild isActive={pathname === path}>
+                        <NavLink to={path} onClick={() => setOpenMobile(false)}>
+                          <Icon />
+                          {label}
+                        </NavLink>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  ))}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        ))}
       </SidebarContent>
       <SidebarFooter>
         <div className="px-2">

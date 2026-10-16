@@ -304,6 +304,21 @@ export interface Goals {
   liquid_buffer: number;
 }
 
+/** One month of forecast.py's projection (RiseUp envelopes; month 1 high-confidence). */
+export interface ForecastMonth {
+  forecast_month: string;
+  confidence: "high" | "carry-forward" | string;
+  projected_net: number;
+  income: { total: number };
+  expenses: { total: number; fixed_total: number; discretionary_total: number };
+}
+
+export interface Forecast {
+  generated_for?: string;
+  horizon_months: number;
+  months: ForecastMonth[];
+}
+
 async function loadDigested<T>(name: string): Promise<T> {
   const res = await fetch(`/data/${name}.json`, { cache: "no-store" });
   // A missing key comes back as the SPA's index.html (CloudFront maps S3's
@@ -314,11 +329,21 @@ async function loadDigested<T>(name: string): Promise<T> {
   return (await res.json()) as T;
 }
 
-export const [cashflow, snapshot, transactions, goals] = await Promise.all([
+/** forecast.json is a nice-to-have: pages that read it render without it. */
+async function loadOptional<T>(name: string): Promise<T | null> {
+  try {
+    return await loadDigested<T>(name);
+  } catch {
+    return null;
+  }
+}
+
+export const [cashflow, snapshot, transactions, goals, forecast] = await Promise.all([
   loadDigested<Cashflow>("cashflow"),
   loadDigested<Snapshot>("snapshot"),
   loadDigested<Transactions>("transactions"),
   loadDigested<Goals>("goals"),
+  loadOptional<Forecast>("forecast"),
 ]);
 
 // --- Number formatting ------------------------------------------------------
