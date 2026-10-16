@@ -1,3 +1,4 @@
+import { useSearchParams } from "react-router-dom";
 import { useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Cell, Pie, PieChart, ResponsiveContainer } from "recharts";
@@ -16,9 +17,12 @@ function dayLabel(iso: string): string {
 /** Month spending explorer (PRD 12 Phase 3): donut, transactions / categories / merchants. */
 export default function Spending() {
   const C = useChartColors();
-  const [idx, setIdx] = useState(0); // 0 = newest month
+  // ?month=YYYY-MM&cat=<name> deep-links from the cashflow screen.
+  const [params] = useSearchParams();
+  const linked = (spending?.months ?? []).findIndex((m) => m.month === params.get("month"));
+  const [idx, setIdx] = useState(linked >= 0 ? linked : 0); // 0 = newest month
   const [tab, setTab] = useState("transactions");
-  const [cat, setCat] = useState<string | null>(null);
+  const [cat, setCat] = useState<string | null>(params.get("cat"));
 
   const months = spending?.months ?? [];
   if (!months.length) {

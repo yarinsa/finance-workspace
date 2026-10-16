@@ -160,6 +160,35 @@ export interface Cashflow {
   charts?: Record<string, unknown>;
   projection?: Projection;
   months?: unknown[];
+  /** Month-by-month cashflow (past actuals, current month, projected months); absent until the pipeline emits it. */
+  months_view?: MonthsView;
+}
+
+export interface MonthGroup {
+  key: "income" | "fixed" | "variable" | "debt_savings";
+  label: string;
+  expected: number | null;
+  actual: number | null;
+}
+
+export interface MonthViewRow {
+  month: string; // "2026-10"
+  kind: "actual" | "current" | "projected";
+  /** Positive magnitudes; net = income − expense. */
+  income: number;
+  expense: number;
+  net: number;
+  /** Current month only: where the month is expected to land. */
+  projected_end: { income: number; expense: number; net: number } | null;
+  groups: MonthGroup[];
+  /** Empty for projected months. */
+  categories: { name: string; amount: number; count: number }[];
+}
+
+export interface MonthsView {
+  current: string;
+  /** Oldest → newest. */
+  months: MonthViewRow[];
 }
 
 export interface Loan {

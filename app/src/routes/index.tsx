@@ -34,7 +34,6 @@ import Runway from "./Runway";
 import Budgets from "./Budgets";
 import Spending from "./Spending";
 import Monthly from "./Monthly";
-import Forecast from "./Forecast";
 import Plan from "./Plan";
 
 /** Navigation hubs, Mint-style: each is one bottom tab (and one sidebar section). */
@@ -77,9 +76,8 @@ export const routes: RouteDef[] = [
   { path: "/budgets", label: "תקציב", icon: Wallet, group: "monthly", Component: Budgets },
   { path: "/spending", label: "הוצאות החודש", icon: Receipt, group: "monthly", Component: Spending },
 
-  { path: "/forecast", label: "תזרים", icon: ArrowLeftRight, group: "forecast", hub: true, Component: Forecast },
+  { path: "/cashflow", label: "תזרים", icon: ArrowLeftRight, group: "forecast", hub: true, Component: Cashflow },
   { path: "/runway", label: "יתרה צפויה", icon: CalendarClock, group: "forecast", Component: Runway },
-  { path: "/cashflow", label: "תזרים כספי", icon: ArrowLeftRight, group: "forecast", Component: Cashflow },
   { path: "/timeline", label: "ציר זמן", icon: CalendarRange, group: "forecast", Component: Timeline },
 
   { path: "/plan", label: "יעדים ותכנון", icon: Compass, group: "plan", hub: true, Component: Plan },
@@ -92,6 +90,9 @@ export const routes: RouteDef[] = [
 
   { path: "/syncs", label: "סנכרונים", icon: RefreshCw, group: "more", hub: true, Component: Syncs },
 ];
+
+/** Retired paths kept alive for bookmarks: `from` redirects to `to`. */
+export const redirects: { from: string; to: string }[] = [{ from: "/forecast", to: "/cashflow" }];
 
 /** The group a pathname belongs to (undefined for unknown paths). */
 export function groupOf(pathname: string): RouteGroup | undefined {
