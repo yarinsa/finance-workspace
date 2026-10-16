@@ -1,7 +1,8 @@
 import { Card, PageTitle } from "@/components/common";
 import NetWorthChart from "@/components/NetWorthChart";
+import Hero from "@/components/home/Hero";
 import MortgageCard from "@/components/MortgageCard";
-import { shekel, snapshot } from "@/lib/data";
+import { cashflow, pct, shekel, snapshot } from "@/lib/data";
 
 export default function Networth() {
   const t = snapshot.totals;
@@ -10,6 +11,7 @@ export default function Networth() {
     ['הלוואות צרכניות', t.consumer_loan_balance],
     ["חוב כרטיסי אשראי", t.credit_card_debt],
   ];
+  const allLoans = snapshot.debt_profile?.all_loans ?? null;
   const savings = snapshot.savings ?? [];
   const assets: [string, number][] = [
     ["יתרות עו\"ש", t.bank_balances_sum],
@@ -19,6 +21,9 @@ export default function Networth() {
   return (
     <div>
       <PageTitle>שווי נקי</PageTitle>
+
+      <Hero netToday={cashflow.projection?.net_worth_today ?? null} />
+      <div className="section-gap" />
 
       <Card>
         <div className="card-title">השווי הנקי לאורך החיים</div>
@@ -58,6 +63,14 @@ export default function Networth() {
             <span>סך חוב</span>
             <strong style={{ color: "var(--lg-bad)" }}>{shekel(t.total_debt)}</strong>
           </div>
+          {allLoans && (
+            <div className="row">
+              <span title="ממוצע משוקלל לפי יתרה, ריבית נומינלית כפי שהבנקים מדווחים">
+                ריבית ממוצעת על הלוואות
+              </span>
+              <strong>{pct(allLoans.avg_rate_pct, 2)}</strong>
+            </div>
+          )}
         </Card>
       </div>
 

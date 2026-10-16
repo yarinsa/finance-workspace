@@ -132,6 +132,16 @@ export interface Runway {
   note: string;
 }
 
+/** One prioritised to-do for the home screen (cashflow.actions, built by the pipeline). */
+export interface HomeAction {
+  id: string;
+  severity: "critical" | "high" | "medium" | "low";
+  title: string;
+  detail: string;
+  cta: { label: string; to: string } | null;
+  amount: number | null;
+}
+
 export interface Cashflow {
   generated_at: string;
   currency: string;
@@ -142,6 +152,8 @@ export interface Cashflow {
   pace?: Pace;
   fixed_expenses?: FixedExpenses | null;
   runway?: Runway;
+  /** "לטיפול" list on the home screen; absent until the pipeline emits it. */
+  actions?: HomeAction[];
   bills?: import("./bills").Bills | null;
   budgets?: import("./budgets").Budgets | null;
   spending?: import("./spending").SpendingData;

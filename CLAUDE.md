@@ -114,6 +114,8 @@ from RiseUp's current budget the same way and written to `cashflow.json`:
 `budgets.py` (tracking-category plan vs. actual per RiseUp cycle, `/budgets`;
 optional overrides in gitignored `data/budgets/budgets.json`), and `spending.py`
 (per-month category/merchant/transaction breakdown with excluded buckets, `/spending`).
+`actions.py` derives the home page's "לטיפול" list (limit breach, over-budget, overdue bills,
+upcoming card bills, duplicate services, stale syncs) from those blocks, with period-stable ids.
 
 **Budget overrides.** Each budget category carries `history` (spend of the last 4
 RiseUp cycles, from `data/riseup/raw/budget_YYYY-MM_6.json`). To change a planned

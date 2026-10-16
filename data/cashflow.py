@@ -559,7 +559,7 @@ def build():
         transactions, snapshot["bank_accounts"], snapshot.get("savings", []),
         _local_today())
     # Mint-style monthly views (PRD 12): bills status, budgets, spending explorer
-    import bills, budgets, spending
+    import actions, bills, budgets, spending
     budget_doc = bills.load_budget()
     bills_block = bills.build_bills(budget_doc, transactions, _local_today())
     budgets_block = budgets.build_budgets(budget_doc, _local_today(), budgets.load_overrides())
@@ -596,6 +596,10 @@ def build():
         "bills": bills_block,
         "budgets": budgets_block,
         "spending": spending_block,
+        "actions": actions.build_actions(
+            runway_block, bills_block, budgets_block,
+            fixed_expenses(forecast, transactions, current),
+            snapshot.get("syncs", []), _local_today()),
         "months": [
             {"month": k, "income": v["income"], "expense": v["expense"], "net": v["net"],
              "count": v["count"]}
