@@ -1,6 +1,6 @@
 import { TransactionList, TransactionRow } from "@/components/TransactionRow";
 import { useState } from "react";
-import { BigNumber, Card, CardLabel, PageTitle, Section } from "@/components/common";
+import { BigNumber, Card, CardLabel, Page, Section } from "@/components/common";
 import TransactionEditSheet, { HORIZON_LABEL, type EditTarget } from "@/components/TransactionEditSheet";
 import type { Horizon } from "@/lib/api";
 import { cashflow, shekel, type Horizons as HorizonsData } from "@/lib/data";
@@ -59,10 +59,9 @@ export default function Horizons() {
 
   if (!data || data.months.length === 0) {
     return (
-      <>
-        <PageTitle>היום · קרוב · פרישה</PageTitle>
+      <Page title="היום · קרוב · פרישה">
         <Card>אין עדיין נתוני חלוקה. הריצו את ה-digest כדי ליצור אותם.</Card>
-      </>
+      </Page>
     );
   }
 
@@ -73,11 +72,9 @@ export default function Horizons() {
   const v = verdict(m, target, order);
 
   return (
-    <>
-      <PageTitle>היום · קרוב · פרישה</PageTitle>
-
+    <Page title="היום · קרוב · פרישה">
       {data.months.length > 1 && (
-        <div className="mb-3 flex gap-1.5 overflow-x-auto">
+        <div className="flex gap-1.5 overflow-x-auto">
           {data.months.map((x, i) => (
             <button
               key={x.month}
@@ -136,49 +133,51 @@ export default function Horizons() {
 
       {order.map((h) => (
         <Section key={h} title={HORIZON_LABEL[h]}>
-          {(data.goals?.[h]?.length ?? 0) > 0 && (
-            <Card className="mb-2 h-auto">
-              <CardLabel>יעדים</CardLabel>
-              {data.goals![h].map((g) => (
-                <div key={g.id} className="flex items-center gap-3 border-line py-1.5 [&+&]:border-t">
-                  <div className="min-w-0 flex-1 truncate text-sm">{g.description}</div>
-                  {g.end_date && (
-                    <div className="text-xs text-muted-foreground">
-                      עד {g.end_date.split("-").reverse().slice(1).join("/")}
-                    </div>
-                  )}
-                  <div className="text-sm font-semibold tabular-nums">{shekel(g.amount)}</div>
-                </div>
-              ))}
-            </Card>
-          )}
-          <Card>
-            {m.buckets[h].top.length === 0 ? (
-              <div className="text-sm text-muted-foreground">אין תנועות החודש. סמנו תנועה כ״{HORIZON_LABEL[h]}״ בעריכה.</div>
-            ) : (
-              <TransactionList>
-                {m.buckets[h].top.map((t) => (
-                  <TransactionRow
-                    key={`${t.date}/${t.amount}/${t.description}`}
-                    merchant={t.description}
-                    amount={t.amount}
-                    date={t.date}
-                    category={t.category}
-                    tags={t.tags}
-                    meta={t.goal || undefined}
-                    edited={t.overridden}
-                    onClick={() =>
-                      setEditing({ date: t.date, amount: t.amount, merchant: t.description, category: t.category ?? "", overridden: t.overridden, tags: t.tags })
-                    }
-                  />
+          <div className="flex flex-col gap-4 md:gap-[18px]">
+            {(data.goals?.[h]?.length ?? 0) > 0 && (
+              <Card className="h-auto">
+                <CardLabel>יעדים</CardLabel>
+                {data.goals![h].map((g) => (
+                  <div key={g.id} className="flex items-center gap-3 border-line py-1.5 [&+&]:border-t">
+                    <div className="min-w-0 flex-1 truncate text-sm">{g.description}</div>
+                    {g.end_date && (
+                      <div className="text-xs text-muted-foreground">
+                        עד {g.end_date.split("-").reverse().slice(1).join("/")}
+                      </div>
+                    )}
+                    <div className="text-sm font-semibold tabular-nums">{shekel(g.amount)}</div>
+                  </div>
                 ))}
-              </TransactionList>
+              </Card>
             )}
-          </Card>
+            <Card>
+              {m.buckets[h].top.length === 0 ? (
+                <div className="text-sm text-muted-foreground">אין תנועות החודש. סמנו תנועה כ״{HORIZON_LABEL[h]}״ בעריכה.</div>
+              ) : (
+                <TransactionList>
+                  {m.buckets[h].top.map((t) => (
+                    <TransactionRow
+                      key={`${t.date}/${t.amount}/${t.description}`}
+                      merchant={t.description}
+                      amount={t.amount}
+                      date={t.date}
+                      category={t.category}
+                      tags={t.tags}
+                      meta={t.goal || undefined}
+                      edited={t.overridden}
+                      onClick={() =>
+                        setEditing({ date: t.date, amount: t.amount, merchant: t.description, category: t.category ?? "", overridden: t.overridden, tags: t.tags })
+                      }
+                    />
+                  ))}
+                </TransactionList>
+              )}
+            </Card>
+          </div>
         </Section>
       ))}
 
       <TransactionEditSheet tx={editing} onClose={() => setEditing(null)} />
-    </>
+    </Page>
   );
 }

@@ -1,4 +1,4 @@
-import { Card, PageTitle } from "@/components/common";
+import { Card, CardLabel, Page } from "@/components/common";
 import { cashflow, shekel } from "@/lib/data";
 
 /** Monthly cashflow waterfall. Renders projection focal points as life-horizon
@@ -8,10 +8,9 @@ export default function Timeline() {
   const points = (cashflow.projection?.focal_points ?? []).filter((p) => p.net_val != null);
 
   return (
-    <div>
-      <PageTitle>ציר זמן</PageTitle>
+    <Page title="ציר זמן">
       <Card>
-        <div className="card-title">נקודות מוקד לאורך החיים</div>
+        <CardLabel>נקודות מוקד לאורך החיים</CardLabel>
         <div className="muted" style={{ fontSize: 13, marginBottom: 8 }}>
           השווי כאן כולל חיסכון ארוך טווח (פנסיה וקרנות השתלמות) ואת המשכנתא — לכן נקודת "היום"
           שונה מהמצב הנזיל במבט על. שווי הדירה אינו נכלל.
@@ -27,6 +26,6 @@ export default function Timeline() {
           </div>
         ))}
       </Card>
-    </div>
+    </Page>
   );
 }

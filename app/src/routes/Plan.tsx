@@ -1,4 +1,4 @@
-import { Card, CardLabel, PageTitle, Section } from "@/components/common";
+import { Card, CardLabel, Page, Section } from "@/components/common";
 import GroupLinks from "@/components/GroupLinks";
 import { goals } from "@/lib/data";
 
@@ -6,8 +6,7 @@ import { goals } from "@/lib/data";
 export default function Plan() {
   const personal = goals.personal_goals ?? [];
   return (
-    <div className="feed">
-      <PageTitle>יעדים ותכנון</PageTitle>
+    <Page title="יעדים ותכנון">
       {personal.length > 0 && (
         <Section title="יעדים" to="/goals">
           <Card to="/goals">
@@ -22,6 +21,6 @@ export default function Plan() {
         </Section>
       )}
       <GroupLinks group="plan" />
-    </div>
+    </Page>
   );
 }
