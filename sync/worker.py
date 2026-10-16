@@ -6,7 +6,7 @@ from temporalio.client import Client
 from temporalio.worker import Worker
 
 from activities import ALL_ACTIVITIES
-from workflows import TASK_QUEUE, AmexSyncWorkflow, FinanceSyncWorkflow
+from workflows import TASK_QUEUE, AmexSyncWorkflow, FinanceSyncWorkflow, LedgerRebuildWorkflow
 
 
 async def main() -> None:
@@ -14,7 +14,7 @@ async def main() -> None:
         os.environ.get("TEMPORAL_ADDRESS", "localhost:7233"),
         namespace=os.environ.get("TEMPORAL_NAMESPACE", "default"),
     )
-    worker = Worker(client, task_queue=TASK_QUEUE, workflows=[FinanceSyncWorkflow, AmexSyncWorkflow], activities=ALL_ACTIVITIES)
+    worker = Worker(client, task_queue=TASK_QUEUE, workflows=[FinanceSyncWorkflow, AmexSyncWorkflow, LedgerRebuildWorkflow], activities=ALL_ACTIVITIES)
     print(f"worker up on task queue {TASK_QUEUE}", flush=True)
     await worker.run()
 

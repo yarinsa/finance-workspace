@@ -95,6 +95,31 @@ The scheduled workflow decides what to scrape with `data/freshness.py`
 targets"), rather than hard-coding the source list. Sources with no target
 (RiseUp) are never returned.
 
+### LedgerRebuildWorkflow (debounced rebuild after ledger edits)
+
+Not scheduled: the ledger API (`api/`) signal-with-starts it on every transaction edit
+(`edited` signal, workflow id `ledger-rebuild`, task queue `finance-sync`). Edits only
+change `transaction_overrides`, so the rebuild is the digest chain run with
+`digest.py --no-normalize` (the `digest` activity's `normalize=False`), then `publish_data`
+(which still respects `SYNC_PUBLISH`).
+
+- **Debounce.** Waits until 20 s pass with no new `edited` signal, so a burst of edits is
+  one rebuild. Signals that land during a run queue exactly one more pass.
+- **Idle out.** After 10 min with no signals it returns, so the next signal-with-start
+  starts a fresh run. It also continues-as-new after 5 passes to keep history small.
+- **Status.** Query `status` -> `{"state": "idle|pending|running", "last_published_at":
+  iso|null, "last_error": str|null}`. A failed pass sets `last_error` and returns to
+  idle; the workflow never crashes on an activity failure (digest: 2 attempts, publish: 3).
+- **Overrides.** `run()` takes an optional `opts` dict (`debounce_seconds`,
+  `idle_seconds`, `max_passes`) so tests can shorten the timers; the API passes none.
+- **Digest lock.** The `digest` activity holds an exclusive `flock` on
+  `data/digested/.lock` for the whole chain, so this workflow and `FinanceSyncWorkflow`
+  never write `data/digested/` at once; the second waits (heartbeating) for the first.
+  The kernel releases it if the worker dies. The file is covered by the `data/digested/`
+  gitignore.
+- **Deploying.** The worker must be restarted to pick the new workflow up:
+  `launchctl kickstart -k gui/$(id -u)/me.yarinsa.finance-worker`.
+
 ## Layout
 
 - `sources.py` the registry (one entry per source, order, login groups)
