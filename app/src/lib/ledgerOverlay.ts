@@ -22,6 +22,11 @@ export function applyOverlay(months: SpendingMonth[], overlay: Overlay): Spendin
   return months.map((m) => applyToMonth(m, overlay));
 }
 
+/** The overlay's tags win when the API returned them (an empty list clears them). */
+function withTags(t: SpendingTransaction, o: Row): SpendingTransaction {
+  return o.tags === undefined ? t : { ...t, tags: o.tags };
+}
+
 type Bucket = { name: string; amount: number; count: number };
 
 function applyToMonth(m: SpendingMonth, overlay: Overlay): SpendingMonth {
@@ -56,9 +61,9 @@ function applyToMonth(m: SpendingMonth, overlay: Overlay): SpendingMonth {
     } else if (o.category && o.category !== t.category) {
       take(cats, t.category, t.amount);
       give(o.category, t.amount);
-      transactions.push({ ...t, category: o.category });
+      transactions.push(withTags({ ...t, category: o.category }, o));
     } else {
-      transactions.push(t);
+      transactions.push(withTags(t, o));
     }
   }
 

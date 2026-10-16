@@ -64,6 +64,19 @@ def sqlalchemy_url(url):
     return re.sub(r"^postgres(ql)?(\+\w+)?://", "postgresql+psycopg://", url)
 
 
+def orm_session(conn):
+    """A SQLAlchemy ORM `Session` on this open psycopg connection (finance/tables.py entities).
+
+    Shares the connection, its role and its transaction: `session.commit()` commits `conn`.
+    Closing the session never closes `conn`."""
+    from sqlalchemy import create_engine
+    from sqlalchemy.pool import StaticPool
+    from sqlmodel import Session
+    engine = create_engine("postgresql+psycopg://", creator=lambda: conn, poolclass=StaticPool,
+                           pool_reset_on_return=None)
+    return Session(engine, expire_on_commit=False)
+
+
 def migrate(url):
     """`alembic upgrade head` (db/migrations) against this database."""
     from alembic import command

@@ -175,7 +175,7 @@ export interface HorizonBucket {
   /** pct minus target_pct, in percentage points. */
   gap_pts: number;
   count: number;
-  top: { date: string; description: string; amount: number; category?: string | null; overridden: boolean }[];
+  top: { date: string; description: string; amount: number; category?: string | null; overridden: boolean; tags?: string[] }[];
 }
 
 export interface Horizons {
@@ -329,6 +329,8 @@ export interface Transaction {
   category?: string;
   /** Id in the DB `categories` table (RiseUp-seeded); absent when uncategorised. */
   category_id?: number;
+  /** Tag names from the DB `transaction_tags` table, sorted; absent when untagged. */
+  tags?: string[];
   origin?: string;
   sources?: string[];
   [k: string]: unknown;

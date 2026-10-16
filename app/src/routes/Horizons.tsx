@@ -1,4 +1,5 @@
 import CategoryTag from "@/components/CategoryTag";
+import TagChips from "@/components/TagChips";
 import { useState } from "react";
 import { BigNumber, Card, CardLabel, PageTitle, Section } from "@/components/common";
 import TransactionEditSheet, { HORIZON_LABEL, type EditTarget } from "@/components/TransactionEditSheet";
@@ -145,7 +146,7 @@ export default function Horizons() {
                   key={`${t.date}/${t.amount}/${t.description}`}
                   type="button"
                   onClick={() =>
-                    setEditing({ date: t.date, amount: t.amount, merchant: t.description, category: t.category ?? "", overridden: t.overridden })
+                    setEditing({ date: t.date, amount: t.amount, merchant: t.description, category: t.category ?? "", overridden: t.overridden, tags: t.tags })
                   }
                   className="flex w-full items-center gap-3 border-line py-2 text-start [&+&]:border-t"
                 >
@@ -153,6 +154,7 @@ export default function Horizons() {
                     <div className="truncate text-sm">{t.description}</div>
                     <div className="mt-0.5 flex items-center gap-1.5 text-xs text-muted-foreground">
                       <CategoryTag name={t.category} />
+                      <TagChips tags={t.tags} />
                       {t.date.split("-").reverse().slice(0, 2).join("/")}
                       {t.overridden && " · נערך"}
                     </div>

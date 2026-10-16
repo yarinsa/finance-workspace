@@ -11,7 +11,10 @@ ignored, as in the dedup key):
     .venv/bin/python db/edit.py exclude  2026-01-15 123.45        # hide from the ledger and every total
     .venv/bin/python db/edit.py include  2026-01-15 123.45        # undo exclude
     .venv/bin/python db/edit.py clear    2026-01-15 123.45 [category|note|horizon]   # drop one field, or the whole override
+    .venv/bin/python db/edit.py tag      2026-01-15 123.45 "טיול" ["עבודה" ...]   # add tags
+    .venv/bin/python db/edit.py untag    2026-01-15 123.45 "טיול" [...]          # remove tags
     .venv/bin/python db/edit.py list [--orphaned]
+    .venv/bin/python db/edit.py tags                                         # every tag, with its count
 
 After a change it rebuilds the digested outputs (digest --no-normalize ->
 validate -> forecast -> cashflow -> goals, as sync/activities.DIGEST_STEPS) so the JSON the app reads picks it up; pass
@@ -23,6 +26,7 @@ from pathlib import Path
 
 import ledger
 import overrides
+import tags
 
 REPO = Path(__file__).resolve().parent.parent
 REBUILD = [["digest.py", "--no-normalize"], ["validate.py"], ["forecast.py"], ["cashflow.py"], ["goals.py"]]
@@ -68,6 +72,9 @@ def show(conn, k):
         print(f"{k[0]}  {k[1]}  excluded")
     else:
         print(f"{k[0]}  {k[1]}  no such transaction")
+    names = tags.tags_of(conn, k)
+    if names:
+        print(f"  tags:     {', '.join(names)}")
     if o:
         print(f"  override: category={o[0]!r} note={o[1]!r} excluded={o[2]} horizon={o[3]!r}")
 
@@ -103,13 +110,17 @@ def main(argv):
     with ledger.connect() as conn:
         if cmd == "list":
             return list_overrides(conn, "--orphaned" in rest)
+        if cmd == "tags":
+            for t in tags.all_tags(conn):
+                print(f"{t['count']:>5}  {t['name']}" + (f"  {t['color']}" if t["color"] else ""))
+            return None
         if len(rest) < 2:
             raise SystemExit(__doc__)
         k = ledger.key(rest[0], rest[1])
         args = rest[2:]
         if cmd == "show":
             return show(conn, k)
-        if cmd in ("category", "note", "horizon", "exclude", "include") and not exists(conn, k):
+        if cmd in ("category", "note", "horizon", "exclude", "include", "tag") and not exists(conn, k):
             raise SystemExit(f"no transaction on {k[0]} for {k[1]} (try `show`, or check the date)")
         if cmd in FIELDS:
             if len(args) != 1:
@@ -121,6 +132,11 @@ def main(argv):
             set_field(conn, k, "excluded", True)
         elif cmd == "include":
             set_field(conn, k, "excluded", False)
+        elif cmd in ("tag", "untag"):
+            if not args:
+                raise SystemExit(f"usage: edit.py {cmd} DATE AMOUNT TAG [TAG ...]")
+            have = set(tags.tags_of(conn, k))
+            tags.set_tags(conn, k, have | set(args) if cmd == "tag" else have - set(args), ACTOR)
         elif cmd == "clear":
             if args and args[0] not in FIELDS:
                 raise SystemExit(f"clear takes one of {FIELDS}, or nothing for the whole override")

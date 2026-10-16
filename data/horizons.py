@@ -107,7 +107,7 @@ def build_horizons(transactions, months=MONTHS):
                 "count": len(rows),
                 "top": [{"date": r["date"], "description": r.get("description", ""),
                          "amount": r["amount"], "category": r.get("category"),
-                         "overridden": bool(r.get("overridden"))}
+                         "overridden": bool(r.get("overridden")), "tags": r.get("tags") or []}
                         for r in top],
             }
         left = round(income - spent, 2)

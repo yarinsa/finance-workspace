@@ -21,6 +21,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "db"))   # the shared override code
 import overrides  # noqa: E402
+import tags  # noqa: E402
 
 from .auth import TokenVerifier, check_csrf, check_origin, current_user  # noqa: E402
 from .config import Settings  # noqa: E402
@@ -46,6 +47,38 @@ class Patch(BaseModel):
     @classmethod
     def blank_clears(cls, v):
         return (v.strip() or None) if v is not None else None
+
+
+class TagSet(BaseModel):
+    """The full set of tag names for one transaction (replaces what was there)."""
+    model_config = ConfigDict(extra="forbid")
+
+    tags: list[str] = Field(max_length=20)
+
+    @field_validator("tags")
+    @classmethod
+    def valid_names(cls, v):
+        return [tags.clean_name(n) for n in v]
+
+
+class TagEdit(BaseModel):
+    """Rename and/or recolor a tag; `color: null` clears it."""
+    model_config = ConfigDict(extra="forbid")
+
+    name: str | None = None
+    color: str | None = Field(default=None, pattern=r"^#[0-9a-fA-F]{6}$")
+
+    @field_validator("name")
+    @classmethod
+    def valid_name(cls, v):
+        return tags.clean_name(v) if v is not None else None
+
+
+def parse_body(model, raw):
+    try:
+        return model.model_validate_json(raw)
+    except ValidationError as e:
+        raise ApiError(422, "invalid", _first_error(e.errors())) from None
 
 
 def parse_key(day, abs_amount):
@@ -199,6 +232,56 @@ def create_app(settings=None, pool=None, rebuilder=None, verifier=None):
     def categories(request: Request, user=Depends(current_user)):
         with db(request) as conn:
             return {"categories": overrides.categories(conn)}
+
+    @app.put("/api/transactions/{day}/{abs_amount}/tags", dependencies=[Depends(check_csrf)])
+    async def put_tags(day: str, abs_amount: str, request: Request, user=Depends(current_user)):
+        k = parse_key(day, abs_amount)
+        body = parse_body(TagSet, await read_json_body(request))
+
+        def work():
+            with db(request) as conn:
+                found(overrides.get_row(conn, k))
+                tags.set_tags(conn, k, body.tags, user)
+                return overrides.get_row(conn, k)
+        row = await run_in_threadpool(work)
+        await run_in_threadpool(signal_rebuild, request)
+        return row
+
+    @app.get("/api/tags")
+    def list_tags(request: Request, user=Depends(current_user)):
+        with db(request) as conn:
+            return {"tags": tags.all_tags(conn)}
+
+    @app.patch("/api/tags/{tag_id}", dependencies=[Depends(check_csrf)])
+    async def edit_tag(tag_id: int, request: Request, user=Depends(current_user)):
+        body = parse_body(TagEdit, await read_json_body(request))
+        if not body.model_fields_set:
+            raise ApiError(422, "invalid", "send name and/or color")
+
+        def work():
+            with db(request) as conn:
+                if body.name and tags.tag_name_taken(conn, body.name, tag_id):
+                    raise ApiError(409, "conflict", "a tag with that name already exists")
+                changes = {f: getattr(body, f) for f in body.model_fields_set if f != "name" or body.name}
+                return tags.update_tag(conn, tag_id, **changes)
+        tag = await run_in_threadpool(work)
+        if tag is None:
+            raise ApiError(404, "not_found", "no such tag")
+        await run_in_threadpool(signal_rebuild, request)
+        return tag
+
+    @app.delete("/api/tags/{tag_id}", dependencies=[Depends(check_csrf)])
+    def remove_tag(tag_id: int, request: Request, user=Depends(current_user)):
+        with db(request) as conn:
+            if not tags.delete_tag(conn, tag_id):
+                raise ApiError(404, "not_found", "no such tag")
+        signal_rebuild(request)
+        return {"deleted": tag_id}
+
+    @app.get("/api/tags/orphaned")
+    def orphaned_tags(request: Request, user=Depends(current_user)):
+        with db(request) as conn:
+            return {"links": tags.orphaned(conn)}
 
     @app.get("/api/overrides/orphaned")
     def orphaned(request: Request, user=Depends(current_user)):

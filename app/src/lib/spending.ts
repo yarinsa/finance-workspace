@@ -21,6 +21,8 @@ export interface SpendingTransaction {
   category: string;
   /** True when a manual override exists for this transaction (ledger API). */
   overridden?: boolean;
+  /** Tag names from the DB `transaction_tags` table, sorted; absent when untagged. */
+  tags?: string[];
 }
 
 export interface ExcludedBucket {

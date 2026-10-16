@@ -5,9 +5,11 @@ import {
   ApiError,
   ApiOffline,
   getCategories,
+  getTags,
   getTransaction,
   ledgerKey,
   patchTransaction,
+  putTags,
   resetTransaction,
   type Horizon,
   type Row,
@@ -31,11 +33,16 @@ export interface EditTarget {
   merchant: string;
   category: string;
   overridden?: boolean;
+  tags?: string[];
 }
+
+const sameTags = (a: string[], b: string[]) => a.length === b.length && a.every((t, i) => t === b[i]);
 
 /**
  * Bottom sheet for editing one transaction through the ledger API: category (picker
- * from `/api/categories` plus free text), note, hide/unhide, and reset to scraped.
+ * from `/api/categories` plus free text), tags (picker from `/api/tags`, type to create),
+ * note, hide/unhide, and reset to scraped. Tags are saved with their own PUT and are not
+ * part of the override, so "reset" leaves them.
  * When the API is unreachable it opens read-only. Writes go to the shared overlay
  * (`useLedgerApi().recordEdit`) so lists and totals update before the rebuild publishes.
  */
@@ -56,6 +63,9 @@ function Body({ tx, onClose }: { tx: EditTarget; onClose: () => void }) {
 
   const [row, setRow] = useState<Row | null>(null);
   const [categories, setCategories] = useState<string[]>([]);
+  const [tagNames, setTagNames] = useState<string[]>([]);
+  const [tags, setTags] = useState<string[]>(known?.tags ?? tx.tags ?? []);
+  const [tagDraft, setTagDraft] = useState("");
   const [form, setForm] = useState<{ category: string; note: string; excluded: boolean; horizon?: Horizon | "clear" }>({
     category: tx.category,
     note: "",
@@ -71,11 +81,13 @@ function Body({ tx, onClose }: { tx: EditTarget; onClose: () => void }) {
   useEffect(() => {
     if (online !== true) return;
     let live = true;
-    void Promise.all([getTransaction(key), getCategories()])
-      .then(([r, cats]) => {
+    void Promise.all([getTransaction(key), getCategories(), getTags()])
+      .then(([r, cats, allTags]) => {
         if (!live) return;
         setRow(r);
         setCategories(cats);
+        setTagNames(allTags.map((t) => t.name));
+        setTags(r.tags ?? []);
         setForm({ category: r.category, note: r.note ?? "", excluded: r.excluded, horizon: r.horizon ?? undefined });
       })
       .catch((e) => {
@@ -92,7 +104,23 @@ function Body({ tx, onClose }: { tx: EditTarget; onClose: () => void }) {
   const baseline = base ?? { category: tx.category, note: null, excluded: false, horizon: null, scraped_horizon: null };
   const shownHorizon = form.horizon === "clear" ? (base?.scraped_horizon ?? null) : (form.horizon ?? null);
   const patch = buildPatch(baseline, form);
-  const dirty = Object.keys(patch).length > 0;
+  const savedTags = base?.tags ?? tx.tags ?? [];
+  const tagsDirty = !sameTags(tags, savedTags);
+  const dirty = Object.keys(patch).length > 0 || tagsDirty;
+
+  const addTag = (raw: string) => {
+    const name = raw.trim().slice(0, 40);
+    setTagDraft("");
+    if (name && !tags.includes(name)) setTags((ts) => [...ts, name].sort((a, b) => a.localeCompare(b, "he")));
+  };
+
+  // PATCH the override fields, then PUT the tag set; the last answer is the row the overlay keeps.
+  const save = async (): Promise<Row> => {
+    let r: Row | null = null;
+    if (Object.keys(patch).length > 0) r = await patchTransaction(key, patch);
+    if (tagsDirty) r = await putTags(key, tags);
+    return r ?? getTransaction(key);
+  };
 
   const run = async (call: () => Promise<Row>) => {
     setBusy(true);
@@ -150,6 +178,57 @@ function Body({ tx, onClose }: { tx: EditTarget; onClose: () => void }) {
             <span className="mt-1 block text-xs text-muted-foreground">מקור: {base.scraped_category}</span>
           )}
         </label>
+
+        <div>
+          <span className="mb-1 block text-xs text-muted-foreground">תגיות</span>
+          <div className="flex flex-wrap items-center gap-1.5 rounded-lg border border-line px-2 py-1.5">
+            {tags.map((t) => (
+              <span key={t} className="inline-flex items-center gap-1 rounded-full border border-brand/40 px-2 py-0.5 text-xs text-brand">
+                #{t}
+                <button
+                  type="button"
+                  aria-label={`הסר ${t}`}
+                  disabled={disabled}
+                  onClick={() => setTags((ts) => ts.filter((x) => x !== t))}
+                  className="disabled:opacity-40"
+                >
+                  ✕
+                </button>
+              </span>
+            ))}
+            <input
+              list="ledger-tags"
+              value={tagDraft}
+              disabled={disabled}
+              maxLength={40}
+              placeholder={tags.length ? "" : "הוסיפו תגית (Enter)"}
+              aria-label="תגית חדשה"
+              className="min-w-[90px] flex-1 bg-transparent py-0.5 text-sm outline-none"
+              onChange={(e) => {
+                const v = e.target.value;
+                // Picking a datalist option fills the whole value at once: add it straight away.
+                if (tagNames.includes(v) && !tags.includes(v)) addTag(v);
+                else setTagDraft(v);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === ",") {
+                  e.preventDefault();
+                  addTag(tagDraft);
+                } else if (e.key === "Backspace" && tagDraft === "" && tags.length) {
+                  setTags((ts) => ts.slice(0, -1));
+                }
+              }}
+              onBlur={() => tagDraft && addTag(tagDraft)}
+            />
+            <datalist id="ledger-tags">
+              {tagNames
+                .filter((t) => !tags.includes(t))
+                .map((t) => (
+                  <option key={t} value={t} />
+                ))}
+            </datalist>
+          </div>
+        </div>
 
         <label className="block">
           <span className="mb-1 block text-xs text-muted-foreground">הערה</span>
@@ -211,7 +290,7 @@ function Body({ tx, onClose }: { tx: EditTarget; onClose: () => void }) {
           <button
             type="button"
             disabled={disabled || !dirty}
-            onClick={() => void run(() => patchTransaction(key, patch))}
+            onClick={() => void run(save)}
             className="flex-1 rounded-lg bg-brand px-3 py-2.5 text-sm font-semibold text-white disabled:opacity-40"
           >
             {busy ? "שומר…" : "שמירה"}
