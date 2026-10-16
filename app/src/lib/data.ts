@@ -164,6 +164,30 @@ export interface Cashflow {
   months?: unknown[];
   /** Month-by-month cashflow (past actuals, current month, projected months); absent until the pipeline emits it. */
   months_view?: MonthsView;
+  /** Net income split across current / near-future / future me (data/horizons.py); absent until emitted. */
+  horizons?: Horizons;
+}
+
+export interface HorizonBucket {
+  amount: number;
+  /** Share of the month's net income, in percent. */
+  pct: number;
+  /** pct minus target_pct, in percentage points. */
+  gap_pts: number;
+  count: number;
+  top: { date: string; description: string; amount: number; overridden: boolean }[];
+}
+
+export interface Horizons {
+  target_pct: number;
+  horizons: ("current" | "near" | "future")[];
+  /** Newest first. */
+  months: {
+    month: string;
+    income: number;
+    buckets: Record<"current" | "near" | "future", HorizonBucket>;
+    unallocated: { amount: number; pct: number };
+  }[];
 }
 
 export interface MonthGroup {

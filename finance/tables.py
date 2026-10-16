@@ -40,13 +40,17 @@ class ScrapedTransaction(SQLModel, table=True):
 class TransactionOverride(SQLModel, table=True):
     """Human layer: sparse edits, kept forever. Null falls through to the scraped value."""
     __tablename__ = "transaction_overrides"
-    __table_args__ = (CheckConstraint("abs_amount >= 0", name="transaction_overrides_abs_amount_check"),)
+    __table_args__ = (
+        CheckConstraint("abs_amount >= 0", name="transaction_overrides_abs_amount_check"),
+        CheckConstraint("horizon IN ('current', 'near', 'future')", name="transaction_overrides_horizon_check"),
+    )
 
     txn_date: dt.date = Field(primary_key=True)
     abs_amount: Decimal = Field(primary_key=True, sa_type=Money)
     category: str | None = Field(default=None, sa_type=Text)
     note: str | None = Field(default=None, sa_type=Text)
     excluded: bool = Field(default=False, sa_column_kwargs={"server_default": text("false")})
+    horizon: str | None = Field(default=None, sa_type=Text)   # current | near | future (data/horizons.py)
     created_at: dt.datetime | None = Field(default=None, sa_column=_now())
     updated_at: dt.datetime | None = Field(default=None, sa_column=_now())
 

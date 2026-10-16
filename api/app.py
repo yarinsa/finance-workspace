@@ -34,12 +34,13 @@ AMOUNT = re.compile(r"^\d{1,10}(\.\d{1,2})?$")
 
 
 class Patch(BaseModel):
-    """Any of the three fields; null clears that field. Unknown fields are rejected."""
+    """Any of the override fields; null clears that field. Unknown fields are rejected."""
     model_config = ConfigDict(extra="forbid")
 
     category: str | None = Field(default=None, max_length=64)
     note: str | None = Field(default=None, max_length=500)
     excluded: bool | None = None
+    horizon: Literal["current", "near", "future"] | None = None
 
     @field_validator("category", "note")
     @classmethod
@@ -175,7 +176,7 @@ def create_app(settings=None, pool=None, rebuilder=None, verifier=None):
         except ValidationError as e:
             raise ApiError(422, "invalid", _first_error(e.errors())) from None
         if not body.model_fields_set:
-            raise ApiError(422, "invalid", "send at least one of category, note, excluded")
+            raise ApiError(422, "invalid", "send at least one of category, note, excluded, horizon")
 
         def work():
             with db(request) as conn:

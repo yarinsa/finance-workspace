@@ -102,4 +102,13 @@ describe("buildPatch", () => {
       note: null,
     });
   });
+
+  it("sets a horizon and clears only a real override", () => {
+    const h = { ...base, horizon: "current" as const, scraped_horizon: "current" as const };
+    expect(buildPatch(h, { category: "מסעדות", note: "", excluded: false, horizon: "future" })).toEqual({ horizon: "future" });
+    expect(buildPatch(h, { category: "מסעדות", note: "", excluded: false, horizon: "clear" })).toEqual({});
+    expect(
+      buildPatch({ ...h, horizon: "near" }, { category: "מסעדות", note: "", excluded: false, horizon: "clear" }),
+    ).toEqual({ horizon: null });
+  });
 });

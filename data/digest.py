@@ -13,6 +13,7 @@ import json, datetime, glob, os, re, subprocess, sys
 from pathlib import Path
 
 import freshness
+import horizons
 
 ROOT = Path(__file__).resolve().parent          # .../Finance/data
 OUT = ROOT / "digested"
@@ -316,6 +317,7 @@ def consolidate_transactions(txns):
     for t in buckets.values():
         t.pop("_riseup", None)
         t.pop("_legs", None)
+        t["horizon"] = horizons.default_horizon(t)   # a manual override replaces it in the view
         out.append({k: v for k, v in t.items() if v is not None})
     out.sort(key=lambda r: r["date"], reverse=True)
     return out

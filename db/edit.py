@@ -7,9 +7,10 @@ ignored, as in the dedup key):
     .venv/bin/python db/edit.py show     2026-01-15 123.45
     .venv/bin/python db/edit.py category 2026-01-15 123.45 "אלקטרוניקה"
     .venv/bin/python db/edit.py note     2026-01-15 123.45 "gift"
+    .venv/bin/python db/edit.py horizon  2026-01-15 123.45 future    # current | near | future (who it's for)
     .venv/bin/python db/edit.py exclude  2026-01-15 123.45        # hide from the ledger and every total
     .venv/bin/python db/edit.py include  2026-01-15 123.45        # undo exclude
-    .venv/bin/python db/edit.py clear    2026-01-15 123.45 [category|note]   # drop one field, or the whole override
+    .venv/bin/python db/edit.py clear    2026-01-15 123.45 [category|note|horizon]   # drop one field, or the whole override
     .venv/bin/python db/edit.py list [--orphaned]
 
 After a change it rebuilds the digested outputs (digest --no-normalize ->
@@ -25,19 +26,19 @@ import overrides
 
 REPO = Path(__file__).resolve().parent.parent
 REBUILD = [["digest.py", "--no-normalize"], ["validate.py"], ["forecast.py"], ["cashflow.py"], ["goals.py"]]
-FIELDS = ("category", "note")
+FIELDS = ("category", "note", "horizon")
 ACTOR = "cli"   # the audit actor for edits made from this script
 
 
 def find(conn, k):
     return conn.execute(
-        "SELECT txn_date, amount, description, category, scraped_category, note, overridden "
+        "SELECT txn_date, amount, description, category, scraped_category, note, overridden, horizon "
         "FROM transactions WHERE (txn_date, abs_amount) = (%s, %s)", k).fetchone()
 
 
 def override(conn, k):
     return conn.execute(
-        "SELECT category, note, excluded FROM transaction_overrides "
+        "SELECT category, note, excluded, horizon FROM transaction_overrides "
         "WHERE (txn_date, abs_amount) = (%s, %s)", k).fetchone()
 
 
@@ -55,9 +56,11 @@ def show(conn, k):
     row = find(conn, k)
     o = override(conn, k)
     if row:
-        d, amt, desc, cat, scraped, note, _ = row
+        d, amt, desc, cat, scraped, note, _, horizon = row
         print(f"{d}  {amt:>10}  {desc}")
         print(f"  category: {cat}" + (f"   (scraped: {scraped})" if cat != scraped else ""))
+        if horizon:
+            print(f"  horizon:  {horizon}")
         if note:
             print(f"  note:     {note}")
     elif o and o[2]:
@@ -65,17 +68,18 @@ def show(conn, k):
     else:
         print(f"{k[0]}  {k[1]}  no such transaction")
     if o:
-        print(f"  override: category={o[0]!r} note={o[1]!r} excluded={o[2]}")
+        print(f"  override: category={o[0]!r} note={o[1]!r} excluded={o[2]} horizon={o[3]!r}")
 
 
 def list_overrides(conn, orphaned_only):
     view = "orphaned_overrides" if orphaned_only else "transaction_overrides"
     rows = conn.execute(
-        f"SELECT o.txn_date, o.abs_amount, s.description, o.category, o.note, o.excluded "
+        f"SELECT o.txn_date, o.abs_amount, s.description, o.category, o.note, o.excluded, o.horizon "
         f"FROM {view} o LEFT JOIN scraped_transactions s USING (txn_date, abs_amount) "
         f"ORDER BY o.txn_date DESC").fetchall()
-    for d, amt, desc, cat, note, excl in rows:
+    for d, amt, desc, cat, note, excl, horizon in rows:
         bits = [f"category={cat}" if cat else "", f"note={note}" if note else "",
+                f"horizon={horizon}" if horizon else "",
                 "excluded" if excl else "", "" if desc is not None else "ORPHANED"]
         print(f"{d}  {amt:>10}  {desc or '-'}  " + "  ".join(b for b in bits if b))
     print(f"{len(rows)} override(s)")
@@ -103,11 +107,13 @@ def main(argv):
         args = rest[2:]
         if cmd == "show":
             return show(conn, k)
-        if cmd in ("category", "note", "exclude", "include") and not exists(conn, k):
+        if cmd in ("category", "note", "horizon", "exclude", "include") and not exists(conn, k):
             raise SystemExit(f"no transaction on {k[0]} for {k[1]} (try `show`, or check the date)")
         if cmd in FIELDS:
             if len(args) != 1:
                 raise SystemExit(f"usage: edit.py {cmd} DATE AMOUNT VALUE")
+            if cmd == "horizon" and args[0] not in overrides.HORIZONS:
+                raise SystemExit(f"horizon is one of {overrides.HORIZONS}")
             set_field(conn, k, cmd, args[0])
         elif cmd == "exclude":
             set_field(conn, k, "excluded", True)
