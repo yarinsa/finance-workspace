@@ -20,9 +20,14 @@ def k(t):
     return ledger.key(t["date"], t["amount"])
 
 
+def plain(rows):
+    """Ledger rows without the `category_id` the view adds."""
+    return [{f: v for f, v in r.items() if f != "category_id"} for r in rows]
+
+
 def test_round_trip_without_overrides_is_identity(conn):
     # No edits: digest must get back exactly what it sent, in the same order.
-    assert ledger.sync(conn, LEDGER) == LEDGER
+    assert plain(ledger.sync(conn, LEDGER)) == LEDGER
 
 
 def test_category_override_survives_reimport(conn):
@@ -35,7 +40,7 @@ def test_category_override_survives_reimport(conn):
     assert row["category"] == "אלקטרוניקה"
     assert row["overridden"] is True
     assert row["description"] == CAL_PURCHASE["description"]   # untouched fields fall through
-    assert out[1:] == [SALARY, CARD_BILL]
+    assert plain(out[1:]) == [SALARY, CARD_BILL]
 
 
 def test_scraper_updates_still_flow_through_unedited_fields(conn):
@@ -53,7 +58,7 @@ def test_excluded_row_is_hidden_and_include_restores_it(conn):
     edit.set_field(conn, k(SALARY), "excluded", True)
     assert [t["date"] for t in ledger.sync(conn, LEDGER)] == ["2026-01-15", "2026-01-02"]
     edit.set_field(conn, k(SALARY), "excluded", False)
-    assert ledger.sync(conn, LEDGER) == LEDGER                 # empty override is pruned
+    assert plain(ledger.sync(conn, LEDGER)) == LEDGER          # empty override is pruned
     assert conn.execute("SELECT count(*) FROM transaction_overrides").fetchone()[0] == 0
 
 
@@ -71,3 +76,26 @@ def test_override_whose_transaction_vanished_is_reported_orphaned(conn):
     ledger.sync(conn, [{**CAL_PURCHASE, "amount": -123.40}, SALARY, CARD_BILL])
     orphans = ledger.orphaned(conn)
     assert [(str(d), str(a)) for d, a, *_ in orphans] == [("2026-01-15", "123.45")]
+
+
+def test_riseup_categories_seed_the_table_and_are_assigned_by_id(conn):
+    # RiseUp's labels become rows in `categories`; each row points at one by id.
+    out = ledger.sync(conn, LEDGER)
+    ids = dict(conn.execute("SELECT name, id FROM categories WHERE source = 'riseup'").fetchall())
+    assert set(ids) == {"קניות", "משכורת"}
+    assert [r.get("category_id") for r in out] == [ids["קניות"], ids["משכורת"], None]
+
+
+def test_a_category_only_the_bank_gave_is_not_assigned(conn):
+    # As the household, a CAL row RiseUp never saw keeps no category: only RiseUp's are copied.
+    bank_only = {"date": "2026-01-20", "amount": -80.0, "description": "חנות בחו\"ל",
+                 "category": "תיירות יוצאת קניות", "origin": "cal", "sources": ["cal"]}
+    row = ledger.sync(conn, [bank_only])[0]
+    assert "category" not in row and "category_id" not in row
+    assert conn.execute("SELECT count(*) FROM categories WHERE name = 'תיירות יוצאת קניות'").fetchone()[0] == 0
+
+
+def test_manual_category_is_added_as_a_user_category(conn):
+    ledger.load(conn, LEDGER)
+    edit.set_field(conn, k(CAL_PURCHASE), "category", "אלקטרוניקה")
+    assert conn.execute("SELECT source FROM categories WHERE name = 'אלקטרוניקה'").fetchone()[0] == "user"

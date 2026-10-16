@@ -38,8 +38,9 @@ def find(conn, k):
 
 def override(conn, k):
     return conn.execute(
-        "SELECT category, note, excluded, horizon FROM transaction_overrides "
-        "WHERE (txn_date, abs_amount) = (%s, %s)", k).fetchone()
+        "SELECT c.name, o.note, o.excluded, o.horizon FROM transaction_overrides o "
+        "LEFT JOIN categories c ON c.id = o.category_id "
+        "WHERE (o.txn_date, o.abs_amount) = (%s, %s)", k).fetchone()
 
 
 def exists(conn, k):
@@ -74,8 +75,9 @@ def show(conn, k):
 def list_overrides(conn, orphaned_only):
     view = "orphaned_overrides" if orphaned_only else "transaction_overrides"
     rows = conn.execute(
-        f"SELECT o.txn_date, o.abs_amount, s.description, o.category, o.note, o.excluded, o.horizon "
+        f"SELECT o.txn_date, o.abs_amount, s.description, c.name, o.note, o.excluded, o.horizon "
         f"FROM {view} o LEFT JOIN scraped_transactions s USING (txn_date, abs_amount) "
+        f"LEFT JOIN categories c ON c.id = o.category_id "
         f"ORDER BY o.txn_date DESC").fetchall()
     for d, amt, desc, cat, note, excl, horizon in rows:
         bits = [f"category={cat}" if cat else "", f"note={note}" if note else "",

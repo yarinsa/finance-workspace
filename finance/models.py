@@ -152,6 +152,7 @@ class LedgerTransaction(Record):
     sources: list[str] = []
     origin: str | None = None
     category: str | None = None
+    category_id: int | None = None   # set by the transactions view: id in the `categories` table
     is_income: bool | None = None
     account_id: str | None = None
     card_last4: str | None = None

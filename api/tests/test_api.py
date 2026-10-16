@@ -286,11 +286,11 @@ def test_key_ignores_sign_and_trailing_zeros(client):
     assert r.status_code == 200 and r.json()["abs_amount"] == "1000.00"
 
 
-def test_categories_are_distinct_scraped_plus_overrides_sorted(client):
+def test_categories_are_the_riseup_ones_plus_user_added_sorted(client):
     client.patch(PURCHASE_URL, json={"category": "אלקטרוניקה"}, headers=WRITE)
     cats = client.get("/api/categories").json()["categories"]
     assert cats == sorted(set(cats))
-    assert {"אלקטרוניקה", "משכורת", "חיובי כרטיס", "קניות"} == set(cats)
+    assert {"אלקטרוניקה", "קניות"} == set(cats)   # only the purchase has a RiseUp category
 
 
 def test_orphaned_overrides_listed(client, owner):

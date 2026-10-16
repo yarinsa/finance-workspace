@@ -1,3 +1,4 @@
+import CategoryTag from "@/components/CategoryTag";
 import { useSearchParams } from "react-router-dom";
 import { useMemo, useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
@@ -214,8 +215,9 @@ export default function Spending() {
                       <i className="size-2.5 shrink-0 rounded-full" style={{ background: catColor(t.category) }} />
                       <div className="min-w-0 flex-1">
                         <div className="truncate">{t.merchant}</div>
-                        <div className="text-xs text-muted-foreground">
-                          {dayLabel(t.date)} · {t.category}
+                        <div className="mt-0.5 flex items-center gap-1.5 text-xs text-muted-foreground">
+                          <CategoryTag name={t.category} />
+                          <span>{dayLabel(t.date)}</span>
                           {t.overridden || overlayFor(overlay, t)?.overridden ? (
                             <span className="ms-1.5 rounded-full bg-brand/15 px-1.5 py-px text-[10px] font-semibold">נערך</span>
                           ) : null}
