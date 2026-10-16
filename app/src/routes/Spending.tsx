@@ -9,12 +9,22 @@ import { noAnim, useChartColors } from "@/components/chartTheme";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import TransactionEditSheet, { type EditTarget } from "@/components/TransactionEditSheet";
 import HiddenTransactionsSheet from "@/components/HiddenTransactionsSheet";
+import { Input } from "@/components/ui/input";
 import { cashflow, monthYear, pct, shekel, useDataVersion } from "@/lib/data";
 import { applyOverlay, overlayFor } from "@/lib/ledgerOverlay";
 import { useLedgerApi } from "@/lib/useLedgerApi";
 
 function dayLabel(iso: string): string {
   return `${iso.slice(8, 10)}/${iso.slice(5, 7)}`;
+}
+
+/** Case-insensitive match on merchant name, or on the amount's digits ("120" finds ₪1,205.50). */
+function matchesQuery(t: { merchant: string; amount: number }, query: string): boolean {
+  const q = query.trim().toLowerCase();
+  if (!q) return true;
+  if (t.merchant.toLowerCase().includes(q)) return true;
+  const digits = q.replace(/[^\d.]/g, "");
+  return digits !== "" && String(Math.abs(t.amount)).includes(digits);
 }
 
 /** Month spending explorer (PRD 12 Phase 3): donut, transactions / categories / merchants. */
@@ -33,6 +43,7 @@ export default function Spending() {
   const [tab, setTab] = useState("transactions");
   const [cat, setCat] = useState<string | null>(params.get("cat"));
   const [merchant, setMerchant] = useState<string | null>(null);
+  const [query, setQuery] = useState("");
 
   if (!months.length) {
     return (
@@ -54,7 +65,10 @@ export default function Spending() {
   };
   const selected = cat ? m.by_category.find((c) => c.name === cat) ?? null : null;
   const txs = m.transactions.filter(
-    (t) => (!selected || t.category === selected.name) && (!merchant || t.merchant === merchant),
+    (t) =>
+      (!selected || t.category === selected.name) &&
+      (!merchant || t.merchant === merchant) &&
+      matchesQuery(t, query),
   );
   const maxCat = m.by_category[0]?.amount || 1;
   const maxMerchant = m.by_merchant[0]?.amount || 1;
@@ -202,6 +216,14 @@ export default function Spending() {
           </TabsList>
 
           <TabsContent value="transactions">
+            <Input
+              type="search"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="חיפוש בית עסק או סכום"
+              aria-label="חיפוש תנועות"
+              className="mb-2"
+            />
             {selected || merchant ? (
               <button
                 type="button"
