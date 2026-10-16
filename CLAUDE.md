@@ -319,6 +319,7 @@ One Poetry project (`pyproject.toml`, in-project `.venv`) covers `data/`, `db/` 
   `db/ledger.py` on every connect. Changing a table:
   `poetry run alembic -c db/alembic.ini revision --autogenerate -m "…"`, review,
   commit. `db/tests/test_schema.py` fails when the migrated DB and the models drift.
+  The full procedure is the `schema-change` skill.
 
 ## Testing
 
