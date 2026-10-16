@@ -5,7 +5,7 @@
     transaction_overrides  human layer (category / note / excluded), kept forever
     transactions           view: the ledger with overrides applied
 
-`python3 db/ledger.py sync` is how data/digest.py uses it: the consolidated
+`python3 db/ledger.py migrate` only applies migrations. `python3 db/ledger.py sync` is how data/digest.py uses it: the consolidated
 ledger arrives as JSON on stdin, is imported, and the `transactions` view comes
 back on stdout in the same order. Rows are keyed on the ledger's dedup key,
 (date, abs(amount)).
@@ -18,6 +18,7 @@ from decimal import Decimal
 from pathlib import Path
 
 import psycopg
+from psycopg import sql
 from psycopg.types.json import Jsonb
 
 from finance.models import LedgerTransaction
@@ -26,16 +27,29 @@ REPO = Path(__file__).resolve().parent.parent
 ALEMBIC_INI = Path(__file__).resolve().parent / "alembic.ini"
 
 
-def database_url(env_file=REPO / ".env"):
-    """DATABASE_URL from the environment, else from .env (read literally)."""
-    url = os.environ.get("DATABASE_URL")
-    if url:
-        return url
+def env_value(name, env_file=REPO / ".env"):
+    """`name` from the environment, else from .env (read literally, no ${...} expansion)."""
+    value = os.environ.get(name)
+    if value:
+        return value
     if env_file.exists():
         for line in env_file.read_text().splitlines():
-            if line.startswith("DATABASE_URL="):
-                return line.split("=", 1)[1].strip().strip("'\"")
+            if line.startswith(f"{name}="):
+                return line.split("=", 1)[1].strip().strip("'\"") or None
     return None
+
+
+def database_url(env_file=REPO / ".env"):
+    """DATABASE_URL from the environment, else from .env (read literally)."""
+    return env_value("DATABASE_URL", env_file)
+
+
+def set_api_role_password(conn, password):
+    """Let the `finance_api` role log in (the migration creates it NOLOGIN).
+
+    DDL cannot take bind parameters, so the password goes in as a quoted literal."""
+    conn.execute(sql.SQL("ALTER ROLE finance_api LOGIN PASSWORD {}").format(sql.Literal(password)))
+    conn.commit()
 
 
 def sqlalchemy_url(url):
@@ -65,7 +79,11 @@ def connect(url=None):
     if not url:
         raise SystemExit("DATABASE_URL is not set (env or .env)")
     migrate(url)
-    return psycopg.connect(url)
+    conn = psycopg.connect(url)
+    password = env_value("FINANCE_API_DB_PASSWORD")
+    if password:
+        set_api_role_password(conn, password)
+    return conn
 
 
 def key(date, amount):
@@ -112,8 +130,12 @@ def sync(conn, ledger):
 
 
 def main():
+    if sys.argv[1:] == ["migrate"]:
+        connect().close()   # upgrade head, and set the finance_api login password if configured
+        print("db: schema is at head", file=sys.stderr)
+        return
     if sys.argv[1:] != ["sync"]:
-        raise SystemExit("usage: ledger.py sync  < ledger.json  > ledger.json")
+        raise SystemExit("usage: ledger.py sync  < ledger.json  > ledger.json\n       ledger.py migrate")
     ledger = json.load(sys.stdin)
     with connect() as conn:
         out = sync(conn, ledger)

@@ -10,7 +10,7 @@ The `transactions` and `orphaned_overrides` views are plain SQL in the migration
 import datetime as dt
 from decimal import Decimal
 
-from sqlalchemy import ARRAY, CheckConstraint, Column, Numeric, Text, text
+from sqlalchemy import ARRAY, BigInteger, CheckConstraint, Column, Numeric, Text, text
 from sqlalchemy.dialects.postgresql import JSONB, TIMESTAMP
 from sqlmodel import Field, SQLModel
 
@@ -49,3 +49,20 @@ class TransactionOverride(SQLModel, table=True):
     excluded: bool = Field(default=False, sa_column_kwargs={"server_default": text("false")})
     created_at: dt.datetime | None = Field(default=None, sa_column=_now())
     updated_at: dt.datetime | None = Field(default=None, sa_column=_now())
+
+
+class OverrideAudit(SQLModel, table=True):
+    """Append-only log of every override change: who, which field, old and new value.
+
+    `old`/`new` are jsonb scalars (a string, a boolean or null). A reset writes one row
+    per field that was set. Written by db/overrides.py for both the CLI and the API."""
+    __tablename__ = "override_audit"
+
+    id: int | None = Field(default=None, sa_column=Column(BigInteger, primary_key=True, autoincrement=True))
+    at: dt.datetime | None = Field(default=None, sa_column=_now())
+    actor: str = Field(sa_type=Text)
+    txn_date: dt.date | None = Field(default=None)
+    abs_amount: Decimal | None = Field(default=None, sa_type=Money)
+    field: str | None = Field(default=None, sa_type=Text)
+    old: object | None = Field(default=None, sa_column=Column(JSONB))
+    new: object | None = Field(default=None, sa_column=Column(JSONB))
