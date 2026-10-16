@@ -178,6 +178,10 @@ def test_malformed_requests_are_400(client, body):
     assert r.status_code == 400
 
 
+# Pairs related directly (1:M) rather than through transactions: a goal's horizon is one object.
+ONE_SIDED = {("Goal", "horizons")}
+
+
 def test_every_group_entity_connects_to_every_other():
     # a new GroupResolver in ENTITIES needs its root field and an M:M field on each peer in the SDL
     from api.gql.endpoint import SCHEMA
@@ -185,7 +189,7 @@ def test_every_group_entity_connects_to_every_other():
     for a in ENTITIES:
         assert a.plural in SCHEMA.query_type.fields, a.type_name
         for b in ENTITIES:
-            if a is not b:
+            if a is not b and (a.type_name, b.plural) not in ONE_SIDED:
                 field = SCHEMA.type_map[a.type_name].fields.get(b.plural)
                 assert field is not None and field.resolve is not None, f"{a.type_name}.{b.plural}"
 
@@ -197,7 +201,7 @@ from api.gql.relay import to_global_id  # noqa: E402
 PURCHASE_ID = to_global_id("Transaction", "2026-01-15:123.45")
 
 UPDATE = """mutation($input: UpdateTransactionInput!) { updateTransaction(input: $input) {
-  clientMutationId transaction { id category { name source } note excluded horizon overridden } } }"""
+  clientMutationId transaction { id category { name source } note excluded horizon { key } overridden } } }"""
 
 
 def test_update_transaction_sets_fields_audits_and_signals_one_rebuild(client, owner, rebuilder):
@@ -206,7 +210,8 @@ def test_update_transaction_sets_fields_audits_and_signals_one_rebuild(client, o
     p = out["updateTransaction"]
     assert p["clientMutationId"] == "m1"
     assert p["transaction"] == {"id": PURCHASE_ID, "category": {"name": "מתנות", "source": "USER"},
-                                "note": "יום הולדת", "excluded": False, "horizon": "NEAR", "overridden": True}
+                                "note": "יום הולדת", "excluded": False, "horizon": {"key": "NEAR"},
+                                "overridden": True}
     fields = {r[0] for r in owner.execute("SELECT field FROM override_audit")}
     assert fields == {"category", "note", "horizon"}
     assert rebuilder.signals == 1
@@ -286,3 +291,65 @@ def test_two_mutations_in_one_request_run_in_order_and_signal_once(client, rebui
 def test_mutations_need_the_csrf_headers(client, rebuilder):
     r = client.post(GQL, json={"query": UPDATE, "variables": {"input": {"id": PURCHASE_ID, "note": "x"}}})
     assert r.status_code == 403 and rebuilder.signals == 0
+
+
+# --- horizons and goals ------------------------------------------------------------------
+
+CREATE_GOAL = """mutation($input: CreateGoalInput!) { createGoal(input: $input) {
+  clientMutationId goal { id slug description amount endDate interval repetitions rise horizon { key } } } }"""
+
+
+def _goal(client, **over):
+    inp = {"description": "קרן חירום", "amount": "30000", "endDate": "2027-06-30", "horizon": "NEAR", **over}
+    return data(client, CREATE_GOAL, input=inp)["createGoal"]["goal"]
+
+
+def test_horizons_root_lists_the_fixed_three_in_position_order(client):
+    q = "{ horizons { totalCount edges { node { key name targetPct } totals { count } } } }"
+    conn = data(client, q)["horizons"]
+    assert conn["totalCount"] == 3
+    assert [e["node"]["key"] for e in conn["edges"]] == ["CURRENT", "NEAR", "FUTURE"]
+
+
+def test_create_goal_with_typed_money_and_a_horizon(client, rebuilder):
+    g = _goal(client)
+    assert g["description"] == "קרן חירום" and g["amount"] == "30000.00" and g["rise"] == "0.00"
+    assert g["endDate"] == "2027-06-30" and g["horizon"] == {"key": "NEAR"} and g["repetitions"] == 1
+    assert rebuilder.signals == 1
+
+
+def test_assigning_a_transaction_to_a_goal_shows_on_goal_and_horizon(client):
+    g = _goal(client)
+    data(client, UPDATE, input={"id": PURCHASE_ID, "goalId": g["id"], "horizon": "NEAR"})
+    q = """query($id: ID!) { node(id: $id) { ... on Goal { transactions { totalCount sum }
+           horizon { goals { edges { node { description } totals { count sum } } } } } } }"""
+    node = data(client, q, id=g["id"])["node"]
+    assert node["transactions"] == {"totalCount": 1, "sum": "-123.45"}
+    assert node["horizon"]["goals"]["edges"] == [{"node": {"description": "קרן חירום"},
+                                                  "totals": {"count": 1, "sum": "-123.45"}}]
+    q = "{ transactions(filter: {goalIds: [\"%s\"]}) { totalCount } }" % g["id"]
+    assert data(client, q)["transactions"]["totalCount"] == 1
+
+
+def test_assigning_an_unknown_goal_is_an_error(client):
+    status, body = gql(client, UPDATE, input={"id": PURCHASE_ID, "goalId": to_global_id("Goal", "999")})
+    assert body["errors"][0]["message"] == "no such goal"
+
+
+def test_update_goal_and_refuse_clearing_required_fields(client):
+    g = _goal(client)
+    q = """mutation($input: UpdateGoalInput!) { updateGoal(input: $input) { goal { amount interval horizon { key } } } }"""
+    out = data(client, q, input={"id": g["id"], "amount": "35000.50", "interval": "YEARLY", "horizon": None})
+    assert out["updateGoal"]["goal"] == {"amount": "35000.50", "interval": "YEARLY", "horizon": None}
+    status, body = gql(client, q, input={"id": g["id"], "description": None})
+    assert "cannot be cleared" in body["errors"][0]["message"]
+
+
+def test_delete_goal_unassigns_its_transactions(client):
+    g = _goal(client)
+    data(client, UPDATE, input={"id": PURCHASE_ID, "goalId": g["id"]})
+    q = "mutation($id: ID!) { deleteGoal(input: {id: $id}) { deletedGoalId } }"
+    assert data(client, q, id=g["id"])["deleteGoal"]["deletedGoalId"] == g["id"]
+    t = data(client, "query($id: ID!) { node(id: $id) { ... on Transaction { goal { id } overridden } } }",
+             id=PURCHASE_ID)["node"]
+    assert t == {"goal": None, "overridden": False}   # the override held only the goal, so it is pruned

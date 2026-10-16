@@ -9,8 +9,8 @@ enum Direction {
   INCOME
 }
 
-"""When the money matters to cashflow (data/horizons.py)."""
-enum Horizon {
+"""A horizon's stable code (the `horizons` table's `key`)."""
+enum HorizonKey {
   CURRENT
   NEAR
   FUTURE
@@ -43,6 +43,8 @@ type Transaction implements Node {
   excluded: Boolean!
   overridden: Boolean!
   horizon: Horizon
+  """The savings goal this transaction is assigned to, by hand."""
+  goal: Goal
   """Best-effort source of the row (cal, amex, discount, leumi, …)."""
   origin: String
   sources: [String!]!
@@ -81,6 +83,8 @@ input TransactionFilter {
   categoryIds: [ID!]
   tagIds: [ID!]
   merchantId: ID
+  horizonIds: [ID!]
+  goalIds: [ID!]
   """Substring match on the description."""
   search: String
   """Rows marked excluded are hidden unless this is true."""
@@ -102,6 +106,7 @@ type TransactionTotals {
 
 """How to order a connection of grouped transactions (merchants, categories, tags)."""
 enum GroupOrder {
+  """By name; horizons in their fixed order (current, near, future)."""
   NAME_ASC
   COUNT_DESC
   """Largest absolute sum first: the biggest spend or income."""
@@ -121,6 +126,12 @@ type Merchant implements Node {
   """The tags on this merchant's transactions; edge totals are this merchant's share."""
   tags(first: Int, after: String, last: Int, before: String,
        dateRange: DateRange, orderBy: GroupOrder = TOTAL_DESC): TagConnection!
+  """The horizons of this merchant's transactions; edge totals are this merchant's share."""
+  horizons(first: Int, after: String, last: Int, before: String,
+           dateRange: DateRange, orderBy: GroupOrder = TOTAL_DESC): HorizonConnection!
+  """The goals of this merchant's transactions; edge totals are this merchant's share."""
+  goals(first: Int, after: String, last: Int, before: String,
+        dateRange: DateRange, orderBy: GroupOrder = TOTAL_DESC): GoalConnection!
 }
 
 type MerchantEdge {
@@ -148,6 +159,12 @@ type Category implements Node {
   """The tags on this category's transactions; edge totals are the category's share."""
   tags(first: Int, after: String, last: Int, before: String,
        dateRange: DateRange, orderBy: GroupOrder = TOTAL_DESC): TagConnection!
+  """The horizons of the category's transactions; edge totals are the category's share."""
+  horizons(first: Int, after: String, last: Int, before: String,
+           dateRange: DateRange, orderBy: GroupOrder = TOTAL_DESC): HorizonConnection!
+  """The goals of the category's transactions; edge totals are the category's share."""
+  goals(first: Int, after: String, last: Int, before: String,
+        dateRange: DateRange, orderBy: GroupOrder = TOTAL_DESC): GoalConnection!
 }
 
 enum CategorySource {
@@ -181,6 +198,12 @@ type Tag implements Node {
   """The categories of this tag's transactions; edge totals are the tag's share."""
   categories(first: Int, after: String, last: Int, before: String,
              dateRange: DateRange, orderBy: GroupOrder = TOTAL_DESC): CategoryConnection!
+  """The horizons of the tag's transactions; edge totals are the tag's share."""
+  horizons(first: Int, after: String, last: Int, before: String,
+           dateRange: DateRange, orderBy: GroupOrder = TOTAL_DESC): HorizonConnection!
+  """The goals of the tag's transactions; edge totals are the tag's share."""
+  goals(first: Int, after: String, last: Int, before: String,
+        dateRange: DateRange, orderBy: GroupOrder = TOTAL_DESC): GoalConnection!
 }
 
 type TagEdge {
@@ -193,6 +216,89 @@ type TagEdge {
 
 type TagConnection {
   edges: [TagEdge!]!
+  pageInfo: PageInfo!
+  totalCount: Int!
+}
+
+"""
+Who a shekel out is for: current me, near-future me, future me (data/horizons.py).
+A fixed list; `targetPct` is the share of net income aimed at it.
+"""
+type Horizon implements Node {
+  id: ID!
+  key: HorizonKey!
+  name: String!
+  targetPct: Float!
+  position: Int!
+  transactions(first: Int, after: String, last: Int, before: String,
+               filter: TransactionFilter, orderBy: TransactionOrder = DATE_DESC): TransactionConnection!
+  """The goals assigned to this horizon; edge totals are each goal's transactions."""
+  goals(first: Int, after: String, last: Int, before: String,
+        dateRange: DateRange, orderBy: GroupOrder = TOTAL_DESC): GoalConnection!
+  """The merchants of this horizon's transactions; edge totals are the horizon's share."""
+  merchants(first: Int, after: String, last: Int, before: String,
+            dateRange: DateRange, orderBy: GroupOrder = TOTAL_DESC): MerchantConnection!
+  """The categories of this horizon's transactions; edge totals are the horizon's share."""
+  categories(first: Int, after: String, last: Int, before: String,
+             dateRange: DateRange, orderBy: GroupOrder = TOTAL_DESC): CategoryConnection!
+  """The tags of this horizon's transactions; edge totals are the horizon's share."""
+  tags(first: Int, after: String, last: Int, before: String,
+       dateRange: DateRange, orderBy: GroupOrder = TOTAL_DESC): TagConnection!
+}
+
+type HorizonEdge {
+  node: Horizon!
+  cursor: String!
+  totals: TransactionTotals!
+}
+
+type HorizonConnection {
+  edges: [HorizonEdge!]!
+  pageInfo: PageInfo!
+  totalCount: Int!
+}
+
+enum GoalInterval {
+  MONTHLY
+  YEARLY
+}
+
+"""A personal savings goal (docs/plangram-prd/04-goals.md); transactions are assigned to it by hand."""
+type Goal implements Node {
+  id: ID!
+  """The goal's stable string id from the old JSON store."""
+  slug: String!
+  description: String!
+  amount: Money!
+  startDate: Date
+  endDate: Date
+  interval: GoalInterval
+  repetitions: Int!
+  """Yearly increase of `amount`."""
+  rise: Money!
+  fromAssetId: String
+  horizon: Horizon
+  transactions(first: Int, after: String, last: Int, before: String,
+               filter: TransactionFilter, orderBy: TransactionOrder = DATE_DESC): TransactionConnection!
+  """The merchants of this goal's transactions; edge totals are the goal's share."""
+  merchants(first: Int, after: String, last: Int, before: String,
+            dateRange: DateRange, orderBy: GroupOrder = TOTAL_DESC): MerchantConnection!
+  """The categories of this goal's transactions; edge totals are the goal's share."""
+  categories(first: Int, after: String, last: Int, before: String,
+             dateRange: DateRange, orderBy: GroupOrder = TOTAL_DESC): CategoryConnection!
+  """The tags of this goal's transactions; edge totals are the goal's share."""
+  tags(first: Int, after: String, last: Int, before: String,
+       dateRange: DateRange, orderBy: GroupOrder = TOTAL_DESC): TagConnection!
+}
+
+type GoalEdge {
+  node: Goal!
+  cursor: String!
+  totals: TransactionTotals!
+}
+
+type GoalConnection {
+  edges: [GoalEdge!]!
   pageInfo: PageInfo!
   totalCount: Int!
 }

@@ -17,6 +17,10 @@ type Query {
              dateRange: DateRange, orderBy: GroupOrder = TOTAL_DESC): CategoryConnection!
   tags(first: Int, after: String, last: Int, before: String, search: String,
        dateRange: DateRange, orderBy: GroupOrder = TOTAL_DESC): TagConnection!
+  horizons(first: Int, after: String, last: Int, before: String, search: String,
+           dateRange: DateRange, orderBy: GroupOrder = NAME_ASC): HorizonConnection!
+  goals(first: Int, after: String, last: Int, before: String, search: String,
+        dateRange: DateRange, orderBy: GroupOrder = NAME_ASC): GoalConnection!
 
   snapshot: Snapshot!
 }
@@ -33,6 +37,10 @@ type Mutation {
   setTransactionTags(input: SetTransactionTagsInput!): SetTransactionTagsPayload!
   updateTag(input: UpdateTagInput!): UpdateTagPayload!
   deleteTag(input: DeleteTagInput!): DeleteTagPayload!
+  createGoal(input: CreateGoalInput!): CreateGoalPayload!
+  updateGoal(input: UpdateGoalInput!): UpdateGoalPayload!
+  """Delete a goal; transactions assigned to it are unassigned."""
+  deleteGoal(input: DeleteGoalInput!): DeleteGoalPayload!
 }
 
 input UpdateTransactionInput {
@@ -42,7 +50,9 @@ input UpdateTransactionInput {
   category: String
   note: String
   excluded: Boolean
-  horizon: Horizon
+  horizon: HorizonKey
+  """A Goal id; null unassigns."""
+  goalId: ID
 }
 
 type UpdateTransactionPayload {
@@ -92,4 +102,50 @@ input DeleteTagInput {
 type DeleteTagPayload {
   clientMutationId: String
   deletedTagId: ID!
+}
+
+input CreateGoalInput {
+  clientMutationId: String
+  description: String!
+  amount: Money!
+  startDate: Date
+  endDate: Date
+  interval: GoalInterval
+  repetitions: Int
+  rise: Money
+  horizon: HorizonKey
+}
+
+type CreateGoalPayload {
+  clientMutationId: String
+  goal: Goal!
+}
+
+"""Any of the goal's fields; a null clears it (description and amount cannot be cleared)."""
+input UpdateGoalInput {
+  clientMutationId: String
+  id: ID!
+  description: String
+  amount: Money
+  startDate: Date
+  endDate: Date
+  interval: GoalInterval
+  repetitions: Int
+  rise: Money
+  horizon: HorizonKey
+}
+
+type UpdateGoalPayload {
+  clientMutationId: String
+  goal: Goal!
+}
+
+input DeleteGoalInput {
+  clientMutationId: String
+  id: ID!
+}
+
+type DeleteGoalPayload {
+  clientMutationId: String
+  deletedGoalId: ID!
 }

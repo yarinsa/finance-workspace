@@ -33,6 +33,36 @@ class Tag:
 
 
 @dataclass(frozen=True)
+class Horizon:
+    TYPENAME = "Horizon"
+    id: int
+    key: str
+    name: str
+    target_pct: float
+    position: int
+
+
+@dataclass(frozen=True)
+class Goal:
+    TYPENAME = "Goal"
+    id: int
+    slug: str
+    description: str
+    amount: Decimal
+    start_date: dt.date | None
+    end_date: dt.date | None
+    interval: str | None
+    repetitions: int
+    rise: Decimal
+    from_asset_id: str | None
+    horizon: Horizon | None
+
+    @property
+    def name(self):
+        return self.description
+
+
+@dataclass(frozen=True)
 class Merchant:
     TYPENAME = "Merchant"
     name: str
@@ -53,8 +83,9 @@ class Txn:
     note: str | None
     excluded: bool
     overridden: bool
-    horizon: str | None
-    raw_horizon: str | None
+    horizon: Horizon | None
+    raw_horizon: Horizon | None
+    goal: Goal | None
     account_id: str | None
     card_last4: str | None
     is_card_bill_payment: bool
@@ -91,7 +122,7 @@ ROWS = """
 SELECT s.txn_date, s.abs_amount, s.amount, s.description, s.origin, s.sources,
        c.id, c.name, c.source, sc.id, sc.name, sc.source,
        o.note, COALESCE(o.excluded, false), o.txn_date IS NOT NULL,
-       COALESCE(h.key, s.record->>'horizon'), s.record->>'horizon',
+       COALESCE(o.horizon_id, s.horizon_id), s.horizon_id, o.goal_id,
        s.record->>'account_id', s.record->>'card_last4',
        COALESCE((s.record->>'card_bill_payment')::boolean, false),
        COALESCE((s.record->>'internal_transfer')::boolean, false),
@@ -100,7 +131,6 @@ FROM scraped_transactions s
 LEFT JOIN transaction_overrides o USING (txn_date, abs_amount)
 LEFT JOIN categories sc ON sc.id = s.category_id
 LEFT JOIN categories c  ON c.id = COALESCE(o.category_id, s.category_id)
-LEFT JOIN horizons h    ON h.id = COALESCE(o.horizon_id, s.horizon_id)
 ORDER BY s.position
 """
 
@@ -124,10 +154,11 @@ class Ledger:
     def rows(self):
         out = []
         for (d, a, amount, desc, origin, sources, cid, cname, csrc, rid, rname, rsrc, note, excluded,
-             overridden, horizon, raw_horizon, account_id, last4, bill, transfer, savings) in self.conn.execute(ROWS):
+             overridden, hid, raw_hid, goal_id, account_id, last4, bill, transfer, savings) in self.conn.execute(ROWS):
             out.append(Txn(d, Decimal(a).quantize(CENT), Decimal(amount).quantize(CENT), desc or "", origin,
                            list(sources or []), _cat(cid, cname, csrc), _cat(rid, rname, rsrc), note, excluded,
-                           overridden, horizon, raw_horizon, account_id, last4, bill, transfer, savings))
+                           overridden, self.horizons.get(hid), self.horizons.get(raw_hid), self.goals.get(goal_id),
+                           account_id, last4, bill, transfer, savings))
         by_key = {t.key: t for t in out}
         for d, a, tid, name, color, at in self.conn.execute(TAG_LINKS):
             if (t := by_key.get((d, Decimal(a).quantize(CENT)))):
@@ -148,12 +179,24 @@ class Ledger:
         return {i: Tag(i, n, c) for i, n, c in self.conn.execute("SELECT id, name, color FROM tags ORDER BY name")}
 
     @cached_property
+    def horizons(self):
+        return {i: Horizon(i, k, n, float(p), pos) for i, k, n, p, pos in
+                self.conn.execute("SELECT id, key, name, target_pct, position FROM horizons ORDER BY position")}
+
+    @cached_property
+    def goals(self):
+        rows = self.conn.execute("SELECT id, slug, description, amount, start_date, end_date, interval, "
+                                 "repetitions, rise, from_asset_id, horizon_id FROM goals ORDER BY end_date, id")
+        return {r[0]: Goal(*r[:3], Decimal(r[3]).quantize(CENT), *r[4:8], Decimal(r[8]).quantize(CENT), r[9],
+                           self.horizons.get(r[10])) for r in rows}
+
+    @cached_property
     def merchants(self):
         return {t.merchant.name for t in self.rows}
 
     def invalidate(self):
         """Forget what was loaded, so reads after a mutation see the write."""
-        for name in ("rows", "by_key", "categories", "tags", "merchants"):
+        for name in ("rows", "by_key", "categories", "tags", "horizons", "goals", "merchants"):
             self.__dict__.pop(name, None)
 
     def audit(self, txn):

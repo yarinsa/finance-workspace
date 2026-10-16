@@ -28,12 +28,14 @@ from pydantic import BaseModel
 
 from api.schema_bindings import load_schema, snake
 
-from .inputs import (ClearTransactionOverrideInput, DeleteTagInput, GroupArgs, GroupOrder, SetTransactionTagsInput,
-                     TransactionArgs, TransactionOrder, UpdateTagInput, UpdateTransactionInput)
+from .inputs import (ClearTransactionOverrideInput, CreateGoalInput, DeleteGoalInput, DeleteTagInput, GroupArgs,
+                     GroupOrder, SetTransactionTagsInput, TransactionArgs, TransactionOrder, UpdateGoalInput,
+                     UpdateTagInput, UpdateTransactionInput)
 from .ledger import CENT, Ledger, Merchant, Txn, totals
 from .relay import ConnectionArgs, GlobalId, paginate, to_global_id, validated
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "db"))   # the shared write paths
+import goal_store  # noqa: E402
 import overrides  # noqa: E402
 import tags as tag_store  # noqa: E402
 
@@ -127,7 +129,15 @@ class GroupResolver(NodeResolver[T]):
 
     def all(self, lg: Ledger) -> list[T]:
         """Every member, for the root connection when `keep_empty`."""
-        return sorted({g for t in lg.rows for g in self.groups_of(t)}, key=lambda g: g.name)
+        return sorted({g for t in lg.rows for g in self.groups_of(t)}, key=self.label)
+
+    def label(self, obj: T) -> str:
+        """What `search` matches."""
+        return obj.name
+
+    def natural_order(self, obj: T) -> tuple:
+        """NAME_ASC: by label unless the entity has an order of its own."""
+        return (self.label(obj).casefold(), self.sort_id(obj))
 
     def contains(self, obj: T):
         return lambda t: obj in self.groups_of(t)
@@ -147,9 +157,9 @@ class GroupResolver(NodeResolver[T]):
                 continue
             for g in self.groups_of(t):
                 members.setdefault(g, []).append(t)
-        pool = nodes if nodes is not None else [n for n in sorted(members, key=lambda g: g.name)]
+        pool = nodes if nodes is not None else sorted(members, key=self.label)
         edges = [{"node": n, "totals": totals(members.get(n, []))} for n in pool
-                 if not args.search or args.search in n.name.casefold()]
+                 if not args.search or args.search in self.label(n).casefold()]
         key = self._sort_key(args.order_by)
         edges.sort(key=key)
         return paginate(edges, key, args)
@@ -157,9 +167,9 @@ class GroupResolver(NodeResolver[T]):
     def _sort_key(self, order):
         def key(e):
             node, tot = e["node"], e["totals"]
-            name, ident = node.name.casefold(), self.sort_id(node)
+            name, ident = self.label(node).casefold(), self.sort_id(node)
             cents = int(abs(tot["sum"]) * 100)
-            return {GroupOrder.NAME_ASC: (name, ident),
+            return {GroupOrder.NAME_ASC: self.natural_order(node),
                     GroupOrder.COUNT_DESC: (-tot["count"], name, ident),
                     GroupOrder.TOTAL_DESC: (-cents, name, ident),
                     GroupOrder.TOTAL_ASC: (cents, name, ident)}[order]
@@ -254,11 +264,86 @@ class TagResolver(GroupResolver):
         return lambda: {"deleted_tag_id": to_global_id(self.type_name, str(tag.id))}
 
 
+class HorizonResolver(GroupResolver):
+    type_name, plural, keep_empty = "Horizon", "horizons", True
+
+    def __init__(self, goals: "GoalResolver"):
+        self.goal_resolver = goals
+
+    def key(self, h):
+        return str(h.id)
+
+    def fetch(self, lg, key):
+        return lg.horizons.get(int(key)) if key.isdigit() else None
+
+    def groups_of(self, t):
+        return [t.horizon] if t.horizon else []
+
+    def all(self, lg):
+        return list(lg.horizons.values())
+
+    def natural_order(self, h):
+        return (h.position, h.id)
+
+    def resolve_goals(self, h, info, **args):
+        """The goals assigned to `h` (not derived from transactions), with each goal's totals."""
+        lg = ledger(info)
+        mine = [g for g in lg.goals.values() if g.horizon == h]
+        return self.goal_resolver.connection(lg.rows, validated(GroupArgs, args), mine)
+
+    def bind(self, schema, others=()):
+        super().bind(schema, others)
+        schema.type_map[self.type_name].fields["goals"].resolve = self.resolve_goals
+
+
+class GoalResolver(GroupResolver):
+    type_name, plural, keep_empty = "Goal", "goals", True
+
+    def key(self, g):
+        return str(g.id)
+
+    def fetch(self, lg, key):
+        return lg.goals.get(int(key)) if key.isdigit() else None
+
+    def groups_of(self, t):
+        return [t.goal] if t.goal else []
+
+    def all(self, lg):
+        return list(lg.goals.values())
+
+    def label(self, g):
+        return g.description
+
+    def mutations(self):
+        return {"createGoal": (CreateGoalInput, self.create), "updateGoal": (UpdateGoalInput, self.update),
+                "deleteGoal": (DeleteGoalInput, self.delete)}
+
+    def _refetched(self, info, goal_id):
+        return lambda: {"goal": self.fetch(ledger(info), str(goal_id))}
+
+    def create(self, inp, info):
+        g = goal_store.create_goal(ledger(info).conn, inp.description.strip(), inp.amount, **inp.fields())
+        return self._refetched(info, g["id"])
+
+    def update(self, inp, info):
+        g = self.require(info, inp.id)
+        changes = inp.changes()
+        if not changes:
+            raise GraphQLError("send at least one goal field")
+        goal_store.update_goal(ledger(info).conn, g.id, **changes)
+        return self._refetched(info, g.id)
+
+    def delete(self, inp, info):
+        g = self.require(info, inp.id)
+        goal_store.delete_goal(ledger(info).conn, g.id)
+        return lambda: {"deleted_goal_id": to_global_id(self.type_name, str(g.id))}
+
+
 class TransactionResolver(NodeResolver[Txn]):
     type_name = "Transaction"
 
-    def __init__(self, tags: TagResolver):
-        self.tag_resolver = tags
+    def __init__(self, goals: GoalResolver):
+        self.goal_resolver = goals
 
     def key(self, t):
         return t.key_str
@@ -280,9 +365,11 @@ class TransactionResolver(NodeResolver[Txn]):
 
     def update(self, inp, info):
         t = self.require(info, inp.id)
+        if inp.goal_id is not None:
+            self.goal_resolver.require(info, inp.goal_id)
         changes = inp.changes()
         if not changes:
-            raise GraphQLError("send at least one of category, note, excluded, horizon")
+            raise GraphQLError("send at least one of category, note, excluded, horizon, goalId")
         overrides.patch(ledger(info).conn, t.key, changes, info.context["user"])
         return self._refetched(info, t)
 
@@ -327,8 +414,9 @@ class TransactionResolver(NodeResolver[Txn]):
         fields["auditLog"].resolve = self.resolve_audit_log
 
 
-ENTITIES: list[GroupResolver] = [MerchantResolver(), CategoryResolver(), TagResolver()]
-TRANSACTIONS = TransactionResolver(ENTITIES[2])
+GOALS = GoalResolver()
+ENTITIES: list[GroupResolver] = [MerchantResolver(), CategoryResolver(), TagResolver(), HorizonResolver(GOALS), GOALS]
+TRANSACTIONS = TransactionResolver(GOALS)
 NODES: dict[str, NodeResolver] = {r.type_name: r for r in [TRANSACTIONS, *ENTITIES]}
 
 
@@ -352,6 +440,13 @@ def _money(v):
     return f"{Decimal(str(v)).quantize(CENT):.2f}"
 
 
+def _parse_money(v):
+    try:
+        return Decimal(str(v)).quantize(CENT)
+    except (InvalidOperation, ValueError):
+        raise GraphQLError(f"not an amount: {v!r}") from None
+
+
 def _parse_date(v):
     try:
         return dt.date.fromisoformat(v)
@@ -368,7 +463,8 @@ def build():
     t["Date"].parse_value = _parse_date
     t["DateTime"].serialize = lambda v: v.isoformat()
     t["JSON"].serialize = lambda v: v
-    for enum in ("Horizon", "CategorySource"):
+    t["Money"].parse_value = _parse_money
+    for enum in ("HorizonKey", "CategorySource", "GoalInterval"):
         for name, value in t[enum].values.items():
             value.value = name.lower()
     t["Node"].resolve_type = lambda obj, *_: obj.TYPENAME

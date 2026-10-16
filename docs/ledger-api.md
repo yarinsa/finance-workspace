@@ -129,8 +129,13 @@ that take one `input` and echo `clientMutationId`.
   `db/overrides.py` and `db/tags.py`, so they're audited the same way. Mutation fields run in
   order on one transaction, and a request that changed anything signals one rebuild
   after the commit.
-- **Not served yet:** `snapshot` (the API container has no `data/` mount) and goals and
-  horizons as GraphQL types; they are REST-only for now.
+- **Horizons and goals** are group entities like merchant, category and tag, so they get
+  transactions, root connections with edge totals, and M:M to the others. Assignment
+  relations are direct 1:M instead: `Horizon.goals` lists the goals assigned to the
+  horizon, and `Goal.horizon` is an object (no `Goal.horizons`). `createGoal`,
+  `updateGoal` and `deleteGoal` go through `db/goal_store.py`, and `updateTransaction`
+  takes `goalId`. The old `Horizon` enum is now `HorizonKey` for inputs.
+- **Not served yet:** `snapshot` (the API container has no `data/` mount).
 
 Each object type is bound to its Pydantic model in `api/schema_bindings.py`. Then
 `api/tests/test_graphql_schema.py` fails when the SDL and the models drift:

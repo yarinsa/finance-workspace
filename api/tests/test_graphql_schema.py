@@ -57,7 +57,7 @@ def test_non_null_sdl_fields_are_never_null_in_the_model(type_name):
 def test_horizon_enum_matches_the_ledger_model():
     literal = models.LedgerTransaction.model_fields["horizon"].annotation
     values = next(get_args(a) for a in get_args(literal) if get_origin(a) is Literal)
-    enum = SCHEMA.type_map["Horizon"]
+    enum = SCHEMA.type_map["HorizonKey"]
     assert isinstance(enum, GraphQLEnumType)
     assert set(enum.values) == {v.upper() for v in values}
 
@@ -71,7 +71,7 @@ def test_category_source_enum_matches_the_table_check():
 
 def test_every_node_type_is_refetchable():
     node = SCHEMA.type_map["Node"]
-    assert {t.name for t in SCHEMA.get_possible_types(node)} == {"Transaction", "Merchant", "Category", "Tag"}
+    assert {t.name for t in SCHEMA.get_possible_types(node)} == {"Transaction", "Merchant", "Category", "Tag", "Horizon", "Goal"}
 
 
 def test_connections_follow_the_relay_spec():
@@ -116,7 +116,7 @@ def test_every_connection_has_a_total_count():
 
 
 def test_group_edges_carry_transaction_totals():
-    for name in ("MerchantEdge", "CategoryEdge", "TagEdge"):
+    for name in ("MerchantEdge", "CategoryEdge", "TagEdge", "HorizonEdge", "GoalEdge"):
         assert _unwrap(OBJECT_TYPES[name].fields["totals"].type).name == "TransactionTotals", name
 
 
