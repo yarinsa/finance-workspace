@@ -20,12 +20,12 @@ def run(coro):
 
 def test_registry_ports_and_scrape_order():
     assert {n: s.port for n, s in sources.SOURCES.items()} == {
-        "discount-mortgage": 9223, "discount-business": 9223, "discount": 0,  # checking logs in by itself: no Chrome
+        "discount-business": 9223, "discount-mortgage": 0, "discount": 0,  # mortgage + checking log in by themselves: no Chrome
         "leumi": 9224, "cal": 9225, "amex": 9226, "max": 9230, "harel": 9227, "more": 9228, "analyst": 9229,
     }
     assert "riseup" not in sources.SOURCES
-    # Chrome apps first (mortgage before business); self-login checking after both.
-    assert list(sources.SYNC_ORDER[:3]) == ["discount-mortgage", "discount-business", "discount"]
+    # The Chrome app first; self-login mortgage and checking after it.
+    assert list(sources.SYNC_ORDER[:3]) == ["discount-business", "discount-mortgage", "discount"]
 
 
 def test_ports_match_check_sessions_script():
@@ -37,21 +37,28 @@ def test_ports_match_check_sessions_script():
             assert sources.SOURCES[name].port == int(port), name
 
 
-def test_discount_mortgage_and_business_share_one_chrome_and_one_login():
-    d = [sources.get(n) for n in ("discount-mortgage", "discount-business")]
-    assert {s.login_group for s in d} == {"discount"}
-    assert {(s.port, s.profile, s.pw_session) for s in d} == {(9223, d[0].profile, "discount")}
-    assert d[0].profile.name == ".chrome-cdp-discount"
+def test_discount_business_is_the_only_chrome_app():
+    b = sources.get("discount-business")
+    assert (b.login_group, b.port, b.pw_session) == ("discount", 9223, "discount")
+    assert b.profile.name == ".chrome-cdp-discount"
+    assert [n for n, s in sources.SOURCES.items() if s.port == 9223] == ["discount-business"]
 
 
-def test_discount_checking_needs_no_chrome():
-    s = sources.get("discount")
+@pytest.mark.parametrize("name, script", [("discount", "scrape.mjs"), ("discount-mortgage", "scrape-mortgage.mjs")])
+def test_discount_self_login_sources_need_no_chrome(name, script):
+    s = sources.get(name)
     assert s.check == sources.SELF and s.port == 0 and not s.playwright and not s.login_group
+    assert s.dumps == ((str(Path(__file__).resolve().parents[2] / "scrapers" / "discount" / script),),)
 
 
-def test_ordered_puts_business_last_whatever_the_caller_passed():
-    assert sources.ordered(["discount-business", "amex", "discount", "discount-mortgage", "amex"]) == \
-        ["discount-mortgage", "discount-business", "discount", "amex"]
+def test_self_login_sources_share_one_group_so_a_refused_login_is_not_retried():
+    assert sources.get("discount").group == sources.get("discount-mortgage").group
+    assert sources.get("discount").group != sources.get("discount-business").group
+
+
+def test_ordered_puts_business_first_then_mortgage_then_checking():
+    assert sources.ordered(["discount", "amex", "discount-business", "discount-mortgage", "amex"]) == \
+        ["discount-business", "discount-mortgage", "discount", "amex"]
 
 
 def test_unknown_source_is_an_error():
@@ -60,8 +67,8 @@ def test_unknown_source_is_an_error():
 
 
 def test_resolve_accepts_names_and_login_groups():
-    # "discount" is both the Chrome login group and the self-login checking source's own name.
-    assert sources.resolve(["discount"]) == {"discount", "discount-mortgage", "discount-business"}
+    # "discount" is both the Chrome login group (business) and the self-login checking source's own name.
+    assert sources.resolve(["discount"]) == {"discount", "discount-business"}
     assert sources.resolve(["discount-mortgage"]) == {"discount-mortgage"}
     assert sources.resolve(["amex", "cal"]) == {"amex", "cal"}
 
@@ -119,10 +126,10 @@ def _fake_cmd(monkeypatch, output, seen=None):
 
 def test_check_uses_single_source_mode_and_timeout(monkeypatch):
     seen = []
-    _fake_cmd(monkeypatch, "discount     9223   live\n", seen)
-    assert run(activities.check_session("discount-mortgage")) == "live"  # mortgage reuses the discount signal
+    _fake_cmd(monkeypatch, "cal          9225   live\n", seen)
+    assert run(activities.check_session("cal")) == "live"
     args, kw = seen[0]
-    assert args[0].endswith("refresh-all/scripts/check_sessions.sh") and args[1] == "discount"
+    assert args[0].endswith("refresh-all/scripts/check_sessions.sh") and args[1] == "cal"
     assert kw["timeout"] == activities.SESSIONS_TIMEOUT
 
 
@@ -216,10 +223,10 @@ def scrape_env(monkeypatch):
 
 def test_scrape_passes_session_or_port_per_script(scrape_env):
     cmds, _ = scrape_env
-    run(activities.scrape("discount-mortgage"))
+    run(activities.scrape("discount-business"))
     run(activities.scrape("more"))
     runs = [c for c in cmds if c[0] == "run"]
-    assert runs == [("run", "discount-mortgage-refresh", ["discount"]), ("run", "more-refresh", ["9228"])]
+    assert runs == [("run", "discount-business-refresh", ["discount"]), ("run", "more-refresh", ["9228"])]
     assert not [c for c in cmds if c[:2] == ("bind", "more")]  # raw-CDP source: no playwright
 
 
@@ -249,7 +256,7 @@ def test_expired_signatures_are_session_expired(scrape_env, output):
     _, results = scrape_env
     results.append((2, output))
     with pytest.raises(ApplicationError) as e:
-        run(activities.scrape("discount-mortgage"))
+        run(activities.scrape("discount-business"))
     assert e.value.type == "SessionExpired" and e.value.non_retryable
 
 
@@ -261,7 +268,8 @@ def test_self_login_refused_is_session_expired(scrape_env):
     assert e.value.type == "SessionExpired" and e.value.non_retryable
 
 
-def test_discount_dump_argv_is_the_absolute_scrape_mjs(monkeypatch):
+@pytest.mark.parametrize("name, script", [("discount", "scrape.mjs"), ("discount-mortgage", "scrape-mortgage.mjs")])
+def test_discount_dump_argv_is_the_absolute_script(monkeypatch, name, script):
     seen = []
 
     async def fake_run(args, **kw):
@@ -269,19 +277,20 @@ def test_discount_dump_argv_is_the_absolute_scrape_mjs(monkeypatch):
         return 0, "done"
 
     monkeypatch.setattr(activities, "run_cmd", fake_run)
-    run(activities.scrape("discount"))
-    expected = Path(__file__).resolve().parents[2] / "scrapers" / "discount" / "scrape.mjs"
+    run(activities.scrape(name))
+    expected = Path(__file__).resolve().parents[2] / "scrapers" / "discount" / script
     assert seen == [[str(expected)]] and Path(seen[0][0]).is_absolute()
     assert expected.is_file()
 
 
-def test_self_check_is_live_without_running_anything(monkeypatch):
+@pytest.mark.parametrize("name", ["discount", "discount-mortgage"])
+def test_self_check_is_live_without_running_anything(monkeypatch, name):
     async def never(*a, **k):
         pytest.fail("a self-login source must not shell out or read tabs")
 
     monkeypatch.setattr(activities, "run_cmd", never)
     monkeypatch.setattr(activities, "_cdp_pages", lambda src: pytest.fail("must not read tabs"))
-    assert run(activities.check_session("discount")) == "live"
+    assert run(activities.check_session(name)) == "live"
 
 
 def test_business_scrape_opens_the_app_when_no_business_tab_exists(scrape_env, monkeypatch):
@@ -291,11 +300,10 @@ def test_business_scrape_opens_the_app_when_no_business_tab_exists(scrape_env, m
     run(activities.scrape("discount-business"))
     assert ("tab", "discount-business", "https://start.telebank.co.il/apollo/business2/") in cmds
     cmds.clear()
-    run(activities.scrape("discount-mortgage"))
-    assert ("tab", "discount-mortgage", None) in cmds  # the retail apps never open a page here
-    cmds.clear()
-    run(activities.scrape("discount"))
-    assert not [c for c in cmds if c[0] in ("tab", "bind")]  # self-login checking touches no Chrome
+    for name in ("discount-mortgage", "discount"):
+        cmds.clear()
+        run(activities.scrape(name))
+        assert not [c for c in cmds if c[0] in ("tab", "bind")]  # self-login sources touch no Chrome
 
 
 # --- validation gate --------------------------------------------------------
@@ -326,3 +334,4 @@ def test_ensure_chrome_is_a_no_op_for_self_login_sources(monkeypatch):
     monkeypatch.setattr(activities, "_cdp_up", lambda src: pytest.fail("no Chrome for a self-login source"))
     monkeypatch.setattr(activities, "_launch_chrome", lambda src: pytest.fail("no Chrome for a self-login source"))
     run(activities.ensure_chrome("discount"))
+    run(activities.ensure_chrome("discount-mortgage"))

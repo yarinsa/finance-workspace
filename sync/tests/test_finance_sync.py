@@ -5,7 +5,7 @@ from temporalio.exceptions import ApplicationError
 from fakes import Fake, expired, moved, rejected, result_of, run, until_phase
 from workflows import FinanceSyncWorkflow
 
-ALL = ["discount-mortgage", "discount-business", "discount", "leumi", "cal", "amex", "max", "harel", "more", "analyst"]
+ALL = ["discount-business", "discount-mortgage", "discount", "leumi", "cal", "amex", "max", "harel", "more", "analyst"]
 
 
 def test_all_sources_live_scrapes_in_registry_order_then_digests_and_publishes_once():
@@ -41,21 +41,21 @@ def test_result_dict_is_per_source_with_status_and_detail():
 # --- preflight / grouped login ------------------------------------------------
 
 def test_dead_sessions_produce_exactly_one_grouped_notification():
-    fake = Fake(sessions={"discount-mortgage": "dead", "discount-business": "dead",
-                          "amex": "dead", "harel": "dead"})
+    fake = Fake(sessions={"discount-business": "dead", "amex": "dead", "harel": "dead"})
     result = result_of(fake)  # nobody signals: time-skipping fast-forwards the 12h wait
     notes = fake.login_notes()
     assert len(notes) == 1
     msg = notes[0]
-    assert "discount (discount-mortgage, discount-business;" in msg  # one entry for the shared Chrome login
-    assert msg.count(".chrome-cdp-discount") == 1
+    assert "discount (profile" in msg and msg.count(".chrome-cdp-discount") == 1  # business is the only Chrome app
+    assert "discount-mortgage" not in msg
     assert "amex" in msg and "harel" in msg and "cal" not in msg
     assert "sync/resume.py" in msg
-    assert all(result[s]["status"] == "needs_login" for s in ["discount-mortgage", "discount-business", "amex", "harel"])
+    assert all(result[s]["status"] == "needs_login" for s in ["discount-business", "amex", "harel"])
     assert result["discount"]["status"] == "ok"  # self-login checking needs no Chrome login
+    assert result["discount-mortgage"]["status"] == "ok"  # nor does self-login mortgage
     assert "12h" in result["amex"]["detail"]
     # The live ones were still scraped.
-    assert fake.of("scrape") == ["discount", "leumi", "cal", "max", "more", "analyst"]
+    assert fake.of("scrape") == ["discount-mortgage", "discount", "leumi", "cal", "max", "more", "analyst"]
 
 
 def test_signal_rechecks_and_scrapes_only_what_came_back():
@@ -75,8 +75,7 @@ def test_signal_rechecks_and_scrapes_only_what_came_back():
 
 
 def test_signal_naming_a_login_group_rechecks_the_whole_group():
-    fake = Fake(sessions={"discount-mortgage": ["dead", "live"],
-                          "discount-business": ["dead", "live"], "amex": ["dead", "live"]})
+    fake = Fake(sessions={"discount-business": ["dead", "live"], "amex": ["dead", "live"]})
 
     async def scenario(env, h):
         await until_phase(h, FinanceSyncWorkflow, "waiting_for_login")
@@ -84,9 +83,8 @@ def test_signal_naming_a_login_group_rechecks_the_whole_group():
         return await h.result()
 
     result = run(fake, scenario)
-    assert [result[s]["status"] for s in ["discount-mortgage", "discount-business"]] == ["ok"] * 2
+    assert result["discount-business"]["status"] == "ok"
     assert result["amex"]["status"] == "needs_login"  # not named, so not re-checked
-    assert fake.of("scrape").index("discount-mortgage") < fake.of("scrape").index("discount-business")
 
 
 def test_unknown_is_not_dead():
@@ -113,10 +111,10 @@ def test_chrome_that_will_not_open_fails_that_source_only():
 
 # --- scrape order / isolation -------------------------------------------------
 
-def test_discount_order_has_business_last_whatever_order_was_requested():
+def test_discount_order_is_chrome_business_then_self_login_mortgage_and_checking():
     fake = Fake()
-    result_of(fake, args=[["discount-business", "amex", "discount-mortgage", "discount"]])
-    assert fake.of("scrape") == ["discount-mortgage", "discount-business", "discount", "amex"]
+    result_of(fake, args=[["discount", "amex", "discount-mortgage", "discount-business"]])
+    assert fake.of("scrape") == ["discount-business", "discount-mortgage", "discount", "amex"]
 
 
 def test_requested_subset_only_touches_those_sources():
@@ -137,27 +135,22 @@ def test_one_failing_source_does_not_abort_the_others():
     assert fake.calls.count(("digest",)) == 1 and fake.calls.count(("publish",)) == 1
 
 
-def test_session_expiring_mid_scrape_skips_the_rest_of_the_chrome_login_group():
+def test_chrome_business_expiry_does_not_skip_self_login_sources():
+    fake = Fake(scrape_errors={"discount-business": expired()})
+    result = result_of(fake)
+    assert result["discount-business"]["status"] == "needs_login"
+    assert all(result[s]["status"] == "ok" for s in ("discount-mortgage", "discount"))
+    assert fake.of("scrape") == ALL
+
+
+def test_refused_headless_login_skips_the_other_self_login_source():
+    # Mortgage and checking share the .env credentials: a refused login must not be retried.
     fake = Fake(scrape_errors={"discount-mortgage": expired()})
     result = result_of(fake)
     assert result["discount-mortgage"]["status"] == "needs_login"
-    assert result["discount-business"]["status"] == "needs_login" and "discount-mortgage" in result["discount-business"]["detail"]
-    assert "discount-business" not in fake.of("scrape")  # the bank is not hammered with a dead login
-    assert result["leumi"]["status"] == "ok"
-
-
-def test_chrome_group_expiry_does_not_skip_self_login_checking():
-    fake = Fake(scrape_errors={"discount-mortgage": expired()})
-    result = result_of(fake)
-    assert result["discount"]["status"] == "ok" and "discount" in fake.of("scrape")
-
-
-def test_self_login_expiry_skips_nothing_else():
-    fake = Fake(scrape_errors={"discount": expired()})
-    result = result_of(fake)
-    assert result["discount"]["status"] == "needs_login"
-    assert fake.of("scrape") == ALL  # checking runs after the Chrome apps, which were already done
-    assert all(result[s]["status"] == "ok" for s in ALL if s != "discount")
+    assert result["discount"]["status"] == "needs_login" and "discount-mortgage" in result["discount"]["detail"]
+    assert "discount" not in fake.of("scrape")
+    assert result["discount-business"]["status"] == "ok" and result["leumi"]["status"] == "ok"
 
 
 def test_nothing_scraped_means_no_digest_and_no_publish():
@@ -262,9 +255,9 @@ def test_dead_source_is_published_waiting_then_needs_login_while_live_ones_are_q
 
 def test_login_group_expiring_publishes_needs_login_for_the_skipped_apps():
     fake = Fake(scrape_errors={"discount-mortgage": expired()})
-    result_of(fake, args=[["discount-mortgage", "discount-business"]])
+    result_of(fake, args=[["discount-mortgage", "discount"]])
     assert fake.published("discount-mortgage")[-1] == "needs_login"
-    assert fake.published("discount-business") == ["checking_session", "needs_login"]
+    assert fake.published("discount") == ["checking_session", "needs_login"]
 
 
 def test_digest_failure_marks_every_scraped_source_failed():

@@ -1,4 +1,7 @@
-# Discount scraper
+# Discount scrapers
+
+`lib.mjs` holds the shared foundation (login, guarded atomic writer, `Exit`, env check, browser
+lifecycle). `scrape.mjs` does checking; `scrape-mortgage.mjs` does mortgage + loans (below).
 
 Deterministic scrape of Bank Discount personal checking. It does its own login with
 `puppeteer` (headless; same flow as `israeli-bank-scrapers`' Discount scraper, which is no
@@ -29,3 +32,12 @@ The account number is `DefaultAccountNumber` from `userAccountsData` (fallback `
 - 1 failure (unknown login outcome / timeout, a file rejected or missing, required file missing); retryable
 - 2 missing env var or bad args
 - 3 `LOGIN FAILED: INVALID_PASSWORD` or `CHANGE_PASSWORD`; needs a human, do not retry
+
+## Mortgage (`scrape-mortgage.mjs`)
+
+Same login, headers (`site: retail`, `businessprocessid: MY_ACCOUNT_HOMEPAGE`) and stub guard;
+replaces `.claude/skills/discount-mortgage-refresh/scripts/dump.sh`. Writes `accountsList.json`,
+`onlineLoans_loansQuery.json` and `mortgage_details.json` (required) to `data/discount-mortgage/raw`.
+The `mortgage/details` POST body is built from `accountsList` (`OldAccountInfo` per entry).
+
+    node scrapers/discount/scrape-mortgage.mjs [--out DIR] [--account N]
