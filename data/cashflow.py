@@ -553,6 +553,18 @@ def build():
     proj = projection.build(snapshot)
     metrics = metrics + proj["metrics"]
 
+    # Day-by-day combined checking balance + safe-to-spend until payday
+    import runway
+    runway_block = runway.build_runway(
+        transactions, snapshot["bank_accounts"], snapshot.get("savings", []),
+        _local_today())
+    # Mint-style monthly views (PRD 12): bills status, budgets, spending explorer
+    import bills, budgets, spending
+    budget_doc = bills.load_budget()
+    bills_block = bills.build_bills(budget_doc, transactions, _local_today())
+    budgets_block = budgets.build_budgets(budget_doc, _local_today(), budgets.load_overrides())
+    spending_block = spending.build_spending(transactions, today=_local_today())
+
     model = {
         "generated_at": datetime.now(timezone.utc)
             .astimezone(timezone(timedelta(hours=3))).isoformat(timespec="seconds"),
@@ -580,6 +592,10 @@ def build():
             "loans_modeled": proj["loans_modeled"],
             "focal_points": proj["focal_points"],
         },
+        "runway": runway_block,
+        "bills": bills_block,
+        "budgets": budgets_block,
+        "spending": spending_block,
         "months": [
             {"month": k, "income": v["income"], "expense": v["expense"], "net": v["net"],
              "count": v["count"]}
@@ -621,6 +637,15 @@ def _write_md(model):
     lines += ["", "## Income breakdown", ""]
     for d in model["charts"]["income_breakdown"]["datasets"]:
         lines.append(f"- {d['name']}: {d['value']:,.0f} {CURRENCY}")
+    rw = model.get("runway")
+    if rw:
+        lines += ["", "## Balance runway", "",
+                  f"- Start balance: {rw['start_balance']:,.0f} {CURRENCY} (limit {rw['overdraft_limit']:,.0f})"]
+        if rw["next_payday"]:
+            lines.append(f"- Next payday: {rw['next_payday']['date']} (+{rw['next_payday']['amount']:,.0f})")
+        if rw["safe_to_spend"] is not None:
+            lines.append(f"- Safe to spend until payday: {rw['safe_to_spend']:,.0f} {CURRENCY}")
+        lines.append(f"- Low point: {rw['low_point']['balance']:,.0f} on {rw['low_point']['date']}")
     lines.append("")
     with open(OUT_MD, "w", encoding="utf-8") as f:
         f.write("\n".join(lines))

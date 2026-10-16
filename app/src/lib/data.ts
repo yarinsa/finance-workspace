@@ -100,6 +100,38 @@ export interface FixedExpenses {
   }[];
 }
 
+/** Day-by-day projection of the combined checking balance (cashflow.runway). */
+export interface Runway {
+  as_of: string;
+  horizon_end: string;
+  currency: string;
+  start_balance: number;
+  overdraft_limit: number;
+  floor: number;
+  accounts: { institution: string; balance: number; overdraft_limit?: number }[];
+  liquid_buffer: { label: string; balance: number }[];
+  next_payday: { date: string; amount: number; name: string } | null;
+  events: {
+    date: string;
+    name: string;
+    amount: number;
+    kind: "income" | "loan" | "card" | "housing" | "bill";
+    category?: string | null;
+    confidence: "known" | "inferred";
+    balance_after: number;
+  }[];
+  days: { date: string; balance: number }[];
+  low_point: { date: string; balance: number };
+  low_before_payday: { date: string; balance: number } | null;
+  first_floor_breach: string | null;
+  first_limit_breach: string | null;
+  days_to_payday: number | null;
+  safe_to_spend: number | null;
+  safe_per_day: number | null;
+  headroom_to_limit: number | null;
+  note: string;
+}
+
 export interface Cashflow {
   generated_at: string;
   currency: string;
@@ -109,6 +141,10 @@ export interface Cashflow {
   today: Today;
   pace?: Pace;
   fixed_expenses?: FixedExpenses | null;
+  runway?: Runway;
+  bills?: import("./bills").Bills | null;
+  budgets?: import("./budgets").Budgets | null;
+  spending?: import("./spending").SpendingData;
   charts?: Record<string, unknown>;
   projection?: Projection;
   months?: unknown[];

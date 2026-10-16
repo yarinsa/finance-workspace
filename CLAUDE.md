@@ -88,6 +88,28 @@ use the recomputed full payment. Read-only over scraped data; safe to re-run.
 Rationale and the trust/double-counting decisions are in
 `docs/forecast-architecture.md`.
 
+### Balance runway
+
+`data/runway.py` (called from `cashflow.py`, output in `cashflow.json` → `runway`)
+projects the **combined Discount + Leumi checking balance day by day** for 45 days:
+recurring ledger items (≥2 of the last 3 months) re-posted on their day of month,
+Fri/Sat → Sunday. It reports the low point before payday, overdraft breaches and
+**safe-to-spend**. It is bills-only (no discretionary spend), and card bills are
+estimated from last month's bill. The app shows it at `/runway`.
+
+Mint-style monthly views (`docs/plangram-prd/12-mint-cashflow.md`) are generated
+from RiseUp's current budget the same way and written to `cashflow.json`:
+`bills.py` (fixed envelopes as paid/upcoming/overdue, shown on `/runway`),
+`budgets.py` (tracking-category plan vs. actual per RiseUp cycle, `/budgets`;
+optional overrides in gitignored `data/budgets/budgets.json`), and `spending.py`
+(per-month category/merchant/transaction breakdown with excluded buckets, `/spending`).
+
+### UX references
+
+Before designing a dashboard screen, read `docs/ux-references.md`: Mobbin
+patterns per feature, what the app has vs. lacks, and the design principles
+(one number + verdict first, balance-after per row, label confidence).
+
 ### Long-range projection
 
 `python3 data/projection.py` writes a net-worth projection to retirement/end age.
