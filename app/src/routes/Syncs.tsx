@@ -1,5 +1,6 @@
-import { Card, ListRow, PageTitle, StubNotice } from "@/components/common";
+import { Card, CardLabel, ListRow, PageTitle, StubNotice } from "@/components/common";
 import { daysSince, snapshot, type SourceSync } from "@/lib/data";
+import { displayState, isRunning, STATE_PILL, useSyncStatus, type SourceStatus } from "@/lib/syncStatus";
 
 const SOURCE_LABEL: Record<string, string> = {
   discount: "דיסקונט — עו״ש",
@@ -40,7 +41,50 @@ function txnLagDays(s: SourceSync): number | null {
   return lag > 14 ? lag : null;
 }
 
-function SyncRow({ s }: { s: SourceSync }) {
+const timeOnly = new Intl.DateTimeFormat("he-IL", { hour: "2-digit", minute: "2-digit" });
+
+/** Live row for an automated source: state pill, the workflow's short text, step progress. */
+function LiveRow({ source, s }: { source: string; s: SourceStatus }) {
+  const d = displayState(s);
+  const pill = STATE_PILL[d];
+  const running = isRunning(d);
+  const pct = s.step && s.total_steps ? Math.round((s.step / s.total_steps) * 100) : 0;
+  return (
+    <div className="live-sync">
+      <ListRow
+        label={SOURCE_LABEL[source] ?? source}
+        sub={
+          <>
+            {d === "stale" ? "העדכון האחרון מהסנכרון התקבל מזמן — ייתכן שה-worker נפל" : s.message}
+            {s.error && (d === "failed" || d === "rejected") && <span className="sync-lag">{s.error}</span>}
+          </>
+        }
+        value={
+          <span className="sync-value">
+            {running && s.step != null && `${s.step}/${s.total_steps}`}
+            <span className={`pill ${pill.cls}`}>
+              {running && <span className="live-pulse" aria-hidden />}
+              {pill.text}
+            </span>
+          </span>
+        }
+      />
+      {running && (
+        <div className="live-progress" role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100}>
+          <span style={{ width: `${pct}%` }} />
+        </div>
+      )}
+      <div className="live-meta muted">
+        עודכן {timeOnly.format(new Date(s.updated_at))}
+        {s.last_success_at
+          ? ` · סנכרון מוצלח אחרון ${dateTime.format(new Date(s.last_success_at))}`
+          : " · עדיין אין סנכרון מוצלח"}
+      </div>
+    </div>
+  );
+}
+
+function SyncRow({ s, automated }: { s: SourceSync; automated: boolean }) {
   const days = daysSince(s.last_synced);
   const lag = txnLagDays(s);
   // A fresh scrape that returned only old transactions isn't fresh data.
@@ -48,7 +92,12 @@ function SyncRow({ s }: { s: SourceSync }) {
 
   return (
     <ListRow
-      label={SOURCE_LABEL[s.source] ?? s.source}
+      label={
+        <>
+          {SOURCE_LABEL[s.source] ?? s.source}
+          <span className="sync-mode">{automated ? "אוטומטי" : "ידני"}</span>
+        </>
+      }
       sub={
         <>
           {dateTime.format(new Date(s.last_synced))}
@@ -67,6 +116,8 @@ function SyncRow({ s }: { s: SourceSync }) {
 }
 
 export default function Syncs() {
+  const live = useSyncStatus();
+  const liveSources = Object.entries(live?.sources ?? {});
   const syncs = snapshot.syncs ?? [];
   if (!syncs.length) {
     return (
@@ -90,9 +141,17 @@ export default function Syncs() {
         {stale ? `${stale} מקורות לא סונכרנו מעל שבוע.` : "כל המקורות סונכרנו בשבוע האחרון."} הנתונים חושבו{" "}
         {ago(daysSince(snapshot.generated_at))}.
       </p>
+      {liveSources.length > 0 && (
+        <Card className="mb-3">
+          <CardLabel>סנכרון אוטומטי</CardLabel>
+          {liveSources.map(([source, s]) => (
+            <LiveRow key={source} source={source} s={s} />
+          ))}
+        </Card>
+      )}
       <Card>
         {sorted.map((s) => (
-          <SyncRow key={s.source} s={s} />
+          <SyncRow key={s.source} s={s} automated={!!live?.sources[s.source]} />
         ))}
       </Card>
     </div>

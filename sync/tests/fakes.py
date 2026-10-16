@@ -32,19 +32,29 @@ class Fake:
     validate_errors {source: exception}
     check_errors    sources whose check_session activity itself blows up
     chrome_errors   sources whose ensure_chrome fails
+    digest_error    exception raised by the digest activity
+    status_error    make every publish_status call blow up (it must never fail the sync)
     """
 
-    def __init__(self, sessions=None, scrape_errors=None, validate_errors=None, check_errors=(), chrome_errors=()):
+    def __init__(self, sessions=None, scrape_errors=None, validate_errors=None, check_errors=(), chrome_errors=(),
+                 digest_error=None, status_error=False):
         self.sessions = {k: list(v) if isinstance(v, list) else [v] for k, v in (sessions or {}).items()}
         self.scrape_errors = scrape_errors or {}
         self.validate_errors = validate_errors or {}
         self.check_errors = set(check_errors)
         self.chrome_errors = set(chrome_errors)
+        self.digest_error = digest_error
+        self.status_error = status_error
         self.calls = []
+        self.statuses = []  # every publish_status (source, entry), in order
 
     # --- helpers for assertions
     def of(self, kind):
         return [c[1] for c in self.calls if c[0] == kind and len(c) > 1]
+
+    def published(self, source):
+        """The statuses published for one source, in order."""
+        return [e["status"] for s, e in self.statuses if s == source]
 
     def notes(self):
         return [(c[1], c[2]) for c in self.calls if c[0] == "notify"]
@@ -85,6 +95,8 @@ class Fake:
         @activity.defn(name="digest")
         async def digest() -> dict:
             self.calls.append(("digest",))
+            if self.digest_error:
+                raise self.digest_error
             return {"transactions": 42}
 
         @activity.defn(name="publish_data")
@@ -96,7 +108,14 @@ class Fake:
         async def notify(title: str, message: str) -> None:
             self.calls.append(("notify", title, message))
 
-        return [ensure_chrome, check_session, scrape, validate_dump, digest, publish_data, notify]
+        @activity.defn(name="publish_status")
+        async def publish_status(source: str, entry: dict) -> str:
+            self.statuses.append((source, entry))
+            if self.status_error:
+                raise RuntimeError("bucket unreachable")
+            return "local"
+
+        return [ensure_chrome, check_session, scrape, validate_dump, digest, publish_data, notify, publish_status]
 
 
 def run(fake, scenario, workflow=FinanceSyncWorkflow, args=()):

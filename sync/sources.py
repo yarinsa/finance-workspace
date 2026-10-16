@@ -96,6 +96,19 @@ _ALL = [
            dumps=(("analyst-refresh/scripts/dump.sh", "{port}"),)),
 ]
 
+# Hebrew names for the dashboard (the same labels app/src/routes/Syncs.tsx uses).
+LABEL_HE = {
+    "discount": "דיסקונט — עו״ש",
+    "discount-mortgage": "דיסקונט — משכנתא",
+    "discount-business": "דיסקונט — עסקי",
+    "leumi": "לאומי",
+    "cal": "כאל",
+    "amex": "אמריקן אקספרס",
+    "harel": "הראל",
+    "more": "מור",
+    "analyst": "אנליסט",
+}
+
 SOURCES = {s.name: s for s in _ALL}
 SYNC_ORDER = tuple(SOURCES)
 

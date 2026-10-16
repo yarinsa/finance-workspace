@@ -122,6 +122,31 @@ fire. Re-run `schedule.py` once after upgrading.
 Publishing to S3 only happens when `SYNC_PUBLISH=1` (set in the worker plist).
 Without it `publish_data` returns `skipped`.
 
+## Live status on the dashboard
+
+Every status change of every source runs the `publish_status` activity, once **per
+source**: `checking_session -> scraping -> validating -> digesting -> publishing ->
+done` (5 steps), or `waiting_for_login` / `needs_login` / `rejected` / `failed`.
+`digesting` and `publishing` are reported on every source that scraped. Sources that
+are connected while others wait for a login show "בתור לסנכרון" (queued). When a
+dump is `rejected` the other sources still finish `done`, with a note that publishing
+was withheld. It writes `data/digested/sync-status.json` and, with
+`SYNC_PUBLISH=1`, copies it to `s3://<bucket>/data/sync-status.json` (bucket from
+`$BUCKET` or `terraform output`). Per source it holds `status`, a short Hebrew
+`message`, `step`/`total_steps`, workflow/run ids, `started_at`, `updated_at`,
+`last_success_at` (advances only on `done`) and a one-line `error`. Status only: no
+secrets or account data.
+
+Publishing is best-effort (one attempt, never raises), so a missing bucket or
+network blip never fails a sync. `deploy.sh --data-only` does not upload or
+delete this file.
+
+The app polls it every 5s while a run is active and every 60s otherwise:
+`/syncs` shows a live card with a progress bar, the header dot pulses while
+running and turns red on `waiting_for_login` / `needs_login` / `rejected` / `failed`, and
+the home "לטיפול" list gets a "log in to <source>" item per source that needs one. A running state that hasn't been
+updated for 15 minutes shows as "לא ידוע" (unknown): the worker probably died.
+
 ## Session expired
 
 You get one notification listing every dead login, grouped, e.g. "discount

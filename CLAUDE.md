@@ -91,6 +91,10 @@ a `data/validate.py dump <source>` gate (skipped while that file doesn't exist);
 failing source never stops the rest. Then digest chain once and
 `infra/deploy.sh --data-only` once (when `SYNC_PUBLISH=1`; withheld if a dump was
 rejected). It **never authenticates**. The source registry is `sync/sources.py`.
+Every source's progress (checking_session → waiting_for_login → scraping → validating →
+digesting → publishing → done, or needs_login / failed / rejected) is published as its own
+entry to `data/sync-status.json`, which the app polls for a live status on `/syncs`, the
+header dot and the home list.
 Install with `sync/install.sh`; UI at http://localhost:8233. Only `sync/` needs
 `temporalio`; `data/` stays stdlib-only.
 

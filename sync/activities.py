@@ -14,6 +14,7 @@ import os
 import re
 import subprocess
 import sys
+import tempfile
 import urllib.request
 from pathlib import Path
 
@@ -403,4 +404,82 @@ async def notify(title: str, message: str) -> None:
         pass
 
 
-ALL_ACTIVITIES = [ensure_chrome, check_session, scrape, validate_dump, digest, publish_data, notify]
+STATUS_FILE = REPO_ROOT / "data" / "digested" / "sync-status.json"
+STATUS_KEY = "data/sync-status.json"
+STATUS_UPLOAD_TIMEOUT = 15.0
+_bucket_cache: str | None = None
+
+
+def merge_status(doc: dict | None, source: str, entry: dict) -> dict:
+    """Fold one source's status `entry` into the sync-status document.
+
+    Other sources are kept as-is. `last_success_at` survives across runs and is
+    moved forward only when this entry reports `done`. Pure, so it is unit-tested.
+    """
+    doc = dict(doc or {})
+    sources = dict(doc.get("sources") or {})
+    prev = sources.get(source) or {}
+    merged = {**entry}
+    merged["last_success_at"] = entry["updated_at"] if entry.get("status") == "done" else prev.get("last_success_at")
+    sources[source] = merged
+    doc["sources"] = sources
+    doc["updated_at"] = entry["updated_at"]
+    return doc
+
+
+def _write_status(source: str, entry: dict) -> dict:
+    try:
+        doc = json.loads(STATUS_FILE.read_text())
+    except (OSError, ValueError):
+        doc = None
+    doc = merge_status(doc, source, entry)
+    STATUS_FILE.parent.mkdir(parents=True, exist_ok=True)
+    # Atomic replace: the dev server or an upload must never read half a file.
+    with tempfile.NamedTemporaryFile("w", dir=STATUS_FILE.parent, delete=False, suffix=".tmp") as f:
+        json.dump(doc, f, ensure_ascii=False, indent=2)
+    os.replace(f.name, STATUS_FILE)
+    return doc
+
+
+async def _bucket() -> str | None:
+    """BUCKET env, else `terraform output -raw bucket` (cached for the worker's life)."""
+    global _bucket_cache
+    if _bucket_cache is None:
+        _bucket_cache = os.environ.get("BUCKET") or ""
+        if not _bucket_cache:
+            proc = await asyncio.create_subprocess_exec(
+                "terraform", "output", "-raw", "bucket", cwd=str(REPO_ROOT / "infra"),
+                stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.DEVNULL,
+            )
+            out, _ = await asyncio.wait_for(proc.communicate(), STATUS_UPLOAD_TIMEOUT)
+            _bucket_cache = out.decode().strip() if proc.returncode == 0 else ""
+    return _bucket_cache or None
+
+
+@activity.defn
+async def publish_status(source: str, entry: dict) -> str:
+    """Write the live status of one source to data/digested/sync-status.json and,
+    with SYNC_PUBLISH=1, copy it to s3://<bucket>/data/sync-status.json.
+
+    Status only: no secrets, cookies or account data. Never raises, so a missing
+    bucket or a network blip can never fail the sync. Returns "published",
+    "local" or "error: ...".
+    """
+    try:
+        _write_status(source, entry)
+        if os.environ.get("SYNC_PUBLISH") != "1":
+            return "local"
+        bucket = await _bucket()
+        if not bucket:
+            return "error: bucket unknown"
+        rc, tail = await run_cmd([
+            "aws", "s3", "cp", str(STATUS_FILE), f"s3://{bucket}/{STATUS_KEY}",
+            "--cache-control", "no-cache,no-store,must-revalidate",
+            "--content-type", "application/json; charset=utf-8",
+        ], timeout=STATUS_UPLOAD_TIMEOUT)
+        return "published" if rc == 0 else f"error: aws rc={rc}: {tail[-200:]}"
+    except Exception as e:  # noqa: BLE001 - status is best-effort by design
+        return f"error: {e}"
+
+
+ALL_ACTIVITIES = [ensure_chrome, check_session, scrape, validate_dump, digest, publish_data, notify, publish_status]

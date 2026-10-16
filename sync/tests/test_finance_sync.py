@@ -1,4 +1,6 @@
 """FinanceSyncWorkflow: preflight, grouped login, scrape order, isolation, validation gate."""
+from temporalio.exceptions import ApplicationError
+
 from fakes import Fake, expired, moved, rejected, result_of, run, until_phase
 from workflows import FinanceSyncWorkflow
 
@@ -198,3 +200,85 @@ def test_final_notification_summarises_by_status():
     result_of(fake, args=[["cal", "amex"]])
     title, msg = fake.notes()[-1]
     assert title == "Finance sync" and "failed: cal" in msg and "ok: amex" in msg
+
+
+# --- live status: one entry per source -----------------------------------------
+
+def test_two_source_run_publishes_a_separate_entry_per_source():
+    fake = Fake()
+    result_of(fake, args=[["cal", "amex"]])
+    steps = ["checking_session", "scraping", "validating", "digesting", "publishing", "done"]
+    assert fake.published("cal") == steps and fake.published("amex") == steps
+    assert {s for s, _ in fake.statuses} == {"cal", "amex"}
+    entries = {s: e for s, e in fake.statuses if e["status"] == "done"}
+    assert "כאל" in entries["cal"]["message"] and "אמריקן אקספרס" in entries["amex"]["message"]
+    assert entries["cal"]["workflow_id"] == entries["amex"]["workflow_id"]  # one run, two entries
+    # Each source moves through its own steps in turn.
+    scraping = [s for s, e in fake.statuses if e["status"] == "scraping"]
+    assert scraping == ["cal", "amex"]
+
+
+def test_digest_and_publish_are_reported_on_every_source_that_scraped():
+    fake = Fake(scrape_errors={"leumi": moved()})
+    result_of(fake, args=[["leumi", "cal", "amex"]])
+    for s in ("cal", "amex"):
+        assert fake.published(s)[-3:] == ["digesting", "publishing", "done"]
+    assert fake.published("leumi") == ["checking_session", "scraping", "failed"]  # never digested
+
+
+def test_rejected_dump_publishes_rejected_with_the_reason():
+    fake = Fake(validate_errors={"cal": rejected()})
+    result_of(fake, args=[["cal", "amex"]])
+    assert fake.published("cal") == ["checking_session", "scraping", "validating", "rejected"]
+    last = [e for s, e in fake.statuses if s == "cal"][-1]
+    assert last["step"] == 3 and "0 transactions" in last["error"]
+    # amex scraped fine; its publish is withheld and it says so.
+    assert fake.published("amex")[-1] == "done" and "publishing" not in fake.published("amex")
+    assert "הוחזק" in [e for s, e in fake.statuses if s == "amex"][-1]["message"]
+
+
+def test_dead_source_is_published_waiting_then_needs_login_while_live_ones_are_queued():
+    fake = Fake(sessions={"amex": "dead"})
+    result_of(fake, args=[["amex", "cal"]])
+    assert fake.published("amex") == ["checking_session", "waiting_for_login", "needs_login"]
+    cal = [e for s, e in fake.statuses if s == "cal"]
+    assert "בתור" in cal[1]["message"]  # connected, but queued behind the login wait
+    assert fake.published("cal")[-1] == "done"
+
+
+def test_login_group_expiring_publishes_needs_login_for_the_skipped_apps():
+    fake = Fake(scrape_errors={"discount": expired()})
+    result_of(fake, args=[["discount", "discount-mortgage"]])
+    assert fake.published("discount")[-1] == "needs_login"
+    assert fake.published("discount-mortgage") == ["checking_session", "needs_login"]
+
+
+def test_digest_failure_marks_every_scraped_source_failed():
+    fake = Fake(digest_error=ApplicationError("digest.py failed (rc=1)", non_retryable=True))
+
+    async def scenario(env, h):
+        try:
+            await h.result()
+        except Exception:
+            return None
+
+    run(fake, scenario, args=[["cal", "amex"]])
+    for s in ("cal", "amex"):
+        assert fake.published(s)[-2:] == ["digesting", "failed"]
+
+
+def test_status_publishing_failure_never_fails_a_multi_source_sync():
+    fake = Fake(status_error=True)
+    result = result_of(fake, args=[["cal", "amex"]])
+    assert result["cal"]["status"] == result["amex"]["status"] == "ok"
+    assert fake.calls.count(("publish",)) == 1
+
+
+def test_merge_status_advances_last_success_only_on_done():
+    import activities
+    doc = None
+    for source, status, at in [("cal", "done", "t1"), ("amex", "rejected", "t2"), ("cal", "scraping", "t3"),
+                               ("cal", "rejected", "t4")]:
+        doc = activities.merge_status(doc, source, {"status": status, "updated_at": at})
+    assert doc["sources"]["cal"]["last_success_at"] == "t1"
+    assert doc["sources"]["amex"]["last_success_at"] is None

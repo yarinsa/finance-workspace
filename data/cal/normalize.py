@@ -7,9 +7,13 @@ Reads:
 
 Each cardTransactions file:
     result.bankAccounts[].debitDates[].transactions[]
-with fields trnIntId (stable id), merchantName, trnPurchaseDate, trnAmt (₪),
-debCrdDate (billing date). Charges are stored as NEGATIVE (money out); refunds
-(refundInd) stay positive.
+with fields trnIntId (stable id), merchantName, trnPurchaseDate, trnAmt,
+amtBeforeConvAndIndex, debCrdDate (billing date). Charges are stored as NEGATIVE
+(money out); refunds (refundInd) stay positive.
+
+`trnAmt` is NOT always ₪: for foreign purchases it is the original-currency
+figure and for installment deals it is the whole deal total. The ₪ charged this
+cycle is then `amtBeforeConvAndIndex` (see charge_amount, issue #35).
 
 Entities emitted: credit_cards, transactions.
 Common envelope: {"source", "entity", "generated_at", "records": [...]}
@@ -52,6 +56,19 @@ for c in init.get("result", {}).get("cards", []):
 emit("credit_cards", cards)
 
 
+def charge_amount(t):
+    """₪ charged this billing cycle for one CAL transaction.
+
+    FX purchases and installment payments use `amtBeforeConvAndIndex`; every
+    other row keeps `trnAmt`, because `amtBeforeConvAndIndex` is 0 on card fees
+    and some refunds.
+    """
+    foreign = (t.get("trnCurrencySymbol") or "₪") != "₪"
+    if foreign or (t.get("numOfPayments") or 0) > 0:
+        return abs(t.get("amtBeforeConvAndIndex") or 0)
+    return t.get("trnAmt", 0)
+
+
 # ---- transactions (deduped across pulls by trnIntId) ----
 txns = {}                                         # trnIntId -> record
 for fp in sorted(glob.glob(str(RAW / "cardTransactions_*.json"))):
@@ -60,9 +77,9 @@ for fp in sorted(glob.glob(str(RAW / "cardTransactions_*.json"))):
     for acc in data.get("result", {}).get("bankAccounts", []):
         for dd in acc.get("debitDates", []):
             for t in dd.get("transactions", []):
-                amt = t.get("trnAmt", 0)
+                amt = charge_amount(t)
                 signed = round(amt if t.get("refundInd") else -amt, 2)
-                tid = t.get("trnIntId") or f"{last4}:{t.get('trnPurchaseDate')}:{amt}"
+                tid = t.get("trnIntId") or f"{last4}:{t.get('trnPurchaseDate')}:{t.get('trnAmt', 0)}"
                 txns[tid] = {
                     "card_last4": last4,
                     "card_name": card_name.get(last4),
@@ -70,6 +87,8 @@ for fp in sorted(glob.glob(str(RAW / "cardTransactions_*.json"))):
                     "billing_date": (t.get("debCrdDate") or "")[:10],
                     "amount": signed,
                     "currency": "ILS",
+                    "original_amount": t.get("trnAmt"),
+                    "original_currency": t.get("trnCurrencySymbol") or "₪",
                     "description": (t.get("merchantName") or "").strip(),
                     "category": (t.get("branchCodeDesc") or "").strip() or None,
                     "installments": t.get("numOfPayments") or None,
