@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>me.yarinsa.finance-worker</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>__REPO__/.venv/bin/python</string>
+    <string>__REPO__/sync/worker.py</string>
+  </array>
+  <key>WorkingDirectory</key><string>__REPO__</string>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <!-- node 22 + homebrew on PATH so playwright-cli, node and aws are found -->
+    <key>PATH</key><string>__HOME__/.nvm/versions/node/v22.22.3/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+    <key>SYNC_PUBLISH</key><string>1</string>
+    <key>TEMPORAL_ADDRESS</key><string>localhost:7233</string>
+  </dict>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><true/>
+  <key>ThrottleInterval</key><integer>30</integer>
+  <key>StandardOutPath</key><string>__HOME__/Library/Logs/finance-sync/worker.log</string>
+  <key>StandardErrorPath</key><string>__HOME__/Library/Logs/finance-sync/worker.err.log</string>
+</dict>
+</plist>

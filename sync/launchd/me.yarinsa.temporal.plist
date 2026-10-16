@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>me.yarinsa.temporal</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/opt/homebrew/bin/temporal</string>
+    <string>server</string>
+    <string>start-dev</string>
+    <string>--ip</string><string>127.0.0.1</string>
+    <string>--port</string><string>7233</string>
+    <string>--ui-port</string><string>8233</string>
+    <string>--db-filename</string><string>__HOME__/.temporal/finance.db</string>
+  </array>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><true/>
+  <key>StandardOutPath</key><string>__HOME__/Library/Logs/finance-sync/temporal.log</string>
+  <key>StandardErrorPath</key><string>__HOME__/Library/Logs/finance-sync/temporal.err.log</string>
+</dict>
+</plist>

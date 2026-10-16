@@ -74,6 +74,17 @@ Chrome profiles persist logins, so this costs a login only when one lapses.
   balances, credit-card debt, loans/mortgage, detected salary, totals, and a
   `spending` summary. Query this for net-worth/debt questions.
 
+### Automated sync (Temporal)
+
+`sync/` runs the AMEX refresh on a schedule (daily 07:30 Asia/Jerusalem) with a
+local Temporal dev server + worker under launchd: ensure Chrome -> check session
+-> `dump.sh` -> digest chain -> `infra/deploy.sh --data-only` (when
+`SYNC_PUBLISH=1`). It **never authenticates** — a dead session triggers a macOS
+notification and a wait for `python3 sync/resume.py` after the human logs in
+(12h, then `needs_login`). Install with `sync/install.sh`; UI at
+http://localhost:8233. Details in `sync/README.md`. Only `sync/` needs
+`temporalio`; `data/` stays stdlib-only.
+
 ### Cashflow forecast
 
 `python3 data/forecast.py` writes `data/digested/forecast.{json,md}` — a
