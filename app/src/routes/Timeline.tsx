@@ -12,10 +12,17 @@ export default function Timeline() {
       <PageTitle>ציר זמן</PageTitle>
       <Card>
         <div className="card-title">נקודות מוקד לאורך החיים</div>
+        <div className="muted" style={{ fontSize: 13, marginBottom: 8 }}>
+          השווי כאן כולל חיסכון ארוך טווח (פנסיה וקרנות השתלמות) ואת המשכנתא — לכן נקודת "היום"
+          שונה מהמצב הנזיל במבט על. שווי הדירה אינו נכלל.
+        </div>
         {points.length === 0 && <div className="muted">אין נתוני תחזית.</div>}
         {points.map((p, i) => (
           <div key={i} className="row">
-            <span>{p.age != null ? `גיל ${p.age}` : p.name ?? p.date}</span>
+            <span>
+              {p.age != null ? `גיל ${p.age}` : p.date}
+              {p.name && <span className="muted"> · {p.name}</span>}
+            </span>
             <strong>{shekel(p.net_val as number)}</strong>
           </div>
         ))}
