@@ -10,9 +10,13 @@ type Query {
   incomes(first: Int, after: String, last: Int, before: String,
           filter: TransactionFilter, orderBy: TransactionOrder = DATE_DESC): TransactionConnection!
 
-  merchants(first: Int, after: String, search: String): MerchantConnection!
-  categories: [Category!]!
-  tags: [Tag!]!
+  """Edge totals cover each merchant's transactions in `dateRange` (all time if omitted)."""
+  merchants(first: Int, after: String, last: Int, before: String, search: String,
+            dateRange: DateRange, orderBy: GroupOrder = TOTAL_DESC): MerchantConnection!
+  categories(first: Int, after: String, last: Int, before: String, search: String,
+             dateRange: DateRange, orderBy: GroupOrder = TOTAL_DESC): CategoryConnection!
+  tags(first: Int, after: String, last: Int, before: String, search: String,
+       dateRange: DateRange, orderBy: GroupOrder = TOTAL_DESC): TagConnection!
 
   snapshot: Snapshot!
 }

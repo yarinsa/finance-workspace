@@ -90,6 +90,15 @@ that take one `input` and echo `clientMutationId`.
 - **Expense / income** is one `Transaction` type with `direction`; `Query.expenses` and
   `Query.incomes` are the filtered connections.
 - **`raw`** holds the scraped values before any override (REST's `scraped_*` fields).
+- **Relations:** the "one" side of a 1:M relation is the object itself
+  (`Transaction.category: Category`). Anything plural over a `Node` is a paginated
+  connection, never a list: that covers the "many" side of 1:M, every M:M, and the root
+  `merchants`/`categories`/`tags`. Every connection has `totalCount`.
+- **Edge totals:** each `MerchantEdge`/`CategoryEdge`/`TagEdge` carries
+  `totals { count sum }`, scoped to the edge. Under `Merchant.categories` it is that
+  merchant's share of the category; at the root it is the whole group. The same
+  connections take `dateRange` and `orderBy: GroupOrder` (default `TOTAL_DESC`).
+  New grouped resources follow this pattern.
 - **`Merchant`** is derived from the description (`data/spending.py` `merchant_name`),
   not stored.
 

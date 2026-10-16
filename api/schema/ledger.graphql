@@ -38,7 +38,7 @@ type Transaction implements Node {
   """Derived from the description (data/spending.py `merchant_name`)."""
   merchant: Merchant!
   category: Category
-  tags: [Tag!]!
+  tags(first: Int, after: String): TagConnection!
   note: String
   excluded: Boolean!
   overridden: Boolean!
@@ -89,17 +89,44 @@ input TransactionFilter {
   includeTransfers: Boolean = false
 }
 
+"""
+Count and signed sum of a set of transactions. Every edge into a Merchant, Category or
+Tag carries one, scoped to the edge: under `Query.categories` it covers the whole
+category, under `Merchant.categories` only that merchant's rows in the category.
+Excluded rows and transfers are left out, as in `TransactionFilter`'s defaults.
+"""
+type TransactionTotals {
+  count: Int!
+  sum: Money!
+}
+
+"""How to order a connection of grouped transactions (merchants, categories, tags)."""
+enum GroupOrder {
+  NAME_ASC
+  COUNT_DESC
+  """Largest absolute sum first: the biggest spend or income."""
+  TOTAL_DESC
+  TOTAL_ASC
+}
+
 """A counterparty, derived from transaction descriptions. Not stored."""
 type Merchant implements Node {
   id: ID!
   name: String!
   transactions(first: Int, after: String, last: Int, before: String,
                filter: TransactionFilter, orderBy: TransactionOrder = DATE_DESC): TransactionConnection!
+  """The categories this merchant's transactions fall in; edge totals are this merchant's share."""
+  categories(first: Int, after: String, last: Int, before: String,
+             dateRange: DateRange, orderBy: GroupOrder = TOTAL_DESC): CategoryConnection!
+  """The tags on this merchant's transactions; edge totals are this merchant's share."""
+  tags(first: Int, after: String, last: Int, before: String,
+       dateRange: DateRange, orderBy: GroupOrder = TOTAL_DESC): TagConnection!
 }
 
 type MerchantEdge {
   node: Merchant!
   cursor: String!
+  totals: TransactionTotals!
 }
 
 type MerchantConnection {
@@ -115,11 +142,29 @@ type Category implements Node {
   source: CategorySource!
   transactions(first: Int, after: String, last: Int, before: String,
                filter: TransactionFilter, orderBy: TransactionOrder = DATE_DESC): TransactionConnection!
+  """The merchants in this category; edge totals are each merchant's share."""
+  merchants(first: Int, after: String, last: Int, before: String, search: String,
+            dateRange: DateRange, orderBy: GroupOrder = TOTAL_DESC): MerchantConnection!
+  """The tags on this category's transactions; edge totals are the category's share."""
+  tags(first: Int, after: String, last: Int, before: String,
+       dateRange: DateRange, orderBy: GroupOrder = TOTAL_DESC): TagConnection!
 }
 
 enum CategorySource {
   RISEUP
   USER
+}
+
+type CategoryEdge {
+  node: Category!
+  cursor: String!
+  totals: TransactionTotals!
+}
+
+type CategoryConnection {
+  edges: [CategoryEdge!]!
+  pageInfo: PageInfo!
+  totalCount: Int!
 }
 
 """A free-form label; a transaction can carry several."""
@@ -130,6 +175,26 @@ type Tag implements Node {
   color: String
   transactions(first: Int, after: String, last: Int, before: String,
                filter: TransactionFilter, orderBy: TransactionOrder = DATE_DESC): TransactionConnection!
+  """The merchants of this tag's transactions; edge totals are the tag's share."""
+  merchants(first: Int, after: String, last: Int, before: String, search: String,
+            dateRange: DateRange, orderBy: GroupOrder = TOTAL_DESC): MerchantConnection!
+  """The categories of this tag's transactions; edge totals are the tag's share."""
+  categories(first: Int, after: String, last: Int, before: String,
+             dateRange: DateRange, orderBy: GroupOrder = TOTAL_DESC): CategoryConnection!
+}
+
+type TagEdge {
+  node: Tag!
+  cursor: String!
+  totals: TransactionTotals!
+  """When the tag was put on the transaction. Set only under `Transaction.tags`."""
+  taggedAt: DateTime
+}
+
+type TagConnection {
+  edges: [TagEdge!]!
+  pageInfo: PageInfo!
+  totalCount: Int!
 }
 
 """One field change on a transaction's override."""
@@ -149,4 +214,5 @@ type AuditEntryEdge {
 type AuditEntryConnection {
   edges: [AuditEntryEdge!]!
   pageInfo: PageInfo!
+  totalCount: Int!
 }

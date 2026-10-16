@@ -45,9 +45,9 @@ BINDINGS: dict[str, Binding] = {
         hidden=frozenset({"category_id", "is_income"}),   # exposed as `category` and `direction`
         never_null=frozenset({"card_bill_payment", "internal_transfer", "savings", "overridden"}),
     ),
-    "Category": Binding(tables.Category, resolved=frozenset({"id", "source", "transactions"}),
+    "Category": Binding(tables.Category, resolved=frozenset({"id", "source", "transactions", "merchants", "tags"}),
                         hidden=frozenset({"created_at"})),
-    "Tag": Binding(tables.Tag, resolved=frozenset({"id", "transactions"}), hidden=frozenset({"created_at"})),
+    "Tag": Binding(tables.Tag, resolved=frozenset({"id", "transactions", "merchants", "categories"}), hidden=frozenset({"created_at"})),
     "AuditEntry": Binding(tables.OverrideAudit, hidden=frozenset({"id", "txn_date", "abs_amount"}),
                           never_null=frozenset({"at"})),   # filled by the database default
     "SnapshotTotals": Binding(models.SnapshotTotals),
@@ -64,6 +64,7 @@ BINDINGS: dict[str, Binding] = {
 STRUCTURAL = frozenset({
     "Query", "Mutation", "PageInfo", "Merchant", "RawTransactionValues", "Snapshot",
     "TransactionConnection", "TransactionEdge", "MerchantConnection", "MerchantEdge",
+    "CategoryConnection", "CategoryEdge", "TagConnection", "TagEdge", "TransactionTotals",
     "AuditEntryConnection", "AuditEntryEdge",
     "UpdateTransactionPayload", "ClearTransactionOverridePayload", "SetTransactionTagsPayload",
     "UpdateTagPayload", "DeleteTagPayload",

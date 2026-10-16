@@ -87,3 +87,41 @@ def test_mutations_take_one_input_and_echo_client_mutation_id():
         assert list(m.args) == ["input"], name
         assert "clientMutationId" in m.args["input"].type.of_type.fields, name
         assert "clientMutationId" in m.type.of_type.fields, name
+
+
+def _unwrap(t):
+    while hasattr(t, "of_type"):
+        t = t.of_type
+    return t
+
+
+def _is_list(t):
+    from graphql import GraphQLList
+    t = t.of_type if isinstance(t, GraphQLNonNull) else t
+    return isinstance(t, GraphQLList)
+
+
+def test_relations_to_nodes_are_connections_never_lists():
+    # 1:M "one" side is the object itself; anything plural over a Node is a paginated connection
+    node = SCHEMA.type_map["Node"]
+    lists = [f"{name}.{f}" for name, t in OBJECT_TYPES.items() for f, gql in t.fields.items()
+             if _is_list(gql.type) and not name.endswith(("Connection",))
+             and isinstance(_unwrap(gql.type), GraphQLObjectType) and node in _unwrap(gql.type).interfaces]
+    assert not lists, f"return a connection instead of a list: {lists}"
+
+
+def test_every_connection_has_a_total_count():
+    missing = [n for n in OBJECT_TYPES if n.endswith("Connection") and "totalCount" not in OBJECT_TYPES[n].fields]
+    assert not missing
+
+
+def test_group_edges_carry_transaction_totals():
+    for name in ("MerchantEdge", "CategoryEdge", "TagEdge"):
+        assert _unwrap(OBJECT_TYPES[name].fields["totals"].type).name == "TransactionTotals", name
+
+
+def test_plural_relations_are_paginated_both_ways():
+    for name, t in OBJECT_TYPES.items():
+        for f, gql in t.fields.items():
+            if _unwrap(gql.type).name.endswith("Connection") and name != "Transaction":
+                assert {"first", "after", "last", "before"} <= set(gql.args), f"{name}.{f}"
