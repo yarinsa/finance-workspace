@@ -32,6 +32,8 @@ raw dumps are already on disk.
    ```
 
    Uploads each JSON with `no-cache` and invalidates `/data/*`.
+   It does **not** touch `data/sync-status.json`: that file is owned by the
+   Temporal worker (`sync/`), which overwrites it on every workflow step.
 
 3. **Report:** the site URL, bucket, invalidation id, and any
    `skip <file>.json` warnings (a missing file means that dashboard page will

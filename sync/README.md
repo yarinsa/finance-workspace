@@ -36,6 +36,26 @@ Temporal UI: http://localhost:8233 (namespace `default`, task queue `finance-syn
 Publishing to S3 only happens when `SYNC_PUBLISH=1` (set in the worker plist).
 Without it `publish_data` returns `skipped`.
 
+## Live status on the dashboard
+
+Every status change (`checking_session -> scraping -> digesting -> publishing ->
+done`, or `waiting_for_login` / `needs_login` / `failed`) runs the
+`publish_status` activity. It writes `data/digested/sync-status.json` and, with
+`SYNC_PUBLISH=1`, copies it to `s3://<bucket>/data/sync-status.json` (bucket from
+`$BUCKET` or `terraform output`). Per source it holds `status`, a short Hebrew
+`message`, `step`/`total_steps`, workflow/run ids, `started_at`, `updated_at`,
+`last_success_at` and a one-line `error`. Status only: no secrets or account data.
+
+Publishing is best-effort (one attempt, never raises), so a missing bucket or
+network blip never fails a sync. `deploy.sh --data-only` does not upload or
+delete this file.
+
+The app polls it every 5s while a run is active and every 60s otherwise:
+`/syncs` shows a live card with a progress bar, the header dot pulses while
+running and turns red on `waiting_for_login` / `needs_login` / `failed`, and the
+home "לטיפול" list gets a "log in to AMEX" item. A running state that hasn't been
+updated for 15 minutes shows as "לא ידוע" (unknown): the worker probably died.
+
 ## Session expired
 
 You get a notification: "AMEX session expired - log in in the AMEX Chrome window".

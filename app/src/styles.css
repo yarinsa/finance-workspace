@@ -171,6 +171,24 @@ body {
 /* Syncs page */
 .sync-value { display: inline-flex; align-items: center; gap: 8px; font-weight: 600; }
 .sync-lag { color: var(--lg-warn); margin-inline-start: 6px; }
+.sync-mode {
+  font-size: 11px; font-weight: 600; color: var(--lg-muted); background: var(--lg-panel-2);
+  border-radius: 999px; padding: 1px 8px; margin-inline-start: 8px; vertical-align: middle;
+}
+
+/* ---- Live (Temporal) sync status --------------------------------------- */
+.pill-run { background: color-mix(in srgb, var(--lg-accent) 15%, transparent); color: var(--lg-accent); display: inline-flex; align-items: center; gap: 6px; }
+.live-pulse, .sync-dot-running, .sync-dot-attention {
+  display: inline-block; width: 8px; height: 8px; border-radius: 50%; flex: none;
+}
+.live-pulse, .sync-dot-running { background: currentColor; animation: live-pulse 1.4s ease-in-out infinite; }
+.sync-dot-running { color: var(--lg-accent); margin-inline-start: 6px; vertical-align: middle; }
+.sync-dot-attention { background: var(--lg-bad); margin-inline-start: 6px; vertical-align: middle; }
+@keyframes live-pulse { 50% { opacity: .35; } }
+@media (prefers-reduced-motion: reduce) { .live-pulse, .sync-dot-running { animation: none; } }
+.live-progress { height: 4px; border-radius: 999px; background: var(--lg-panel-2); overflow: hidden; margin: 2px 0 6px; }
+.live-progress > span { display: block; height: 100%; background: var(--lg-accent); border-radius: inherit; transition: width .4s ease; }
+.live-meta { font-size: 12px; margin-bottom: 4px; }
 
 /* ---- Mortgage card ------------------------------------------------------ */
 .list-foot.no-rule { border-top: 0; margin-top: 0; padding-top: 8px; }

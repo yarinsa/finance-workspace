@@ -27,7 +27,8 @@ describes).
    ```
 
    Runs `pnpm install --frozen-lockfile && pnpm build`, syncs hashed assets with
-   immutable caching (`--delete`, excluding `data/*`), uploads `index.html` with
+   immutable caching (`--delete`, excluding `data/*`, so the data files and the
+   worker's live `data/sync-status.json` survive), uploads `index.html` with
    `no-cache`, and invalidates `/*`. Use a long timeout (~10 min) and filter the
    noisy `upload:`/`Completed` lines when summarizing.
 
