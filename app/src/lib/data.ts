@@ -207,6 +207,8 @@ export interface SnapshotTotals {
   /** Liquid position vs debt — deliberately EXCLUDES long-term savings. */
   tracked_net_position: number;
   long_term_savings?: number;
+  /** Withdrawable deposits (e.g. נזיל יומי+), part of long_term_savings. */
+  liquid_savings?: number;
   /** tracked_net_position + long_term_savings. */
   net_position_with_savings?: number;
   monthly_loan_service: number;
