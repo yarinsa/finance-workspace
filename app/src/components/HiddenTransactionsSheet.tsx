@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { TransactionList, TransactionRow } from "@/components/TransactionRow";
 import { ApiOffline, keyId, listTransactions, patchTransaction, type Row } from "@/lib/api";
-import { shekel } from "@/lib/data";
 import { useLedgerApi } from "@/lib/useLedgerApi";
 
 /** Transactions hidden through the edit sheet, with a way to bring each one back. */
@@ -67,27 +67,28 @@ function Body() {
         ) : rows.length === 0 ? (
           <div className="py-3 text-muted-foreground">אין תנועות מוסתרות.</div>
         ) : (
-          <ul className="divide-y divide-line">
+          <TransactionList>
             {rows.map((r) => (
-              <li key={keyId(r)} className="flex items-center gap-3 py-2.5">
-                <div className="min-w-0 flex-1">
-                  <div className="truncate">{r.description}</div>
-                  <div className="text-xs text-muted-foreground">
-                    {r.date.slice(8, 10)}/{r.date.slice(5, 7)} · {r.category}
-                  </div>
-                </div>
-                <strong className="shrink-0 tabular-nums">{shekel(r.amount)}</strong>
-                <button
-                  type="button"
-                  disabled={pending === keyId(r)}
-                  onClick={() => void unhide(r)}
-                  className="shrink-0 rounded-lg border border-line px-2.5 py-1 text-xs disabled:opacity-40"
-                >
-                  בטל הסתרה
-                </button>
-              </li>
+              <TransactionRow
+                key={keyId(r)}
+                merchant={r.description}
+                amount={r.amount}
+                date={r.date}
+                category={r.category}
+                tags={r.tags}
+                trailing={
+                  <button
+                    type="button"
+                    disabled={pending === keyId(r)}
+                    onClick={() => void unhide(r)}
+                    className="shrink-0 rounded-lg border border-line px-2.5 py-1 text-xs disabled:opacity-40"
+                  >
+                    בטל הסתרה
+                  </button>
+                }
+              />
             ))}
-          </ul>
+          </TransactionList>
         )}
         {updating && <div className="mt-2 text-xs text-muted-foreground">מתעדכן…</div>}
         {error && <div className="mt-2 text-sm text-bad">{error}</div>}

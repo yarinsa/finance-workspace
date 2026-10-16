@@ -1,5 +1,4 @@
-import CategoryTag from "@/components/CategoryTag";
-import TagChips from "@/components/TagChips";
+import { TransactionList, TransactionRow } from "@/components/TransactionRow";
 import { useSearchParams } from "react-router-dom";
 import { useMemo, useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
@@ -14,10 +13,6 @@ import { Input } from "@/components/ui/input";
 import { cashflow, monthYear, pct, shekel, useDataVersion } from "@/lib/data";
 import { applyOverlay, overlayFor } from "@/lib/ledgerOverlay";
 import { useLedgerApi } from "@/lib/useLedgerApi";
-
-function dayLabel(iso: string): string {
-  return `${iso.slice(8, 10)}/${iso.slice(5, 7)}`;
-}
 
 /** Case-insensitive match on merchant name, or on the amount's digits ("120" finds ₪1,205.50). */
 function matchesQuery(t: { merchant: string; amount: number }, query: string): boolean {
@@ -252,31 +247,22 @@ export default function Spending() {
             {txs.length === 0 ? (
               <div className="py-3 text-muted-foreground">אין תנועות.</div>
             ) : (
-              <ul className="divide-y divide-line">
+              <TransactionList>
                 {txs.map((t, i) => (
-                  <li key={`${t.date}-${i}`}>
-                    <button
-                      type="button"
-                      onClick={() => setEditing(t)}
-                      className="flex w-full items-center gap-3 py-2.5 text-start"
-                    >
-                      <i className="size-2.5 shrink-0 rounded-full" style={{ background: catColor(t.category) }} />
-                      <div className="min-w-0 flex-1">
-                        <div className="truncate">{t.merchant}</div>
-                        <div className="mt-0.5 flex items-center gap-1.5 text-xs text-muted-foreground">
-                          <CategoryTag name={t.category} />
-                          <TagChips tags={t.tags} onPick={setTag} />
-                          <span>{dayLabel(t.date)}</span>
-                          {t.overridden || overlayFor(overlay, t)?.overridden ? (
-                            <span className="ms-1.5 rounded-full bg-brand/15 px-1.5 py-px text-[10px] font-semibold">נערך</span>
-                          ) : null}
-                        </div>
-                      </div>
-                      <strong className="shrink-0 tabular-nums">{shekel(t.amount)}</strong>
-                    </button>
-                  </li>
+                  <TransactionRow
+                    key={`${t.date}-${i}`}
+                    merchant={t.merchant}
+                    amount={-t.amount}
+                    date={t.date}
+                    category={t.category}
+                    tags={t.tags}
+                    onPickTag={setTag}
+                    dotColor={catColor(t.category)}
+                    edited={t.overridden || overlayFor(overlay, t)?.overridden}
+                    onClick={() => setEditing(t)}
+                  />
                 ))}
-              </ul>
+              </TransactionList>
             )}
           </TabsContent>
 
