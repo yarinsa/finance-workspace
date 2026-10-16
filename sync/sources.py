@@ -99,9 +99,10 @@ _ALL = [
            app_host="telebank.co.il", check=SELF, playwright=False,
            dumps=((str(REPO_ROOT / "scrapers" / "discount" / "scrape.mjs"),),)),
     # dump.sh first (it needs the live SessionID); dump-loans.sh navigates the tab.
-    Source(name="leumi", port=9224, login_url="https://hb2.bankleumi.co.il/", app_host="bankleumi.co.il",
-           check=SESSIONS, dumps=(("leumi-account-refresh/scripts/dump.sh", "{session}"),
-                                  ("leumi-account-refresh/scripts/dump-loans.sh", "{session}"))),
+    # Leumi logs in headless by itself (scrapers/leumi/scrape.mjs, LEUMI_USERNAME/LEUMI_PASSWORD in
+    # .env) and makes the dump.sh + dump-loans.sh calls in one run.
+    Source(name="leumi", port=0, login_url="https://hb2.bankleumi.co.il/", app_host="bankleumi.co.il",
+           check=SELF, playwright=False, dumps=((str(REPO_ROOT / "scrapers" / "leumi" / "scrape.mjs"),),)),
     # CAL logs in headless by itself (scrapers/cal/scrape.mjs, CAL_USERNAME/CAL_PASSWORD in .env).
     Source(name="cal", port=0, login_url="https://www.cal-online.co.il/", app_host="cal-online.co.il",
            check=SELF, playwright=False, dumps=((str(REPO_ROOT / "scrapers" / "cal" / "scrape.mjs"),),)),

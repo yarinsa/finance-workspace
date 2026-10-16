@@ -5,6 +5,21 @@ description: Refresh the raw Bank Leumi (בנק לאומי) account data dump in
 
 # Leumi Account Raw Data Refresh
 
+> **Default path: headless, no Chrome.** `scrapers/leumi/scrape.mjs` logs in by itself with
+> `LEUMI_USERNAME` / `LEUMI_PASSWORD` from the repo-root `.env` (the user fills it; agents never
+> type or read credentials), then makes the same calls as `dump.sh` and `dump-loans.sh` and writes
+> the same files below. The scheduled sync runs it (`sync/sources.py`, check `self`).
+>
+> ```bash
+> cd scrapers/leumi && npm install     # first time
+> node scrapers/leumi/scrape.mjs [--out DIR] [--account-index 1] [--num-tx 500] [--loans "3 4"]
+> ```
+>
+> Exit codes: 0 ok · 1 failure (stub-guarded: nothing bad written) · 2 missing env / bad args ·
+> 3 `LOGIN FAILED: INVALID_PASSWORD | CHANGE_PASSWORD | ACCOUNT_BLOCKED | OTP_REQUIRED` — needs a
+> human; the sync reports `needs_login` and never retries. The CDP flow below is the fallback
+> (e.g. when Leumi demands an OTP).
+
 Pulls **raw** Bank Leumi account API responses (account list, balance summary,
 current-account transactions) straight from the logged-in online-banking web
 app (`hb2.bankleumi.co.il`) into `data/leumi/raw/`.

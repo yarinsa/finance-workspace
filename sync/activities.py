@@ -48,8 +48,9 @@ VALIDATION_FAILED = "ValidationFailed"
 EXPIRED_MARKERS = (
     "session not live", "VERDICT: LOGGED_OUT", "LOGIN-SHELL HTML", "actionRequired", "stepup",
     "קלט לא תקין", "session likely", "probably logged out", "No logged-in", "No amitim",
-    # self-login scrapers (scrapers/discount: mortgage, checking): the bank refused the .env credentials
+    # self-login scrapers (scrapers/*): the bank refused the .env credentials or wants a human step
     "LOGIN FAILED: INVALID_PASSWORD", "LOGIN FAILED: CHANGE_PASSWORD",
+    "LOGIN FAILED: OTP_REQUIRED", "LOGIN FAILED: ACCOUNT_BLOCKED",
 )
 
 

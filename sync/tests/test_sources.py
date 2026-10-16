@@ -21,7 +21,7 @@ def run(coro):
 def test_registry_ports_and_scrape_order():
     assert {n: s.port for n, s in sources.SOURCES.items()} == {
         "discount-business": 9223, "discount-mortgage": 0, "discount": 0,  # mortgage + checking log in by themselves: no Chrome
-        "leumi": 9224, "cal": 0, "amex": 9226, "max": 0, "harel": 9227, "more": 9228, "analyst": 9229,
+        "leumi": 0, "cal": 0, "amex": 9226, "max": 0, "harel": 9227, "more": 9228, "analyst": 9229,
     }
     assert "riseup" not in sources.SOURCES
     # The Chrome app first; self-login mortgage and checking after it.
@@ -246,16 +246,14 @@ def test_scrape_passes_session_or_port_per_script(scrape_env):
     assert not [c for c in cmds if c[:2] == ("bind", "more")]  # raw-CDP source: no playwright
 
 
-def test_leumi_runs_dump_then_loans_and_stops_on_first_failure(scrape_env):
-    cmds, results = scrape_env
+def test_leumi_logs_in_by_itself_in_one_script(scrape_env):
+    """dump.sh + dump-loans.sh are one headless run now: no Chrome tab, no playwright."""
+    cmds, _ = scrape_env
+    leumi = sources.get("leumi")
+    assert leumi.check == sources.SELF and leumi.group == "bankleumi.co.il-self"
     run(activities.scrape("leumi"))
-    assert [c[1] for c in cmds if c[0] == "run"] == ["leumi-account-refresh"] * 2
-    cmds.clear()
-    results.append((2, "something moved"))
-    with pytest.raises(ApplicationError) as e:
-        run(activities.scrape("leumi"))
-    assert e.value.type == "ScrapeFailed" and e.value.non_retryable
-    assert len([c for c in cmds if c[0] == "run"]) == 1  # dump-loans.sh never ran
+    assert [c for c in cmds if c[0] == "run"] == [("run", "scrapers", [])]
+    assert not [c for c in cmds if c[0] in ("tab", "bind")]
 
 
 @pytest.mark.parametrize("output", [
@@ -267,6 +265,8 @@ def test_leumi_runs_dump_then_loans_and_stops_on_first_failure(scrape_env):
     "SME - קלט לא תקין",
     "LOGIN FAILED: INVALID_PASSWORD",
     "LOGIN FAILED: CHANGE_PASSWORD",
+    "LOGIN FAILED: OTP_REQUIRED",
+    "LOGIN FAILED: ACCOUNT_BLOCKED",
 ])
 def test_expired_signatures_are_session_expired(scrape_env, output):
     _, results = scrape_env

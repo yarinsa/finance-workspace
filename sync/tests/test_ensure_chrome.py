@@ -100,12 +100,12 @@ def test_ensure_chrome_launches_with_the_sources_own_port_and_profile(monkeypatc
 
     monkeypatch.setattr(activities, "_cdp_up", lambda src: bool(up))
     monkeypatch.setattr(activities, "_launch_chrome", fake_launch)
-    monkeypatch.setattr(activities, "_cdp_pages", lambda src: [{"type": "page", "url": "https://hb2.bankleumi.co.il/x"}])
+    monkeypatch.setattr(activities, "_cdp_pages", lambda src: [{"type": "page", "url": "https://www.harel-group.co.il/x"}])
     monkeypatch.setattr(activities, "run_cmd", fake_run_cmd)
     monkeypatch.setattr(activities.asyncio, "sleep", no_sleep)
-    assert _run(activities.ensure_chrome("leumi")) == "launched"
-    assert launched == ["leumi"]
-    assert sources.get("leumi").port == 9224 and sources.get("leumi").profile.name == ".chrome-cdp-leumi"
+    assert _run(activities.ensure_chrome("harel")) == "launched"
+    assert launched == ["harel"]
+    assert sources.get("harel").port == 9227 and sources.get("harel").profile.name == ".chrome-cdp-harel"
 
 
 def test_run_cmd_kills_hung_command_and_raises():

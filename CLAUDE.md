@@ -177,6 +177,8 @@ CAL works the same way: `scrapers/cal/scrape.mjs` logs in headless with
 `data/cal/raw` files as `cal-refresh/scripts/dump.sh`; a refused login (or a demanded OTP) is `needs_login`.
 Max does the same: `scrapers/max/scrape.mjs` logs in headless with `MAX_USERNAME`/`MAX_PASSWORD`
 (check mode `self`, its own login group) and writes `data/max/raw/`.
+Leumi too: `scrapers/leumi/scrape.mjs` logs in headless with `LEUMI_USERNAME`/`LEUMI_PASSWORD`
+(check mode `self`) and makes the `dump.sh` + `dump-loans.sh` calls, writing the same `data/leumi/raw/` files.
 The source registry is `sync/sources.py`.
 Every source's progress (checking_session → waiting_for_login → scraping → validating →
 digesting → publishing → done, or needs_login / failed / rejected) is published as its own
