@@ -37,3 +37,22 @@ def test_no_verdict_is_not_logged_out():
 
 def test_help_text_mentioning_verdict_midline_is_ignored():
     assert parse_verdict("see VERDICT: LIVE in docs") is None
+
+
+# As the household, when the 2026-10-16 live run printed this (playwright-cli
+# --raw JSON-quotes the returned string, so newlines arrive as literal "\n"),
+# the session should read as LOGGED_OUT, not "no verdict".
+RAW_QUOTED_LOGGED_OUT = (
+    '"cookie authentication_shared: MISSING\\ncookie JSESSIONID: MISSING\\n'
+    'IsLoggedIn status: 200\\nIsLoggedIn body: {\\"data\\":{\\"isLoggedIn\\":false}}\\n'
+    'VERDICT: LOGGED_OUT"\n\n'
+    'Session looks LOGGED OUT. Ask the USER to log in in the visible window.\n'
+)
+
+
+def test_raw_json_quoted_logged_out():
+    assert parse_verdict(RAW_QUOTED_LOGGED_OUT) is False
+
+
+def test_raw_json_quoted_live():
+    assert parse_verdict(RAW_QUOTED_LOGGED_OUT.replace("LOGGED_OUT\"", "LIVE\"")) is True

@@ -31,7 +31,9 @@ PW_SESSION = "amex"
 SESSION_EXPIRED = "SessionExpired"
 SCRAPE_FAILED = "ScrapeFailed"
 
-_VERDICT_RE = re.compile(r"^VERDICT:\s*(LIVE|LOGGED_OUT)\s*$", re.MULTILINE)
+# Starts a line, or follows a literal "\n" / opening quote: playwright-cli --raw
+# JSON-quotes the returned string, so its newlines arrive escaped.
+_VERDICT_RE = re.compile(r'(?:^|\\n|")VERDICT:\s*(LIVE|LOGGED_OUT)\b', re.MULTILINE)
 
 
 def parse_verdict(output: str):
