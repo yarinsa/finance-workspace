@@ -20,6 +20,7 @@ for label in "${LABELS[@]}"; do
   sed -e "s|__REPO__|$REPO|g" -e "s|__HOME__|$HOME|g" "$REPO/sync/launchd/$label.plist" > "$dest"
   launchctl bootout "gui/$UID/$label" 2>/dev/null || true
   launchctl bootstrap "gui/$UID" "$dest"
+  launchctl kickstart "gui/$UID/$label"  # RunAtLoad does not always fire on bootstrap
   echo "loaded $label"
 done
 
