@@ -3,7 +3,7 @@ ever logging in.
 
   preflight   check every requested session first
   login       if any are dead, ONE notification listing them (grouped by login), then wait
-              up to 12h for the `session_refreshed` signal (sync/resume.py)
+              up to 15m for the `session_refreshed` signal (sync/resume.py)
   scrape      live (and unknown) sources in registry order; one failing never stops the rest
   gate        validate_dump after each scrape; a rejected dump does not count
   finish      digest once, publish once, if at least one source scraped
@@ -23,7 +23,9 @@ with workflow.unsafe.imports_passed_through():
     import sources
 
 TASK_QUEUE = "finance-sync"
-LOGIN_WAIT = timedelta(hours=12)
+# Short: an OTP expires within minutes anyway, and a login missed now is retried by the
+# next scheduled run (08:10 / 13:10) instead of a waiting run swallowing it (overlap SKIP).
+LOGIN_WAIT = timedelta(minutes=15)
 
 QUICK = dict(
     start_to_close_timeout=timedelta(minutes=3),
@@ -255,7 +257,7 @@ class _FinanceSync:
                     state[s] = await self._probe(s)
             for s in dead:
                 if state[s] == "dead":
-                    self._res(s, NEEDS_LOGIN, "still logged out" if self._resumed else "no login within 12h")
+                    self._res(s, NEEDS_LOGIN, "still logged out" if self._resumed else "no login within 15m")
                     await self._set(s, "needs_login")
 
         # 3. Scrape in registry order (Discount: business -> mortgage -> checking).

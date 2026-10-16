@@ -4,7 +4,7 @@
 > persistence guarantees) and is not wired into `refresh-all`. Keep `refresh-all`
 > as the manual path; use this as the unattended daily one.
 
-`FinanceSyncWorkflow` refreshes every scraped source daily at 07:30
+`FinanceSyncWorkflow` refreshes every scraped source daily at 08:10 and 13:10
 Asia/Jerusalem on this Mac, then digests and publishes once:
 
 ```
@@ -15,7 +15,7 @@ preflight (all sessions) -> one login notification + wait -> scrape each live so
 RiseUp is deliberately not covered.
 
 **The automation never logs in.** A dead session sends a macOS notification and
-waits up to 12h for you. No credentials, OTPs, Keychain reads or keep-alive pings.
+waits up to 15m for you. No credentials, OTPs, Keychain reads or keep-alive pings.
 
 ## Sources
 
@@ -72,7 +72,7 @@ the scrape opens `…/apollo/business2/` itself.
    a tab exists, attaches playwright-cli where the dump needs it) then
    `check_session(source)` for every requested source, before anything is scraped.
 2. **Grouped login.** If any are dead: **one** notification listing them by login
-   group, then wait up to 12h for `session_refreshed`. After the signal the dead
+   group, then wait up to 15m for `session_refreshed`. After the signal the dead
    sources are re-checked (only the ones named, if `resume.py` got names). Sources
    still dead are skipped with status `needs_login`; this is not an error.
 3. **Scrape.** Live and unknown sources one at a time in registry order. `scrape` then
@@ -145,7 +145,7 @@ docker compose up -d --wait   # Temporal (+ Postgres) alone, from the repo root
 Temporal runs in Docker Compose (the `temporal` service); its history stays in
 `~/.temporal/finance.db`, bind-mounted into the container. The worker stays a
 launchd agent on the Mac (it needs Chrome, osascript and aws). Set Docker
-Desktop to start at login, otherwise the 07:30 run has no server.
+Desktop to start at login, otherwise the scheduled runs have no server.
 
 Temporal UI: http://localhost:8233 (namespace `default`, task queue `finance-sync`).
 
@@ -156,7 +156,7 @@ poetry run python sync/schedule.py --trigger            # run now
 poetry run python sync/schedule.py --pause              # / --unpause
 ```
 
-The schedule id is `finance-sync` (workflow `FinanceSyncWorkflow`, daily 07:30
+The schedule id is `finance-sync` (workflow `FinanceSyncWorkflow`, daily 08:10 and 13:10
 Asia/Jerusalem). It replaces the old AMEX-only `amex-sync` schedule, which
 `schedule.py` deletes when it creates or updates `finance-sync` so the two never both
 fire. Re-run `schedule.py` once after upgrading.
@@ -200,7 +200,7 @@ poetry run python sync/resume.py                     # re-check every dead sourc
 poetry run python sync/resume.py discount amex       # re-check only these (a source name or a login group)
 ```
 
-This signals every running sync workflow. After 12h without a signal, or for sources
+This signals every running sync workflow. After 15m without a signal, or for sources
 still dead on the re-check, the status is `needs_login` and nothing is scraped for them.
 
 ## Logs

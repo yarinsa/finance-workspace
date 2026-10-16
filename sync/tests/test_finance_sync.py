@@ -42,7 +42,7 @@ def test_result_dict_is_per_source_with_status_and_detail():
 
 def test_dead_sessions_produce_exactly_one_grouped_notification():
     fake = Fake(sessions={"discount-business": "dead", "amex": "dead", "harel": "dead"})
-    result = result_of(fake)  # nobody signals: time-skipping fast-forwards the 12h wait
+    result = result_of(fake)  # nobody signals: time-skipping fast-forwards the 15m wait
     notes = fake.login_notes()
     assert len(notes) == 1
     msg = notes[0]
@@ -53,7 +53,7 @@ def test_dead_sessions_produce_exactly_one_grouped_notification():
     assert all(result[s]["status"] == "needs_login" for s in ["discount-business", "amex", "harel"])
     assert result["discount"]["status"] == "ok"  # self-login checking needs no Chrome login
     assert result["discount-mortgage"]["status"] == "ok"  # nor does self-login mortgage
-    assert "12h" in result["amex"]["detail"]
+    assert "15m" in result["amex"]["detail"]
     # The live ones were still scraped.
     assert fake.of("scrape") == ["discount-mortgage", "discount", "leumi", "cal", "max", "more", "analyst"]
 

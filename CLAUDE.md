@@ -152,12 +152,12 @@ Rules that keep it cheap and safe — keep them when changing anything here:
 **Proof of concept** (dev server, no persistence guarantees); see
 `sync/README.md` for status. Not yet the only refresh path — `refresh-all` remains.
 
-`sync/` runs `FinanceSyncWorkflow` daily at 07:30 Asia/Jerusalem over every scraped
+`sync/` runs `FinanceSyncWorkflow` daily at 08:10 and 13:10 Asia/Jerusalem over every scraped
 source (discount, discount-mortgage, discount-business, leumi, cal, amex, harel, more,
 analyst; RiseUp is out of scope) with the Temporal dev server in Docker Compose
 (`docker-compose.yml`) and the worker under launchd. It checks **every** session
 first, sends **one** macOS notification listing
-the dead logins (grouped by login), and waits up to 12h
+the dead logins (grouped by login), and waits up to 15m
 for `poetry run python sync/resume.py [source|group ...]`; still-dead sources are skipped as
 `needs_login`, never fatal. Live sources are scraped one at a time in registry order
 (Discount **business → mortgage → account**: the one Chrome app first, then the two

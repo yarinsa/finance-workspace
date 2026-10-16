@@ -31,10 +31,10 @@ def test_dead_session_notifies_then_resumes_on_signal():
         "ensure_chrome", "check", "ensure_chrome", "check", "scrape", "digest", "publish"]
 
 
-def test_dead_session_times_out_after_12h_without_scraping():
+def test_dead_session_times_out_after_15m_without_scraping():
     fake = Fake(sessions={"amex": "dead"})
-    result = result_of(fake, workflow=AmexSyncWorkflow)  # time-skipping fast-forwards the 12h timer
-    assert result == {"amex": {"status": "needs_login", "detail": "no login within 12h"}}
+    result = result_of(fake, workflow=AmexSyncWorkflow)  # time-skipping fast-forwards the 15m timer
+    assert result == {"amex": {"status": "needs_login", "detail": "no login within 15m"}}
     assert not {"scrape", "digest", "publish"} & {c[0] for c in fake.calls}
 
 
