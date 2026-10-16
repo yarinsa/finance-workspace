@@ -13,6 +13,8 @@ import {
   Sparkles,
   Target,
   type LucideIcon,
+  Receipt,
+  Wallet,
 } from "lucide-react";
 import Cashflow from "./Cashflow";
 import Overview from "./Overview";
@@ -26,6 +28,8 @@ import Timeline from "./Timeline";
 import MyPlan from "./MyPlan";
 import Syncs from "./Syncs";
 import Runway from "./Runway";
+import Budgets from "./Budgets";
+import Spending from "./Spending";
 
 export interface RouteDef {
   path: string;
@@ -41,6 +45,8 @@ export const routes: RouteDef[] = [
   { path: "/overview", label: "מבט על", icon: House, primary: true, Component: Overview },
   { path: "/cashflow", label: "תזרים כספי", icon: ArrowLeftRight, primary: true, Component: Cashflow },
   { path: "/runway", label: "יתרה צפויה", icon: CalendarClock, Component: Runway },
+  { path: "/budgets", label: "תקציב", icon: Wallet, Component: Budgets },
+  { path: "/spending", label: "הוצאות החודש", icon: Receipt, Component: Spending },
   { path: "/summary", label: "סיכום התוכנית", icon: ClipboardList, Component: Summary },
   { path: "/goals", label: "יעדים", icon: Target, primary: true, Component: Goals },
   { path: "/recommendations", label: "המלצות", icon: Lightbulb, Component: Recommendations },

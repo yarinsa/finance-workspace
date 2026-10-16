@@ -142,6 +142,9 @@ export interface Cashflow {
   pace?: Pace;
   fixed_expenses?: FixedExpenses | null;
   runway?: Runway;
+  bills?: import("./bills").Bills | null;
+  budgets?: import("./budgets").Budgets | null;
+  spending?: import("./spending").SpendingData;
   charts?: Record<string, unknown>;
   projection?: Projection;
   months?: unknown[];

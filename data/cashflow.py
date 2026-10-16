@@ -558,6 +558,12 @@ def build():
     runway_block = runway.build_runway(
         transactions, snapshot["bank_accounts"], snapshot.get("savings", []),
         _local_today())
+    # Mint-style monthly views (PRD 12): bills status, budgets, spending explorer
+    import bills, budgets, spending
+    budget_doc = bills.load_budget()
+    bills_block = bills.build_bills(budget_doc, transactions, _local_today())
+    budgets_block = budgets.build_budgets(budget_doc, _local_today(), budgets.load_overrides())
+    spending_block = spending.build_spending(transactions, today=_local_today())
 
     model = {
         "generated_at": datetime.now(timezone.utc)
@@ -587,6 +593,9 @@ def build():
             "focal_points": proj["focal_points"],
         },
         "runway": runway_block,
+        "bills": bills_block,
+        "budgets": budgets_block,
+        "spending": spending_block,
         "months": [
             {"month": k, "income": v["income"], "expense": v["expense"], "net": v["net"],
              "count": v["count"]}

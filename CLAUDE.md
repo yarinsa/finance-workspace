@@ -97,6 +97,13 @@ Fri/Sat → Sunday. It reports the low point before payday, overdraft breaches a
 **safe-to-spend**. It is bills-only (no discretionary spend), and card bills are
 estimated from last month's bill. The app shows it at `/runway`.
 
+Mint-style monthly views (`docs/plangram-prd/12-mint-cashflow.md`) are generated
+from RiseUp's current budget the same way and written to `cashflow.json`:
+`bills.py` (fixed envelopes as paid/upcoming/overdue, shown on `/runway`),
+`budgets.py` (tracking-category plan vs. actual per RiseUp cycle, `/budgets`;
+optional overrides in gitignored `data/budgets/budgets.json`), and `spending.py`
+(per-month category/merchant/transaction breakdown with excluded buckets, `/spending`).
+
 ### UX references
 
 Before designing a dashboard screen, read `docs/ux-references.md`: Mobbin

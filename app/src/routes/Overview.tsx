@@ -1,6 +1,7 @@
 import { BigNumber, Card, CardLabel, Kpi, KpiGrid, ListRow, Nudge, Section } from "@/components/common";
 import NetWorthChart from "@/components/NetWorthChart";
 import RunwayTeaser from "@/components/RunwayTeaser";
+import BudgetsTeaser from "@/components/BudgetsTeaser";
 import WalletHero from "@/components/WalletHero";
 import MortgageCard from "@/components/MortgageCard";
 import SpendingDonut from "@/components/SpendingDonut";
@@ -69,6 +70,7 @@ export default function Overview() {
       </header>
 
       {cashflow.runway && <RunwayTeaser runway={cashflow.runway} />}
+      {cashflow.budgets && <BudgetsTeaser budgets={cashflow.budgets} />}
 
       <Section title="תזרים" to="/cashflow">
         <WalletHero />

@@ -22,6 +22,9 @@ data/*
 !data/detect_freeze.py
 !data/goals.py
 !data/runway.py
+!data/bills.py
+!data/budgets.py
+!data/spending.py
 !data/*/
 data/*/raw/
 data/*/normalized/
@@ -62,6 +65,7 @@ riseup-skill.zip
 # Goals store — the user's real targets (plus atomic-write .bak/.tmp). Personal,
 # hand-edited; never commit. data/goals.py is the code that reads it.
 data/goals/
+data/budgets/
 
 # terraform — state holds the Cognito client secret; never commit
 infra/.terraform/
