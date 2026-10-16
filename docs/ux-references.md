@@ -52,3 +52,29 @@ Gathered 2026-10-16 while choosing the next feature (→ balance runway, below).
 3. **Mark the low point and payday on the chart.** Draw the floor (₪0) and the overdraft limit as reference lines. The overdraft is debt capacity, not cash (see the `cashflow-mgmt` skill).
 4. **Label confidence.** Inferred items (card bills estimated from last month) get a "משוער" tag. Never show false precision.
 5. **Explain in words** under the chart, the way bunq and Cash App do.
+
+## Monzo deep-dive (2026-10-16)
+
+Trends has three tabs: **Balance / Spending / Target**.
+- **Balance**: the end-of-day balance chart (above), then a monthly breakdown: Starting balance → Total money in → Total money out → **Total upcoming** → **Left to spend until <month end>**. <https://mobbin.com/screens/b133d628-fd50-4d2f-8f6c-75739d474379>
+- **Spending**: weekly bars against a dashed **average** line, then categories with "Create your own category". A setup step asks *"What should we count as spending?"*, and a visible **"Excluded from spending"** card lists Income / Savings / Transfers with amounts. <https://mobbin.com/screens/0ee03dc9-3c12-4c3a-8725-4320efc7acf5>
+- **Target**: a monthly cap on **non-essential** spending. It shows a burn-down line against a dashed ideal pace, "20% left of £800 target · 11 days to go · £14 per day", category sub-targets ("£242 over target"), and an "Excluded from target" list (bills, savings, transfers). Setup projects "What you'll save: +£6,876 by Jul 2027". <https://mobbin.com/screens/2eb613ac-522c-41cd-bcbe-b289273a7e8d>, <https://mobbin.com/screens/b45d3c48-66e5-4c98-aaa1-fb18a54f2462>
+- **Average spending onboarding**: 12 monthly bars with the range ("varied between £181 and £3,212"). <https://mobbin.com/screens/5e23f085-6193-4610-bad2-9ab4d806f69f>
+- **Summary (older)**: a "Left to spend" ring with "17 days to go" and "You're set to have £38 left over", plus a Committed spending row of subscription logos and Money in / out / into pots. Flow: <https://mobbin.com/flows/8ea712b4-35df-4e50-bf84-cf798e4213c6>
+- **Pots**: per-purpose pots with their own scheduled payments, which is the sinking-fund pattern from the `cashflow-mgmt` skill. Flow: <https://mobbin.com/flows/2e556e48-6e4b-49aa-b6ef-efe136c97d95>
+
+## Mint deep-dive (2026-10-16)
+- **Overview**: Net worth / Spending toggle, a cumulative spending line against last month ("$89 less than last month"), and account-type cards (Cash / Credit cards / Loans). <https://mobbin.com/screens/ffb67843-861a-46a3-803f-ab0f6e1f34bd>
+- **Monthly**: a category donut, then **Bills and subscriptions** with due dates. <https://mobbin.com/screens/86d02c18-a7a2-4259-8407-7cd3ef3b197c>
+- **Budgets**: "$363 left" hero with a bar, and per-category "$49 left · $51 of $100" bars. <https://mobbin.com/screens/8f0146fd-6ffb-47b8-afcd-f775363040e3>
+- **Budget editor**: a ± amount with the last 4 months' bars against the budget line, so the budget is set from evidence. <https://mobbin.com/screens/b5e3882e-792a-4e38-8313-2a2fb09d40b8>
+- **Weekly spending targets**: top categories drawn as bubbles. <https://mobbin.com/screens/468580f4-cefc-45f4-9b82-f6ab4a073439>
+
+### What these add for us
+| Idea | Source | Fit |
+|---|---|---|
+| **Discretionary spending target with burn-down and ₪/day** | Monzo Target | High. It pairs with the runway: runway says how much is safe, the target keeps spending under it. The forecast already has `discretionary_total`. |
+| **"Excluded from spending" transparency card** | Monzo | High and cheap. Shows the card bills, internal transfers and savings that `digest.py` excludes, so the totals can be trusted. |
+| Monthly breakdown: start → in → out → upcoming → left | Monzo Balance | Medium. Could sit under the runway chart. |
+| Budget editor with history bars | Mint | Medium, once targets exist. |
+| Sinking-fund pots (ארנונה, car insurance) | Monzo Pots | Medium. Already described in the `cashflow-mgmt` skill. |
