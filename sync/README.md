@@ -1,4 +1,9 @@
-# Automated sync (Temporal)
+# Automated sync (Temporal) — POC
+
+> **Status: proof of concept.** Covers AMEX only, runs on a local Temporal dev
+> server (no persistence guarantees), and is not yet wired into `refresh-all`.
+> Keep it as a reference for automating the other sources; don't rely on it as
+> the only refresh path.
 
 Runs the AMEX refresh daily at 07:30 Asia/Jerusalem on this Mac:
 `ensure_chrome -> check session -> scrape -> digest -> publish`.

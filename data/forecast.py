@@ -42,6 +42,9 @@ CAL_BIG = ROOT / "cal" / "raw" / "bigNumberAndDetails.json"
 AMEX_BILL = ROOT / "amex" / "raw" / "billingsOverview.json"
 MORTGAGE = ROOT / "discount-mortgage" / "raw" / "mortgage_details.json"
 FREEZE = ROOT / "freeze.json"
+# The bank's own amortization schedule (לוח סילוקין), hand-entered from the PDF —
+# gitignored like freeze.json since it holds real payment figures.
+SCHEDULE = ROOT / "mortgage_schedule.json"
 
 # RiseUp tags the mortgage envelope with this expense category. We suppress it
 # and substitute the authoritative next-installment sum from the mortgage data
@@ -117,8 +120,51 @@ def authoritative_mortgage_payment(target_month=None):
         due = f"{raw[:4]}-{raw[4:6]}-{raw[6:8]}" if raw and len(raw) == 8 else raw
 
     freeze = load_freeze()
-    total = sum(payment_for_track(l, target_month, freeze) for l in active)
-    return round(total, 2), due
+    total = round(sum(payment_for_track(l, target_month, freeze) for l in active), 2)
+    if target_month and raw and len(raw) == 8:
+        # The dump only knows the current installment; the bank's schedule knows
+        # the Jan-2027 step-up (מתווה tranches end their reduced-principal phase).
+        total = schedule_adjusted(total, f"{raw[:4]}-{raw[4:6]}", target_month,
+                                  load_mortgage_schedule())
+    return total, due
+
+
+def load_mortgage_schedule(path=None):
+    """Bank-schedule bands ``[{"from": "YYYY-MM", "to": "YYYY-MM", "payment": n}]``
+    from data/mortgage_schedule.json, or [] when the file is absent."""
+    try:
+        return json.loads(Path(path or SCHEDULE).read_text()).get("periods", [])
+    except FileNotFoundError:
+        return []
+
+
+def scheduled_payment(periods, month):
+    """The schedule's installment for ``month`` (YYYY-MM): the band's payment,
+    0.0 once past the final band (mortgage paid off), None if ``month`` precedes
+    the schedule or there is no schedule."""
+    if not periods:
+        return None
+    for p in periods:
+        if p["from"] <= month <= p["to"]:
+            return float(p["payment"])
+    return 0.0 if month > max(p["to"] for p in periods) else None
+
+
+def schedule_adjusted(current, base_month, target_month, periods):
+    """Today's real installment moved by the schedule's step between months.
+
+    ``current`` (the dump's NextPayment sum) runs a little over the schedule —
+    index linkage the PDF can't know — so we apply the schedule as a *delta*
+    from ``base_month`` rather than replacing the figure. Falls back to
+    ``current`` when either month is outside the schedule; 0 once paid off.
+    """
+    tgt = scheduled_payment(periods, target_month)
+    base = scheduled_payment(periods, base_month)
+    if tgt == 0.0:
+        return 0.0
+    if tgt is None or not base:
+        return current
+    return round(current + tgt - base, 2)
 
 
 def load_freeze():
@@ -213,6 +259,18 @@ def ledger_band(tx):
     return [{"month": m, "net": round(v[1] + v[0], 2)} for m, v in band]
 
 
+def is_internal_fixed(row):
+    """A RiseUp fixed envelope that is a move between our own accounts.
+
+    The ledger already tags these via ``digest.is_internal_transfer``; the
+    forecast reads RiseUp's envelopes directly, so it applies the same rule.
+    E.g. the ₪452 standing order personal → own business account, which then
+    pays card bills that are already counted.
+    """
+    import digest
+    return digest.is_internal_transfer({"description": row.get("name") or ""})
+
+
 def build(b, fmonth):
     """Project a single target month `fmonth` (YYYY-MM) from the envelopes."""
     envs = b["envelopes"]
@@ -233,6 +291,8 @@ def build(b, fmonth):
         amt = e.get("originalAmount") or 0
         name = d.get("businessName") or d.get("expense") or e["id"]
         row = {"name": str(name), "category": d.get("expense"), "amount": abs(amt)}
+        if is_internal_fixed(row):
+            continue
         if d.get("isIncome"):
             fixed_income.append(row)
         else:
