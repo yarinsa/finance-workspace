@@ -9,6 +9,7 @@ calls of `.claude/skills/leumi-account-refresh/scripts/dump.sh` (`accounts.json`
 
     cd scrapers/leumi && npm install          # first time
     node scrapers/leumi/scrape.mjs [--out DIR] [--account-index 1] [--num-tx 500] [--loans "3 4"]
+    scrapers/leumi/refresh.sh [-y]            # dry run, summary, confirm, real run + validate
 
 Exit codes: 0 ok · 1 failure (retryable) · 2 missing env / bad args · 3 `LOGIN FAILED:
 INVALID_PASSWORD | CHANGE_PASSWORD | ACCOUNT_BLOCKED | OTP_REQUIRED` (needs a human; the sync
