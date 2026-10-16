@@ -8,13 +8,14 @@ per-device dismiss sticks until the situation changes.
 Action shape: {id, severity, title, detail, cta: {label, to} | null, amount}.
 """
 from collections import defaultdict
-from datetime import date, timedelta
+from datetime import date, datetime, time, timedelta
+
+import freshness
 
 SEVERITY_ORDER = {"critical": 0, "high": 1, "medium": 2, "low": 3}
 MIN_BUDGET_PLAN = 50      # skip RiseUp's ₪1 placeholder envelopes
 MAX_BUDGET_ITEMS = 3
 CARD_WINDOW_DAYS = 14
-STALE_DAYS = 7
 
 
 def shekel(x):
@@ -146,26 +147,41 @@ def _duplicate_actions(fixed):
 
 
 def _stale_actions(syncs, as_of):
-    stale = []
+    """One action naming every source past its freshness target plus grace.
+
+    `as_of` may be a date (taken as noon that day) or a datetime. Sources with no
+    target (RiseUp) are skipped; the id is the sorted list of overdue sources so
+    a dismiss sticks until the set changes.
+    """
+    now = as_of if isinstance(as_of, datetime) else datetime.combine(as_of, time(12))
+    late = []
     for s in syncs or []:
+        if s.get("source") not in freshness.TARGETS:
+            continue
         try:
-            last = date.fromisoformat(str(s["last_synced"])[:10])
+            row = freshness.classify(s["source"], s["last_synced"], now)
         except (KeyError, ValueError, TypeError):
             continue
-        if (as_of - last).days > STALE_DAYS:
-            stale.append((s["source"], (as_of - last).days))
-    if not stale:
+        if row["state"] == "overdue":
+            late.append(row)
+    if not late:
         return []
-    stale.sort()
-    return [_action("stale:" + ",".join(s for s, _ in stale), "low", "נתונים לא עדכניים",
-                    ", ".join(f"{s} ({d} ימים)" for s, d in stale),
-                    ("לסנכרונים", "/syncs"))]
+    late.sort(key=lambda r: r["source"])
+    detail = ", ".join(
+        f"{r['source']} ({freshness.fmt_span(r['age'])}, יעד {freshness.fmt_span(r['target'])}, "
+        f"באיחור {freshness.fmt_span(freshness.lateness(r))})" for r in late)
+    return [_action("stale:" + ",".join(r["source"] for r in late), "low", "נתונים לא עדכניים",
+                    detail, ("לסנכרונים", "/syncs"))]
 
 
-def build_actions(runway, bills, budgets, fixed_expenses, syncs, as_of):
-    """Prioritised to-handle list: critical -> low, then amount descending."""
+def build_actions(runway, bills, budgets, fixed_expenses, syncs, as_of, validation=()):
+    """Prioritised to-handle list: critical -> low, then amount descending.
+
+    `validation` is data/validate.py's `validation_actions()` output, already in
+    action shape; it is merged in as-is.
+    """
     actions = (_runway_actions(runway) + _budget_actions(budgets) + _bill_actions(bills)
                + _card_actions(runway, as_of) + _duplicate_actions(fixed_expenses)
-               + _stale_actions(syncs, as_of))
+               + _stale_actions(syncs, as_of) + list(validation))
     actions.sort(key=lambda a: (SEVERITY_ORDER[a["severity"]], -(a["amount"] or 0)))
     return actions

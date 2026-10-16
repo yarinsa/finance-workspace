@@ -94,6 +94,7 @@ Sanity signal: `mortgage_details.json` is ~17K when real, ~350B when a stub.
 
 ```bash
 python3 data/digest.py      # normalizes every source, then combines
+python3 data/validate.py    # cross-source checks -> digested/validation.{json,md}
 python3 data/forecast.py    # 6-month cashflow projection
 ```
 

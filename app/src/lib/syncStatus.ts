@@ -15,10 +15,12 @@ export type SyncState =
   | "checking_session"
   | "waiting_for_login"
   | "scraping"
+  | "validating"
   | "digesting"
   | "publishing"
   | "done"
   | "needs_login"
+  | "rejected"
   | "failed";
 
 export interface SourceStatus {
@@ -32,7 +34,7 @@ export interface SourceStatus {
   started_at: string;
   updated_at: string;
   last_success_at: string | null;
-  /** One-line root cause when status is `failed`. */
+  /** One-line root cause when status is `failed` or `rejected`. */
   error: string | null;
 }
 
@@ -42,9 +44,9 @@ export interface SyncStatusDoc {
 }
 
 /** States where the workflow is still moving on its own. */
-const RUNNING: ReadonlySet<SyncState> = new Set(["starting", "checking_session", "scraping", "digesting", "publishing"]);
+const RUNNING: ReadonlySet<SyncState> = new Set(["starting", "checking_session", "scraping", "validating", "digesting", "publishing"]);
 /** States that need the human (or a look at the Temporal UI). */
-const ATTENTION: ReadonlySet<SyncState> = new Set(["waiting_for_login", "needs_login", "failed"]);
+const ATTENTION: ReadonlySet<SyncState> = new Set(["waiting_for_login", "needs_login", "rejected", "failed"]);
 
 /** A running status this old means the worker died mid-run; don't keep claiming progress. */
 export const STALE_AFTER_MS = 15 * 60_000;
@@ -72,10 +74,12 @@ export const STATE_PILL: Record<Display, { text: string; cls: string }> = {
   starting: { text: "מתחיל", cls: "pill-run" },
   checking_session: { text: "בודק חיבור", cls: "pill-run" },
   scraping: { text: "מוריד נתונים", cls: "pill-run" },
+  validating: { text: "בודק נתונים", cls: "pill-run" },
   digesting: { text: "מעבד", cls: "pill-run" },
   publishing: { text: "מפרסם", cls: "pill-run" },
   waiting_for_login: { text: "ממתין להתחברות", cls: "pill-warn" },
   needs_login: { text: "נדרשת התחברות", cls: "pill-bad" },
+  rejected: { text: "הנתונים נדחו", cls: "pill-bad" },
   failed: { text: "נכשל", cls: "pill-bad" },
   done: { text: "הושלם", cls: "pill-good" },
   stale: { text: "לא ידוע", cls: "pill-muted" },
@@ -90,7 +94,17 @@ export function headline(doc: SyncStatusDoc | null, now = Date.now()): "attentio
   return null;
 }
 
-const LOGIN_LABEL: Record<string, string> = { amex: "אמריקן אקספרס" };
+const LOGIN_LABEL: Record<string, string> = {
+  discount: "דיסקונט — עו״ש",
+  "discount-mortgage": "דיסקונט — משכנתא",
+  "discount-business": "דיסקונט — עסקי",
+  leumi: "לאומי",
+  cal: "כאל",
+  amex: "אמריקן אקספרס",
+  harel: "הראל",
+  more: "מור",
+  analyst: "אנליסט",
+};
 
 /** Home "לטיפול" items: one per source that is waiting for (or gave up on) a login, or failed. */
 export function syncActions(doc: SyncStatusDoc | null, now = Date.now()): HomeAction[] {
@@ -113,6 +127,8 @@ export function syncActions(doc: SyncStatusDoc | null, now = Date.now()): HomeAc
       });
     } else if (d === "failed") {
       out.push({ id, severity: "medium", title: `הסנכרון של ${name} נכשל`, detail: s.error ?? s.message, cta, amount: null });
+    } else if (d === "rejected") {
+      out.push({ id, severity: "medium", title: `הנתונים של ${name} נדחו בבדיקה`, detail: s.error ?? s.message, cta, amount: null });
     }
   }
   return out;

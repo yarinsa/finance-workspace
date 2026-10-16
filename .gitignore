@@ -27,6 +27,8 @@ data/*
 !data/spending.py
 !data/months_view.py
 !data/actions.py
+!data/validate.py
+!data/freshness.py
 !data/*/
 data/*/raw/
 data/*/normalized/

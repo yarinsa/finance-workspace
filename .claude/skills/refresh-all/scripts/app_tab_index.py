@@ -25,6 +25,8 @@ import sys
 APP = {
     "riseup":   (("input.riseup.co.il/web/",), ()),
     "discount": (("apollo/retail3",), ()),
+    # Same Chrome/login as "discount" but the SME app; only sync/ looks for it.
+    "discount-business": (("apollo/business2",), ()),
     "leumi":    (("#/hpsummary",), ()),
     "cal":      (("digital-web.cal-online.co.il/dashboard",), ()),
     "amex":     (("web.americanexpress.co.il",), ("אזור אישי",)),

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Install the local Temporal dev server + finance worker as launchd agents and
-# register the daily amex-sync schedule. Safe to re-run.
+# register the daily finance-sync schedule. Safe to re-run.
 set -euo pipefail
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
