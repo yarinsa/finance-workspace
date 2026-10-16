@@ -1,22 +1,101 @@
 # Automated sync (Temporal) — POC
 
-> **Status: proof of concept.** Covers AMEX only, runs on a local Temporal dev
-> server (no persistence guarantees), and is not yet wired into `refresh-all`.
-> Keep it as a reference for automating the other sources; don't rely on it as
-> the only refresh path.
+> **Status: proof of concept.** Runs on a local Temporal dev server (no
+> persistence guarantees) and is not wired into `refresh-all`. Keep `refresh-all`
+> as the manual path; use this as the unattended daily one.
 
-Runs the AMEX refresh daily at 07:30 Asia/Jerusalem on this Mac:
-`ensure_chrome -> check session -> scrape -> digest -> publish`.
+`FinanceSyncWorkflow` refreshes every scraped source daily at 07:30
+Asia/Jerusalem on this Mac, then digests and publishes once:
 
-**The automation never logs in.** If the session is dead it sends a macOS
-notification and waits up to 12h for you. No credentials, OTPs, Keychain reads
-or keep-alive pings.
+```
+preflight (all sessions) -> one login notification + wait -> scrape each live source
+  -> validate each dump -> digest -> publish
+```
+
+RiseUp is deliberately not covered.
+
+**The automation never logs in.** A dead session sends a macOS notification and
+waits up to 12h for you. No credentials, OTPs, Keychain reads or keep-alive pings.
+
+## Sources
+
+Defined once in `sources.py` (ports, Chrome profiles, login URLs, tab matching, dump
+commands, session-check strategy). Registry order is the scrape order.
+
+| Source | CDP port | Login group | Session check |
+|---|---|---|---|
+| `discount` | 9223 | discount | `check_sessions.sh discount` |
+| `discount-mortgage` | 9223 | discount | `check_sessions.sh discount` |
+| `discount-business` | 9223 | discount | open tabs only (business2 tab) |
+| `leumi` | 9224 | leumi | `check_sessions.sh leumi` |
+| `cal` | 9225 | cal | `check_sessions.sh cal` |
+| `amex` | 9226 | amex | `check_session.sh` VERDICT (cookies + `/IsLoggedIn`) |
+| `harel` | 9227 | harel | `check_sessions.sh harel` |
+| `more` | 9228 | more | `check_sessions.sh more` |
+| `analyst` | 9229 | analyst | `check_sessions.sh analyst` |
+
+The three Discount apps share **one** Chrome (`~/.chrome-cdp-discount`) and **one**
+login, so they are announced as one entry and re-checked together. The order
+**account → mortgage → business** is enforced whatever order `sources` was passed in:
+the business (SME) app rebinds the server session and blocks the mortgage endpoints
+(`actionRequired: stepup`), so it always goes last. Leumi runs `dump.sh` and then
+`dump-loans.sh`. App-tab matching comes from `refresh-all/scripts/app_tab_index.py`
+(loaded, not copied); a `discount-business` entry was added to it.
+
+### Session checks ("live" / "dead" / "unknown")
+
+Nothing here navigates a bank tab. `unknown` (no tab on the app, page unreadable,
+check could not run, Chrome was closed) is **never** treated as dead: the source is
+scraped anyway and the dump script's own stub guard is the backstop; the result
+detail says `session unverified`. A source is only `dead` on a positive signal:
+AMEX's `LOGGED_OUT` verdict, `check_sessions.sh` reporting `NEEDS LOGIN`, or the
+bank's login page open in its window with nothing on the app.
+
+`check_sessions.sh` today can only answer live or unknown (its `DEAD` branch is
+unreachable), so for everything except AMEX a lapsed session usually shows up as
+`unknown` and is caught at scrape time instead (`SessionExpired`, below). The
+business app can only be judged by whether a `business2` tab is open; if none is,
+the scrape opens `…/apollo/business2/` itself (it runs last, so rebinding the shared
+login is already expected).
+
+## Workflow
+
+`FinanceSyncWorkflow.run(sources: list[str] | None = None)`; `None` is every source.
+
+1. **Preflight.** `ensure_chrome(source)` (launches the window if closed, makes sure
+   a tab exists, attaches playwright-cli where the dump needs it) then
+   `check_session(source)` for every requested source, before anything is scraped.
+2. **Grouped login.** If any are dead: **one** notification listing them by login
+   group, then wait up to 12h for `session_refreshed`. After the signal the dead
+   sources are re-checked (only the ones named, if `resume.py` got names). Sources
+   still dead are skipped with status `needs_login`; this is not an error.
+3. **Scrape.** Live and unknown sources one at a time in registry order. `scrape` then
+   `validate_dump`. One failing source never stops the others. If a session expires
+   mid-scrape, the rest of that login group is skipped as `needs_login` instead of
+   hammering the bank with a dead login.
+4. **Validation gate.** `validate_dump(source)` runs `python3 data/validate.py dump
+   <source>` when that file exists (exit 0 = good; non-zero rejects, with the output in
+   the result detail) and passes while the file doesn't exist yet. A rejected source
+   has status `rejected` and does not count as scraped.
+5. **Finish.** If at least one source scraped: digest once, publish once. Publishing is
+   withheld when any dump was rejected (the rejected files are already on disk and the
+   digest reads them). One summary notification.
+
+Result: `{source: {"status": ..., "detail": ...}}` plus `"_finish": {digest, published}`
+when the finish ran. Statuses: `ok`, `needs_login`, `failed`, `rejected`. The `status`
+query returns `{"phase": ..., "sources": {source: {status, detail}}}` while it runs.
+
+A scrape failure is never retried (`SessionExpired`, `ScrapeFailed`): the dump scripts
+keep the previous dump intact, and "live but failing" means the endpoint moved (see the
+source's refresh skill triage table). `AmexSyncWorkflow` still exists and is just
+`FinanceSyncWorkflow(["amex"])`.
 
 ## Layout
 
-- `activities.py` subprocess wrappers (amex-refresh scripts, `data/*.py`, `infra/deploy.sh --data-only`, osascript)
-- `workflows.py` `AmexSyncWorkflow` (query `status`, signal `session_refreshed`)
-- `worker.py` task queue `finance-sync`; `schedule.py` schedule `amex-sync`; `resume.py`
+- `sources.py` the registry (one entry per source, order, login groups)
+- `activities.py` subprocess wrappers (`ensure_chrome`, `check_session`, `scrape`, `validate_dump`, `digest`, `publish_data`, `notify`)
+- `workflows.py` `FinanceSyncWorkflow` (query `status`, signal `session_refreshed`), `AmexSyncWorkflow`
+- `worker.py` task queue `finance-sync`; `schedule.py`; `resume.py`
 - `launchd/` plist templates; `install.sh` / `uninstall.sh`
 
 ## Start / stop
@@ -29,28 +108,33 @@ sync/uninstall.sh    # unload agents (keeps ~/.temporal/finance.db)
 Temporal UI: http://localhost:8233 (namespace `default`, task queue `finance-sync`).
 
 ```bash
-.venv/bin/python sync/schedule.py --trigger   # run now
-.venv/bin/python sync/schedule.py --pause     # / --unpause
+.venv/bin/python sync/schedule.py                      # create/update the schedule (every source)
+.venv/bin/python sync/schedule.py --sources amex,cal   # ...only these
+.venv/bin/python sync/schedule.py --trigger            # run now
+.venv/bin/python sync/schedule.py --pause              # / --unpause
 ```
+
+The schedule id is `finance-sync` (workflow `FinanceSyncWorkflow`, daily 07:30
+Asia/Jerusalem). It replaces the old AMEX-only `amex-sync` schedule, which
+`schedule.py` deletes when it creates or updates `finance-sync` so the two never both
+fire. Re-run `schedule.py` once after upgrading.
 
 Publishing to S3 only happens when `SYNC_PUBLISH=1` (set in the worker plist).
 Without it `publish_data` returns `skipped`.
 
 ## Session expired
 
-You get a notification: "AMEX session expired - log in in the AMEX Chrome window".
-Log in in that Chrome window (profile `~/.chrome-cdp-amex`, CDP port 9226), then:
+You get one notification listing every dead login, grouped, e.g. "discount
+(discount, discount-mortgage, discount-business; profile ~/.chrome-cdp-discount),
+amex (profile ~/.chrome-cdp-amex)". Log in in each of those Chrome windows, then:
 
 ```bash
-python3 sync/resume.py
+python3 sync/resume.py                     # re-check every dead source
+python3 sync/resume.py discount amex       # re-check only these (a source name or a login group)
 ```
 
-This signals every running `AmexSyncWorkflow`; it re-checks the session and
-continues. After 12h without a signal, or if the session is still dead, the run
-ends with status `needs_login` and scrapes nothing. A scrape failure is never
-retried (`SessionExpired`, `ScrapeFailed`): `dump.sh` keeps the previous dump
-intact, and a "live but failing" result means the endpoint moved (see the
-amex-refresh skill triage table).
+This signals every running sync workflow. After 12h without a signal, or for sources
+still dead on the re-check, the status is `needs_login` and nothing is scraped for them.
 
 ## Logs
 
@@ -59,4 +143,5 @@ Per-run detail (command output tails) is in the Temporal UI event history.
 
 ## Tests
 
-`.venv/bin/python -m pytest sync/tests` (time-skipping Temporal test server, mocked activities).
+`.venv/bin/python -m pytest sync/tests` (time-skipping Temporal test server, mocked
+activities; nothing touches Chrome or a bank).
