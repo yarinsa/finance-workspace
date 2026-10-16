@@ -32,6 +32,7 @@ export default function Spending() {
   const [idx, setIdx] = useState(linked >= 0 ? linked : 0); // 0 = newest month
   const [tab, setTab] = useState("transactions");
   const [cat, setCat] = useState<string | null>(params.get("cat"));
+  const [merchant, setMerchant] = useState<string | null>(null);
 
   if (!months.length) {
     return (
@@ -52,16 +53,25 @@ export default function Spending() {
     return i < 0 ? C.muted : color(i);
   };
   const selected = cat ? m.by_category.find((c) => c.name === cat) ?? null : null;
-  const txs = selected ? m.transactions.filter((t) => t.category === selected.name) : m.transactions;
+  const txs = m.transactions.filter(
+    (t) => (!selected || t.category === selected.name) && (!merchant || t.merchant === merchant),
+  );
   const maxCat = m.by_category[0]?.amount || 1;
   const maxMerchant = m.by_merchant[0]?.amount || 1;
 
   const go = (d: number) => {
     setIdx((i) => Math.min(months.length - 1, Math.max(0, i + d)));
     setCat(null);
+    setMerchant(null);
+  };
+  const pickMerchant = (name: string) => {
+    setMerchant(name);
+    setCat(null);
+    setTab("transactions");
   };
   const pick = (name: string) => {
     setCat((c) => (c === name ? null : name));
+    setMerchant(null);
     setTab("transactions");
   };
 
@@ -192,13 +202,16 @@ export default function Spending() {
           </TabsList>
 
           <TabsContent value="transactions">
-            {selected ? (
+            {selected || merchant ? (
               <button
                 type="button"
-                onClick={() => setCat(null)}
+                onClick={() => {
+                  setCat(null);
+                  setMerchant(null);
+                }}
                 className="mb-2 rounded-full bg-panel-2 px-3 py-1 text-xs"
               >
-                {selected.name} ✕
+                {selected?.name ?? merchant} ✕
               </button>
             ) : null}
             {txs.length === 0 ? (
@@ -245,12 +258,13 @@ export default function Spending() {
 
           <TabsContent value="merchants">
             {m.by_merchant.map((x) => (
-              <BarRow
-                key={x.name}
-                label={x.count > 1 ? `${x.name} ×${x.count}` : x.name}
-                value={shekel(x.amount)}
-                fraction={x.amount / maxMerchant}
-              />
+              <button key={x.name} type="button" onClick={() => pickMerchant(x.name)} className="block w-full text-start">
+                <BarRow
+                  label={x.count > 1 ? `${x.name} ×${x.count}` : x.name}
+                  value={shekel(x.amount)}
+                  fraction={x.amount / maxMerchant}
+                />
+              </button>
             ))}
           </TabsContent>
         </Tabs>
