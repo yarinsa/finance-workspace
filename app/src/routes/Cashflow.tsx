@@ -2,7 +2,7 @@ import { BarRow, Card, CardLabel, Kpi, KpiGrid, PageTitle, StatRow } from "@/com
 import NetWorthChart from "@/components/NetWorthChart";
 import MonthlyTrendChart from "@/components/MonthlyTrendChart";
 import FixedExpenses from "@/components/FixedExpenses";
-import { cashflow, shekel, transactions, formatMetric, formatMetricCompact } from "@/lib/data";
+import { cashflow, monthYear, shekel, transactions, formatMetric, formatMetricCompact } from "@/lib/data";
 
 export default function Cashflow() {
   const { metrics, today } = cashflow;
@@ -13,6 +13,9 @@ export default function Cashflow() {
     .sort((a, b) => b[1] - a[1])
     .slice(0, 6);
   const maxCat = expenseCats[0]?.[1] ?? 1;
+  // summary.by_category covers the whole ledger, not one month — say which span.
+  const dates = transactions.transactions.map((t) => t.date).sort();
+  const period = dates.length ? `${monthYear(dates[0])} – ${monthYear(dates[dates.length - 1])}` : "";
 
   return (
     <div className="space-y-4 md:space-y-[18px]">
@@ -46,7 +49,7 @@ export default function Cashflow() {
       {/* Phones: this month's numbers first — they're what you open the screen for. */}
       <div className="grid gap-3 md:grid-cols-2 md:gap-3.5">
         <Card to="/networth" className="max-md:order-2">
-          <CardLabel>שווי נקי — לאורך החיים</CardLabel>
+          <CardLabel>שווי נקי — לאורך החיים (כולל חיסכון ארוך טווח)</CardLabel>
           <NetWorthChart />
         </Card>
 
@@ -63,7 +66,7 @@ export default function Cashflow() {
       </div>
 
       <Card>
-        <CardLabel>הוצאות לפי קטגוריה</CardLabel>
+        <CardLabel>הוצאות לפי קטגוריה · סה״כ {period}</CardLabel>
         {expenseCats.map(([cat, amt]) => (
           <BarRow key={cat} label={cat} value={shekel(amt)} fraction={amt / maxCat} />
         ))}
