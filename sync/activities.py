@@ -8,6 +8,8 @@ session is reported, never repaired.
 """
 import asyncio
 import collections
+import contextlib
+import fcntl
 import importlib.util
 import json
 import os
@@ -360,21 +362,53 @@ async def validate_dump(source: str) -> str:
 DIGEST_STEPS = ["digest.py", "validate.py", "forecast.py", "cashflow.py", "goals.py"]  # order matters (sync-data skill)
 
 
+DIGEST_LOCK = REPO_ROOT / "data" / "digested" / ".lock"
+
+
+@contextlib.asynccontextmanager
+async def digest_lock(path: Path = DIGEST_LOCK, poll: float = 0.2):
+    """Exclusive `flock` on `path`, so two digest chains (FinanceSyncWorkflow and
+    LedgerRebuildWorkflow) never write data/digested/ at once.
+
+    Polls with LOCK_NB instead of blocking, so the event loop stays free and the activity
+    keeps heartbeating while it waits behind a long digest. The kernel drops the lock if the
+    worker dies, so a crash never leaves it stuck.
+    """
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with open(path, "a") as fh:
+        while True:
+            try:
+                fcntl.flock(fh, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                break
+            except BlockingIOError:
+                _heartbeat("waiting for digest lock")
+                await asyncio.sleep(poll)
+        try:
+            yield
+        finally:
+            fcntl.flock(fh, fcntl.LOCK_UN)
+
+
 @activity.defn
-async def digest() -> dict:
-    """digest -> validate -> forecast -> cashflow -> goals. Stops at the first failure so a
-    half-rebuilt set is never published."""
-    for step in DIGEST_STEPS:
-        rc, tail = await run_cmd([sys.executable, str(REPO_ROOT / "data" / step)])
-        if rc != 0:
-            raise ApplicationError(f"{step} failed (rc={rc}):\n{tail}")
-    summary = {"steps": DIGEST_STEPS}
-    try:
-        tx = json.loads((REPO_ROOT / "data" / "digested" / "transactions.json").read_text())
-        summary["transactions"] = len(tx["transactions"])
-    except Exception:
-        pass
-    return summary
+async def digest(normalize: bool = True) -> dict:
+    """digest -> validate -> forecast -> cashflow -> goals, under the digest file lock. Stops at
+    the first failure so a half-rebuilt set is never published. `normalize=False` passes
+    `--no-normalize` to digest.py (override-only edits don't need a re-normalize)."""
+    async with digest_lock():
+        for step in DIGEST_STEPS:
+            cmd = [sys.executable, str(REPO_ROOT / "data" / step)]
+            if step == "digest.py" and not normalize:
+                cmd.append("--no-normalize")
+            rc, tail = await run_cmd(cmd)
+            if rc != 0:
+                raise ApplicationError(f"{step} failed (rc={rc}):\n{tail}")
+        summary = {"steps": DIGEST_STEPS}
+        try:
+            tx = json.loads((REPO_ROOT / "data" / "digested" / "transactions.json").read_text())
+            summary["transactions"] = len(tx["transactions"])
+        except Exception:
+            pass
+        return summary
 
 
 @activity.defn
