@@ -46,7 +46,7 @@ edits), so CloudFront invalidations stay far below the 1,000/month free quota.
    new). Kill switch: `docker compose stop api` or `tailscale funnel off`; the UI
    falls back to read-only.
 8. **No generic query surface** — fixed endpoints, Pydantic-validated bodies
-   (category ≤ 64 chars, note ≤ 500), body size ≤ 8 KB, no SQL from the client.
+   (category ≤ 64 chars, note ≤ 500), body size ≤ 8 KB (16 KB for GraphQL), no SQL from the client.
 
 ## Contract (all pieces build against this)
 
@@ -108,6 +108,49 @@ that take one `input` and echo `clientMutationId`.
   New grouped resources follow this pattern.
 - **`Merchant`** is derived from the description (`data/spending.py` `merchant_name`),
   not stored.
+
+**Serving** (`POST /api/graphql`, `api/gql/`):
+
+- **Resolvers:** one class per entity in `resolvers.py`. `NodeResolver` covers global IDs
+  and `Query.node`. `GroupResolver` covers merchant, category and tag: `transactions`,
+  the root connection with edge totals, and an M:M field to every other group entity.
+  A new grouped resource is one subclass in `ENTITIES` plus its SDL.
+- **Arguments:** each resolver validates its arguments through Pydantic (`inputs.py`,
+  `relay.py`), so IDs and cursors are decoded and `first`/`last` capped at 200.
+- **Loading:** a request loads the whole effective ledger once (`ledger.py`) and filters
+  in memory. That is fine for a few thousand rows, and it's the only way to group by
+  merchant, which is derived in Python (`finance/merchants.py`).
+- **Limits:** a depth limit of 14 and an 8,000-character query. Introspection is on only
+  with `FINANCE_API_DEV_USER`. Resolver crashes reach the client as `internal error`.
+- **Mutations** live on the entity they change (`TransactionResolver`: `updateTransaction`,
+  `clearTransactionOverride`, `setTransactionTags`; `TagResolver`: `updateTag`, `deleteTag`).
+  Each input subclasses the REST body in `api/inputs.py`, so both paths validate alike, and
+  nulls are kept: `null` clears a field, an omitted field is untouched. Writes go through
+  `db/overrides.py` and `db/tags.py`, so they're audited the same way. Mutation fields run in
+  order on one transaction, and a request that changed anything signals one rebuild
+  after the commit.
+- **Horizons and goals** are group entities like merchant, category and tag, so they get
+  transactions, root connections with edge totals, and M:M to the others. Assignment
+  relations are direct 1:M instead: `Horizon.goals` lists the goals assigned to the
+  horizon, and `Goal.horizon` is an object (no `Goal.horizons`). `createGoal`,
+  `updateGoal` and `deleteGoal` go through `db/goal_store.py`, and `updateTransaction`
+  takes `goalId`. The old `Horizon` enum is now `HorizonKey` for inputs.
+- **Not served yet:** `snapshot` (the API container has no `data/` mount).
+
+**Client** (`app/`): Relay 21.
+
+- `relay-compiler` reads the SDL straight from `api/schema` (`app/relay.config.json`) and
+  writes types to the gitignored `src/__generated__`.
+- `pnpm dev`, `pnpm build` and `pnpm test` run the compiler first, with
+  `FORCE_NO_WATCHMAN=1`, because the Watchman-backed run hangs.
+- A small plugin in `vite.config.ts` replaces each `graphql` tag with an import of its
+  artifact. `@vitejs/plugin-react` 6 has no Babel step, so `babel-plugin-relay` can't do it.
+- `src/lib/relay.ts` maps failures onto the same `ApiOffline`/`ApiError` as REST.
+- `TransactionEditSheet` preloads its query when it opens (`useQueryLoader`), not on
+  mount: the sheet remounts its body, and a fetch-on-mount query refetched in a loop.
+  It edits through the mutations and still feeds the shared overlay.
+- The static JSON stays the read path, so the app works with the Mac off.
+- `FINANCE_API_URL` points a worktree's dev server at its own API.
 
 Each object type is bound to its Pydantic model in `api/schema_bindings.py`. Then
 `api/tests/test_graphql_schema.py` fails when the SDL and the models drift:

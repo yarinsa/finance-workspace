@@ -6,6 +6,7 @@ real least-privilege grants without touching the role's (cluster-wide) password.
 JWTs are signed with a key generated here and verified through a fake JWKS client:
 nothing calls AWS. All transactions are made up.
 """
+import os
 import sys
 import time
 from pathlib import Path
@@ -33,6 +34,7 @@ CLIENT_ID = "test-client"
 POOL_ID = "eu-west-1_TESTPOOL"
 REGION = "eu-west-1"
 ME = "me@example.com"
+TEST_DB = os.environ.get("FINANCE_TEST_DB", "finance_test")   # a branch with other migrations uses its own
 ISSUER = f"https://cognito-idp.{REGION}.amazonaws.com/{POOL_ID}"
 
 # Made-up rows in the digested ledger's shape.
@@ -56,9 +58,9 @@ def test_url():
     except psycopg.OperationalError as e:
         pytest.skip(f"Postgres not reachable: {e}")
     with admin:
-        if not admin.execute("SELECT 1 FROM pg_database WHERE datname = %s", ("finance_test",)).fetchone():
-            admin.execute("CREATE DATABASE finance_test")
-    return make_conninfo(**{**conninfo_to_dict(url), "dbname": "finance_test"})
+        if not admin.execute("SELECT 1 FROM pg_database WHERE datname = %s", (TEST_DB,)).fetchone():
+            admin.execute(f'CREATE DATABASE "{TEST_DB}"')
+    return make_conninfo(**{**conninfo_to_dict(url), "dbname": TEST_DB})
 
 
 @pytest.fixture

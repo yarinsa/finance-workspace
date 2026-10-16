@@ -1,0 +1,19 @@
+{
+  "root": ".",
+  "sources": { "src": "app" },
+  "excludes": ["**/node_modules/**", "**/__generated__/**"],
+  "projects": {
+    "app": {
+      "language": "typescript",
+      "schemaDir": "../api/schema",
+      "output": "src/__generated__",
+      "eagerEsModules": true,
+      "customScalarTypes": {
+        "Money": "string",
+        "Date": "string",
+        "DateTime": "string",
+        "JSON": "unknown"
+      }
+    }
+  }
+}

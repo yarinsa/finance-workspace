@@ -80,10 +80,14 @@ export function LedgerApiProvider({ children }: { children: ReactNode }) {
     void checkHealth();
     const id = setInterval(() => void checkHealth(), HEALTH_POLL_MS);
     const onFocus = () => void checkHealth();
+    // Raised by code outside React state (e.g. an error boundary) when a call hit ApiOffline.
+    const onOffline = () => setOnline(false);
     window.addEventListener("focus", onFocus);
+    window.addEventListener("ledger-api-offline", onOffline);
     return () => {
       clearInterval(id);
       window.removeEventListener("focus", onFocus);
+      window.removeEventListener("ledger-api-offline", onOffline);
     };
   }, [checkHealth]);
 
