@@ -171,7 +171,7 @@ asks the user the 3 params, and writes `data/freeze.json` (gitignored — real
 payment amounts) with the recomputed post-freeze payment per track.
 `data/forecast.py` reads it so the months after the freeze show the real
 (higher) payment instead of naively carrying the frozen figure forward. When a
-mortgage looks frozen, run `python3 data/detect_freeze.py` and confirm with the
+mortgage looks frozen, run `poetry run python data/detect_freeze.py` and confirm with the
 user — don't assume the current `NextPayment` is permanent.
 
 ### Dating a freeze from payment history (the authoritative method)

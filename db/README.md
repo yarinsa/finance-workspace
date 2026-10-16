@@ -4,8 +4,9 @@ A local Postgres holds the transaction ledger. It keeps the scraped data and you
 manual edits apart, so a re-scrape never loses a category you set by hand.
 
 Postgres runs in Docker Compose (`postgres` service in `docker-compose.yml`). The
-ledger code is in `db/ledger.py`, the edit CLI is `db/edit.py`, and the schema is
-`db/schema.sql` (applied idempotently on every connect).
+ledger code is in `db/ledger.py`, the edit CLI is `db/edit.py`. The tables are SQLModel classes in
+`finance/tables.py`; migrations live in `db/migrations/` (Alembic) and run
+(`upgrade head`) on every connect.
 
 ## Layers
 
@@ -25,7 +26,7 @@ scraped value. An override with nothing left in it is deleted.
 ```bash
 cp .env.example .env                       # then fill in POSTGRES_PASSWORD and DATABASE_URL
 docker compose up -d --wait                # starts postgres (and the Temporal dev server)
-.venv/bin/pip install -r db/requirements.txt
+poetry install --with sync,dev
 ```
 
 `DATABASE_URL` must be written out in full in `.env`, for example
@@ -42,13 +43,13 @@ A transaction is addressed by its date and amount. The sign is ignored, as in th
 dedup key.
 
 ```bash
-.venv/bin/python db/edit.py show     2026-01-15 123.45
-.venv/bin/python db/edit.py category 2026-01-15 123.45 "אלקטרוניקה"
-.venv/bin/python db/edit.py note     2026-01-15 123.45 "gift"
-.venv/bin/python db/edit.py exclude  2026-01-15 123.45        # hide from the ledger and every total
-.venv/bin/python db/edit.py include  2026-01-15 123.45        # undo exclude
-.venv/bin/python db/edit.py clear    2026-01-15 123.45 [category|note]   # drop one field, or the whole override
-.venv/bin/python db/edit.py list [--orphaned]
+poetry run python db/edit.py show     2026-01-15 123.45
+poetry run python db/edit.py category 2026-01-15 123.45 "אלקטרוניקה"
+poetry run python db/edit.py note     2026-01-15 123.45 "gift"
+poetry run python db/edit.py exclude  2026-01-15 123.45        # hide from the ledger and every total
+poetry run python db/edit.py include  2026-01-15 123.45        # undo exclude
+poetry run python db/edit.py clear    2026-01-15 123.45 [category|note]   # drop one field, or the whole override
+poetry run python db/edit.py list [--orphaned]
 ```
 
 Every change rebuilds `data/digested/` (digest, validate, forecast, cashflow, goals), so
@@ -59,12 +60,24 @@ push the result to the dashboard with the `sync-data` skill.
 
 When `DATABASE_URL` is set (in the environment or `.env`), `data/digest.py` builds
 the consolidated ledger as before, then pipes it through
-`.venv/bin/python db/ledger.py sync`. That imports the rows into
+`poetry run python db/ledger.py sync`. That imports the rows into
 `scraped_transactions` and returns the `transactions` view, in the same order, which
 is what gets written to `data/digested/transactions.json`. Cashflow, spending and
 the app all read that file, so they see your edits.
 
-`data/digest.py` itself stays stdlib-only. Only `db/ledger.py` needs `psycopg`.
+Each row is validated as `finance.models.LedgerTransaction` before it is stored.
+
+## Changing the schema
+
+Edit `finance/tables.py`, then generate and review a migration:
+
+```bash
+poetry run alembic -c db/alembic.ini revision --autogenerate -m "add tag to overrides"
+```
+
+Views (`transactions`, `orphaned_overrides`) are plain SQL: change them with
+`op.execute` in a migration. `db/tests/test_schema.py` fails if the migrated
+database and `finance/tables.py` disagree.
 
 - If `DATABASE_URL` is set but the database is down, digest fails loudly. Start
   the container, or run with `--no-db` to skip the database for that run.
@@ -76,7 +89,7 @@ data, usually because a bank corrected the date or amount. Orphans are kept, not
 deleted, so no edit is lost silently. Each digest run prints a warning for them.
 
 ```bash
-.venv/bin/python db/edit.py list --orphaned
+poetry run python db/edit.py list --orphaned
 ```
 
 To fix one, either re-create it on the corrected date and amount (then

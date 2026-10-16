@@ -93,9 +93,9 @@ Sanity signal: `mortgage_details.json` is ~17K when real, ~350B when a stub.
 ### 4. Digest + forecast
 
 ```bash
-python3 data/digest.py      # normalizes every source, then combines
-python3 data/validate.py    # cross-source checks -> digested/validation.{json,md}
-python3 data/forecast.py    # 6-month cashflow projection
+poetry run python data/digest.py      # normalizes every source, then combines
+poetry run python data/validate.py    # cross-source checks -> digested/validation.{json,md}
+poetry run python data/forecast.py    # 6-month cashflow projection
 ```
 
 Then check the outputs before publishing or reporting success:
@@ -106,7 +106,7 @@ Then check the outputs before publishing or reporting success:
   carrying categories, so a thin RiseUp month de-categorizes the whole ledger.
 - If `data/freeze.json` is missing while the mortgage shows interest-only
   tracks, the forecast is carrying a frozen payment forward indefinitely — say
-  so. `python3 data/detect_freeze.py --check` reports without prompting.
+  so. `poetry run python data/detect_freeze.py --check` reports without prompting.
 
 ### 5. Publish to the dashboard
 

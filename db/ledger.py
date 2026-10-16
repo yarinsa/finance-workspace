@@ -12,6 +12,7 @@ back on stdout in the same order. Rows are keyed on the ledger's dedup key,
 """
 import json
 import os
+import re
 import sys
 from decimal import Decimal
 from pathlib import Path
@@ -19,8 +20,10 @@ from pathlib import Path
 import psycopg
 from psycopg.types.json import Jsonb
 
+from finance.models import LedgerTransaction
+
 REPO = Path(__file__).resolve().parent.parent
-SCHEMA = Path(__file__).resolve().parent / "schema.sql"
+ALEMBIC_INI = Path(__file__).resolve().parent / "alembic.ini"
 
 
 def database_url(env_file=REPO / ".env"):
@@ -35,15 +38,34 @@ def database_url(env_file=REPO / ".env"):
     return None
 
 
+def sqlalchemy_url(url):
+    """The same URL (or libpq key=value conninfo) for SQLAlchemy, on the psycopg 3 driver."""
+    if "://" not in url:
+        from psycopg.conninfo import conninfo_to_dict
+        from sqlalchemy.engine import URL
+        c = conninfo_to_dict(url)
+        return URL.create("postgresql+psycopg", username=c.get("user"), password=c.get("password"),
+                          host=c.get("host"), port=int(c["port"]) if c.get("port") else None,
+                          database=c.get("dbname"))
+    return re.sub(r"^postgres(ql)?(\+\w+)?://", "postgresql+psycopg://", url)
+
+
+def migrate(url):
+    """`alembic upgrade head` (db/migrations) against this database."""
+    from alembic import command
+    from alembic.config import Config
+    cfg = Config(str(ALEMBIC_INI))
+    cfg.attributes["url"] = url
+    command.upgrade(cfg, "head")
+
+
 def connect(url=None):
-    """Open a connection and make sure the schema is current."""
+    """Open a connection and make sure the schema is migrated to head."""
     url = url or database_url()
     if not url:
         raise SystemExit("DATABASE_URL is not set (env or .env)")
-    conn = psycopg.connect(url)
-    conn.execute(SCHEMA.read_text())
-    conn.commit()
-    return conn
+    migrate(url)
+    return psycopg.connect(url)
 
 
 def key(date, amount):
@@ -52,7 +74,12 @@ def key(date, amount):
 
 
 def load(conn, ledger):
-    """Replace scraped_transactions with this ledger. Overrides are untouched."""
+    """Replace scraped_transactions with this ledger. Overrides are untouched.
+
+    Every row is validated as a LedgerTransaction first, so the jsonb `record`
+    always has the shape finance/models.py declares."""
+    ledger = [LedgerTransaction.model_validate(t).model_dump(mode="json", exclude_unset=True)
+              for t in ledger]
     with conn.transaction(), conn.cursor() as cur:
         cur.execute("TRUNCATE scraped_transactions")
         cur.executemany(

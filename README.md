@@ -32,7 +32,7 @@ normalizer, then combines all `normalized/*.json` into:
   spending `summary` by category and origin.
 - **`data/digested/snapshot.{json,md}`** — headline net-worth / debt position.
 
-Run `python3 data/digest.py` (or `--no-normalize` to combine existing output only).
+Run `poetry run python data/digest.py` (or `--no-normalize` to combine existing output only).
 See `CLAUDE.md` for the dedup rules and conventions.
 
 | Source | Raw | normalize.py | Entities emitted |

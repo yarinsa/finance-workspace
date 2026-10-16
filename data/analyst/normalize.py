@@ -16,6 +16,7 @@ accounts[]. One record is emitted per account with a non-zero balance.
 Self-contained; safe to re-run after each scrape.
 """
 import json, datetime
+from finance.models import write_envelope
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent          # .../data/analyst
@@ -44,11 +45,8 @@ def load(name, default=None):
 
 
 def emit(entity, records):
-    path = OUT / f"{entity}.json"
-    path.write_text(json.dumps(
-        {"source": SOURCE, "entity": entity, "generated_at": NOW, "records": records},
-        ensure_ascii=False, indent=2))
-    print(f"  {SOURCE}/{path.name}: {len(records)} records")
+    """Validate through finance.models and write the common envelope."""
+    write_envelope(OUT, SOURCE, entity, NOW, records)
 
 
 def iso(ddmmyyyy):
