@@ -66,7 +66,12 @@ async function login(page) {
     if (text.includes(ACCOUNT_BLOCKED_MSG)) throw new Exit(3, 'LOGIN FAILED: ACCOUNT_BLOCKED');
     if (/קוד אימות|קוד חד[ -]פעמי|נשלח אליך קוד/.test(text)) throw new Exit(3, 'LOGIN FAILED: OTP_REQUIRED');
   }
-  throw new Exit(1, `LOGIN FAILED: UNKNOWN ${page.url()}`);
+  // Unrecognised page: keep what it showed (local only) so the next selector fix is a look, not a guess.
+  const shot = path.join(outDir, 'login-unknown.png');
+  await page.screenshot({ path: shot, fullPage: true }).catch(() => {});
+  const text = await page.evaluate(() => document.body?.innerText || '').catch(() => '');
+  fs.writeFileSync(path.join(outDir, 'login-unknown.txt'), `${page.url()}\n\n${text}`);
+  throw new Exit(1, `LOGIN FAILED: UNKNOWN ${page.url()} (screenshot + text: ${shot}, login-unknown.txt)`);
 }
 
 /** The live Broker SessionID: 32-hex suffix of the SPA's "_pouch_sessionDB_<id>" localStorage key. */

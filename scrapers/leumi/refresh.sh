@@ -22,7 +22,7 @@ fi
 [[ -d scrapers/leumi/node_modules ]] || (cd scrapers/leumi && npm install --silent) || exit 1
 
 DRY="$(mktemp -d /tmp/leumi-dry-XXXX)"
-trap 'rm -rf "$DRY"' EXIT
+trap '[[ -f "$DRY/login-unknown.png" ]] && { mkdir -p /tmp/leumi-login-debug; cp "$DRY"/login-unknown.* /tmp/leumi-login-debug/; echo "Login page saved to /tmp/leumi-login-debug/"; }; rm -rf "$DRY"' EXIT
 
 echo "== dry run -> $DRY =="
 node scrapers/leumi/scrape.mjs --out "$DRY"
