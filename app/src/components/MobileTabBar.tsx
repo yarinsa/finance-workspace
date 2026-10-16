@@ -1,6 +1,6 @@
-import { NavLink } from "react-router-dom";
+import { NavLink, useLocation } from "react-router-dom";
 import { LayoutGrid } from "lucide-react";
-import { routes } from "@/routes";
+import { groupOf, groups, routes } from "@/routes";
 import { useSidebar } from "@/components/ui/sidebar";
 import { cn } from "@/lib/utils";
 
@@ -11,7 +11,11 @@ import { cn } from "@/lib/utils";
  */
 export function MobileTabBar() {
   const { setOpenMobile } = useSidebar();
-  const tabs = routes.filter((r) => r.primary);
+  const { pathname } = useLocation();
+  const active = groupOf(pathname);
+  const tabs = groups
+    .filter((g) => g.tab)
+    .map((g) => ({ ...g, path: routes.find((r) => r.group === g.key && r.hub)!.path }));
 
   return (
     <nav
@@ -20,17 +24,15 @@ export function MobileTabBar() {
       style={{ bottom: "calc(env(safe-area-inset-bottom) + 12px)" }}
     >
       <div className="flex h-16 flex-1 items-center justify-around rounded-full border bg-background/80 px-2 shadow-lg backdrop-blur-xl">
-        {tabs.map(({ path, label, icon: Icon }) => (
+        {tabs.map(({ key, path, label, icon: Icon }) => (
           <NavLink
-            key={path}
+            key={key}
             to={path}
             aria-label={label}
-            className={({ isActive }) =>
-              cn(
-                "flex size-12 items-center justify-center rounded-full transition-colors active:scale-95",
-                isActive ? "text-[var(--lg-accent)]" : "text-foreground/80",
-              )
-            }
+            className={cn(
+              "flex size-12 items-center justify-center rounded-full transition-colors active:scale-95",
+              active === key ? "text-[var(--lg-accent)]" : "text-foreground/80",
+            )}
           >
             <Icon className="size-6" strokeWidth={2.25} />
           </NavLink>

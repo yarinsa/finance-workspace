@@ -1,3 +1,5 @@
+import { useState } from "react";
+import BudgetEditorSheet from "@/components/BudgetEditorSheet";
 import { BigNumber, Card, CardLabel, PageTitle, Section } from "@/components/common";
 import { cashflow, shekel } from "@/lib/data";
 import type { BudgetCategory, Budgets as BudgetsData } from "@/lib/budgets";
@@ -38,14 +40,14 @@ function Hero({ b }: { b: BudgetsData }) {
   );
 }
 
-function Row({ c }: { c: BudgetCategory }) {
+function Row({ c, onOpen }: { c: BudgetCategory; onOpen: () => void }) {
   const pct = c.planned > 0 ? (c.spent / c.planned) * 100 : c.spent > 0 ? 100 : 0;
   return (
-    <div className="border-b border-line py-3 last:border-b-0">
+    <button type="button" onClick={onOpen} className="block w-full border-b border-line py-3 text-start last:border-b-0">
       <div className="mb-1.5 flex items-baseline justify-between gap-3">
         <span className="font-semibold">
           {c.name}
-          {c.source === "override" && <span className="ms-1.5 text-xs font-normal text-muted-foreground">מותאם</span>}
+          {c.source === "override" && <span className="ms-1.5 text-xs font-normal text-muted-foreground">מותאם אישית</span>}
         </span>
         <span className={`text-sm font-bold tabular-nums ${c.over ? "text-bad" : ""}`}>
           {c.over ? `חריגה ${shekel(-c.left)}` : `${shekel(c.left)} נותרו`}
@@ -55,11 +57,12 @@ function Row({ c }: { c: BudgetCategory }) {
       <div className="mt-1.5 text-xs text-muted-foreground tabular-nums">
         {shekel(c.spent)} מתוך {shekel(c.planned)}
       </div>
-    </div>
+    </button>
   );
 }
 
 export default function Budgets() {
+  const [editing, setEditing] = useState<string | null>(null);
   const b = cashflow.budgets;
   return (
     <div className="space-y-4 md:space-y-[18px]">
@@ -74,10 +77,14 @@ export default function Budgets() {
           <Section title="לפי קטגוריה">
             <Card>
               {b.categories.map((c) => (
-                <Row key={c.name} c={c} />
+                <Row key={c.name} c={c} onOpen={() => setEditing(c.name)} />
               ))}
             </Card>
           </Section>
+          <BudgetEditorSheet
+            category={b.categories.find((c) => c.name === editing) ?? null}
+            onClose={() => setEditing(null)}
+          />
         </>
       )}
     </div>

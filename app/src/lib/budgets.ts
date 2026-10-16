@@ -8,6 +8,14 @@ export interface BudgetCategory {
   pct: number | null;
   over: boolean;
   source: "riseup" | "override";
+  /** Spend of the last cycles before the current one, oldest first. */
+  history?: BudgetHistoryPoint[];
+}
+
+export interface BudgetHistoryPoint {
+  /** Budget month, YYYY-MM. */
+  cycle: string;
+  spent: number;
 }
 
 export interface Budgets {
