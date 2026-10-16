@@ -54,7 +54,7 @@ fi
 
 if [[ $MODE != app ]]; then
   echo "==> uploading digested data"
-  for f in cashflow snapshot transactions goals forecast; do
+  for f in cashflow snapshot transactions goals forecast validation; do
     src="$REPO/data/digested/$f.json"
     if [[ -f "$src" ]]; then
       aws s3 cp "$src" "s3://$BUCKET/data/$f.json" \

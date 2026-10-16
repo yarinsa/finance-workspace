@@ -174,10 +174,14 @@ def _stale_actions(syncs, as_of):
                     detail, ("לסנכרונים", "/syncs"))]
 
 
-def build_actions(runway, bills, budgets, fixed_expenses, syncs, as_of):
-    """Prioritised to-handle list: critical -> low, then amount descending."""
+def build_actions(runway, bills, budgets, fixed_expenses, syncs, as_of, validation=()):
+    """Prioritised to-handle list: critical -> low, then amount descending.
+
+    `validation` is data/validate.py's `validation_actions()` output, already in
+    action shape; it is merged in as-is.
+    """
     actions = (_runway_actions(runway) + _budget_actions(budgets) + _bill_actions(bills)
                + _card_actions(runway, as_of) + _duplicate_actions(fixed_expenses)
-               + _stale_actions(syncs, as_of))
+               + _stale_actions(syncs, as_of) + list(validation))
     actions.sort(key=lambda a: (SEVERITY_ORDER[a["severity"]], -(a["amount"] or 0)))
     return actions

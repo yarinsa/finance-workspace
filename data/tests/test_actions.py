@@ -154,3 +154,13 @@ def test_named_reason_groups_across_merchants_and_single_generic_skipped():
     acts = by_id(build(fixed_expenses=fixed), "dup:")
     assert [a["id"] for a in acts] == ["dup:שיחות לחו״ל:2026-10"]
     assert acts[0]["title"] == "שירות כפול: שיחות לחו״ל" and acts[0]["amount"] == 44.9
+
+
+def test_validation_failures_join_the_list_by_severity():
+    """A failing card-statement check from validate.py lands in "לטיפול" next to the
+    built-in actions, sorted by severity like everything else."""
+    failing = {"id": "validation:card_statements.amex:2026-10", "severity": "high",
+               "title": "חיובי כרטיס חסרים", "detail": "29 raw vouchers missing from the ledger",
+               "cta": {"label": "לסנכרונים", "to": "/syncs"}, "amount": 5212.89}
+    out = actions.build_actions(None, None, None, [], [], date(2026, 10, 16), [failing])
+    assert out == [failing]

@@ -24,6 +24,7 @@ DIGESTED = os.path.join(HERE, "digested")
 TRANSACTIONS = os.path.join(DIGESTED, "transactions.json")
 SNAPSHOT = os.path.join(DIGESTED, "snapshot.json")
 FORECAST = os.path.join(DIGESTED, "forecast.json")
+VALIDATION = os.path.join(DIGESTED, "validation.json")
 OUT_JSON = os.path.join(DIGESTED, "cashflow.json")
 OUT_MD = os.path.join(DIGESTED, "cashflow.md")
 OUT_HTML = os.path.join(DIGESTED, "cashflow.html")
@@ -565,7 +566,7 @@ def build():
         transactions, snapshot["bank_accounts"], snapshot.get("savings", []),
         _local_today())
     # Mint-style monthly views (PRD 12): bills status, budgets, spending explorer
-    import actions, bills, budgets, spending
+    import actions, bills, budgets, spending, validate
     budget_doc = bills.load_budget()
     bills_block = bills.build_bills(budget_doc, transactions, _local_today())
     budgets_block = budgets.build_budgets(budget_doc, _local_today(), budgets.load_overrides())
@@ -609,7 +610,8 @@ def build():
         "actions": actions.build_actions(
             runway_block, bills_block, budgets_block,
             fixed_expenses(forecast, transactions, current),
-            snapshot.get("syncs", []), _local_today()),
+            snapshot.get("syncs", []), _local_today(),
+            validate.validation_actions(_load_optional(VALIDATION) or {})),
         "months": [
             {"month": k, "income": v["income"], "expense": v["expense"], "net": v["net"],
              "count": v["count"]}
