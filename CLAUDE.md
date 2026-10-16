@@ -74,7 +74,9 @@ Chrome profiles persist logins, so this costs a login only when one lapses.
   balances, credit-card debt, loans/mortgage, detected salary, totals, and a
   `spending` summary. Query this for net-worth/debt questions.
 
-### Automated sync (Temporal)
+### Automated sync (Temporal) — POC
+
+**Proof of concept** (AMEX only, local dev server); see `sync/README.md` for status.
 
 `sync/` runs the AMEX refresh on a schedule (daily 07:30 Asia/Jerusalem) with a
 local Temporal dev server + worker under launchd: ensure Chrome -> check session
