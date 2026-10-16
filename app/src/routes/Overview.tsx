@@ -1,5 +1,6 @@
 import { BigNumber, Card, CardLabel, Kpi, KpiGrid, ListRow, Nudge, Section } from "@/components/common";
 import NetWorthChart from "@/components/NetWorthChart";
+import RunwayTeaser from "@/components/RunwayTeaser";
 import WalletHero from "@/components/WalletHero";
 import MortgageCard from "@/components/MortgageCard";
 import SpendingDonut from "@/components/SpendingDonut";
@@ -66,6 +67,8 @@ export default function Overview() {
         <h1>{greeting(new Date().getHours())} 👋</h1>
         <p className="muted">הכסף שלך, ברור יותר כל יום</p>
       </header>
+
+      {cashflow.runway && <RunwayTeaser runway={cashflow.runway} />}
 
       <Section title="תזרים" to="/cashflow">
         <WalletHero />

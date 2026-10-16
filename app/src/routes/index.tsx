@@ -8,6 +8,7 @@ import {
   Landmark,
   Lightbulb,
   RefreshCw,
+  CalendarClock,
   PieChart,
   Sparkles,
   Target,
@@ -24,6 +25,7 @@ import Metrics from "./Metrics";
 import Timeline from "./Timeline";
 import MyPlan from "./MyPlan";
 import Syncs from "./Syncs";
+import Runway from "./Runway";
 
 export interface RouteDef {
   path: string;
@@ -38,6 +40,7 @@ export interface RouteDef {
 export const routes: RouteDef[] = [
   { path: "/overview", label: "מבט על", icon: House, primary: true, Component: Overview },
   { path: "/cashflow", label: "תזרים כספי", icon: ArrowLeftRight, primary: true, Component: Cashflow },
+  { path: "/runway", label: "יתרה צפויה", icon: CalendarClock, Component: Runway },
   { path: "/summary", label: "סיכום התוכנית", icon: ClipboardList, Component: Summary },
   { path: "/goals", label: "יעדים", icon: Target, primary: true, Component: Goals },
   { path: "/recommendations", label: "המלצות", icon: Lightbulb, Component: Recommendations },

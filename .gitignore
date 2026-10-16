@@ -21,6 +21,7 @@ data/*
 !data/projection.py
 !data/detect_freeze.py
 !data/goals.py
+!data/runway.py
 !data/*/
 data/*/raw/
 data/*/normalized/
