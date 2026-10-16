@@ -171,7 +171,8 @@ def test_get_transaction_shape(client):
     assert r.json() == {
         "date": "2026-01-15", "abs_amount": "123.45", "amount": -123.45, "description": "חנות לדוגמה",
         "category": "קניות", "scraped_category": "קניות", "note": None, "excluded": False,
-        "overridden": False, "origin": "cal", "sources": ["cal", "riseup"]}
+        "overridden": False, "origin": "cal", "sources": ["cal", "riseup"],
+        "horizon": None, "scraped_horizon": None}
 
 
 def test_unknown_key_is_404_on_every_verb(client, rebuilder):
@@ -298,8 +299,17 @@ def test_orphaned_overrides_listed(client, owner):
     import ledger
     ledger.load(owner, [{**PURCHASE, "amount": -123.40}, SALARY, CARD_BILL])
     assert client.get("/api/overrides/orphaned").json() == {"overrides": [
-        {"date": "2026-01-15", "abs_amount": "123.45", "category": "אלקטרוניקה", "note": None, "excluded": False}]}
+        {"date": "2026-01-15", "abs_amount": "123.45", "category": "אלקטרוניקה", "note": None, "excluded": False,
+         "horizon": None}]}
     assert client.get(PURCHASE_URL).status_code == 404
+
+
+def test_horizon_override_wins_and_rejects_unknown(client, rebuilder):
+    r = client.patch(PURCHASE_URL, json={"horizon": "future"}, headers=WRITE)
+    assert r.status_code == 200 and r.json()["horizon"] == "future" and r.json()["overridden"]
+    assert client.patch(PURCHASE_URL, json={"horizon": "someday"}, headers=WRITE).status_code == 422
+    r = client.patch(PURCHASE_URL, json={"horizon": None}, headers=WRITE)
+    assert r.json()["horizon"] is None and not r.json()["overridden"]   # empty override pruned
 
 
 def test_rebuild_status_comes_from_the_workflow_query(client, rebuilder):

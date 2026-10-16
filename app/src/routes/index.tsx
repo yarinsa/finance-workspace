@@ -15,6 +15,7 @@ import {
   CalendarCheck,
   Compass,
   Ellipsis,
+  Scale,
   type LucideIcon,
   Receipt,
   Wallet,
@@ -35,6 +36,7 @@ import Budgets from "./Budgets";
 import Spending from "./Spending";
 import Monthly from "./Monthly";
 import Plan from "./Plan";
+import HorizonsPage from "./Horizons";
 
 /** Navigation hubs, Mint-style: each is one bottom tab (and one sidebar section). */
 export type RouteGroup = "overview" | "monthly" | "forecast" | "plan" | "more";
@@ -81,6 +83,7 @@ export const routes: RouteDef[] = [
   { path: "/timeline", label: "ציר זמן", icon: CalendarRange, group: "forecast", Component: Timeline },
 
   { path: "/plan", label: "יעדים ותכנון", icon: Compass, group: "plan", hub: true, Component: Plan },
+  { path: "/horizons", label: "היום · קרוב · פרישה", icon: Scale, group: "plan", Component: HorizonsPage },
   { path: "/goals", label: "יעדים", icon: Target, group: "plan", Component: Goals },
   { path: "/summary", label: "סיכום התוכנית", icon: ClipboardList, group: "plan", Component: Summary },
   { path: "/recommendations", label: "המלצות", icon: Lightbulb, group: "plan", Component: Recommendations },

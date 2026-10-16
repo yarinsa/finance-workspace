@@ -9,11 +9,19 @@ import {
   ledgerKey,
   patchTransaction,
   resetTransaction,
+  type Horizon,
   type Row,
 } from "@/lib/api";
 import { shekel } from "@/lib/data";
 import { buildPatch } from "@/lib/editPatch";
 import { useLedgerApi } from "@/lib/useLedgerApi";
+
+export const HORIZON_LABEL: Record<Horizon, string> = {
+  current: "אני של היום",
+  near: "אני של העתיד הקרוב",
+  future: "אני של העתיד (פרישה)",
+};
+const HORIZON_SHORT: Record<Horizon, string> = { current: "היום", near: "עתיד קרוב", future: "פרישה" };
 
 /** What the static data knows about a transaction before the API is asked. */
 export interface EditTarget {
@@ -48,7 +56,11 @@ function Body({ tx, onClose }: { tx: EditTarget; onClose: () => void }) {
 
   const [row, setRow] = useState<Row | null>(null);
   const [categories, setCategories] = useState<string[]>([]);
-  const [form, setForm] = useState({ category: tx.category, note: "", excluded: false });
+  const [form, setForm] = useState<{ category: string; note: string; excluded: boolean; horizon?: Horizon | "clear" }>({
+    category: tx.category,
+    note: "",
+    excluded: false,
+  });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -64,7 +76,7 @@ function Body({ tx, onClose }: { tx: EditTarget; onClose: () => void }) {
         if (!live) return;
         setRow(r);
         setCategories(cats);
-        setForm({ category: r.category, note: r.note ?? "", excluded: r.excluded });
+        setForm({ category: r.category, note: r.note ?? "", excluded: r.excluded, horizon: r.horizon ?? undefined });
       })
       .catch((e) => {
         if (!live) return;
@@ -77,7 +89,8 @@ function Body({ tx, onClose }: { tx: EditTarget; onClose: () => void }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [online, key.date, key.abs_amount]);
 
-  const baseline = base ?? { category: tx.category, note: null, excluded: false };
+  const baseline = base ?? { category: tx.category, note: null, excluded: false, horizon: null, scraped_horizon: null };
+  const shownHorizon = form.horizon === "clear" ? (base?.scraped_horizon ?? null) : (form.horizon ?? null);
   const patch = buildPatch(baseline, form);
   const dirty = Object.keys(patch).length > 0;
 
@@ -148,6 +161,38 @@ function Body({ tx, onClose }: { tx: EditTarget; onClose: () => void }) {
             onChange={(e) => setForm((f) => ({ ...f, note: e.target.value }))}
           />
         </label>
+
+        <div>
+          <span className="mb-1 block text-xs text-muted-foreground">שייך ל…</span>
+          <div className="grid grid-cols-3 gap-1.5" role="radiogroup" aria-label="אופק">
+            {(Object.keys(HORIZON_SHORT) as Horizon[]).map((h) => (
+              <button
+                key={h}
+                type="button"
+                role="radio"
+                aria-checked={shownHorizon === h}
+                title={HORIZON_LABEL[h]}
+                disabled={disabled}
+                onClick={() => setForm((f) => ({ ...f, horizon: h }))}
+                className={`rounded-lg border px-2 py-2 text-sm disabled:opacity-40 ${
+                  shownHorizon === h ? "border-brand bg-brand/15 font-semibold" : "border-line"
+                }`}
+              >
+                {HORIZON_SHORT[h]}
+              </button>
+            ))}
+          </div>
+          {base && base.horizon !== (base.scraped_horizon ?? null) && form.horizon !== "clear" && (
+            <button
+              type="button"
+              disabled={disabled}
+              onClick={() => setForm((f) => ({ ...f, horizon: "clear" }))}
+              className="mt-1 text-xs text-muted-foreground underline disabled:opacity-40"
+            >
+              נקה (לפי הכלל: {base.scraped_horizon ? HORIZON_SHORT[base.scraped_horizon] : "ללא"})
+            </button>
+          )}
+        </div>
 
         <label className="flex items-center gap-3 text-sm">
           <input

@@ -20,13 +20,21 @@ export interface Row {
   overridden: boolean;
   origin: string;
   sources: string[];
+  /** Effective horizon bucket (override if present, else the rule's pick); null when unclassified. */
+  horizon?: Horizon | null;
+  /** What the horizon rules picked before any override. */
+  scraped_horizon?: Horizon | null;
 }
+
+/** Whose money a transaction serves: current me, near-future me, or future (retirement) me. */
+export type Horizon = "current" | "near" | "future";
 
 /** The editable fields. `null` clears that field's override. */
 export interface RowPatch {
   category?: string | null;
   note?: string | null;
   excluded?: boolean;
+  horizon?: Horizon | null;
 }
 
 export interface Health {

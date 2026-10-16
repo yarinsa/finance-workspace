@@ -10,7 +10,7 @@ import datetime as dt
 import json
 import re
 from pathlib import Path
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, BeforeValidator, ConfigDict
 
@@ -158,6 +158,7 @@ class LedgerTransaction(Record):
     card_bill_payment: bool | None = None
     internal_transfer: bool | None = None
     savings: bool | None = None
+    horizon: Literal["current", "near", "future"] | None = None   # data/horizons.py default; overridable
     # set by the transactions view when a manual override applies
     note: str | None = None
     overridden: bool | None = None
