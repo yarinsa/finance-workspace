@@ -2,6 +2,8 @@ import { NavLink, Navigate, Route, Routes, useLocation } from "react-router-dom"
 import { groups, redirects, routes } from "./routes";
 import { cashflow, daysSince, useDataVersion } from "./lib/data";
 import { LedgerApiProvider, useLedgerApi } from "./lib/useLedgerApi";
+import { RelayEnvironmentProvider } from "react-relay";
+import { environment } from "./lib/relay";
 import { displayState, headline, STATE_PILL, useSyncStatus } from "./lib/syncStatus";
 import {
   Sidebar,
@@ -118,6 +120,7 @@ export default function App() {
   const days = daysSince(cashflow.generated_at);
   const current = routes.find((r) => r.path === pathname);
   return (
+    <RelayEnvironmentProvider environment={environment}>
     <LedgerApiProvider>
     <TooltipProvider>
       <SidebarProvider>
@@ -148,5 +151,6 @@ export default function App() {
       </SidebarProvider>
     </TooltipProvider>
     </LedgerApiProvider>
+    </RelayEnvironmentProvider>
   );
 }

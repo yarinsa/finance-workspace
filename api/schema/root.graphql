@@ -1,5 +1,10 @@
 type Query {
   node(id: ID!): Node
+  """
+  A transaction by its ledger key, for screens that only know the date and amount
+  from the static JSON. Null when no transaction has this key.
+  """
+  transactionByKey(date: Date!, absAmount: Money!): Transaction
 
   transactions(first: Int, after: String, last: Int, before: String,
                filter: TransactionFilter, orderBy: TransactionOrder = DATE_DESC): TransactionConnection!

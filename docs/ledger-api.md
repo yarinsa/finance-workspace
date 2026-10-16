@@ -137,6 +137,21 @@ that take one `input` and echo `clientMutationId`.
   takes `goalId`. The old `Horizon` enum is now `HorizonKey` for inputs.
 - **Not served yet:** `snapshot` (the API container has no `data/` mount).
 
+**Client** (`app/`): Relay 21.
+
+- `relay-compiler` reads the SDL straight from `api/schema` (`app/relay.config.json`) and
+  writes types to the gitignored `src/__generated__`.
+- `pnpm dev`, `pnpm build` and `pnpm test` run the compiler first, with
+  `FORCE_NO_WATCHMAN=1`, because the Watchman-backed run hangs.
+- A small plugin in `vite.config.ts` replaces each `graphql` tag with an import of its
+  artifact. `@vitejs/plugin-react` 6 has no Babel step, so `babel-plugin-relay` can't do it.
+- `src/lib/relay.ts` maps failures onto the same `ApiOffline`/`ApiError` as REST.
+- `TransactionEditSheet` preloads its query when it opens (`useQueryLoader`), not on
+  mount: the sheet remounts its body, and a fetch-on-mount query refetched in a loop.
+  It edits through the mutations and still feeds the shared overlay.
+- The static JSON stays the read path, so the app works with the Mac off.
+- `FINANCE_API_URL` points a worktree's dev server at its own API.
+
 Each object type is bound to its Pydantic model in `api/schema_bindings.py`. Then
 `api/tests/test_graphql_schema.py` fails when the SDL and the models drift:
 

@@ -383,6 +383,9 @@ class TransactionResolver(NodeResolver[Txn]):
         tag_store.set_tags(ledger(info).conn, t.key, inp.tags, info.context["user"])
         return self._refetched(info, t)
 
+    def resolve_by_key(self, _, info, date, absAmount):
+        return ledger(info).by_key.get((date, Decimal(absAmount).quantize(CENT)))
+
     def resolve_list(self, direction=None):
         """`Query.transactions` / `expenses` / `incomes`."""
         def resolve(_, info, **args):
@@ -407,6 +410,7 @@ class TransactionResolver(NodeResolver[Txn]):
     def bind(self, schema):
         super().bind(schema)
         q, fields = schema.query_type.fields, schema.type_map[self.type_name].fields
+        q["transactionByKey"].resolve = self.resolve_by_key
         q["transactions"].resolve = self.resolve_list()
         q["expenses"].resolve = self.resolve_list("EXPENSE")
         q["incomes"].resolve = self.resolve_list("INCOME")

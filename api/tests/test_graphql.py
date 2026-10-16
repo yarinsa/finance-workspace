@@ -353,3 +353,9 @@ def test_delete_goal_unassigns_its_transactions(client):
     t = data(client, "query($id: ID!) { node(id: $id) { ... on Transaction { goal { id } overridden } } }",
              id=PURCHASE_ID)["node"]
     assert t == {"goal": None, "overridden": False}   # the override held only the goal, so it is pruned
+
+
+def test_transaction_by_key_finds_the_row_the_static_json_knows(client):
+    q = "query($d: Date!, $a: Money!) { transactionByKey(date: $d, absAmount: $a) { id amount } }"
+    assert data(client, q, d="2026-01-15", a="123.45")["transactionByKey"] == {"id": PURCHASE_ID, "amount": "-123.45"}
+    assert data(client, q, d="2026-01-15", a="9.99")["transactionByKey"] is None

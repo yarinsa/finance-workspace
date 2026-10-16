@@ -31,6 +31,28 @@ function serveDigested(): Plugin {
   };
 }
 
+// Relay: replace each graphql`…` tag with an import of the artifact relay-compiler
+// wrote for it (src/__generated__/<Name>.graphql.ts). This is what babel-plugin-relay
+// does; @vitejs/plugin-react 6 has no Babel step, so it is done here with a regex over
+// the operation or fragment name. relay-compiler itself runs before dev/build/test.
+function relayTags(): Plugin {
+  const TAG = /graphql`\s*(?:query|mutation|subscription|fragment)\s+([A-Za-z_][\w]*)[\s\S]*?`/g;
+  return {
+    name: "relay-tags",
+    enforce: "pre",
+    transform(code, id) {
+      if (!/\.tsx?$/.test(id) || id.includes("/__generated__/") || !code.includes("graphql`")) return null;
+      const imports: string[] = [];
+      const out = code.replace(TAG, (_, name: string) => {
+        const local = `__relay_${name}`;
+        imports.push(`import ${local} from "@/__generated__/${name}.graphql";`);
+        return local;
+      });
+      return imports.length ? { code: `${imports.join("\n")}\n${out}`, map: null } : null;
+    },
+  };
+}
+
 // Dev/preview forward /api to the local ledger API (docker compose, 127.0.0.1:8787).
 // The API demands the origin secret that CloudFront adds in production, so it is
 // injected here, server-side, from the repo-root .env. loadEnv(..., "") is only
@@ -41,7 +63,8 @@ function apiProxy(mode: string): Record<string, ProxyOptions> {
   const secret = process.env.FINANCE_API_ORIGIN_SECRET ?? env.FINANCE_API_ORIGIN_SECRET;
   return {
     "/api": {
-      target: "http://127.0.0.1:8787",
+      // FINANCE_API_URL points a worktree's dev server at its own API (default: the compose service).
+      target: process.env.FINANCE_API_URL ?? env.FINANCE_API_URL ?? "http://127.0.0.1:8787",
       changeOrigin: true,
       headers: secret ? { "X-Origin-Secret": secret } : {},
     },
@@ -49,7 +72,7 @@ function apiProxy(mode: string): Record<string, ProxyOptions> {
 }
 
 export default defineConfig(({ mode }) => ({
-  plugins: [react(), tailwindcss(), serveDigested()],
+  plugins: [relayTags(), react(), tailwindcss(), serveDigested()],
   server: { proxy: apiProxy(mode) },
   preview: { proxy: apiProxy(mode) },
   resolve: {

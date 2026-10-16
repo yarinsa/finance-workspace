@@ -1,25 +1,19 @@
-import { useEffect, useState } from "react";
+import { Component, Suspense, useEffect, useState, type ReactNode } from "react";
+import { graphql, useMutation, usePreloadedQuery, useQueryLoader, type PreloadedQuery } from "react-relay";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Input } from "@/components/ui/input";
 import OptionChips from "@/components/OptionChips";
-import {
-  ApiError,
-  ApiOffline,
-  getCategories,
-  getGoals,
-  getTags,
-  type Goal,
-  getTransaction,
-  ledgerKey,
-  patchTransaction,
-  putTags,
-  resetTransaction,
-  type Horizon,
-  type Row,
-} from "@/lib/api";
+import { ApiOffline, ledgerKey, type Horizon, type Row } from "@/lib/api";
 import { shekel } from "@/lib/data";
 import { buildPatch } from "@/lib/editPatch";
 import { useLedgerApi } from "@/lib/useLedgerApi";
+import type {
+  TransactionEditSheetQuery,
+  TransactionEditSheetQuery$data,
+} from "@/__generated__/TransactionEditSheetQuery.graphql";
+import type { TransactionEditSheetUpdateMutation } from "@/__generated__/TransactionEditSheetUpdateMutation.graphql";
+import type { TransactionEditSheetTagsMutation } from "@/__generated__/TransactionEditSheetTagsMutation.graphql";
+import type { TransactionEditSheetClearMutation } from "@/__generated__/TransactionEditSheetClearMutation.graphql";
 
 export const HORIZON_LABEL: Record<Horizon, string> = {
   current: "אני של היום",
@@ -41,84 +35,207 @@ export interface EditTarget {
 
 const sameTags = (a: string[], b: string[]) => a.length === b.length && a.every((t, i) => t === b[i]);
 
+// Picker lists are small (a household's categories, tags and goals); 200 is the API's page cap.
+const QUERY = graphql`
+  query TransactionEditSheetQuery($date: Date!, $absAmount: Money!) {
+    transactionByKey(date: $date, absAmount: $absAmount) {
+      ...TransactionEditSheet_transaction @relay(mask: false)
+    }
+    categories(first: 200, orderBy: NAME_ASC) { edges { node { name } } }
+    tags(first: 200, orderBy: NAME_ASC) { edges { node { name } } }
+    goals(first: 200) { edges { node { id description horizon { key } } } }
+  }
+`;
+
+graphql`
+  fragment TransactionEditSheet_transaction on Transaction {
+    id date amount absAmount description origin sources note excluded overridden
+    category { name }
+    horizon { key }
+    goal { id description }
+    raw { category { name } horizon { key } }
+    tags(first: 50) { edges { node { name } } }
+  }
+`;
+
+const UPDATE = graphql`
+  mutation TransactionEditSheetUpdateMutation($input: UpdateTransactionInput!) {
+    updateTransaction(input: $input) { transaction { ...TransactionEditSheet_transaction @relay(mask: false) } }
+  }
+`;
+
+const SET_TAGS = graphql`
+  mutation TransactionEditSheetTagsMutation($input: SetTransactionTagsInput!) {
+    setTransactionTags(input: $input) { transaction { ...TransactionEditSheet_transaction @relay(mask: false) } }
+  }
+`;
+
+const CLEAR = graphql`
+  mutation TransactionEditSheetClearMutation($input: ClearTransactionOverrideInput!) {
+    clearTransactionOverride(input: $input) { transaction { ...TransactionEditSheet_transaction @relay(mask: false) } }
+  }
+`;
+
+type Txn = NonNullable<TransactionEditSheetQuery$data["transactionByKey"]>;
+type GoalOption = { id: string; description: string; horizon: Horizon | null };
+
+const lower = (k: string | null | undefined) => (k ? (k.toLowerCase() as Horizon) : null);
+
+/** The GraphQL transaction in the REST `Row` shape the shared overlay keeps until the rebuild publishes. */
+export function toRow(t: Txn): Row {
+  return {
+    date: t.date,
+    abs_amount: t.absAmount,
+    amount: Number(t.amount),
+    description: t.description,
+    category: t.category?.name ?? "",
+    scraped_category: t.raw.category?.name ?? "",
+    note: t.note ?? null,
+    excluded: t.excluded,
+    overridden: t.overridden,
+    origin: t.origin ?? "",
+    sources: [...t.sources],
+    horizon: lower(t.horizon?.key),
+    scraped_horizon: lower(t.raw.horizon?.key),
+    tags: t.tags.edges.map((e) => e.node.name),
+    goal: t.goal?.description ?? null,
+  };
+}
+
 /**
- * Bottom sheet for editing one transaction through the ledger API: category (picker
- * from `/api/categories` plus free text), tags (picker from `/api/tags`, type to create),
- * note, hide/unhide, and reset to scraped. Tags are saved with their own PUT and are not
- * part of the override, so "reset" leaves them.
- * When the API is unreachable it opens read-only. Writes go to the shared overlay
- * (`useLedgerApi().recordEdit`) so lists and totals update before the rebuild publishes.
+ * Bottom sheet for editing one transaction through the ledger API's GraphQL endpoint:
+ * category (picker plus free text), tags (picker, type to create), note, horizon, goal,
+ * hide/unhide, and reset to raw. One query loads the transaction and the pickers; saves
+ * are the `updateTransaction` / `setTransactionTags` / `clearTransactionOverride`
+ * mutations. Tags are not part of the override, so "reset" leaves them.
+ * When the API is unreachable it opens read-only from the static data. Writes go to the
+ * shared overlay (`useLedgerApi().recordEdit`) so lists and totals update before the
+ * rebuild publishes.
  */
 export default function TransactionEditSheet({ tx, onClose }: { tx: EditTarget | null; onClose: () => void }) {
+  const { online } = useLedgerApi();
+  // Fetch once per opened transaction, here rather than on mount: the sheet's portal and
+  // Suspense remount the body, and a fetch-on-mount query would refetch on every remount.
+  const [queryRef, loadQuery, disposeQuery] = useQueryLoader<TransactionEditSheetQuery>(QUERY);
+  const date = tx ? ledgerKey(tx).date : null;
+  const absAmount = tx ? ledgerKey(tx).abs_amount : null;
+  useEffect(() => {
+    if (online !== true || date == null || absAmount == null) return;
+    loadQuery({ date, absAmount }, { fetchPolicy: "network-only" });
+    return () => disposeQuery();
+  }, [online, date, absAmount, loadQuery, disposeQuery]);
+
   return (
     <Sheet open={tx != null} onOpenChange={(o) => !o && onClose()}>
       <SheetContent side="bottom" className="max-h-[90vh] overflow-y-auto" dir="rtl">
-        {tx && <Body key={`${tx.date}/${tx.amount}`} tx={tx} onClose={onClose} />}
+        {tx &&
+          (online === true && queryRef ? (
+            <OfflineFallback key={`${tx.date}/${tx.amount}`} tx={tx} onClose={onClose}>
+              <Suspense fallback={<Body tx={tx} onClose={onClose} loading />}>
+                <LiveBody tx={tx} onClose={onClose} queryRef={queryRef} />
+              </Suspense>
+            </OfflineFallback>
+          ) : (
+            <Body key={`${tx.date}/${tx.amount}`} tx={tx} onClose={onClose} />
+          ))}
       </SheetContent>
     </Sheet>
   );
 }
 
-function Body({ tx, onClose }: { tx: EditTarget; onClose: () => void }) {
+/** A failed load shows the read-only sheet; an unreachable API is also reported to the shared state. */
+class OfflineFallback extends Component<
+  { tx: EditTarget; onClose: () => void; children: ReactNode },
+  { failed: boolean }
+> {
+  state = { failed: false };
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+  componentDidCatch(error: unknown) {
+    if (error instanceof ApiOffline) window.dispatchEvent(new Event("ledger-api-offline"));
+  }
+  render() {
+    return this.state.failed ? <Body tx={this.props.tx} onClose={this.props.onClose} /> : this.props.children;
+  }
+}
+
+function LiveBody({
+  tx,
+  onClose,
+  queryRef,
+}: {
+  tx: EditTarget;
+  onClose: () => void;
+  queryRef: PreloadedQuery<TransactionEditSheetQuery>;
+}) {
+  const data = usePreloadedQuery<TransactionEditSheetQuery>(QUERY, queryRef);
+  return (
+    <Body
+      tx={tx}
+      onClose={onClose}
+      txn={data.transactionByKey}
+      categories={data.categories.edges.map((e) => e.node.name)}
+      tagNames={data.tags.edges.map((e) => e.node.name)}
+      goals={data.goals.edges.map((e) => ({
+        id: e.node.id,
+        description: e.node.description,
+        horizon: lower(e.node.horizon?.key),
+      }))}
+    />
+  );
+}
+
+interface BodyProps {
+  tx: EditTarget;
+  onClose: () => void;
+  /** The live transaction; absent when read-only (API off) or still loading. */
+  txn?: Txn | null;
+  categories?: string[];
+  tagNames?: string[];
+  goals?: GoalOption[];
+  loading?: boolean;
+}
+
+function Body({ tx, onClose, txn, categories = [], tagNames = [], goals = [], loading = false }: BodyProps) {
   const { online, overlay, recordEdit, markOffline, updating } = useLedgerApi();
   const key = ledgerKey(tx);
   const known = overlay.get(`${key.date}/${key.abs_amount}`);
+  const base: Row | null = txn ? toRow(txn) : (known ?? null);
+  const baseGoal = txn?.goal?.id ?? null;
 
-  const [row, setRow] = useState<Row | null>(null);
-  const [categories, setCategories] = useState<string[]>([]);
-  const [tagNames, setTagNames] = useState<string[]>([]);
-  const [tags, setTags] = useState<string[]>(known?.tags ?? tx.tags ?? []);
+  const [tags, setTags] = useState<string[]>(base?.tags ?? tx.tags ?? []);
   const [tagDraft, setTagDraft] = useState("");
-  const [goals, setGoals] = useState<Goal[]>([]);
   const [form, setForm] = useState<{
     category: string;
     note: string;
     excluded: boolean;
     horizon?: Horizon | "clear";
-    goal_id?: number | null;
-  }>({
-    category: tx.category,
-    note: "",
-    excluded: false,
-  });
+    goal_id?: string | null;
+  }>(() =>
+    base
+      ? { category: base.category, note: base.note ?? "", excluded: base.excluded, horizon: base.horizon ?? undefined }
+      : { category: tx.category, note: "", excluded: false },
+  );
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const readOnly = online !== true;
-  const base: Row | null = row ?? known ?? null;
+  const [commitUpdate] = useMutation<TransactionEditSheetUpdateMutation>(UPDATE);
+  const [commitTags] = useMutation<TransactionEditSheetTagsMutation>(SET_TAGS);
+  const [commitClear] = useMutation<TransactionEditSheetClearMutation>(CLEAR);
 
-  // Load the authoritative row (sources, scraped category, note, flags) and the picker values.
-  useEffect(() => {
-    if (online !== true) return;
-    let live = true;
-    void Promise.all([getTransaction(key), getCategories(), getTags(), getGoals().catch(() => [] as Goal[])])
-      .then(([r, cats, allTags, allGoals]) => {
-        if (!live) return;
-        setRow(r);
-        setCategories(cats);
-        setTagNames(allTags.map((t) => t.name));
-        setGoals(allGoals);
-        setTags(r.tags ?? []);
-        setForm({ category: r.category, note: r.note ?? "", excluded: r.excluded, horizon: r.horizon ?? undefined, goal_id: r.goal_id ?? null });
-      })
-      .catch((e) => {
-        if (!live) return;
-        if (e instanceof ApiOffline) markOffline();
-        else if (e instanceof ApiError && e.status !== 404) setError(e.message);
-      });
-    return () => {
-      live = false;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [online, key.date, key.abs_amount]);
+  const readOnly = online !== true || !txn;
 
-  const baseline = base ?? { category: tx.category, note: null, excluded: false, horizon: null, scraped_horizon: null, goal_id: null };
-  const shownGoal = form.goal_id === undefined ? (base?.goal_id ?? null) : form.goal_id;
+  const baseline = {
+    ...(base ?? { category: tx.category, note: null, excluded: false, horizon: null, scraped_horizon: null }),
+    goal_id: baseGoal,
+  };
+  const shownGoal = form.goal_id === undefined ? baseGoal : form.goal_id;
   // Picking a goal also files the money under that goal's horizon.
-  const pickGoal = (g: Goal | null) =>
+  const pickGoal = (g: GoalOption | null) =>
     setForm((f) => ({ ...f, goal_id: g?.id ?? null, ...(g?.horizon ? { horizon: g.horizon } : {}) }));
   const shownHorizon = form.horizon === "clear" ? (base?.scraped_horizon ?? null) : (form.horizon ?? null);
-  const patch = buildPatch(baseline, form);
+  const patch = buildPatch<string>(baseline, form);
   const savedTags = base?.tags ?? tx.tags ?? [];
   // A name typed but not yet confirmed with Enter still counts when saving.
   const draft = tagDraft.trim().slice(0, 40);
@@ -132,19 +249,52 @@ function Body({ tx, onClose }: { tx: EditTarget; onClose: () => void }) {
     if (name && !tags.includes(name)) setTags((ts) => [...ts, name].sort((a, b) => a.localeCompare(b, "he")));
   };
 
-  // PATCH the override fields, then PUT the tag set; the last answer is the row the overlay keeps.
-  const save = async (): Promise<Row> => {
-    let r: Row | null = null;
-    if (Object.keys(patch).length > 0) r = await patchTransaction(key, patch);
-    if (tagsDirty) r = await putTags(key, finalTags);
-    return r ?? getTransaction(key);
+  /** Commit one mutation and hand back the transaction its payload carries. */
+  const mutate = <M extends { response: object }>(
+    commit: (cfg: { variables: never; onCompleted: (r: M["response"]) => void; onError: (e: Error) => void }) => unknown,
+    variables: object,
+    pick: (r: M["response"]) => Txn,
+  ) =>
+    new Promise<Txn>((resolve, reject) =>
+      commit({ variables: variables as never, onCompleted: (r) => resolve(pick(r)), onError: reject }),
+    );
+
+  // updateTransaction for the override fields, then setTransactionTags; the last payload is what the overlay keeps.
+  const save = async (): Promise<Txn> => {
+    const id = txn!.id;
+    let t: Txn = txn!;
+    if (Object.keys(patch).length > 0) {
+      const { goal_id, horizon, ...rest } = patch;
+      const input = {
+        id,
+        ...rest,
+        ...(horizon !== undefined ? { horizon: horizon ? (horizon.toUpperCase() as "CURRENT" | "NEAR" | "FUTURE") : null } : {}),
+        ...(goal_id !== undefined ? { goalId: goal_id } : {}),
+      };
+      t = await mutate<TransactionEditSheetUpdateMutation>(commitUpdate, { input }, (r) => r.updateTransaction.transaction);
+    }
+    if (tagsDirty) {
+      t = await mutate<TransactionEditSheetTagsMutation>(
+        commitTags,
+        { input: { id, tags: finalTags } },
+        (r) => r.setTransactionTags.transaction,
+      );
+    }
+    return t;
   };
 
-  const run = async (call: () => Promise<Row>) => {
+  const reset = () =>
+    mutate<TransactionEditSheetClearMutation>(
+      commitClear,
+      { input: { id: txn!.id } },
+      (r) => r.clearTransactionOverride.transaction,
+    );
+
+  const run = async (call: () => Promise<Txn>) => {
     setBusy(true);
     setError(null);
     try {
-      recordEdit(await call());
+      recordEdit(toRow(await call()));
       onClose();
     } catch (e) {
       if (e instanceof ApiOffline) markOffline();
@@ -155,7 +305,7 @@ function Body({ tx, onClose }: { tx: EditTarget; onClose: () => void }) {
   };
 
   const overridden = base?.overridden ?? tx.overridden ?? false;
-  const disabled = readOnly || busy;
+  const disabled = readOnly || busy || loading;
 
   return (
     <>
@@ -171,7 +321,7 @@ function Body({ tx, onClose }: { tx: EditTarget; onClose: () => void }) {
       </SheetHeader>
 
       <div className="space-y-4 px-4 pb-4">
-        {readOnly && (
+        {readOnly && !loading && (
           <div className="rounded-xl border border-line bg-panel-2 p-3 text-sm text-muted-foreground">
             עריכה זמינה כשהמחשב הביתי פועל
           </div>
@@ -290,7 +440,7 @@ function Body({ tx, onClose }: { tx: EditTarget; onClose: () => void }) {
           <div>
             <span className="mb-1 block text-xs text-muted-foreground">הכסף הלך ליעד…</span>
             <div className="flex flex-wrap gap-1.5" role="radiogroup" aria-label="יעד">
-              {[null, ...goals].map((g) => (
+              {[null, ...goals].map((g: GoalOption | null) => (
                 <button
                   key={g?.id ?? "none"}
                   type="button"
@@ -336,7 +486,7 @@ function Body({ tx, onClose }: { tx: EditTarget; onClose: () => void }) {
             <button
               type="button"
               disabled={disabled}
-              onClick={() => void run(() => resetTransaction(key))}
+              onClick={() => void run(reset)}
               className="rounded-lg border border-line px-3 py-2.5 text-sm disabled:opacity-40"
             >
               החזר למקור
