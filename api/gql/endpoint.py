@@ -63,31 +63,36 @@ def _error(e: GraphQLError):
 
 
 def run(body: bytes, conn, user, allow_introspection=False):
-    """(status, response dict) for a GraphQL request body."""
+    """(status, response dict, writes) for a GraphQL request body.
+
+    `writes` counts mutations that changed the ledger; the caller signals a rebuild
+    once the connection has committed. Mutation fields run in order, all in the one
+    transaction the caller commits."""
     try:
         req = Request.model_validate_json(body)
     except ValidationError as e:
-        return 400, {"errors": [{"message": f"bad request: {e.errors()[0]['msg']}"}]}
+        return 400, {"errors": [{"message": f"bad request: {e.errors()[0]['msg']}"}]}, 0
     try:
         doc = parse(req.query)
     except GraphQLError as e:
-        return 400, {"errors": [e.formatted]}
+        return 400, {"errors": [e.formatted]}, 0
     rules = [*specified_rules, depth_limit(MAX_DEPTH)]
     if not allow_introspection:
         rules.append(NoSchemaIntrospectionCustomRule)
     errors = validate(SCHEMA, doc, rules)
     if errors:
-        return 400, {"errors": [e.formatted for e in errors]}
+        return 400, {"errors": [e.formatted for e in errors]}, 0
     ops = [d for d in doc.definitions if getattr(d, "operation", None) is not None]
     op = next((d for d in ops if req.operation_name in (None, d.name and d.name.value)), None)
-    if op is not None and op.operation != OperationType.QUERY:
-        return 400, {"errors": [{"message": f"{op.operation.value} operations are not served yet"}]}
+    if op is not None and op.operation == OperationType.SUBSCRIPTION:
+        return 400, {"errors": [{"message": "subscriptions are not served"}]}, 0
+    context = {"ledger": Ledger(conn), "user": user, "writes": 0}
     result = execute(SCHEMA, doc, variable_values=req.variables, operation_name=req.operation_name,
-                     context_value={"ledger": Ledger(conn), "user": user}, field_resolver=default_resolver)
+                     context_value=context, field_resolver=default_resolver)
     if not isinstance(result, ExecutionResult):
         raise RuntimeError("resolvers must be synchronous")
     out = {"data": result.data}
     if result.errors:
         out["errors"] = [_error(e) for e in result.errors]
     json.dumps(out, default=str)   # fail here, not in the response, if a resolver returned junk
-    return 200, out
+    return 200, out, context["writes"]

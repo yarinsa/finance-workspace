@@ -167,12 +167,6 @@ def test_deep_queries_are_refused(client):
     assert status == 400 and "deeper" in body["errors"][0]["message"]
 
 
-def test_mutations_are_not_served_yet(client):
-    q = 'mutation { deleteTag(input: {id: "x"}) { deletedTagId } }'
-    status, body = gql(client, q)
-    assert status == 400 and "mutation" in body["errors"][0]["message"]
-
-
 def test_snapshot_is_an_error_not_a_crash(client):
     status, body = gql(client, "{ snapshot { generatedAt } }")
     assert status == 200 and body["errors"][0]["message"].startswith("snapshot")
@@ -194,3 +188,101 @@ def test_every_group_entity_connects_to_every_other():
             if a is not b:
                 field = SCHEMA.type_map[a.type_name].fields.get(b.plural)
                 assert field is not None and field.resolve is not None, f"{a.type_name}.{b.plural}"
+
+
+# --- mutations ---------------------------------------------------------------------------
+
+from api.gql.relay import to_global_id  # noqa: E402
+
+PURCHASE_ID = to_global_id("Transaction", "2026-01-15:123.45")
+
+UPDATE = """mutation($input: UpdateTransactionInput!) { updateTransaction(input: $input) {
+  clientMutationId transaction { id category { name source } note excluded horizon overridden } } }"""
+
+
+def test_update_transaction_sets_fields_audits_and_signals_one_rebuild(client, owner, rebuilder):
+    out = data(client, UPDATE, input={"id": PURCHASE_ID, "clientMutationId": "m1",
+                                      "category": "מתנות", "note": "יום הולדת", "horizon": "NEAR"})
+    p = out["updateTransaction"]
+    assert p["clientMutationId"] == "m1"
+    assert p["transaction"] == {"id": PURCHASE_ID, "category": {"name": "מתנות", "source": "USER"},
+                                "note": "יום הולדת", "excluded": False, "horizon": "NEAR", "overridden": True}
+    fields = {r[0] for r in owner.execute("SELECT field FROM override_audit")}
+    assert fields == {"category", "note", "horizon"}
+    assert rebuilder.signals == 1
+
+
+def test_null_clears_a_field_and_an_absent_field_is_untouched(client):
+    data(client, UPDATE, input={"id": PURCHASE_ID, "category": "מתנות", "note": "x"})
+    t = data(client, UPDATE, input={"id": PURCHASE_ID, "note": None})["updateTransaction"]["transaction"]
+    assert t["note"] is None and t["category"]["name"] == "מתנות"
+
+
+def test_update_with_nothing_to_change_is_an_error_and_no_rebuild(client, rebuilder):
+    status, body = gql(client, UPDATE, input={"id": PURCHASE_ID})
+    assert "at least one" in body["errors"][0]["message"] and rebuilder.signals == 0
+
+
+def test_unknown_transaction_and_wrong_id_type_are_errors(client, rebuilder):
+    status, body = gql(client, UPDATE, input={"id": to_global_id("Transaction", "2020-01-01:1.00"), "note": "x"})
+    assert body["errors"][0]["message"] == "no such transaction"
+    status, body = gql(client, UPDATE, input={"id": to_global_id("Tag", "1"), "note": "x"})
+    assert "not a Transaction" in body["errors"][0]["message"]
+    assert rebuilder.signals == 0
+
+
+def test_clear_override_returns_to_raw_values(client):
+    data(client, UPDATE, input={"id": PURCHASE_ID, "category": "מתנות", "excluded": True})
+    q = """mutation($id: ID!) { clearTransactionOverride(input: {id: $id}) {
+           transaction { overridden excluded category { name } } } }"""
+    t = data(client, q, id=PURCHASE_ID)["clearTransactionOverride"]["transaction"]
+    assert t == {"overridden": False, "excluded": False, "category": {"name": "קניות"}}
+
+
+SET_TAGS = """mutation($id: ID!, $tags: [String!]!) { setTransactionTags(input: {id: $id, tags: $tags}) {
+  transaction { tags { totalCount edges { node { id name } } } } } }"""
+
+
+def test_set_tags_replaces_the_set_and_creates_unknown_tags(client, owner):
+    data(client, SET_TAGS, id=PURCHASE_ID, tags=["טיול", "החזר"])
+    conn = data(client, SET_TAGS, id=PURCHASE_ID, tags=[" טיול "])["setTransactionTags"]["transaction"]["tags"]
+    assert [e["node"]["name"] for e in conn["edges"]] == ["טיול"]
+    audit = owner.execute("SELECT old, new FROM override_audit WHERE field = 'tags' ORDER BY id").fetchall()
+    assert audit == [(None, "החזר"), (None, "טיול"), ("החזר", None)]
+
+
+def test_blank_tag_name_is_a_validation_error(client):
+    status, body = gql(client, SET_TAGS, id=PURCHASE_ID, tags=["  "])
+    assert "tag name" in body["errors"][0]["message"]
+
+
+def test_update_and_delete_tag(client):
+    tag_id = data(client, SET_TAGS, id=PURCHASE_ID, tags=["טיול"])[
+        "setTransactionTags"]["transaction"]["tags"]["edges"][0]["node"]["id"]
+    q = """mutation($id: ID!) { updateTag(input: {id: $id, name: "חופשה", color: "#ff8800"}) {
+           tag { id name color } } }"""
+    assert data(client, q, id=tag_id)["updateTag"]["tag"] == {"id": tag_id, "name": "חופשה", "color": "#ff8800"}
+    q = "mutation($id: ID!) { deleteTag(input: {id: $id}) { deletedTagId } }"
+    assert data(client, q, id=tag_id)["deleteTag"]["deletedTagId"] == tag_id
+    assert data(client, "{ tags { totalCount } }")["tags"]["totalCount"] == 0
+
+
+def test_rename_to_a_taken_name_is_refused(client):
+    data(client, SET_TAGS, id=PURCHASE_ID, tags=["א", "ב"])
+    edges = data(client, "{ tags(orderBy: NAME_ASC) { edges { node { id } } } }")["tags"]["edges"]
+    q = 'mutation($id: ID!) { updateTag(input: {id: $id, name: "ב"}) { tag { name } } }'
+    status, body = gql(client, q, id=edges[0]["node"]["id"])
+    assert "already exists" in body["errors"][0]["message"]
+
+
+def test_two_mutations_in_one_request_run_in_order_and_signal_once(client, rebuilder):
+    q = f"""mutation {{ a: updateTransaction(input: {{id: "{PURCHASE_ID}", note: "1"}}) {{ transaction {{ note }} }}
+                     b: updateTransaction(input: {{id: "{PURCHASE_ID}", note: "2"}}) {{ transaction {{ note }} }} }}"""
+    d = data(client, q)
+    assert (d["a"]["transaction"]["note"], d["b"]["transaction"]["note"]) == ("1", "2")
+    assert rebuilder.signals == 1
+
+
+def test_mutations_need_the_csrf_headers(client, rebuilder):
+    r = client.post(GQL, json={"query": UPDATE, "variables": {"input": {"id": PURCHASE_ID, "note": "x"}}})
+    assert r.status_code == 403 and rebuilder.signals == 0

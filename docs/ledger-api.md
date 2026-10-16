@@ -122,8 +122,15 @@ that take one `input` and echo `clientMutationId`.
   merchant, which is derived in Python (`finance/merchants.py`).
 - **Limits:** a depth limit of 14 and an 8,000-character query. Introspection is on only
   with `FINANCE_API_DEV_USER`. Resolver crashes reach the client as `internal error`.
-- **Not served yet:** mutations return 400 until step 3, and `snapshot` returns an error
-  because the API container has no `data/` mount.
+- **Mutations** live on the entity they change (`TransactionResolver`: `updateTransaction`,
+  `clearTransactionOverride`, `setTransactionTags`; `TagResolver`: `updateTag`, `deleteTag`).
+  Each input subclasses the REST body in `api/inputs.py`, so both paths validate alike, and
+  nulls are kept: `null` clears a field, an omitted field is untouched. Writes go through
+  `db/overrides.py` and `db/tags.py`, so they're audited the same way. Mutation fields run in
+  order on one transaction, and a request that changed anything signals one rebuild
+  after the commit.
+- **Not served yet:** `snapshot` (the API container has no `data/` mount) and goals and
+  horizons as GraphQL types; they are REST-only for now.
 
 Each object type is bound to its Pydantic model in `api/schema_bindings.py`. Then
 `api/tests/test_graphql_schema.py` fails when the SDL and the models drift:
