@@ -139,6 +139,10 @@ def resolve_config(cfg, snapshot, forecast=None):
     else:
         out.setdefault("retirement_drawdown_source", "config")
 
+    if out.get("mortgage_schedule") is None:
+        import forecast as _fc          # same dir; shares the schedule loader
+        out["mortgage_schedule"] = _fc.load_mortgage_schedule()
+    out.setdefault("start_month", date.today().strftime("%Y-%m"))
     out.setdefault("borrow_rate", out["real_return"])
     out.setdefault("savings_contribution", 0)
     out["limitations"] = list(LIMITATIONS)
@@ -203,6 +207,11 @@ def amortize_loans(loans):
     return out
 
 
+def _fc_schedule_adjusted(*a):
+    import forecast as _fc
+    return _fc.schedule_adjusted(*a)
+
+
 def simulate(snapshot, cfg=CONFIG, forecast=None):
     """March month-by-month from today to end_age. Returns timeline + focal points.
 
@@ -234,6 +243,12 @@ def simulate(snapshot, cfg=CONFIG, forecast=None):
     loans = amortize_loans(snapshot.get("loans", []))
     total_loan_balance = sum(l["balance"] for l in loans)
     base_service = sum(l["base_payment"] for l in loans)
+    # Mortgage cash follows the bank's schedule (Jan-2027 step-up etc.) when we
+    # have it; the per-track amortization still drives the balances.
+    schedule = cfg.get("mortgage_schedule") or []
+    base_mortgage = sum(l["base_payment"] for l in loans if l["category"] == "mortgage")
+    sy, sm = (int(x) for x in cfg["start_month"].split("-"))
+    mortgage_cash = []
 
     surplus = float(cfg["monthly_surplus"] or 0)
     drawdown = float(cfg["retirement_drawdown"] or 0)
@@ -271,12 +286,15 @@ def simulate(snapshot, cfg=CONFIG, forecast=None):
 
         # 1) service loans
         paid = 0.0
+        paid_mortgage = 0.0
         for l in loans:
             if l["balance"] <= 0:
                 continue
             interest = l["balance"] * l["rate_m"]
             principal = l["payment"] - interest
             paid += l["payment"]
+            if l["category"] == "mortgage":
+                paid_mortgage += l["payment"]
             l["balance"] = max(0.0, l["balance"] - principal)
             l["payments_remaining"] -= 1
             if l["payments_remaining"] <= 0:
@@ -287,6 +305,14 @@ def simulate(snapshot, cfg=CONFIG, forecast=None):
                     "month": m, "age": round(cfg["current_age"] + m / 12, 1),
                     "name": f"סיום הלוואה: {l['name']}", "freed_monthly": round(l["payment"]),
                 })
+
+        if schedule and base_mortgage:
+            ym = f"{sy + (sm - 1 + m) // 12}-{(sm - 1 + m) % 12 + 1:02d}"
+            sched = _fc_schedule_adjusted(base_mortgage, cfg["start_month"], ym, schedule)
+            paid += sched - paid_mortgage
+            paid_mortgage = sched
+        if m <= 60:
+            mortgage_cash.append({"month": m, "mortgage_paid": round(paid_mortgage, 2)})
 
         # 2) grow / charge the pools, then add this month's cashflow
         liquid *= (1 + r_m) if liquid >= 0 else (1 + b_m)
@@ -345,6 +371,7 @@ def simulate(snapshot, cfg=CONFIG, forecast=None):
         "monthly_surplus": surplus,
         "total_loan_balance_today": round(total_loan_balance),
         "loans_modeled": len(loans),
+        "mortgage_cash": mortgage_cash,
     }
 
 
