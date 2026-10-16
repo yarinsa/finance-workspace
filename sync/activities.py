@@ -357,12 +357,12 @@ async def validate_dump(source: str) -> str:
     return "ok"
 
 
-DIGEST_STEPS = ["digest.py", "forecast.py", "cashflow.py", "goals.py"]  # order matters (sync-data skill)
+DIGEST_STEPS = ["digest.py", "validate.py", "forecast.py", "cashflow.py", "goals.py"]  # order matters (sync-data skill)
 
 
 @activity.defn
 async def digest() -> dict:
-    """digest -> forecast -> cashflow -> goals. Stops at the first failure so a
+    """digest -> validate -> forecast -> cashflow -> goals. Stops at the first failure so a
     half-rebuilt set is never published."""
     for step in DIGEST_STEPS:
         rc, tail = await run_cmd([sys.executable, str(REPO_ROOT / "data" / step)])
