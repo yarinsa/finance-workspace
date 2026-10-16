@@ -14,6 +14,7 @@ from typing import Literal
 
 from fastapi import Depends, FastAPI, Query, Request
 from fastapi.exceptions import RequestValidationError
+from fastapi.encoders import jsonable_encoder
 from fastapi.responses import JSONResponse
 from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
@@ -26,11 +27,13 @@ import tags  # noqa: E402
 from .auth import TokenVerifier, check_csrf, check_origin, current_user  # noqa: E402
 from .config import Settings  # noqa: E402
 from .errors import ApiError  # noqa: E402
+from .gql import endpoint  # noqa: E402
 from .rebuild import Rebuilder  # noqa: E402
 
 log = logging.getLogger("finance_api")
 
 MAX_BODY = 8 * 1024
+MAX_GRAPHQL_BODY = 16 * 1024   # a GraphQL document with variables
 AMOUNT = re.compile(r"^\d{1,10}(\.\d{1,2})?$")
 
 
@@ -108,16 +111,16 @@ def db(request: Request):
         raise
 
 
-async def read_json_body(request: Request):
-    """The request body, refusing to buffer more than MAX_BODY bytes."""
+async def read_json_body(request: Request, limit=MAX_BODY):
+    """The request body, refusing to buffer more than `limit` bytes."""
     declared = request.headers.get("content-length")
-    if declared and declared.isdigit() and int(declared) > MAX_BODY:
-        raise ApiError(413, "too_large", f"body must be at most {MAX_BODY} bytes")
+    if declared and declared.isdigit() and int(declared) > limit:
+        raise ApiError(413, "too_large", f"body must be at most {limit} bytes")
     body = b""
     async for chunk in request.stream():
         body += chunk
-        if len(body) > MAX_BODY:
-            raise ApiError(413, "too_large", f"body must be at most {MAX_BODY} bytes")
+        if len(body) > limit:
+            raise ApiError(413, "too_large", f"body must be at most {limit} bytes")
     return body
 
 
@@ -292,6 +295,16 @@ def create_app(settings=None, pool=None, rebuilder=None, verifier=None):
     def audit(request: Request, user=Depends(current_user), limit: int = Query(50, ge=1, le=500)):
         with db(request) as conn:
             return {"entries": overrides.audit_log(conn, limit)}
+
+    @app.post("/api/graphql", dependencies=[Depends(check_csrf)])
+    async def graphql(request: Request, user=Depends(current_user)):
+        body = await read_json_body(request, MAX_GRAPHQL_BODY)
+
+        def work():
+            with db(request) as conn:
+                return endpoint.run(body, conn, user, allow_introspection=bool(settings.dev_user))
+        status, out = await run_in_threadpool(work)
+        return JSONResponse(jsonable_encoder(out), status_code=status)
 
     @app.get("/api/rebuild")
     def rebuild_status(request: Request, user=Depends(current_user)):

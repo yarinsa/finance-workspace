@@ -46,7 +46,7 @@ edits), so CloudFront invalidations stay far below the 1,000/month free quota.
    new). Kill switch: `docker compose stop api` or `tailscale funnel off`; the UI
    falls back to read-only.
 8. **No generic query surface** — fixed endpoints, Pydantic-validated bodies
-   (category ≤ 64 chars, note ≤ 500), body size ≤ 8 KB, no SQL from the client.
+   (category ≤ 64 chars, note ≤ 500), body size ≤ 8 KB (16 KB for GraphQL), no SQL from the client.
 
 ## Contract (all pieces build against this)
 
@@ -101,6 +101,22 @@ that take one `input` and echo `clientMutationId`.
   New grouped resources follow this pattern.
 - **`Merchant`** is derived from the description (`data/spending.py` `merchant_name`),
   not stored.
+
+**Serving** (`POST /api/graphql`, `api/gql/`):
+
+- **Resolvers:** one class per entity in `resolvers.py`. `NodeResolver` covers global IDs
+  and `Query.node`. `GroupResolver` covers merchant, category and tag: `transactions`,
+  the root connection with edge totals, and an M:M field to every other group entity.
+  A new grouped resource is one subclass in `ENTITIES` plus its SDL.
+- **Arguments:** each resolver validates its arguments through Pydantic (`inputs.py`,
+  `relay.py`), so IDs and cursors are decoded and `first`/`last` capped at 200.
+- **Loading:** a request loads the whole effective ledger once (`ledger.py`) and filters
+  in memory. That is fine for a few thousand rows, and it's the only way to group by
+  merchant, which is derived in Python (`finance/merchants.py`).
+- **Limits:** a depth limit of 14 and an 8,000-character query. Introspection is on only
+  with `FINANCE_API_DEV_USER`. Resolver crashes reach the client as `internal error`.
+- **Not served yet:** mutations return 400 until step 3, and `snapshot` returns an error
+  because the API container has no `data/` mount.
 
 Each object type is bound to its Pydantic model in `api/schema_bindings.py`. Then
 `api/tests/test_graphql_schema.py` fails when the SDL and the models drift:
