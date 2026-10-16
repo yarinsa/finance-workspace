@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Start Temporal (Docker Compose) + install the finance worker as a launchd agent
-# and register the daily amex-sync schedule. Safe to re-run.
+# and register the daily finance-sync schedule. Safe to re-run.
 set -euo pipefail
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"

@@ -13,11 +13,11 @@ raw dumps are already on disk.
 ## Steps
 
 1. **Rebuild the digested outputs** from the repo root (read-only over scraped
-   data, safe to re-run). Order matters — `forecast`, `cashflow` and `goals`
-   read what `digest` writes:
+   data, safe to re-run). Order matters — `validate`, `forecast`, `cashflow` and `goals`
+   read what `digest` writes, and `cashflow` turns validation failures into actions:
 
    ```bash
-   python3 data/digest.py && python3 data/forecast.py && python3 data/cashflow.py && python3 data/goals.py
+   python3 data/digest.py && python3 data/validate.py && python3 data/forecast.py && python3 data/cashflow.py && python3 data/goals.py
    ```
 
    Stop and report if any step fails — don't upload a half-rebuilt set.

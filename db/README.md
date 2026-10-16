@@ -51,7 +51,7 @@ dedup key.
 .venv/bin/python db/edit.py list [--orphaned]
 ```
 
-Every change rebuilds `data/digested/` (digest, forecast, cashflow, goals), so
+Every change rebuilds `data/digested/` (digest, validate, forecast, cashflow, goals), so
 the JSON the app reads picks it up. Pass `--no-rebuild` to skip the rebuild. Then
 push the result to the dashboard with the `sync-data` skill.
 

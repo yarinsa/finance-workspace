@@ -1,12 +1,14 @@
-"""Temporal activities for the AMEX sync.
+"""Temporal activities for the multi-source finance sync.
 
-Each activity wraps an existing, human-run script (the amex-refresh skill's
-scripts, the digest chain, infra/deploy.sh) in a subprocess. Nothing here ever
-authenticates: no credentials, no OTPs, no Keychain. A dead session is reported,
-never repaired.
+Each activity wraps an existing, human-run script (the per-source refresh skills'
+dump.sh, refresh-all's session checks, the digest chain, infra/deploy.sh) in a
+subprocess. Which port, profile and dump to use comes from sources.py.
+Nothing here ever authenticates: no credentials, no OTPs, no Keychain. A dead
+session is reported, never repaired.
 """
 import asyncio
 import collections
+import importlib.util
 import json
 import os
 import re
@@ -19,23 +21,37 @@ from pathlib import Path
 from temporalio import activity
 from temporalio.exceptions import ApplicationError
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
-SKILL_SCRIPTS = REPO_ROOT / ".claude" / "skills" / "amex-refresh" / "scripts"
+import sources
 
-CDP_PORT = 9226
-CDP_VERSION_URL = f"http://127.0.0.1:{CDP_PORT}/json/version"  # 127.0.0.1, never localhost (IPv6)
+REPO_ROOT = Path(__file__).resolve().parent.parent
+SKILLS = REPO_ROOT / ".claude" / "skills"
+REFRESH_ALL = SKILLS / "refresh-all" / "scripts"
+AMEX_CHECK = SKILLS / "amex-refresh" / "scripts" / "check_session.sh"
+VALIDATOR = REPO_ROOT / "data" / "validate.py"  # built separately; absent means no gate yet
+
 CHROME_BIN = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
-CHROME_PROFILE = Path.home() / ".chrome-cdp-amex"
-AMEX_URL = "https://www.americanexpress.co.il/"
-AMEX_TAB_URL = "https://web.americanexpress.co.il/"  # opened when the profile has no AMEX tab
-AMEX_HOST = "americanexpress.co.il"
-CDP_LIST_URL = f"http://127.0.0.1:{CDP_PORT}/json/list"
-CDP_NEW_URL = f"http://127.0.0.1:{CDP_PORT}/json/new?{AMEX_TAB_URL}"
-PW_SESSION = "amex"
 PW_TIMEOUT = 30.0  # playwright-cli / check_session.sh can hang forever on a wedged Chrome
+SESSIONS_TIMEOUT = 90.0  # check_sessions.sh makes several playwright-cli calls for one source
+VALIDATE_TIMEOUT = 120.0
 
 SESSION_EXPIRED = "SessionExpired"
 SCRAPE_FAILED = "ScrapeFailed"
+VALIDATION_FAILED = "ValidationFailed"
+
+# What the dump scripts print when the session, not the endpoint, is the problem:
+# amex's liveness gate, the Discount/Leumi/CAL/Harel stub guards (login-shell HTML,
+# SME rebind) and the raw-CDP scripts (more, analyst) that find no logged-in tab.
+EXPIRED_MARKERS = (
+    "session not live", "VERDICT: LOGGED_OUT", "LOGIN-SHELL HTML", "actionRequired", "stepup",
+    "קלט לא תקין", "session likely", "probably logged out", "No logged-in", "No amitim",
+)
+
+
+def looks_expired(output: str) -> bool:
+    """True when dump output says the login lapsed (log in again) rather than that an
+    endpoint moved (triage the skill). Only known signatures count."""
+    return any(m in output for m in EXPIRED_MARKERS)
+
 
 # Starts a line, or follows a literal "\n" / opening quote: playwright-cli --raw
 # JSON-quotes the returned string, so its newlines arrive escaped.
@@ -107,34 +123,51 @@ async def run_cmd(args, *, env=None, heartbeat_every=10.0, tail_lines=40, timeou
     return proc.returncode, "\n".join(tail)
 
 
-def _cdp_up() -> bool:
+def _load_app_tabs():
+    """refresh-all's app_tab_index.py is the single tab-matching table; load it from
+    its file (it is a script, not a package) instead of copying the table."""
+    spec = importlib.util.spec_from_file_location("app_tab_index", REFRESH_ALL / "app_tab_index.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+app_tabs = _load_app_tabs()
+INTERNAL_URLS = ("chrome://", "chrome-untrusted://", "devtools://", "chrome-extension://")
+
+
+def _cdp(src, path: str) -> str:
+    return f"http://127.0.0.1:{src.port}{path}"  # 127.0.0.1, never localhost (IPv6)
+
+
+def _cdp_up(src) -> bool:
     try:
-        with urllib.request.urlopen(CDP_VERSION_URL, timeout=2) as r:
+        with urllib.request.urlopen(_cdp(src, "/json/version"), timeout=2) as r:
             return r.status == 200
     except Exception:
         return False
 
 
-async def _wait_for_cdp(seconds: int) -> bool:
+async def _wait_for_cdp(src, seconds: int) -> bool:
     for _ in range(seconds):
-        if await asyncio.to_thread(_cdp_up):
+        if await asyncio.to_thread(_cdp_up, src):
             return True
         await asyncio.sleep(1)
     return False
 
 
-def _launch_chrome():
-    """Open the AMEX Chrome window exactly as the amex-refresh skill does. It is
+def _launch_chrome(src):
+    """Open the source's Chrome window exactly as the refresh skills do. It is
     detached so it outlives the worker. We only open the window; the human logs in."""
     subprocess.Popen(
         [
             CHROME_BIN,
-            f"--remote-debugging-port={CDP_PORT}",
-            f"--user-data-dir={CHROME_PROFILE}",
+            f"--remote-debugging-port={src.port}",
+            f"--user-data-dir={src.profile}",
             "--no-first-run",
             "--no-default-browser-check",
             "--new-window",
-            AMEX_URL,
+            src.login_url,
         ],
         stdin=subprocess.DEVNULL,
         stdout=subprocess.DEVNULL,
@@ -143,101 +176,193 @@ def _launch_chrome():
     )
 
 
-def _cdp_pages() -> list:
+def _cdp_pages(src) -> list:
     """Page targets from CDP /json/list (no playwright attach needed)."""
-    with urllib.request.urlopen(CDP_LIST_URL, timeout=3) as r:
+    with urllib.request.urlopen(_cdp(src, "/json/list"), timeout=3) as r:
         targets = json.loads(r.read())
     return [t for t in targets if t.get("type") == "page"]
 
 
-def _open_amex_tab():
+def _open_tab(src, url: str):
     # /json/new needs PUT on modern Chrome; GET is rejected with 405.
-    req = urllib.request.Request(CDP_NEW_URL, method="PUT")
+    req = urllib.request.Request(_cdp(src, f"/json/new?{url}"), method="PUT")
     with urllib.request.urlopen(req, timeout=5) as r:
         r.read()
 
 
-def _amex_tab_index(pages) -> int | None:
-    """Index of the first AMEX page among the user-facing tabs, or None.
-    chrome:// internals (browser_ui, omnibox popup) are not tabs playwright lists."""
-    tabs = [p for p in pages if not p.get("url", "").startswith(("chrome://", "chrome-untrusted://", "devtools://", "chrome-extension://"))]
-    for i, p in enumerate(tabs):
-        if AMEX_HOST in p.get("url", ""):
-            return i
-    return None
+def _user_tabs(pages) -> list:
+    """The tabs playwright-cli lists, in its order: chrome:// internals (browser_ui,
+    omnibox popup) and extension targets are not tabs to it."""
+    return [p for p in pages if not p.get("url", "").startswith(INTERNAL_URLS)]
 
 
-async def _ensure_amex_tab() -> int:
-    """Make sure an AMEX tab exists (open one if not) and return its tab index.
-    Opening the login page is not authenticating."""
-    pages = await asyncio.to_thread(_cdp_pages)
-    idx = _amex_tab_index(pages)
-    if idx is None:
-        await asyncio.to_thread(_open_amex_tab)
-        await asyncio.sleep(1)
-        idx = _amex_tab_index(await asyncio.to_thread(_cdp_pages))
-    if idx is None:
-        raise ApplicationError("no AMEX tab in Chrome after opening one")
+def _tab_index(src, pages, *, app_only=False) -> int | None:
+    """playwright tab index of the tab on src's app; else (unless app_only) the first
+    tab anywhere on the bank's host, e.g. its login page, so the human finds the window."""
+    tabs = _user_tabs(pages)
+    idx = app_tabs.app_tab_index(tabs, src.app_tab_key)
+    if idx is None and not app_only:
+        idx = next((i for i, t in enumerate(tabs) if src.app_host in t.get("url", "")), None)
     return idx
 
 
+def classify_tabs(src, pages) -> str:
+    """Judge a session from open tabs alone: "live" on the app, "dead" when the bank's
+    host shows a login page and nothing is on the app, else "unknown". No tab at all is
+    unknown: a closed tab is not an expired session (check_sessions.sh's rule)."""
+    tabs = _user_tabs(pages)
+    if app_tabs.app_tab_index(tabs, src.app_tab_key) is not None:
+        return "live"
+    for t in tabs:
+        url = t.get("url", "")
+        if src.app_host in url and any(h in url.lower() for h in app_tabs.LOGIN_HINTS):
+            return "dead"
+    return "unknown"
+
+
+async def _ensure_tab(src, *, open_url=None) -> int:
+    """Return the index of src's tab, opening a page first when the profile has no tab on
+    the bank (src's login page) or when `open_url` is given. Opening a login page is not
+    authenticating."""
+    idx = _tab_index(src, await asyncio.to_thread(_cdp_pages, src))
+    if idx is None or open_url:
+        await asyncio.to_thread(_open_tab, src, open_url or src.open_url)
+        await asyncio.sleep(1)
+        idx = _tab_index(src, await asyncio.to_thread(_cdp_pages, src))
+    if idx is None:
+        raise ApplicationError(f"no {src.name} tab in Chrome after opening one")
+    return idx
+
+
+async def _bind_playwright(src, tab: int):
+    # Attaching is not authenticating; it only binds playwright-cli to the window.
+    rc, tail = await run_cmd(
+        ["playwright-cli", f"-s={src.pw_session}", "attach", f"--cdp=http://127.0.0.1:{src.port}"], timeout=PW_TIMEOUT
+    )
+    if rc != 0:
+        raise ApplicationError(f"playwright-cli attach failed (rc={rc}):\n{tail}")
+    await run_cmd(["playwright-cli", f"-s={src.pw_session}", "tab-select", str(tab)], timeout=PW_TIMEOUT)
+
+
 @activity.defn
-async def ensure_chrome() -> str:
-    """Make sure the AMEX Chrome (CDP 9226, persisted profile) is up and that a
-    playwright-cli session is attached to it. Returns "already_running" or "launched"."""
+async def ensure_chrome(source: str) -> str:
+    """Make sure the source's Chrome (its CDP port, persisted profile) is up, has a tab
+    on the bank, and, for playwright sources, has a playwright-cli session attached to
+    that tab. Returns "already_running" or "launched"."""
+    src = sources.get(source)
     state = "already_running"
-    if not await asyncio.to_thread(_cdp_up):
+    if not await asyncio.to_thread(_cdp_up, src):
         state = "launched"
         # Launch gotcha (SKILL.md): the launcher can exit without the port
         # binding. Poll, and retry the launch once.
         for _ in range(2):
-            await asyncio.to_thread(_launch_chrome)
-            if await _wait_for_cdp(20):
+            await asyncio.to_thread(_launch_chrome, src)
+            if await _wait_for_cdp(src, 20):
                 break
         else:
-            raise ApplicationError(f"Chrome did not open CDP port {CDP_PORT}")
-    # Without an AMEX tab attach/run-code hang (2026-10-16), so create one first.
-    tab = await _ensure_amex_tab()
-    # Attaching is not authenticating; it only binds playwright-cli to the window.
-    rc, tail = await run_cmd(
-        ["playwright-cli", f"-s={PW_SESSION}", "attach", f"--cdp=http://127.0.0.1:{CDP_PORT}"], timeout=PW_TIMEOUT
-    )
-    if rc != 0:
-        raise ApplicationError(f"playwright-cli attach failed (rc={rc}):\n{tail}")
-    await run_cmd(["playwright-cli", f"-s={PW_SESSION}", "tab-select", str(tab)], timeout=PW_TIMEOUT)
+            raise ApplicationError(f"Chrome did not open CDP port {src.port}")
+    # Without a tab on the bank attach/run-code hang (2026-10-16), so create one first.
+    tab = await _ensure_tab(src)
+    if src.playwright:
+        await _bind_playwright(src, tab)
     return state
 
 
-@activity.defn
-async def check_amex_session() -> bool:
-    """True when check_session.sh prints VERDICT: LIVE. False for LOGGED_OUT.
-    A missing verdict is an infrastructure problem and raises (retryable)."""
-    rc, tail = await run_cmd([str(SKILL_SCRIPTS / "check_session.sh"), PW_SESSION], timeout=PW_TIMEOUT)
-    live = parse_verdict(tail)
-    if live is None:
-        raise ApplicationError(f"check_session.sh printed no VERDICT (rc={rc}):\n{tail}")
-    return live
+def parse_sessions_row(output: str, name: str) -> str | None:
+    """Map check_sessions.sh's table row for `name` to live / dead / unknown. A closed
+    Chrome is unknown, not dead. None when the row is missing (the script did not run)."""
+    m = re.search(rf"^{re.escape(name)}\s+\d+\s+(.+?)\s*$", output, re.MULTILINE)
+    if not m:
+        return None
+    status = m.group(1).lower()
+    if status == "live":
+        return "live"
+    if status.startswith("needs login"):
+        return "dead"
+    return "unknown"
 
 
 @activity.defn
-async def scrape_amex() -> str:
-    """Run dump.sh (which re-checks liveness and never overwrites a good dump
-    with a stub). Every failure is non-retryable: retrying cannot fix a dead
-    session or a moved endpoint, and the workflow must not hammer the bank."""
-    rc, tail = await run_cmd([str(SKILL_SCRIPTS / "dump.sh"), PW_SESSION])
-    if rc == 0:
-        return tail
-    if "session not live" in tail or "VERDICT: LOGGED_OUT" in tail:
-        raise ApplicationError("AMEX session expired", tail, type=SESSION_EXPIRED, non_retryable=True)
-    raise ApplicationError(f"dump.sh failed (rc={rc})", tail, type=SCRAPE_FAILED, non_retryable=True)
+async def check_session(source: str) -> str:
+    """"live" | "dead" | "unknown". Read-only: never navigates, never logs in.
+    "unknown" means the check could not tell (no tab on the app, page unreadable); the
+    workflow scrapes it anyway and the dump script's stub guard is the backstop.
+    Infrastructure failures raise (retryable); the workflow reads a persistent one as unknown."""
+    src = sources.get(source)
+    if src.check == sources.VERDICT:
+        # AMEX's own check_session.sh: auth cookies + /IsLoggedIn, the strongest signal we have.
+        rc, tail = await run_cmd([str(AMEX_CHECK), src.pw_session], timeout=PW_TIMEOUT)
+        live = parse_verdict(tail)
+        if live is None:
+            raise ApplicationError(f"check_session.sh printed no VERDICT (rc={rc}):\n{tail}")
+        return "live" if live else "dead"
+
+    if src.check == sources.SESSIONS:
+        rc, tail = await run_cmd([str(REFRESH_ALL / "check_sessions.sh"), src.check_key], timeout=SESSIONS_TIMEOUT)
+        verdict = parse_sessions_row(tail, src.check_key)
+        if verdict is None:
+            raise ApplicationError(f"check_sessions.sh printed no row for {src.check_key} (rc={rc}):\n{tail}")
+        if verdict != "unknown":
+            return verdict
+
+    # Open tabs are all that is left to go on. For TABS sources that is the whole check; for
+    # SESSIONS sources it can only upgrade "unknown" to "dead", when the bank's login page
+    # is sitting in the window (check_sessions.sh itself only ever says live or unknown).
+    try:
+        verdict = classify_tabs(src, await asyncio.to_thread(_cdp_pages, src))
+    except Exception:
+        return "unknown"
+    if src.check == sources.TABS:
+        return verdict
+    return "dead" if verdict == "dead" else "unknown"
 
 
-DIGEST_STEPS = ["digest.py", "forecast.py", "cashflow.py", "goals.py"]  # order matters (sync-data skill)
+@activity.defn
+async def scrape(source: str) -> str:
+    """Run the source's dump script(s) in order (each one re-guards against stubs and
+    keeps the previous dump on failure). Every failure is non-retryable: retrying cannot
+    fix a dead session or a moved endpoint, and the workflow must not hammer the bank."""
+    src = sources.get(source)
+    if src.playwright:
+        # Re-select the right tab: the previous source on this Chrome (the Discount apps
+        # share one) may have moved it. The only page ever opened here is the business app,
+        # which runs LAST in the Discount chain, so rebinding the shared login is expected.
+        pages = await asyncio.to_thread(_cdp_pages, src)
+        missing = bool(src.app_url) and _tab_index(src, pages, app_only=True) is None
+        await _bind_playwright(src, await _ensure_tab(src, open_url=src.app_url if missing else None))
+    tail = ""
+    for dump in src.dumps:
+        argv = [str(SKILLS / dump[0])] + [a.format(session=src.pw_session, port=src.port) for a in dump[1:]]
+        rc, tail = await run_cmd(argv)
+        if rc != 0:
+            if looks_expired(tail):
+                raise ApplicationError(f"{source} session expired", tail, type=SESSION_EXPIRED, non_retryable=True)
+            raise ApplicationError(f"{Path(argv[0]).name} failed for {source} (rc={rc})", tail,
+                                   type=SCRAPE_FAILED, non_retryable=True)
+    return tail
+
+
+@activity.defn
+async def validate_dump(source: str) -> str:
+    """Gate a fresh dump: `python3 data/validate.py dump <source>` (exit 0 = good). Returns
+    "ok", or "skipped" while data/validate.py does not exist yet. A rejection raises
+    non-retryable with the validator's output, so the workflow does not count the scrape."""
+    sources.get(source)
+    if not VALIDATOR.exists():
+        return "skipped"
+    rc, tail = await run_cmd([sys.executable, str(VALIDATOR), "dump", source], timeout=VALIDATE_TIMEOUT)
+    if rc != 0:
+        raise ApplicationError(f"validate.py rejected the {source} dump (rc={rc}):\n{tail}",
+                               type=VALIDATION_FAILED, non_retryable=True)
+    return "ok"
+
+
+DIGEST_STEPS = ["digest.py", "validate.py", "forecast.py", "cashflow.py", "goals.py"]  # order matters (sync-data skill)
 
 
 @activity.defn
 async def digest() -> dict:
-    """digest -> forecast -> cashflow -> goals. Stops at the first failure so a
+    """digest -> validate -> forecast -> cashflow -> goals. Stops at the first failure so a
     half-rebuilt set is never published."""
     for step in DIGEST_STEPS:
         rc, tail = await run_cmd([sys.executable, str(REPO_ROOT / "data" / step)])
@@ -357,4 +482,4 @@ async def publish_status(source: str, entry: dict) -> str:
         return f"error: {e}"
 
 
-ALL_ACTIVITIES = [ensure_chrome, check_amex_session, scrape_amex, digest, publish_data, notify, publish_status]
+ALL_ACTIVITIES = [ensure_chrome, check_session, scrape, validate_dump, digest, publish_data, notify, publish_status]

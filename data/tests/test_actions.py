@@ -1,5 +1,5 @@
 """Real-case tests for actions.py (home "לטיפול" list)."""
-from datetime import date
+from datetime import date, datetime, timedelta, timezone
 
 import actions
 
@@ -97,11 +97,34 @@ def test_duplicate_service_is_low():
     assert a["amount"] == 109.4
 
 
+NOON = datetime(2026, 10, 16, 12, 0, tzinfo=timezone(timedelta(hours=3)))
+
+
 def test_stale_source_nine_days():
-    a = by_id(build(), "stale:")[0]
+    # discount-business: daily target, last scraped 10-07 -> overdue; amex today -> fine.
+    a = by_id(build(as_of=NOON), "stale:")[0]
     assert a["id"] == "stale:discount-business" and a["severity"] == "low"
-    assert "discount-business (9 ימים)" in a["detail"]
+    assert "discount-business (9 ימים, יעד 24 שעות, באיחור 8 ימים)" in a["detail"]
+    assert "amex" not in a["detail"]
     assert a["cta"]["to"] == "/syncs"
+
+
+def test_stale_uses_per_source_targets():
+    syncs = [
+        {"source": "harel", "last_synced": "2026-09-26T09:00:00+03:00"},               # 20d, monthly: fresh
+        {"source": "amex", "last_synced": "2026-10-14T09:00:00+03:00"},                # 51h, daily: overdue
+        {"source": "discount-mortgage", "last_synced": "2026-10-10T09:00:00+03:00"},   # 6d, weekly: fresh
+        {"source": "riseup", "last_synced": "2026-08-01T09:00:00+03:00"},              # no target: ignored
+    ]
+    [a] = by_id(build(syncs=syncs, as_of=NOON), "stale:")
+    assert a["id"] == "stale:amex"
+    assert a["detail"] == "amex (2 ימים, יעד 24 שעות, באיחור 27 שעות)"
+
+
+def test_no_stale_action_when_everything_is_within_target():
+    syncs = [{"source": "amex", "last_synced": "2026-10-16T08:00:00+03:00"},
+             {"source": "analyst", "last_synced": "2026-10-01T08:00:00+03:00"}]
+    assert by_id(build(syncs=syncs), "stale:") == []
 
 
 def test_ordering_critical_first_then_amount_desc():
@@ -131,3 +154,13 @@ def test_named_reason_groups_across_merchants_and_single_generic_skipped():
     acts = by_id(build(fixed_expenses=fixed), "dup:")
     assert [a["id"] for a in acts] == ["dup:שיחות לחו״ל:2026-10"]
     assert acts[0]["title"] == "שירות כפול: שיחות לחו״ל" and acts[0]["amount"] == 44.9
+
+
+def test_validation_failures_join_the_list_by_severity():
+    """A failing card-statement check from validate.py lands in "לטיפול" next to the
+    built-in actions, sorted by severity like everything else."""
+    failing = {"id": "validation:card_statements.amex:2026-10", "severity": "high",
+               "title": "חיובי כרטיס חסרים", "detail": "29 raw vouchers missing from the ledger",
+               "cta": {"label": "לסנכרונים", "to": "/syncs"}, "amount": 5212.89}
+    out = actions.build_actions(None, None, None, [], [], date(2026, 10, 16), [failing])
+    assert out == [failing]

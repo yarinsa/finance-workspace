@@ -13,7 +13,7 @@ ignored, as in the dedup key):
     .venv/bin/python db/edit.py list [--orphaned]
 
 After a change it rebuilds the digested outputs (digest --no-normalize ->
-forecast -> cashflow -> goals) so the JSON the app reads picks it up; pass
+validate -> forecast -> cashflow -> goals, as sync/activities.DIGEST_STEPS) so the JSON the app reads picks it up; pass
 --no-rebuild to skip. Push to the dashboard afterwards with the sync-data skill.
 """
 import subprocess
@@ -23,7 +23,7 @@ from pathlib import Path
 import ledger
 
 REPO = Path(__file__).resolve().parent.parent
-REBUILD = [["digest.py", "--no-normalize"], ["forecast.py"], ["cashflow.py"], ["goals.py"]]
+REBUILD = [["digest.py", "--no-normalize"], ["validate.py"], ["forecast.py"], ["cashflow.py"], ["goals.py"]]
 FIELDS = ("category", "note")
 
 

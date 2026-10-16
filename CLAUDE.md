@@ -63,6 +63,46 @@ agent, read from Keychain, or pulled from Messages — these are live bank
 accounts, and unattended authentication is not a capability worth automating.
 Chrome profiles persist logins, so this costs a login only when one lapses.
 
+### Validation
+
+`data/validate.py` proves the scraped data is complete and consistent, using the
+**direct bank and card sources only** (no check reads `data/riseup`), so the
+forecast can stop depending on RiseUp. Checks are organized by transaction type;
+each returns `{id, type, status: pass|warn|fail|skip, summary, details[]}` and the
+details name the concrete transactions (date, Hebrew description, amount, source)
+behind any warn or fail.
+
+| Type | Check id | What it proves | Data it relies on |
+|---|---|---|---|
+| dump | `dump.<source>` | The fresh dump is trustworthy: no error stubs / missing or tiny required files, no >20% record-count drop vs the previous `normalized/` output (a CAL billing-cycle rollover is only a warning), latest transaction not stale | each source's `raw/` + a throwaway dry-run of its `normalize.py` |
+| card_bill | `card_bills` | Every CAL/AMEX statement (cycle and immediate charges) is settled by one bank debit (same amount, ±3 banking days, Fri/Sat roll to Sunday), and every issuer-named card-bill debit has a statement; also flags matches `digest.is_card_bill_payment` misses | CAL `monthlyDebitsSummary`, AMEX monthly pulls, bank ledgers |
+| card_statement | `card_statements.cal` / `.amex` | A card cycle's transactions sum to its statement total (catches pagination gaps, installments and foreign-currency rows carried at the wrong ₪ amount) and every raw AMEX voucher reached the ledger | CAL `cardTransactions_*`, AMEX `transactions_*`, normalized card transactions |
+| balance | `balance.<account>` | Opening balance + operations = closing balance (running-balance chain has no break, ends on the current balance), the normalized ledger sums to the same movement, and no multi-week hole in history | Discount/Leumi/business `raw/transactions.json` running balances |
+| internal_transfer | `internal_transfers` | Each move between our own accounts has its opposite leg within 2 banking days (transfers to untracked accounts — Hapoalim/Bit, liquid deposit — are not orphans) | all bank ledgers |
+| loan_payment | `loans.mortgage` / `.discount` / `.leumi` | The dump's `NextPayment` (mortgage = Σ per track, as `forecast.py` uses) matches the actual bank debit in the expected month, and the prior installments exist | mortgage/loan dumps, bank ledgers |
+| salary | `salary` | The payday income `runway.py` infers arrived in its window in each of the last 4 months | bank ledgers (via `runway.infer_recurring`) |
+
+Findings are attributed, not just counted: a statement or transfer that cannot be
+found because a bank ledger has a hole (or predates it) is reported as a
+`warn`/skip pointing at the hole, so one root cause does not fan out into dozens of
+failures.
+
+```
+python3 data/validate.py                  # all checks -> data/digested/validation.{json,md}
+python3 data/validate.py dump <source>    # exit 0 = ok, 1 = REJECT (run before trusting a scrape)
+python3 data/validate.py --data-dir D --out-dir O --as-of 2026-10-16 [--strict]
+```
+
+`--data-dir` / `FINANCE_DATA_DIR` reads another checkout's data read-only;
+`--out-dir` / `VALIDATE_OUT_DIR` redirects the report. `validation_actions(report)`
+returns "לטיפול"-shaped action items for the failures (wire-up into `actions.py`
+is separate). The suite is `data/tests/test_validate.py`.
+
+**Real failures become regression tests**, same rule as below: a `fail` that turns
+out to be a real defect (e.g. Leumi FITID collisions dropping ledger rows, CAL
+`trnAmt` instead of the billed ₪) gets a failing test built from the exact
+records, then the fix.
+
 ## The two things the app reads
 
 - **`data/digested/transactions.json`** — the unified ledger. Every transaction
@@ -85,19 +125,45 @@ Setup, the orphaned-override rule and the `.env` rule are in **db/README.md**.
 
 ### Automated sync (Temporal) — POC
 
-**Proof of concept** (AMEX only); see `sync/README.md` for status.
+**Proof of concept** (dev server, no persistence guarantees); see
+`sync/README.md` for status. Not yet the only refresh path — `refresh-all` remains.
 
-`sync/` runs the AMEX refresh on a schedule (daily 07:30 Asia/Jerusalem): the Temporal
-dev server runs in Docker Compose (`docker-compose.yml`), the worker runs under launchd
-on this Mac. Flow: ensure Chrome -> check session
--> `dump.sh` -> digest chain -> `infra/deploy.sh --data-only` (when
-`SYNC_PUBLISH=1`). It **never authenticates** — a dead session triggers a macOS
-notification and a wait for `python3 sync/resume.py` after the human logs in
-(12h, then `needs_login`). Install with `sync/install.sh`; UI at
-http://localhost:8233. Every workflow step is also published to
-`data/sync-status.json`, which the app polls for a live status on `/syncs`, the
-header dot and the home list. Details in `sync/README.md`. Only `sync/` needs
+`sync/` runs `FinanceSyncWorkflow` daily at 07:30 Asia/Jerusalem over every scraped
+source (discount, discount-mortgage, discount-business, leumi, cal, amex, harel, more,
+analyst; RiseUp is out of scope) with the Temporal dev server in Docker Compose
+(`docker-compose.yml`) and the worker under launchd. It checks **every** session
+first, sends **one** macOS notification listing
+the dead logins (grouped: the three Discount apps are one login), and waits up to 12h
+for `python3 sync/resume.py [source|group ...]`; still-dead sources are skipped as
+`needs_login`, never fatal. Live sources are scraped one at a time in registry order
+(Discount **account → mortgage → business**, business always last), each followed by
+a `data/validate.py dump <source>` gate (skipped while that file doesn't exist); one
+failing source never stops the rest. Then digest chain once and
+`infra/deploy.sh --data-only` once (when `SYNC_PUBLISH=1`; withheld if a dump was
+rejected). It **never authenticates**. The source registry is `sync/sources.py`.
+Every source's progress (checking_session → waiting_for_login → scraping → validating →
+digesting → publishing → done, or needs_login / failed / rejected) is published as its own
+entry to `data/sync-status.json`, which the app polls for a live status on `/syncs`, the
+header dot and the home list.
+Install with `sync/install.sh`; UI at http://localhost:8233. Only `sync/` needs
 `temporalio`; `data/` stays stdlib-only.
+
+### Freshness targets
+
+`data/freshness.py` holds a per-source target (max age + grace) instead of one
+global staleness rule: banks and cards **daily** (24h + 12h), the mortgage/loans
+**weekly** (7d + 2d), pension/study/gemel **monthly** (30d + 7d). RiseUp has no
+target and is never listed. Age is the newest `raw/` file mtime (what
+`digest.source_syncs` calls `last_synced`). State is `fresh` -> `due` (past target,
+inside grace) -> `overdue` (past grace; raises the home "נתונים לא עדכניים"
+action, naming how late each source is) or `never`.
+
+- `python3 data/freshness.py` prints the table (`--json` for the list; `--root DIR`
+  reads another checkout's dumps read-only). `digest.py` writes the same list to
+  `snapshot.json` -> `freshness`.
+- `due_sources(now)` is the pure "scrape these today" list for the scheduled sync,
+  in Discount-safe order (account -> mortgage -> business). A new source must be
+  added to `TARGETS` (a test enforces it).
 
 ### Cashflow forecast
 
