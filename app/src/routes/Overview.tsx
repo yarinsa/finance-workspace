@@ -1,4 +1,4 @@
-import { Nudge } from "@/components/common";
+import { Nudge, Page } from "@/components/common";
 import AccountRows from "@/components/home/AccountRows";
 import ActionList from "@/components/home/ActionList";
 import RecentTransactions from "@/components/home/RecentTransactions";
@@ -26,7 +26,7 @@ export default function Overview() {
   const netWorth = snapshot.totals.net_position_with_savings ?? cashflow.projection?.net_worth_today ?? null;
 
   return (
-    <div className="feed flex flex-col gap-6 [&>*]:!mt-0">
+    <Page>
       {age > 7 && !hasStaleAction && (
         <Nudge action="לעדכון יתרות ▸">
           🕑 הגיע זמן לעדכן את היתרות שלך — הנתונים מלפני {num(age)} ימים.
@@ -42,6 +42,6 @@ export default function Overview() {
       <UpcomingChips runway={cashflow.runway} />
       <AccountRows netWorth={netWorth} />
       <RecentTransactions />
-    </div>
+    </Page>
   );
 }

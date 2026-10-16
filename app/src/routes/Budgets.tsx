@@ -1,6 +1,6 @@
 import { useState } from "react";
 import BudgetEditorSheet from "@/components/BudgetEditorSheet";
-import { BigNumber, Card, CardLabel, PageTitle, Section } from "@/components/common";
+import { BigNumber, Card, CardLabel, Page, Section } from "@/components/common";
 import { cashflow, shekel } from "@/lib/data";
 import type { BudgetCategory, Budgets as BudgetsData } from "@/lib/budgets";
 
@@ -65,8 +65,7 @@ export default function Budgets() {
   const [editing, setEditing] = useState<string | null>(null);
   const b = cashflow.budgets;
   return (
-    <div className="space-y-4 md:space-y-[18px]">
-      <PageTitle>תקציב</PageTitle>
+    <Page title="תקציב">
       {!b ? (
         <Card>
           <div className="text-sm text-muted-foreground">אין עדיין נתוני תקציב. רענן את RiseUp והרץ את הפייפליין.</div>
@@ -87,6 +86,6 @@ export default function Budgets() {
           />
         </>
       )}
-    </div>
+    </Page>
   );
 }

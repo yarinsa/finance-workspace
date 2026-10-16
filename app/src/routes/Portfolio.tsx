@@ -1,4 +1,4 @@
-import { Card, Kpi, PageTitle, StubNotice } from "@/components/common";
+import { Card, CardLabel, Kpi, Page, StubNotice } from "@/components/common";
 import { shekel, snapshot } from "@/lib/data";
 
 const KIND_LABEL: Record<string, string> = {
@@ -13,28 +13,25 @@ export default function Portfolio() {
 
   if (savings.length === 0) {
     return (
-      <div>
-        <PageTitle>השקעות</PageTitle>
+      <Page title="השקעות" wide>
         <StubNotice status="חסום · דורש מקור נתונים חדש">
           לא נמצאו נתוני חיסכון. הריצו <code>/harel-refresh</code> ואז{" "}
           <code>python3 data/digest.py</code>.
         </StubNotice>
-      </div>
+      </Page>
     );
   }
 
   return (
-    <div>
-      <PageTitle>השקעות</PageTitle>
-
+    <Page title="השקעות" wide>
       <div className="grid grid-2">
         <Kpi label="סך חיסכון ארוך טווח" value={shekel(total)} />
         <Kpi label="מספר פוליסות" value={String(
           savings.reduce((n, s) => n + (s.policies_count ?? 0), 0))} />
       </div>
 
-      <Card className="section-gap">
-        <div className="card-title">החזקות</div>
+      <Card>
+        <CardLabel>החזקות</CardLabel>
         {savings.map((s) => (
           <div key={`${s.institution}-${s.kind}-${s.label}`} className="row">
             <span>
@@ -59,6 +56,6 @@ export default function Portfolio() {
           ?.policies_count ?? 0} קרנות ההשתלמות מוצגות כסכום אחד ולא בנפרד.
         נדל"ן ותיקי השקעות חיצוניים עדיין לא נאספים.
       </StubNotice>
-    </div>
+    </Page>
   );
 }

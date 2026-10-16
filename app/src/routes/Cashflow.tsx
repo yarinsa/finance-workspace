@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Card, PageTitle } from "@/components/common";
+import { Card, Page } from "@/components/common";
 import MonthStrip from "@/components/cashflow/MonthStrip";
 import { CashflowLinks, MonthSummary } from "@/components/cashflow/MonthDetail";
 import { cashflow } from "@/lib/data";
@@ -15,13 +15,12 @@ export default function Cashflow() {
 
   if (!view || !view.months.length) {
     return (
-      <div className="space-y-4">
-        <PageTitle>תזרים</PageTitle>
+      <Page title="תזרים">
         <Card>
           <div className="text-muted-foreground">אין עדיין תצוגה חודשית — הריצו את הפייפליין ופרסמו מחדש.</div>
         </Card>
         <CashflowLinks />
-      </div>
+      </Page>
     );
   }
 
@@ -29,11 +28,10 @@ export default function Cashflow() {
   const m = view.months.find((x) => x.month === selected) ?? view.months[view.months.length - 1];
 
   return (
-    <div className="space-y-4 md:space-y-[18px]">
-      <PageTitle>תזרים</PageTitle>
+    <Page title="תזרים">
       <MonthStrip months={view.months} selected={m.month} onSelect={setPicked} />
       <MonthSummary m={m} />
       <CashflowLinks />
-    </div>
+    </Page>
   );
 }

@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { createContext, useContext, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { Info } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -35,9 +35,13 @@ export function Card({
   );
 }
 
-/** Small muted heading at the top of a card. */
+/** Heading level for card titles: h2 on a page, h3 once inside a `Section`. */
+const HeadingLevel = createContext<2 | 3>(2);
+
+/** Small muted heading at the top of a card (h2, or h3 inside a `Section`). */
 export function CardLabel({ children }: { children: ReactNode }) {
-  return <div className="mb-2.5 text-sm font-semibold text-muted-foreground">{children}</div>;
+  const Tag = useContext(HeadingLevel) === 3 ? "h3" : "h2";
+  return <Tag className="m-0 mb-2.5 text-sm font-semibold text-muted-foreground">{children}</Tag>;
 }
 
 /** Headline figure; `tone` colours it by sign or verdict. */
@@ -221,7 +225,28 @@ export function KpiGrid({ cols = 4, children }: { cols?: 3 | 4 | 5; children: Re
 
 /** Page heading. On phones the sticky header already names the page, so it's visually hidden there. */
 export function PageTitle({ children }: { children: ReactNode }) {
-  return <h1 className="mb-5 text-[26px] font-extrabold max-md:sr-only">{children}</h1>;
+  return <h1 className="text-[26px] font-extrabold max-md:sr-only">{children}</h1>;
+}
+
+/**
+ * Root of every page: one vertical rhythm for its direct children (cards, sections).
+ * Narrow (phone-shaped, 720px) by default; `wide` for pages whose content is multi-column at md.
+ */
+export function Page({
+  title,
+  wide,
+  children,
+}: {
+  title?: ReactNode;
+  wide?: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <div className={cn("flex flex-col gap-4 md:gap-[18px]", !wide && "max-w-[720px]")}>
+      {title && <PageTitle>{title}</PageTitle>}
+      {children}
+    </div>
+  );
 }
 
 /** Honest placeholder for screens whose data we don't yet produce. */
@@ -240,29 +265,32 @@ export function StubNotice({
   );
 }
 
-/** A titled block of the Overview feed, with an optional "see all" deep link. */
+/** A titled block of a page, with an optional "see all" deep link or custom `action`. */
 export function Section({
   title,
   to,
   linkLabel = "הכל",
+  action,
   children,
 }: {
-  title: string;
+  title: ReactNode;
   to?: string;
   linkLabel?: string;
+  action?: ReactNode;
   children: ReactNode;
 }) {
   return (
-    <section className="[&+&]:mt-7">
+    <section className="mt-3 first:mt-0 [h1+&]:mt-0">
       <header className="mb-2.5 flex items-baseline justify-between">
         <h2 className="m-0 text-lg font-extrabold">{title}</h2>
+        {action}
         {to && (
           <Link to={to} className="text-sm font-semibold text-brand no-underline">
             {linkLabel} ›
           </Link>
         )}
       </header>
-      {children}
+      <HeadingLevel.Provider value={3}>{children}</HeadingLevel.Provider>
     </section>
   );
 }

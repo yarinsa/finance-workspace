@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Card, PageTitle } from "@/components/common";
+import { Card, CardLabel, Page, Section } from "@/components/common";
 import { HORIZON_LABEL, HORIZON_SHORT } from "@/components/TransactionEditSheet";
 import { ApiOffline, patchGoal, type Horizon } from "@/lib/api";
 import { useLedgerApi } from "@/lib/useLedgerApi";
@@ -19,7 +19,7 @@ function GeneralCard({ c }: { c: GeneralGoalCard }) {
   const muted = c.status === "needs_input";
   return (
     <Card>
-      <div className="card-title">{c.name}</div>
+      <CardLabel>{c.name}</CardLabel>
       <div className="big-num" style={{ fontSize: 24, color: muted ? "var(--lg-muted)" : undefined }}>
         {generalValue(c)}
       </div>
@@ -127,34 +127,34 @@ function GoalCard({ g }: { g: PersonalGoal }) {
 export default function Goals() {
   const { general, personal_goals, missing_piece } = goals;
   return (
-    <div>
-      <PageTitle>יעדים</PageTitle>
-
-      <h2 style={{ fontSize: 18, margin: "0 0 12px" }}>יעדים כללים</h2>
-      <div className="grid grid-4">
-        {general.map((c) => (
-          <GeneralCard key={c.key} c={c} />
-        ))}
-      </div>
-      {missing_piece > 0 && (
-        <div className="muted section-gap">חתיכה חסרה (פער למימון כל היעדים): {shekel(missing_piece)}</div>
-      )}
-
-      <h2 style={{ fontSize: 18, margin: "26px 0 12px" }}>יעדים אישיים</h2>
-      {personal_goals.length === 0 ? (
-        <Card>
-          <span className="muted">
-            אין יעדים אישיים עדיין. הוסיפו עם <code>POST /api/goals</code> או{" "}
-            <code>db/goal_store.py import</code>, והריצו <code>data/goals.py</code>.
-          </span>
-        </Card>
-      ) : (
-        <div className="grid grid-2">
-          {personal_goals.map((g) => (
-            <GoalCard key={g.id ?? g.description} g={g} />
+    <Page title="יעדים" wide>
+      <Section title="יעדים כללים">
+        <div className="grid grid-4">
+          {general.map((c) => (
+            <GeneralCard key={c.key} c={c} />
           ))}
         </div>
-      )}
-    </div>
+        {missing_piece > 0 && (
+          <div className="muted mt-[18px]">חתיכה חסרה (פער למימון כל היעדים): {shekel(missing_piece)}</div>
+        )}
+      </Section>
+
+      <Section title="יעדים אישיים">
+        {personal_goals.length === 0 ? (
+          <Card>
+            <span className="muted">
+              אין יעדים אישיים עדיין. הוסיפו עם <code>POST /api/goals</code> או{" "}
+              <code>db/goal_store.py import</code>, והריצו <code>data/goals.py</code>.
+            </span>
+          </Card>
+        ) : (
+          <div className="grid grid-2">
+            {personal_goals.map((g) => (
+              <GoalCard key={g.id ?? g.description} g={g} />
+            ))}
+          </div>
+        )}
+      </Section>
+    </Page>
   );
 }

@@ -1,4 +1,4 @@
-import { Card, CardLabel, ListRow, PageTitle, StubNotice } from "@/components/common";
+import { Card, CardLabel, ListRow, Page, StubNotice } from "@/components/common";
 import { daysSince, snapshot, type SourceSync } from "@/lib/data";
 import { displayState, isRunning, STATE_PILL, useSyncStatus, type SourceStatus } from "@/lib/syncStatus";
 
@@ -121,12 +121,11 @@ export default function Syncs() {
   const syncs = snapshot.syncs ?? [];
   if (!syncs.length) {
     return (
-      <div>
-        <PageTitle>סנכרונים</PageTitle>
+      <Page title="סנכרונים">
         <StubNotice status="אין נתונים">
           אין עדיין נתוני סנכרון — הריצו <code>python3 data/digest.py</code> ואז sync-data.
         </StubNotice>
-      </div>
+      </Page>
     );
   }
 
@@ -135,14 +134,13 @@ export default function Syncs() {
   const stale = sorted.filter((s) => daysSince(s.last_synced) > 7).length;
 
   return (
-    <div>
-      <PageTitle>סנכרונים</PageTitle>
-      <p className="muted" style={{ marginTop: -8 }}>
+    <Page title="סנכרונים">
+      <p className="muted">
         {stale ? `${stale} מקורות לא סונכרנו מעל שבוע.` : "כל המקורות סונכרנו בשבוע האחרון."} הנתונים חושבו{" "}
         {ago(daysSince(snapshot.generated_at))}.
       </p>
       {liveSources.length > 0 && (
-        <Card className="mb-3">
+        <Card>
           <CardLabel>סנכרון אוטומטי</CardLabel>
           {liveSources.map(([source, s]) => (
             <LiveRow key={source} source={source} s={s} />
@@ -154,6 +152,6 @@ export default function Syncs() {
           <SyncRow key={s.source} s={s} automated={!!live?.sources[s.source]} />
         ))}
       </Card>
-    </div>
+    </Page>
   );
 }

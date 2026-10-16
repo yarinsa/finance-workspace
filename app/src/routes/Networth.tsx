@@ -1,4 +1,4 @@
-import { Card, PageTitle } from "@/components/common";
+import { Card, CardLabel, Page } from "@/components/common";
 import NetWorthChart from "@/components/NetWorthChart";
 import Hero from "@/components/home/Hero";
 import MortgageCard from "@/components/MortgageCard";
@@ -19,20 +19,17 @@ export default function Networth() {
   ];
 
   return (
-    <div>
-      <PageTitle>שווי נקי</PageTitle>
-
+    <Page title="שווי נקי" wide>
       <Hero netToday={cashflow.projection?.net_worth_today ?? null} />
-      <div className="section-gap" />
 
       <Card>
-        <div className="card-title">השווי הנקי לאורך החיים</div>
+        <CardLabel>השווי הנקי לאורך החיים</CardLabel>
         <NetWorthChart height={280} showLoans />
       </Card>
 
-      <div className="grid grid-2 section-gap">
+      <div className="grid grid-2">
         <Card>
-          <div className="card-title">נכסים נמדדים</div>
+          <CardLabel>נכסים נמדדים</CardLabel>
           {assets.map(([k, v]) => (
             <div key={k} className="row">
               <span>{k}</span>
@@ -45,14 +42,14 @@ export default function Networth() {
               <strong>{shekel(t.bank_balances_sum + (t.long_term_savings ?? 0))}</strong>
             </div>
           )}
-          <p className="muted section-gap">
+          <p className="muted mt-3">
             {savings.length > 0
               ? 'תיקי השקעות חיצוניים ונדל"ן עדיין לא נאספים — השווי הנקי עדיין מוערך בחסר.'
               : 'פנסיה / השתלמות / תיקים / נדל"ן עדיין לא נאספים — השווי הנקי מוערך בחסר.'}
           </p>
         </Card>
         <Card>
-          <div className="card-title">התחייבויות</div>
+          <CardLabel>התחייבויות</CardLabel>
           {liabilities.map(([k, v]) => (
             <div key={k} className="row">
               <span>{k}</span>
@@ -74,11 +71,9 @@ export default function Networth() {
         </Card>
       </div>
 
-      <div className="section-gap">
-        <MortgageCard />
-      </div>
+      <MortgageCard />
 
-      <Card className="section-gap">
+      <Card>
         <div className="row">
           <span>
             מצב נטו נזיל (עו"ש − חוב)
@@ -108,6 +103,6 @@ export default function Networth() {
           <strong>{shekel(t.monthly_loan_service)}</strong>
         </div>
       </Card>
-    </div>
+    </Page>
   );
 }

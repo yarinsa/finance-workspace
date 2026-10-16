@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { Check, X } from "lucide-react";
-import { Card } from "@/components/common";
+import { Card, Section } from "@/components/common";
 import { cn } from "@/lib/utils";
 import type { HomeAction } from "@/lib/data";
 
@@ -49,18 +49,20 @@ export default function ActionList({ actions }: { actions: HomeAction[] | undefi
   };
 
   return (
-    <section>
-      <header className="mb-2.5 flex items-baseline justify-between">
-        <h2 className="m-0 text-lg font-extrabold">
+    <Section
+      title={
+        <>
           לטיפול{open.length > 0 && <span className="text-muted-foreground"> · {open.length}</span>}
-        </h2>
-        {hidden > 0 && open.length > 0 && (
+        </>
+      }
+      action={
+        hidden > 0 && open.length > 0 ? (
           <button type="button" className="text-sm font-semibold text-brand" onClick={() => update([])}>
             הצג שהוסתרו
           </button>
-        )}
-      </header>
-
+        ) : undefined
+      }
+    >
       {open.length === 0 ? (
         <Card>
           <div className="flex items-center gap-3">
@@ -113,6 +115,6 @@ export default function ActionList({ actions }: { actions: HomeAction[] | undefi
           )}
         </div>
       )}
-    </section>
+    </Section>
   );
 }

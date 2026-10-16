@@ -1,4 +1,4 @@
-import { BarRow, Card, CardLabel, PageTitle, Section } from "@/components/common";
+import { BarRow, Card, CardLabel, Page, Section } from "@/components/common";
 import BillsCard from "@/components/BillsCard";
 import FixedExpenses from "@/components/FixedExpenses";
 import BudgetsTeaser from "@/components/BudgetsTeaser";
@@ -34,8 +34,7 @@ function SpendingSummary() {
 /** Mint "Monthly": budgets, bills & subscriptions and month spending in one scroll. */
 export default function Monthly() {
   return (
-    <div className="feed">
-      <PageTitle>החודש</PageTitle>
+    <Page title="החודש">
       <WalletHero />
       {cashflow.budgets && (
         <Section title="תקציב" to="/budgets">
@@ -48,6 +47,6 @@ export default function Monthly() {
         <SpendingSummary />
       </Section>
       <GroupLinks group="monthly" />
-    </div>
+    </Page>
   );
 }

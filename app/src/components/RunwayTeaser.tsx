@@ -7,7 +7,7 @@ export default function RunwayTeaser({ runway: r }: { runway: Runway }) {
   if (safe == null) return null;
   const ok = safe > 0;
   return (
-    <Card to="/runway" className="mb-5">
+    <Card to="/runway">
       <CardLabel>יתרה צפויה</CardLabel>
       <div className={`text-[22px] font-extrabold tabular-nums ${ok ? "" : "text-bad"}`}>
         {ok ? `${shekel(safe)} פנוי עד המשכורת` : `חסרים ${shekel(-safe)} עד המשכורת`}

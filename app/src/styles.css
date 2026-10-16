@@ -83,7 +83,6 @@ body {
 .pill-bad { background: rgba(248,113,113,.15); color: var(--lg-bad); }
 .pill-warn { background: rgba(251,191,36,.15); color: var(--lg-warn); }
 
-.card-title { font-size: 14px; color: var(--lg-muted); margin: 0 0 10px; font-weight: 600; }
 
 .big-num { font-size: 34px; font-weight: 800; }
 .muted { color: var(--lg-muted); }
@@ -105,7 +104,6 @@ body {
 .bar-track { background: var(--lg-panel-2); border-radius: 8px; height: 10px; overflow: hidden; }
 .bar-fill { height: 100%; background: var(--lg-accent); }
 
-.section-gap { margin-top: 18px; }
 
 /* ---- Wallet header (Overview) ------------------------------------------ */
 .wallet-card {
@@ -237,7 +235,7 @@ body {
 }
 
 /* ---- Reference look: greeting, icon tabs, donut ----------------------- */
-.greeting { margin: 4px 0 18px; }
+.greeting { margin: 0; }
 .greeting h1 { font-size: 24px; font-weight: 800; margin: 0; }
 .greeting p { margin: 2px 0 0; font-size: 14px; }
 .section-title { font-size: 18px; }
@@ -256,8 +254,6 @@ body {
 .donut-legend i { width: 9px; height: 9px; border-radius: 3px; flex-shrink: 0; }
 .donut-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-/* Overview reads as a single feed — keep it phone-shaped on wide screens too. */
-.feed { max-width: 720px; }
 
 /* shadcn surfaces (SidebarInset, sheets) follow the dashboard palette */
 :root, .dark { --background: var(--lg-bg); }

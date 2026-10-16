@@ -6,7 +6,7 @@ import type { Budgets } from "@/lib/budgets";
 export default function BudgetsTeaser({ budgets: b }: { budgets: Budgets }) {
   const over = b.left < 0;
   return (
-    <Card to="/budgets" className="mb-5">
+    <Card to="/budgets">
       <CardLabel>תקציב</CardLabel>
       <div className={`text-[22px] font-extrabold tabular-nums ${over ? "text-bad" : ""}`}>
         {over ? `חריגה ${shekel(-b.left)}` : `${shekel(b.left)} נותרו`}

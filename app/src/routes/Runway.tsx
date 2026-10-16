@@ -1,5 +1,5 @@
 import { Area, AreaChart, CartesianGrid, ReferenceDot, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { BigNumber, Card, CardLabel, PageTitle, Section } from "@/components/common";
+import { BigNumber, Card, CardLabel, Page, Section } from "@/components/common";
 import BillsCard from "@/components/BillsCard";
 import { chartProps, noAnim, useChartColors } from "@/components/chartTheme";
 import { cashflow, shekel, shekelSigned, type Runway as RunwayData } from "@/lib/data";
@@ -156,16 +156,14 @@ export default function Runway() {
   const r = cashflow.runway;
   if (!r) {
     return (
-      <div className="feed">
-        <PageTitle>יתרה צפויה</PageTitle>
+      <Page title="יתרה צפויה">
         <p className="muted">אין עדיין תחזית יתרה — הריצו את הפייפליין לעדכון.</p>
-      </div>
+      </Page>
     );
   }
   const buffer = r.liquid_buffer.reduce((a, b) => a + b.balance, 0);
   return (
-    <div className="feed">
-      <PageTitle>יתרה צפויה</PageTitle>
+    <Page title="יתרה צפויה">
       <Hero r={r} />
 
       <Section title="מסלול היתרה">
@@ -197,6 +195,6 @@ export default function Runway() {
       <p className="text-xs leading-relaxed text-muted-foreground">
         התחזית כוללת הוצאות קבועות בלבד (ללא הוצאות יומיומיות); חיובי האשראי מוערכים לפי החודש הקודם.
       </p>
-    </div>
+    </Page>
   );
 }

@@ -3,7 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import { useMemo, useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Cell, Pie, PieChart, ResponsiveContainer } from "recharts";
-import { BarRow, Card, PageTitle } from "@/components/common";
+import { BarRow, Card, Page, PageTitle } from "@/components/common";
 import ExcludedSpendingCard from "@/components/ExcludedSpendingCard";
 import { noAnim, useChartColors } from "@/components/chartTheme";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -44,12 +44,11 @@ export default function Spending() {
 
   if (!months.length) {
     return (
-      <div className="space-y-4">
-        <PageTitle>הוצאות החודש</PageTitle>
+      <Page title="הוצאות החודש">
         <Card>
           <div className="text-muted-foreground">אין נתוני הוצאות עדיין. הריצו את הפייפליין ופרסמו מחדש.</div>
         </Card>
-      </div>
+      </Page>
     );
   }
 
@@ -97,7 +96,7 @@ export default function Spending() {
         : `${shekel(Math.abs(delta))} ${delta < 0 ? "פחות" : "יותר"} מהחודש הקודם`;
 
   return (
-    <div className="space-y-4 md:space-y-[18px]">
+    <Page>
       <div className="flex items-center justify-between gap-2">
         <PageTitle>הוצאות החודש</PageTitle>
         <div className="flex items-center gap-3 text-xs text-muted-foreground">
@@ -295,6 +294,6 @@ export default function Spending() {
       <ExcludedSpendingCard excluded={m.excluded} />
       <TransactionEditSheet tx={editing} onClose={() => setEditing(null)} />
       <HiddenTransactionsSheet open={hiddenOpen} onClose={() => setHiddenOpen(false)} />
-    </div>
+    </Page>
   );
 }

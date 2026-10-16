@@ -1,4 +1,4 @@
-import { Card, PageTitle, StubNotice } from "@/components/common";
+import { Card, Page, StubNotice } from "@/components/common";
 import { snapshot, shekel } from "@/lib/data";
 
 /** No rules engine yet (PRD 05). Surface 1–2 honest derived nudges from the
@@ -12,18 +12,17 @@ export default function Recommendations() {
     nudges.push("יתרת העו\"ש נמוכה משירות החוב החודשי — תזרים תחת לחץ.");
 
   return (
-    <div>
-      <PageTitle>המלצות</PageTitle>
+    <Page title="המלצות">
       <StubNotice status="חלקי · אין עדיין מנוע המלצות">
         אין מנוע חוקים בצד שלנו. בהמשך — מנוע נדנודים מלא (PRD 05). כרגע, נדנודים
         נגזרים מה-<code>snapshot</code>:
       </StubNotice>
-      <div className="grid section-gap">
+      <div className="grid">
         {nudges.map((n, i) => (
           <Card key={i}>⚡ {n}</Card>
         ))}
         {nudges.length === 0 && <Card>אין נדנודים כרגע.</Card>}
       </div>
-    </div>
+    </Page>
   );
 }
