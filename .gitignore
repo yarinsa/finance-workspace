@@ -26,6 +26,7 @@ data/*
 !data/budgets.py
 !data/spending.py
 !data/actions.py
+!data/validate.py
 !data/*/
 data/*/raw/
 data/*/normalized/

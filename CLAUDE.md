@@ -63,6 +63,46 @@ agent, read from Keychain, or pulled from Messages — these are live bank
 accounts, and unattended authentication is not a capability worth automating.
 Chrome profiles persist logins, so this costs a login only when one lapses.
 
+### Validation
+
+`data/validate.py` proves the scraped data is complete and consistent, using the
+**direct bank and card sources only** (no check reads `data/riseup`), so the
+forecast can stop depending on RiseUp. Checks are organized by transaction type;
+each returns `{id, type, status: pass|warn|fail|skip, summary, details[]}` and the
+details name the concrete transactions (date, Hebrew description, amount, source)
+behind any warn or fail.
+
+| Type | Check id | What it proves | Data it relies on |
+|---|---|---|---|
+| dump | `dump.<source>` | The fresh dump is trustworthy: no error stubs / missing or tiny required files, no >20% record-count drop vs the previous `normalized/` output (a CAL billing-cycle rollover is only a warning), latest transaction not stale | each source's `raw/` + a throwaway dry-run of its `normalize.py` |
+| card_bill | `card_bills` | Every CAL/AMEX statement (cycle and immediate charges) is settled by one bank debit (same amount, ±3 banking days, Fri/Sat roll to Sunday), and every issuer-named card-bill debit has a statement; also flags matches `digest.is_card_bill_payment` misses | CAL `monthlyDebitsSummary`, AMEX monthly pulls, bank ledgers |
+| card_statement | `card_statements.cal` / `.amex` | A card cycle's transactions sum to its statement total (catches pagination gaps, installments and foreign-currency rows carried at the wrong ₪ amount) and every raw AMEX voucher reached the ledger | CAL `cardTransactions_*`, AMEX `transactions_*`, normalized card transactions |
+| balance | `balance.<account>` | Opening balance + operations = closing balance (running-balance chain has no break, ends on the current balance), the normalized ledger sums to the same movement, and no multi-week hole in history | Discount/Leumi/business `raw/transactions.json` running balances |
+| internal_transfer | `internal_transfers` | Each move between our own accounts has its opposite leg within 2 banking days (transfers to untracked accounts — Hapoalim/Bit, liquid deposit — are not orphans) | all bank ledgers |
+| loan_payment | `loans.mortgage` / `.discount` / `.leumi` | The dump's `NextPayment` (mortgage = Σ per track, as `forecast.py` uses) matches the actual bank debit in the expected month, and the prior installments exist | mortgage/loan dumps, bank ledgers |
+| salary | `salary` | The payday income `runway.py` infers arrived in its window in each of the last 4 months | bank ledgers (via `runway.infer_recurring`) |
+
+Findings are attributed, not just counted: a statement or transfer that cannot be
+found because a bank ledger has a hole (or predates it) is reported as a
+`warn`/skip pointing at the hole, so one root cause does not fan out into dozens of
+failures.
+
+```
+python3 data/validate.py                  # all checks -> data/digested/validation.{json,md}
+python3 data/validate.py dump <source>    # exit 0 = ok, 1 = REJECT (run before trusting a scrape)
+python3 data/validate.py --data-dir D --out-dir O --as-of 2026-10-16 [--strict]
+```
+
+`--data-dir` / `FINANCE_DATA_DIR` reads another checkout's data read-only;
+`--out-dir` / `VALIDATE_OUT_DIR` redirects the report. `validation_actions(report)`
+returns "לטיפול"-shaped action items for the failures (wire-up into `actions.py`
+is separate). The suite is `data/tests/test_validate.py`.
+
+**Real failures become regression tests**, same rule as below: a `fail` that turns
+out to be a real defect (e.g. Leumi FITID collisions dropping ledger rows, CAL
+`trnAmt` instead of the billed ₪) gets a failing test built from the exact
+records, then the fix.
+
 ## The two things the app reads
 
 - **`data/digested/transactions.json`** — the unified ledger. Every transaction
