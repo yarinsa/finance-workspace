@@ -65,7 +65,7 @@ def test_url():
 def owner(test_url):
     """The schema owner: migrates, seeds, and checks what the API wrote."""
     c = ledger.connect(test_url)
-    c.execute("TRUNCATE scraped_transactions, transaction_overrides, categories, transaction_tags, tags, override_audit")
+    c.execute("TRUNCATE scraped_transactions, transaction_overrides, categories, transaction_tags, tags, override_audit, goals")
     c.commit()
     ledger.load(c, LEDGER)
     yield c

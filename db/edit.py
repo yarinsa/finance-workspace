@@ -10,7 +10,8 @@ ignored, as in the dedup key):
     .venv/bin/python db/edit.py horizon  2026-01-15 123.45 future    # current | near | future (who it's for)
     .venv/bin/python db/edit.py exclude  2026-01-15 123.45        # hide from the ledger and every total
     .venv/bin/python db/edit.py include  2026-01-15 123.45        # undo exclude
-    .venv/bin/python db/edit.py clear    2026-01-15 123.45 [category|note|horizon]   # drop one field, or the whole override
+    .venv/bin/python db/edit.py goal     2026-01-15 123.45 phone-2026  # money that went to a goal (db/goal_store.py)
+    .venv/bin/python db/edit.py clear    2026-01-15 123.45 [category|note|horizon|goal]   # drop one field, or the whole override
     .venv/bin/python db/edit.py tag      2026-01-15 123.45 "טיול" ["עבודה" ...]   # add tags
     .venv/bin/python db/edit.py untag    2026-01-15 123.45 "טיול" [...]          # remove tags
     .venv/bin/python db/edit.py list [--orphaned]
@@ -42,8 +43,9 @@ def find(conn, k):
 
 def override(conn, k):
     return conn.execute(
-        "SELECT c.name, o.note, o.excluded, o.horizon FROM transaction_overrides o "
+        "SELECT c.name, o.note, o.excluded, h.key, g.slug FROM transaction_overrides o "
         "LEFT JOIN categories c ON c.id = o.category_id "
+        "LEFT JOIN horizons h ON h.id = o.horizon_id LEFT JOIN goals g ON g.id = o.goal_id "
         "WHERE (o.txn_date, o.abs_amount) = (%s, %s)", k).fetchone()
 
 
@@ -76,15 +78,15 @@ def show(conn, k):
     if names:
         print(f"  tags:     {', '.join(names)}")
     if o:
-        print(f"  override: category={o[0]!r} note={o[1]!r} excluded={o[2]} horizon={o[3]!r}")
+        print(f"  override: category={o[0]!r} note={o[1]!r} excluded={o[2]} horizon={o[3]!r} goal={o[4]!r}")
 
 
 def list_overrides(conn, orphaned_only):
     view = "orphaned_overrides" if orphaned_only else "transaction_overrides"
     rows = conn.execute(
-        f"SELECT o.txn_date, o.abs_amount, s.description, c.name, o.note, o.excluded, o.horizon "
+        f"SELECT o.txn_date, o.abs_amount, s.description, c.name, o.note, o.excluded, h.key "
         f"FROM {view} o LEFT JOIN scraped_transactions s USING (txn_date, abs_amount) "
-        f"LEFT JOIN categories c ON c.id = o.category_id "
+        f"LEFT JOIN categories c ON c.id = o.category_id LEFT JOIN horizons h ON h.id = o.horizon_id "
         f"ORDER BY o.txn_date DESC").fetchall()
     for d, amt, desc, cat, note, excl, horizon in rows:
         bits = [f"category={cat}" if cat else "", f"note={note}" if note else "",
@@ -120,7 +122,7 @@ def main(argv):
         args = rest[2:]
         if cmd == "show":
             return show(conn, k)
-        if cmd in ("category", "note", "horizon", "exclude", "include", "tag") and not exists(conn, k):
+        if cmd in ("category", "note", "horizon", "goal", "exclude", "include", "tag") and not exists(conn, k):
             raise SystemExit(f"no transaction on {k[0]} for {k[1]} (try `show`, or check the date)")
         if cmd in FIELDS:
             if len(args) != 1:
@@ -128,6 +130,13 @@ def main(argv):
             if cmd == "horizon" and args[0] not in overrides.HORIZONS:
                 raise SystemExit(f"horizon is one of {overrides.HORIZONS}")
             set_field(conn, k, cmd, args[0])
+        elif cmd == "goal":
+            if len(args) != 1:
+                raise SystemExit("usage: edit.py goal DATE AMOUNT GOAL_SLUG")
+            g = conn.execute("SELECT id FROM goals WHERE slug = %s", (args[0],)).fetchone()
+            if not g:
+                raise SystemExit(f"no goal {args[0]!r} (see `db/goal_store.py list`)")
+            set_field(conn, k, "goal_id", g[0])
         elif cmd == "exclude":
             set_field(conn, k, "excluded", True)
         elif cmd == "include":
@@ -138,7 +147,9 @@ def main(argv):
             have = set(tags.tags_of(conn, k))
             tags.set_tags(conn, k, have | set(args) if cmd == "tag" else have - set(args), ACTOR)
         elif cmd == "clear":
-            if args and args[0] not in FIELDS:
+            if args and args[0] == "goal":
+                args = ["goal_id"]
+            elif args and args[0] not in FIELDS:
                 raise SystemExit(f"clear takes one of {FIELDS}, or nothing for the whole override")
             if args:
                 set_field(conn, k, args[0], None)

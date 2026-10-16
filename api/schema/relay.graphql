@@ -1,0 +1,36 @@
+# Relay plumbing and shared scalars.
+# Spec: https://relay.dev/graphql/connections.htm and https://relay.dev/graphql/objectidentification.htm
+
+"""ISO calendar date, e.g. "2026-01-15"."""
+scalar Date
+
+"""ISO 8601 timestamp with timezone."""
+scalar DateTime
+
+"""
+Shekel amount as a decimal string with 2 places, e.g. "-123.45".
+Money out is negative. A string, not a Float, so amounts never pick up binary rounding.
+"""
+scalar Money
+
+"""Any JSON value (audit old/new values are a string, a boolean or null)."""
+scalar JSON
+
+"""An object with a globally unique, opaque ID that `Query.node` can refetch."""
+interface Node {
+  id: ID!
+}
+
+type PageInfo {
+  hasNextPage: Boolean!
+  hasPreviousPage: Boolean!
+  startCursor: String
+  endCursor: String
+}
+
+input DateRange {
+  """Inclusive."""
+  from: Date
+  """Inclusive."""
+  to: Date
+}

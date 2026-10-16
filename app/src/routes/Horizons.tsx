@@ -137,6 +137,22 @@ export default function Horizons() {
 
       {order.map((h) => (
         <Section key={h} title={HORIZON_LABEL[h]}>
+          {(data.goals?.[h]?.length ?? 0) > 0 && (
+            <Card className="mb-2 h-auto">
+              <CardLabel>יעדים</CardLabel>
+              {data.goals![h].map((g) => (
+                <div key={g.id} className="flex items-center gap-3 border-line py-1.5 [&+&]:border-t">
+                  <div className="min-w-0 flex-1 truncate text-sm">{g.description}</div>
+                  {g.end_date && (
+                    <div className="text-xs text-muted-foreground">
+                      עד {g.end_date.split("-").reverse().slice(1).join("/")}
+                    </div>
+                  )}
+                  <div className="text-sm font-semibold tabular-nums">{shekel(g.amount)}</div>
+                </div>
+              ))}
+            </Card>
+          )}
           <Card>
             {m.buckets[h].top.length === 0 ? (
               <div className="text-sm text-muted-foreground">אין תנועות החודש. סמנו תנועה כ״{HORIZON_LABEL[h]}״ בעריכה.</div>
@@ -156,6 +172,7 @@ export default function Horizons() {
                       <CategoryTag name={t.category} />
                       <TagChips tags={t.tags} />
                       {t.date.split("-").reverse().slice(0, 2).join("/")}
+                      {t.goal && ` · ${t.goal}`}
                       {t.overridden && " · נערך"}
                     </div>
                   </div>

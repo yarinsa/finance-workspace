@@ -66,15 +66,60 @@ Key: a transaction is `(date, abs_amount)` — ISO date and the absolute amount 
 | GET | `/api/health` | — | `{"ok":true,"db":true,"temporal":true}` |
 | GET | `/api/transactions` | `?from=&to=` (ISO dates), `&excluded=include\|only` (default: hide) | `{"transactions":[Row]}` |
 | GET | `/api/transactions/{date}/{abs_amount}` | — | `Row` or 404 |
-| PATCH | `/api/transactions/{date}/{abs_amount}` | any of `{"category":str\|null,"note":str\|null,"excluded":bool}`; `null` clears that field | `Row` (empty overrides are pruned) |
+| PATCH | `/api/transactions/{date}/{abs_amount}` | any of `{"category":str\|null,"note":str\|null,"excluded":bool,"horizon":"current\|near\|future"\|null,"goal_id":int\|null}`; `null` clears that field (unknown `goal_id` → 422) | `Row` (empty overrides are pruned) |
 | DELETE | `/api/transactions/{date}/{abs_amount}/override` | — | `Row` back to scraped values |
 | GET | `/api/categories` | — | `{"categories":[str]}` (distinct, scraped + overrides, sorted) |
+| PUT | `/api/transactions/{date}/{abs_amount}/tags` | `{"tags":[str]}` (≤20, replaces the set) | `Row` |
+| GET | `/api/tags` | — | `{"tags":[{id,name,color,count}]}` |
+| GET | `/api/horizons` | — | `{"horizons":[{id,key,name,target_pct,position}]}` (fixed, seeded by migration 0006) |
+| GET | `/api/goals` | — | `{"goals":[Goal]}` — `{id,slug,description,amount,start_date,end_date,interval,repetitions,rise,from_asset_id,horizon,transactions}` |
+| POST | `/api/goals` | `{"description","amount",…, "horizon"?}` | `Goal` |
+| PATCH | `/api/goals/{id}` | any goal field; `"horizon":null` unassigns | `Goal` or 404 |
+| DELETE | `/api/goals/{id}` | — | `{"deleted":id}`; its transactions are unassigned |
 | GET | `/api/overrides/orphaned` | — | `{"overrides":[{date,abs_amount,category,note,excluded}]}` |
 | GET | `/api/audit` | `?limit=50` | `{"entries":[{at,actor,date,abs_amount,field,old,new}]}` |
 | GET | `/api/rebuild` | — | `{"state":"idle\|pending\|running","last_published_at":iso\|null,"last_error":str\|null}` |
 
 Errors: `{"error":"<code>","message":"…"}` with 400/401/403/404/413/422/503.
-Any successful PATCH/DELETE signals a rebuild.
+Any successful write (POST/PUT/PATCH/DELETE) signals a rebuild.
+
+### GraphQL (schema-first, replacing the REST routes)
+
+The contract is the SDL in **`api/schema/*.graphql`**. Write the schema change first,
+then the code. It follows Relay: `Node` + `Query.node(id)` for refetching, cursor
+connections (`edges`/`node`/`cursor`/`pageInfo`) for every list, and mutations
+that take one `input` and echo `clientMutationId`.
+
+- **IDs** are opaque global IDs (`base64("Transaction:2026-01-15:123.45")`). A
+  transaction's ID still wraps the `(date, abs_amount)` key.
+- **Cursors** are keyset cursors over that key, so a page doesn't shift when an edit lands.
+- **`Money`** is a 2-decimal string with the sign (money out is negative), never a Float.
+- **Expense / income** is one `Transaction` type with `direction`; `Query.expenses` and
+  `Query.incomes` are the filtered connections.
+- **`raw`** holds the scraped values before any override (REST's `scraped_*` fields).
+- **Relations:** the "one" side of a 1:M relation is the object itself
+  (`Transaction.category: Category`). Anything plural over a `Node` is a paginated
+  connection, never a list: that covers the "many" side of 1:M, every M:M, and the root
+  `merchants`/`categories`/`tags`. Every connection has `totalCount`.
+- **Edge totals:** each `MerchantEdge`/`CategoryEdge`/`TagEdge` carries
+  `totals { count sum }`, scoped to the edge. Under `Merchant.categories` it is that
+  merchant's share of the category; at the root it is the whole group. The same
+  connections take `dateRange` and `orderBy: GroupOrder` (default `TOTAL_DESC`).
+  New grouped resources follow this pattern.
+- **`Merchant`** is derived from the description (`data/spending.py` `merchant_name`),
+  not stored.
+
+Each object type is bound to its Pydantic model in `api/schema_bindings.py`. Then
+`api/tests/test_graphql_schema.py` fails when the SDL and the models drift:
+
+- an SDL field has no model field;
+- a model field is neither exposed nor `hidden`;
+- a non-null SDL field sits on an optional model field;
+- an enum disagrees with its `Literal` or CHECK constraint.
+
+The same safety rules apply: same edge auth and origin secret, the CSRF headers on any
+request that carries a mutation, POST only, depth and `first` limits, and introspection
+off in production. The client compiles against the committed SDL.
 
 ### Rebuild workflow (Temporal)
 

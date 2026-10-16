@@ -3,8 +3,12 @@
 The rows are made up but shaped like ledger entries (no household data). The
 property under test is the reason the database exists: a re-import of the scraped ledger never loses a human edit.
 """
+import json
+
 import edit
+import goal_store
 import ledger
+import overrides
 import tags
 
 # Made-up rows in the digested ledger's shape.
@@ -22,8 +26,8 @@ def k(t):
 
 
 def plain(rows):
-    """Ledger rows without the `category_id` the view adds."""
-    return [{f: v for f, v in r.items() if f != "category_id"} for r in rows]
+    """Ledger rows without the `category_id` / `horizon_id` the view adds."""
+    return [{f: v for f, v in r.items() if f not in ("category_id", "horizon_id")} for r in rows]
 
 
 def test_round_trip_without_overrides_is_identity(conn):
@@ -147,3 +151,62 @@ def test_orm_session_shares_the_connection_and_never_closes_it(conn):
     s = ledger.orm_session(conn)
     s.close()
     assert conn.execute("SELECT 1").fetchone() == (1,)
+
+
+# --- horizons and goals --------------------------------------------------------------
+
+def test_digest_horizon_default_is_assigned_by_id_and_an_override_replaces_it(conn):
+    # The digest stamps the 123.45 charge "current"; I move it to "near" by hand.
+    rows = [{**CAL_PURCHASE, "horizon": "current"}, SALARY, CARD_BILL]
+    ledger.load(conn, rows)
+    ids = dict(conn.execute("SELECT key, id FROM horizons").fetchall())
+    assert conn.execute("SELECT horizon_id FROM scraped_transactions WHERE amount < -100 AND amount > -200"
+                        ).fetchone()[0] == ids["current"]
+    edit.set_field(conn, k(CAL_PURCHASE), "horizon", "near")
+    out = ledger.sync(conn, rows)
+    assert (out[0]["horizon"], out[0]["horizon_id"]) == ("near", ids["near"])
+    assert overrides.get_row(conn, k(CAL_PURCHASE))["horizon"] == "near"
+    edit.set_field(conn, k(CAL_PURCHASE), "horizon", None)   # back to the digest's default
+    assert ledger.materialize(conn)[0]["horizon"] == "current"
+
+
+def test_horizons_are_the_three_seeded_buckets_in_order(conn):
+    assert [h["key"] for h in goal_store.horizons(conn)] == ["current", "near", "future"]
+
+
+def test_goal_gets_a_horizon_and_a_transaction_can_go_to_it(conn):
+    # As the household, the phone I bought on 2026-01-15 is the "החלפת טלפון" goal.
+    ledger.load(conn, LEDGER)
+    g = goal_store.create_goal(conn, "החלפת טלפון", 3000, slug="phone-2026", end_date="2026-11-23",
+                               horizon="near")
+    assert (g["horizon"], g["end_date"]) == ("near", "2026-11-23")
+    row = overrides.patch(conn, k(CAL_PURCHASE), {"goal_id": g["id"]}, "cli")
+    assert (row["goal_id"], row["goal"]) == (g["id"], "החלפת טלפון")
+    assert ledger.materialize(conn)[0]["goal"] == "החלפת טלפון"
+    assert goal_store.all_goals(conn)[0]["transactions"] == 1
+    assert goal_store.update_goal(conn, g["id"], horizon="future")["horizon"] == "future"
+    assert goal_store.delete_goal(conn, g["id"])
+    assert "goal" not in ledger.materialize(conn)[0]
+    assert overrides.get_override(conn, k(CAL_PURCHASE)) is None   # the now-empty override is pruned
+
+
+def test_patch_rejects_an_unknown_goal(conn):
+    ledger.load(conn, LEDGER)
+    try:
+        overrides.patch(conn, k(CAL_PURCHASE), {"goal_id": 999}, "cli")
+    except ValueError as e:
+        assert "999" in str(e)
+    else:
+        raise AssertionError("expected ValueError")
+
+
+def test_goals_are_imported_once_from_the_json_store(conn, tmp_path):
+    store = tmp_path / "goals.json"
+    store.write_text(json.dumps({"goals": [
+        {"id": "phone-2026", "description": "החלפת טלפון", "amount": 3000, "start_date": "2026-01-01",
+         "end_date": "2026-11-23", "interval": None, "repetitions": 1, "rise": 0, "from_asset_id": None}]}),
+        encoding="utf-8")
+    assert goal_store.import_json(conn, store) == 1
+    assert goal_store.import_json(conn, store) == 0      # re-running adds nothing
+    [g] = goal_store.all_goals(conn)
+    assert (g["slug"], g["amount"], g["horizon"]) == ("phone-2026", 3000.0, "near")

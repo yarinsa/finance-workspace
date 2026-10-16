@@ -25,6 +25,52 @@ def _category_fk():
     return Column(Integer, ForeignKey("categories.id", ondelete="SET NULL"), nullable=True, index=True)
 
 
+def _fk(table):
+    return Column(Integer, ForeignKey(f"{table}.id", ondelete="SET NULL"), nullable=True, index=True)
+
+
+class Horizon(SQLModel, table=True):
+    """Who a shekel out is for: current me, near-future me, future me (data/horizons.py).
+
+    A fixed list seeded by migration 0006; `key` is the stable code the ledger and API
+    use, `name` the label and `target_pct` the share of net income aimed for."""
+    __tablename__ = "horizons"
+
+    id: int | None = Field(default=None, primary_key=True)
+    key: str = Field(sa_column=Column(Text, nullable=False, unique=True))
+    name: str = Field(sa_type=Text)
+    target_pct: Decimal = Field(sa_type=Numeric(5, 2))
+    position: int = Field(default=0)
+    created_at: dt.datetime | None = Field(default=None, sa_column=_now())
+
+    scraped_transactions: list["ScrapedTransaction"] = Relationship(back_populates="horizon_ref")
+    overrides: list["TransactionOverride"] = Relationship(back_populates="horizon_ref")
+    goals: list["Goal"] = Relationship(back_populates="horizon_ref")
+
+
+class Goal(SQLModel, table=True):
+    """A personal savings goal (docs/plangram-prd/04-goals.md), assigned to a horizon.
+
+    Was data/goals/goals.json's `goals` list; `slug` keeps that store's string id."""
+    __tablename__ = "goals"
+
+    id: int | None = Field(default=None, primary_key=True)
+    slug: str = Field(sa_column=Column(Text, nullable=False, unique=True))
+    description: str = Field(sa_type=Text)
+    amount: Decimal = Field(sa_type=Money)
+    start_date: dt.date | None = None
+    end_date: dt.date | None = None
+    interval: str | None = Field(default=None, sa_type=Text)
+    repetitions: int = Field(default=1)
+    rise: Decimal = Field(default=Decimal(0), sa_type=Money)
+    from_asset_id: str | None = Field(default=None, sa_type=Text)
+    horizon_id: int | None = Field(default=None, sa_column=_fk("horizons"))
+    created_at: dt.datetime | None = Field(default=None, sa_column=_now())
+
+    horizon_ref: Horizon | None = Relationship(back_populates="goals")
+    overrides: list["TransactionOverride"] = Relationship(back_populates="goal_ref")
+
+
 class Category(SQLModel, table=True):
     """The fixed list of spending categories a transaction can be assigned to.
 
@@ -57,8 +103,10 @@ class ScrapedTransaction(SQLModel, table=True):
     position: int                                    # index in the digested ledger (keeps its order)
     record: dict = Field(sa_column=Column(JSONB, nullable=False))   # the full LedgerTransaction
     imported_at: dt.datetime | None = Field(default=None, sa_column=_now())
+    horizon_id: int | None = Field(default=None, sa_column=_fk("horizons"))   # data/horizons.py default
 
     category_ref: Category | None = Relationship(back_populates="scraped_transactions")
+    horizon_ref: Horizon | None = Relationship(back_populates="scraped_transactions")
     tags: list["Tag"] = Relationship(sa_relationship_kwargs={
         "secondary": "transaction_tags", "viewonly": True, "order_by": "Tag.name",
         "primaryjoin": "and_(ScrapedTransaction.txn_date == foreign(TransactionTag.txn_date), "
@@ -71,7 +119,6 @@ class TransactionOverride(SQLModel, table=True):
     __tablename__ = "transaction_overrides"
     __table_args__ = (
         CheckConstraint("abs_amount >= 0", name="transaction_overrides_abs_amount_check"),
-        CheckConstraint("horizon IN ('current', 'near', 'future')", name="transaction_overrides_horizon_check"),
     )
 
     txn_date: dt.date = Field(primary_key=True)
@@ -79,11 +126,14 @@ class TransactionOverride(SQLModel, table=True):
     category_id: int | None = Field(default=None, sa_column=_category_fk())
     note: str | None = Field(default=None, sa_type=Text)
     excluded: bool = Field(default=False, sa_column_kwargs={"server_default": text("false")})
-    horizon: str | None = Field(default=None, sa_type=Text)   # current | near | future (data/horizons.py)
     created_at: dt.datetime | None = Field(default=None, sa_column=_now())
     updated_at: dt.datetime | None = Field(default=None, sa_column=_now())
+    horizon_id: int | None = Field(default=None, sa_column=_fk("horizons"))
+    goal_id: int | None = Field(default=None, sa_column=_fk("goals"))   # money that went to this goal
 
     category_ref: Category | None = Relationship(back_populates="overrides")
+    horizon_ref: Horizon | None = Relationship(back_populates="overrides")
+    goal_ref: Goal | None = Relationship(back_populates="overrides")
 
 
 class OverrideAudit(SQLModel, table=True):

@@ -26,6 +26,9 @@ export interface Row {
   scraped_horizon?: Horizon | null;
   /** Tag names on this transaction, sorted. */
   tags?: string[];
+  /** The goal this money went to (id in `/api/goals`), and its description. */
+  goal_id?: number | null;
+  goal?: string | null;
 }
 
 /** A tag in the `tags` table, with how many transactions carry it. */
@@ -46,7 +49,36 @@ export interface RowPatch {
   note?: string | null;
   excluded?: boolean;
   horizon?: Horizon | null;
+  goal_id?: number | null;
 }
+
+/** A row of the `horizons` table: the fixed buckets with their label and target share of income. */
+export interface HorizonInfo {
+  id: number;
+  key: Horizon;
+  name: string;
+  target_pct: number;
+  position: number;
+}
+
+/** A personal goal in the `goals` table (db/goal_store.py). */
+export interface Goal {
+  id: number;
+  slug: string;
+  description: string;
+  amount: number;
+  start_date: string | null;
+  end_date: string | null;
+  interval: "monthly" | "yearly" | null;
+  repetitions: number;
+  rise: number;
+  from_asset_id: string | null;
+  horizon: Horizon | null;
+  /** How many transactions are assigned to this goal. */
+  transactions: number;
+}
+
+export type GoalEdit = Partial<Pick<Goal, "description" | "amount" | "start_date" | "end_date" | "interval" | "repetitions" | "rise" | "horizon">>;
 
 export interface Health {
   ok: boolean;
@@ -214,6 +246,24 @@ export const putTags = (key: LedgerKey, tags: string[]) => request<Row>("PUT", `
 /** Rename and/or recolour a tag (`color: null` clears it). 409 when the name is taken. */
 export const patchTag = (id: number, patch: { name?: string; color?: string | null }) =>
   request<Omit<Tag, "count">>("PATCH", `/tags/${id}`, patch);
+
+export async function getHorizons(): Promise<HorizonInfo[]> {
+  return (await request<{ horizons: HorizonInfo[] }>("GET", "/horizons")).horizons;
+}
+
+export async function getGoals(): Promise<Goal[]> {
+  return (await request<{ goals: Goal[] }>("GET", "/goals")).goals;
+}
+
+/** Add a goal; `description` and `amount` are required. */
+export const createGoal = (goal: GoalEdit & { description: string; amount: number }) =>
+  request<Goal>("POST", "/goals", goal);
+
+/** Change a goal's fields; `horizon: null` unassigns it. */
+export const patchGoal = (id: number, patch: GoalEdit) => request<Goal>("PATCH", `/goals/${id}`, patch);
+
+/** Delete a goal; transactions assigned to it are unassigned. */
+export const deleteGoal = (id: number) => request<{ deleted: number }>("DELETE", `/goals/${id}`);
 
 /** Delete a tag and remove it from every transaction. */
 export const deleteTag = (id: number) => request<{ deleted: number }>("DELETE", `/tags/${id}`);
