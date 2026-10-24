@@ -302,7 +302,7 @@ two answer different questions ("can I pay my bills" vs "what am I worth").
   bank/card dumps lack, so on a conflict RiseUp's fields win; the direct source is
   still recorded in `sources` and backfills anything RiseUp is missing.
 - RiseUp's origin names are mapped to our source ids (`RISEUP_ORIGIN` in
-  `digest.py`): `cal`/`leumicard` → `cal`, `americanexpress`/`isracard` → `amex`,
+  `digest.py`): `cal` → `cal`, `leumicard` → `max` (Max, ex-Leumi Card), `americanexpress`/`isracard` → `amex`,
   `leumiBank` → `leumi`, `discount` → `discount`.
 - Tradeoff of the date+amount key: a card charge and its matching bank debit on the
   same day/amount merge into one row. That is intentional — it's the same money in
@@ -318,6 +318,7 @@ two answer different questions ("can I pay my bills" vs "what am I worth").
 | `leumi` (checking + loan total) | ✅ | accounts, loans, transactions |
 | `cal` (CAL credit cards) | ✅ | credit_cards, transactions |
 | `amex` (American Express / Isracard) | ✅ | credit_cards, transactions |
+| `max` (Max, ex-Leumi Card) | ✅ | credit_cards, transactions |
 | `riseup` (aggregator) | ✅ | accounts, credit_cards, income, subscription, transactions |
 | `harel` (pension + study funds) | ✅ | savings |
 | `more` (More study funds, incl. self-employed) | ✅ | savings |

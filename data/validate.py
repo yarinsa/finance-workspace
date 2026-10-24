@@ -2,7 +2,7 @@
 """Validate that the scraped data is complete and consistent.
 
 Reads ONLY the direct bank and card sources (discount, discount-business,
-discount-mortgage, leumi, cal, amex, plus the savings sources for dump sanity) —
+discount-mortgage, leumi, cal, amex, max, plus the savings sources for dump sanity) —
 never RiseUp — and cross-checks them against each other, organized by
 transaction type:
 
@@ -69,6 +69,7 @@ SOURCE_SPECS = {
               "max_txn_age_days": 14},
     "cal": {"required": ["account_init.json", "monthlyDebitsSummary.json"], "max_txn_age_days": 14},
     "amex": {"required": ["cardList.json"], "max_txn_age_days": 14},
+    "max": {"required": ["categories.json"], "max_txn_age_days": 14},
     "harel": {"required": ["customer-products.json"], "max_txn_age_days": None},
     "more": {"required": ["dashboard-accounts.json"], "max_txn_age_days": None},
     "analyst": {"required": ["sum-financial-data.json"], "max_txn_age_days": None},
@@ -78,8 +79,9 @@ SOURCE_SPECS = {
 # (the Discount dump is a rolling window; a missed scrape loses days for good).
 GAP_DAYS = {"discount": 14, "leumi": 30, "discount-business": 45}
 
-# Card issuers as named on the bank side. `max` is a card we do not scrape, so
-# its bank debits are expected to have no statement here.
+# Card issuers as named on the bank side. `max` is scraped (data/max), but its
+# statement totals are not reconciled against bank debits yet, so its bank debits
+# are expected to have no statement here.
 ISSUER_PHRASES = {
     "cal": ["דיינרס", "כאל", "כ.א.ל"],
     "amex": ["אמריקן אקס", "מאסטרקארד", "מסטרקארד", "מאסטרקרד", "ישראכרט"],
@@ -385,6 +387,22 @@ def raw_findings(source, raw_dir, as_of):
                     and not check_raw_file(raw_dir / f"transactions_{suffix}_{m}.json", min_bytes=0)]
             if not good:
                 out.append(("fail", f"active card {suffix}: no good statement pull for {sorted(wanted)}"))
+    elif source == "max":
+        # One getTransactionsAndGraphs pull per billing month, all cards together.
+        # The current month's statement must be there; every pull must be real data
+        # (Max signals an error with returnCode != 0 and no `result`).
+        files = sorted(raw_dir.glob("transactions_*.json"))
+        current = f"transactions_{as_of.year}-{as_of.month:02d}.json"
+        if current not in {f.name for f in files}:
+            out.append(("fail", f"no pull for the current billing month ({current})"))
+        for f in files:
+            why = check_raw_file(f, min_bytes=0)
+            if not why:
+                body = load(f.name)
+                if body.get("returnCode") not in (0, None) or not isinstance(body.get("result"), dict):
+                    why = f"error stub: returnCode {body.get('returnCode')} {body.get('rcDesc') or ''}".strip()
+            if why:
+                out.append(("fail", f"{f.name}: {why}"))
     return out
 
 
@@ -448,8 +466,12 @@ def is_cycle_rollover(prev_records, new_records):
     return bool(top(prev_records)) and top(new_records) > top(prev_records)
 
 
-def latest_txn_date(records):
+def latest_txn_date(records, as_of=None):
+    """Newest transaction date; rows dated after `as_of` (a card's future installments)
+    say nothing about how fresh the dump is, so they are ignored."""
+    cutoff = as_of.isoformat() if as_of else None
     ds = [str(r["date"])[:10] for r in records or [] if r.get("date")]
+    ds = [d for d in ds if cutoff is None or d <= cutoff]
     return max(ds) if ds else None
 
 
@@ -482,7 +504,7 @@ def check_dump(source, data_dir=DEFAULT_DATA_DIR, as_of=None, dry_run=True, new=
                       + (" - new billing cycle, expected" if rollover else " - more than "
                          f"{COUNT_DROP:.0%} drop vs previous normalized output")})
 
-    latest = latest_txn_date(new.get("transactions"))
+    latest = latest_txn_date(new.get("transactions"), as_of)
     max_age = spec["max_txn_age_days"]
     if max_age is not None and not any(f["level"] == "fail" for f in findings):
         if latest is None:
