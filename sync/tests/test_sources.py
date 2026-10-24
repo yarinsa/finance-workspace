@@ -1,5 +1,6 @@
 """The registry, and the activities that read it (checks, scrape, validation gate)."""
 import asyncio
+import os
 import re
 from pathlib import Path
 
@@ -94,7 +95,9 @@ def test_resolve_accepts_names_and_login_groups():
 def test_every_dump_script_exists():
     for s in sources.SOURCES.values():
         for dump in s.dumps:
-            assert (activities.SKILLS / dump[0]).is_file(), dump[0]
+            script = activities.SKILLS / dump[0]
+            assert script.is_file(), dump[0]
+            assert os.access(script, os.X_OK), f"{dump[0]} is not executable (chmod +x)"  # run directly by the worker
 
 
 # --- tab-based session judgement ---------------------------------------------
