@@ -3,7 +3,7 @@
 // cookie, the CSRF headers on every POST, and failures mapped onto ApiOffline/ApiError so
 // screens handle "the home computer is off" the same way for REST and GraphQL.
 import { Environment, Network, RecordSource, Store, type FetchFunction } from "relay-runtime";
-import { ApiError, ApiOffline } from "./api";
+import { ApiError, ApiOffline, unauthenticated } from "./api";
 
 const OFFLINE_STATUSES = new Set([502, 503, 504]);
 
@@ -25,10 +25,7 @@ const fetchGraphQL: FetchFunction = async (operation, variables) => {
   } catch (err) {
     throw new ApiOffline(err instanceof Error ? err.message : "network error");
   }
-  if (res.status === 401) {
-    globalThis.location.reload();
-    throw new ApiError(401, "unauthenticated", "session expired");
-  }
+  if (res.status === 401) throw unauthenticated();
   if (OFFLINE_STATUSES.has(res.status)) throw new ApiOffline(`HTTP ${res.status}`);
   if (!res.headers.get("content-type")?.includes("json")) throw new ApiOffline("non-JSON response");
 

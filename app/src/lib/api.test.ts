@@ -5,6 +5,12 @@ import { buildPatch } from "./editPatch";
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
 
+/** Minimal in-memory Storage (vitest runs in node, which has no sessionStorage). */
+function memoryStorage(): Pick<Storage, "getItem" | "setItem" | "clear"> {
+  const m = new Map<string, string>();
+  return { getItem: (k) => m.get(k) ?? null, setItem: (k, v) => void m.set(k, v), clear: () => m.clear() };
+}
+
 const fetchMock = vi.fn();
 const reload = vi.fn();
 
@@ -13,6 +19,7 @@ beforeEach(() => {
   reload.mockReset();
   vi.stubGlobal("fetch", fetchMock);
   vi.stubGlobal("location", { reload });
+  vi.stubGlobal("sessionStorage", memoryStorage());
 });
 afterEach(() => vi.unstubAllGlobals());
 
@@ -25,8 +32,29 @@ describe("ledgerKey", () => {
 });
 
 describe("error mapping", () => {
-  it("reloads the page on 401", async () => {
+  it("reloads the page on the first 401", async () => {
     fetchMock.mockResolvedValue(json({ error: "unauthenticated" }, 401));
+    await expect(getHealth()).rejects.toBeInstanceOf(ApiError);
+    expect(reload).toHaveBeenCalledOnce();
+  });
+
+  it("goes offline instead of reloading on a repeat 401 within a minute", async () => {
+    fetchMock.mockResolvedValue(json({ error: "unauthenticated" }, 401));
+    await expect(getHealth()).rejects.toBeInstanceOf(ApiError);
+    await expect(getHealth()).rejects.toBeInstanceOf(ApiOffline);
+    expect(reload).toHaveBeenCalledOnce();
+  });
+
+  it("goes offline without reloading when sessionStorage is unavailable", async () => {
+    fetchMock.mockResolvedValue(json({ error: "unauthenticated" }, 401));
+    vi.stubGlobal("sessionStorage", undefined);
+    await expect(getHealth()).rejects.toBeInstanceOf(ApiOffline);
+    expect(reload).not.toHaveBeenCalled();
+  });
+
+  it("reloads again once the minute has passed", async () => {
+    fetchMock.mockResolvedValue(json({ error: "unauthenticated" }, 401));
+    sessionStorage.setItem("ledger-api-401-reload-at", String(Date.now() - 61_000));
     await expect(getHealth()).rejects.toBeInstanceOf(ApiError);
     expect(reload).toHaveBeenCalledOnce();
   });
