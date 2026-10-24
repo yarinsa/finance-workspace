@@ -49,27 +49,64 @@ async function visible(page, selector) {
     .catch(() => false);
 }
 
-/** Library flow: open the personal-area popup, pick the password tab, submit, classify. */
+/**
+ * Fill the ID-number field Max adds to the password form after failed attempts: any visible,
+ * empty input in app-user-login-form other than username/password. Returns true when filled.
+ */
+async function fillIdIfAsked(page) {
+  const sel = await page.evaluate(() => {
+    const el = [...document.querySelectorAll('app-user-login-form input')].find((e) =>
+      !['user-name', 'password'].includes(e.id) && e.type !== 'hidden' && !e.value
+      && (e.offsetWidth || e.offsetHeight || e.getClientRects().length));
+    if (!el) return null;
+    el.setAttribute('data-max-id-field', '1');
+    return '[data-max-id-field="1"]';
+  });
+  if (!sel) return false;
+  if (!process.env.MAX_ID) throw new Exit(3, 'LOGIN FAILED: ID_REQUIRED (set MAX_ID in .env)');
+  await fillInput(page, sel, process.env.MAX_ID);
+  return true;
+}
+
+/** Open the /login page (it replaced the personal-area popup), pick the password tab, submit, classify. */
 async function login(page) {
-  await page.goto(`${BASE_URL}/homepage/welcome`, { waitUntil: 'load' });
-  await page.waitForSelector('.personal-area > a.go-to-personal-area', { visible: true });
-  await page.$eval('.personal-area > a.go-to-personal-area', (el) => el.click());
+  await page.goto(`${BASE_URL}/login`, { waitUntil: 'networkidle2' });
   await page.waitForSelector('#login-password-link', { visible: true });
   await page.$eval('#login-password-link', (el) => el.click());
-  await page.waitForSelector('#login-password.tab-pane.active app-user-login-form', { visible: true });
+  await page.waitForSelector('#user-name', { visible: true });
   await fillInput(page, '#user-name', process.env.MAX_USERNAME);
   await fillInput(page, '#password', process.env.MAX_PASSWORD);
-  await page.$eval('app-user-login-form .general-button.send-me-code', (el) => el.click());
+  // The ID tab's "send me a code" button shares the class; app-user-login-form is the password form.
+  const submit = () => page.$eval('app-user-login-form .general-button.send-me-code', (el) => el.click());
+  await fillIdIfAsked(page);
+  await submit();
 
   let url = '';
+  let idSent = false;
   for (let i = 0; i < 40; i++) {
     url = page.url();
     if (url.startsWith(SUCCESS_URL)) return;
+    // After failed attempts Max adds an ID-number field to the form ("נבקש למלא את מספר תעודת
+    // הזהות שלך"); fill it from MAX_ID and submit once more.
+    if (!idSent && await fillIdIfAsked(page)) {
+      idSent = true;
+      await submit();
+      continue;
+    }
     if (url.includes('/renew-password')) throw new Exit(3, 'LOGIN FAILED: CHANGE_PASSWORD');
     if (await visible(page, '#popupWrongDetails')) throw new Exit(3, 'LOGIN FAILED: INVALID_PASSWORD');
+    if (await visible(page, '#popupCardHoldersLoginError')) throw new Exit(3, 'LOGIN FAILED: LOGIN_ERROR');
+    // "פרטי המשתמש שלך ננעלו": locked after wrong attempts; only the human can unlock (never retry).
+    if (await page.evaluate(() => document.body.innerText.includes('ננעלו')).catch(() => false)) {
+      throw new Exit(3, 'LOGIN FAILED: ACCOUNT_BLOCKED');
+    }
     await sleep(1000);
   }
-  throw new Exit(1, `LOGIN FAILED: UNKNOWN ${url}`);
+  // Keep what the page showed, so the next fix is not a blind retry against a live account.
+  await page.screenshot({ path: path.join(outDir, 'login-unknown.png') }).catch(() => {});
+  fs.writeFileSync(path.join(outDir, 'login-unknown.txt'),
+    await page.evaluate(() => document.body.innerText).catch(() => ''), 'utf8');
+  throw new Exit(1, `LOGIN FAILED: UNKNOWN ${url} (page saved to ${outDir}/login-unknown.*)`);
 }
 
 let failed = false;
