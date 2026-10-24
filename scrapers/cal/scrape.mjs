@@ -216,10 +216,15 @@ async function scrape(page, token) {
   console.log('== pending / not-yet-billed (clearance requests) ==');
   await dump(page, 'clearanceRequests.json', '/Transactions/api/approvals/getClearanceRequests', { cardUniqueIDArray: cardIds });
 
-  console.log('== per-card transaction details (current billing month) ==');
+  // A billing month holds the purchases since the previous statement, so anything bought after
+  // this month's statement is only in NEXT month's details (`_next`, the still-open cycle).
+  console.log('== per-card transaction details (current + next billing month) ==');
+  const next = new Date(now.getFullYear(), now.getMonth() + 1, 1);
   for (const [i, c] of cards.entries()) {
-    await dump(page, `cardTransactions_${c.last4Digits || 'x'}_${i}.json`, '/Transactions/api/transactionsDetails/getCardTransactionsDetails',
-      { cardUniqueId: c.cardUniqueId, month: String(now.getMonth() + 1), year: String(now.getFullYear()) });
+    for (const [suffix, d] of [['', now], ['_next', next]]) {
+      await dump(page, `cardTransactions_${c.last4Digits || 'x'}_${i}${suffix}.json`, '/Transactions/api/transactionsDetails/getCardTransactionsDetails',
+        { cardUniqueId: c.cardUniqueId, month: String(d.getMonth() + 1), year: String(d.getFullYear()) });
+    }
   }
 
   console.log('== loans ==');
