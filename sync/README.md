@@ -29,7 +29,7 @@ commands, session-check strategy). Registry order is the scrape order.
 | `discount` | none | (self-login) | `self`: always live; its dump logs in headless |
 | `leumi` | 9224 | leumi | `check_sessions.sh leumi` |
 | `cal` | 9225 | cal | `check_sessions.sh cal` |
-| `amex` | 9226 | amex | `check_session.sh` VERDICT (cookies + `/IsLoggedIn`) |
+| `amex` | none | (self-login) | `self`: `scrapers/amex/scrape.mjs` logs in headless from `.env` |
 | `max` | — | — | self: `scrapers/max/scrape.mjs` logs in headless from `.env` |
 | `harel` | 9227 | harel | `check_sessions.sh harel` |
 | `more` | 9228 | more | `check_sessions.sh more` |

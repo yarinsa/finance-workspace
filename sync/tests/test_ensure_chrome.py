@@ -1,6 +1,8 @@
 """Regression tests for the 2026-10-16 incident: the AMEX Chrome (9226) had run
 for 7 days holding only More/Harel tabs (plus browser_ui/omnibox and extension
-targets), and `playwright-cli attach` / `run-code` hung forever."""
+targets), and `playwright-cli attach` / `run-code` hung forever. AMEX now logs in headless,
+so Harel (the remaining playwright source) carries the same scenario: its Chrome holding only
+other banks' tabs."""
 import asyncio
 import sys
 import time
@@ -11,13 +13,13 @@ from temporalio.exceptions import ApplicationError
 import activities
 import sources
 
-AMEX = sources.get("amex")
+HAREL = sources.get("harel")
 
 INCIDENT_TARGETS = [
     {"type": "page", "url": "chrome://omnibox-popup.top-chrome/"},
     {"type": "page", "url": "chrome://browser-ui/"},
     {"type": "page", "url": "https://www.more.co.il/personal-area"},
-    {"type": "page", "url": "https://www.harel-group.co.il/client-view"},
+    {"type": "page", "url": "https://web.americanexpress.co.il/transactions"},
     {"type": "background_page", "url": "chrome-extension://abc/_generated_background_page.html"},
     {"type": "service_worker", "url": "chrome-extension://abc/sw.js"},
 ]
@@ -27,19 +29,19 @@ def _run(coro):
     return asyncio.run(coro)
 
 
-def test_no_amex_tab_in_incident_profile():
-    assert activities._tab_index(AMEX, INCIDENT_TARGETS) is None
+def test_no_harel_tab_in_incident_profile():
+    assert activities._tab_index(HAREL, INCIDENT_TARGETS) is None
 
 
-def test_amex_tab_index_skips_internal_targets():
-    pages = INCIDENT_TARGETS + [{"type": "page", "url": "https://web.americanexpress.co.il/login"}]
+def test_harel_tab_index_skips_internal_targets():
+    pages = INCIDENT_TARGETS + [{"type": "page", "url": "https://www.harel-group.co.il/client-view"}]
     pages = [p for p in pages if p["type"] == "page"]
-    assert activities._tab_index(AMEX, pages) == 2  # after More and Harel, not browser_ui/omnibox
+    assert activities._tab_index(HAREL, pages) == 2  # after More and AMEX, not browser_ui/omnibox
 
 
-def test_ensure_chrome_opens_amex_tab_and_selects_it(monkeypatch):
+def test_ensure_chrome_opens_harel_tab_and_selects_it(monkeypatch):
     pages = [t for t in INCIDENT_TARGETS if t["type"] == "page"]
-    listings = [pages, pages + [{"type": "page", "url": "https://web.americanexpress.co.il/"}]]
+    listings = [pages, pages + [{"type": "page", "url": HAREL.open_url}]]
     opened, calls = [], []
 
     async def no_sleep(_):
@@ -55,19 +57,19 @@ def test_ensure_chrome_opens_amex_tab_and_selects_it(monkeypatch):
     monkeypatch.setattr(activities, "run_cmd", fake_run_cmd)
     monkeypatch.setattr(activities.asyncio, "sleep", no_sleep)
 
-    assert _run(activities.ensure_chrome("amex")) == "already_running"
-    assert opened == ["https://web.americanexpress.co.il/"]
+    assert _run(activities.ensure_chrome("harel")) == "already_running"
+    assert opened == [HAREL.open_url]
     attach, select = calls
     assert "attach" in attach[0] and attach[1]["timeout"] == activities.PW_TIMEOUT
-    assert "--cdp=http://127.0.0.1:9226" in attach[0]
+    assert "--cdp=http://127.0.0.1:9227" in attach[0]
     assert select[0][-2:] == ["tab-select", "2"] and select[1]["timeout"] == activities.PW_TIMEOUT
 
 
-def test_existing_amex_tab_is_not_reopened(monkeypatch):
-    pages = [{"type": "page", "url": "https://web.americanexpress.co.il/x"}]
+def test_existing_harel_tab_is_not_reopened(monkeypatch):
+    pages = [{"type": "page", "url": "https://www.harel-group.co.il/x"}]
     monkeypatch.setattr(activities, "_cdp_pages", lambda src: pages)
     monkeypatch.setattr(activities, "_open_tab", lambda src, url: pytest.fail("must not open a second tab"))
-    assert _run(activities._ensure_tab(AMEX)) == 0
+    assert _run(activities._ensure_tab(HAREL)) == 0
 
 
 def test_raw_cdp_sources_get_a_tab_but_no_playwright_session(monkeypatch):
@@ -128,8 +130,8 @@ def test_check_session_hang_is_bounded(monkeypatch):
 
     async def fake_run_cmd(args, **kw):
         seen.update(kw)
-        return 0, "VERDICT: LIVE"
+        return 0, "harel        9227   live\n"
 
     monkeypatch.setattr(activities, "run_cmd", fake_run_cmd)
-    assert _run(activities.check_session("amex")) == "live"
-    assert seen["timeout"] == activities.PW_TIMEOUT
+    assert _run(activities.check_session("harel")) == "live"
+    assert seen["timeout"] == activities.SESSIONS_TIMEOUT

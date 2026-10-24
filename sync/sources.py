@@ -107,9 +107,10 @@ _ALL = [
     # CAL logs in headless by itself (scrapers/cal/scrape.mjs, CAL_USERNAME/CAL_PASSWORD in .env).
     Source(name="cal", port=0, login_url="https://www.cal-online.co.il/", app_host="cal-online.co.il",
            check=SELF, playwright=False, dumps=((str(REPO_ROOT / "scrapers" / "cal" / "scrape.mjs"),),)),
-    Source(name="amex", port=9226, login_url="https://www.americanexpress.co.il/", app_host="americanexpress.co.il",
-           tab_url="https://web.americanexpress.co.il/", check=VERDICT,
-           dumps=(("amex-refresh/scripts/dump.sh", "{session}"),)),
+    # AMEX logs in headless by itself (scrapers/amex/scrape.mjs, AMEX_ID / AMEX_CARD6_DIGITS /
+    # AMEX_PASSWORD from .env) and writes the same files as amex-refresh/scripts/dump.sh.
+    Source(name="amex", port=0, login_url="https://web.americanexpress.co.il/", app_host="americanexpress.co.il",
+           check=SELF, playwright=False, dumps=((str(REPO_ROOT / "scrapers" / "amex" / "scrape.mjs"),),)),
     # Max (ex-Leumi Card) logs in headless by itself (scrapers/max/scrape.mjs, MAX_USERNAME /
     # MAX_PASSWORD from .env): no Chrome, and a refused login is needs_login, never retried.
     Source(name="max", port=0, login_url="https://www.max.co.il/", app_host="max.co.il",

@@ -22,7 +22,7 @@ def run(coro):
 def test_registry_ports_and_scrape_order():
     assert {n: s.port for n, s in sources.SOURCES.items()} == {
         "discount-business": 0, "discount-mortgage": 0, "discount": 0,  # all of Discount logs in by itself: no Chrome
-        "leumi": 0, "cal": 0, "amex": 9226, "max": 0, "harel": 9227, "more": 9228, "analyst": 9229,
+        "leumi": 0, "cal": 0, "amex": 0, "max": 0, "harel": 9227, "more": 9228, "analyst": 9229,
     }
     assert "riseup" not in sources.SOURCES
     # Discount stays business -> mortgage -> checking; each is its own headless session.
@@ -175,25 +175,23 @@ def test_missing_row_is_an_infrastructure_error(monkeypatch):
         run(activities.check_session("harel"))
 
 
-def test_amex_keeps_the_verdict_path(monkeypatch):
+def test_amex_logs_in_by_itself(monkeypatch):
+    s = sources.get("amex")
+    assert s.check == sources.SELF and s.port == 0 and not s.playwright
+    assert s.group == "americanexpress.co.il-self" != sources.get("discount").group
     seen = []
 
-    async def fake(args, **kw):
-        seen.append(args)
-        return 1, "VERDICT: LOGGED_OUT"
+    async def fake_run(args, **kw):
+        seen.append(list(args))
+        return 3, "LOGIN FAILED: INVALID_PASSWORD\n"
 
-    monkeypatch.setattr(activities, "run_cmd", fake)
-    assert run(activities.check_session("amex")) == "dead"
-    assert seen[0][0].endswith("amex-refresh/scripts/check_session.sh")
-
-
-def test_amex_without_verdict_raises_instead_of_calling_it_dead(monkeypatch):
-    async def fake(args, **kw):
-        return 1, "Error: session 'amex' not found"
-
-    monkeypatch.setattr(activities, "run_cmd", fake)
-    with pytest.raises(ApplicationError):
-        run(activities.check_session("amex"))
+    monkeypatch.setattr(activities, "run_cmd", fake_run)
+    assert run(activities.check_session("amex")) == "live"  # no Chrome to check
+    with pytest.raises(ApplicationError) as e:
+        run(activities.scrape("amex"))
+    assert e.value.type == "SessionExpired" and e.value.non_retryable
+    script = Path(__file__).resolve().parents[2] / "scrapers" / "amex" / "scrape.mjs"
+    assert seen == [[str(script)]] and script.is_file()
 
 
 # --- scrape -----------------------------------------------------------------
@@ -223,10 +221,10 @@ def scrape_env(monkeypatch):
 
 def test_scrape_passes_session_or_port_per_script(scrape_env):
     cmds, _ = scrape_env
-    run(activities.scrape("amex"))
+    run(activities.scrape("harel"))
     run(activities.scrape("more"))
     runs = [c for c in cmds if c[0] == "run"]
-    assert runs == [("run", "amex-refresh", ["amex"]), ("run", "more-refresh", ["9228"])]
+    assert runs == [("run", "harel-refresh", ["harel"]), ("run", "more-refresh", ["9228"])]
     assert not [c for c in cmds if c[:2] == ("bind", "more")]  # raw-CDP source: no playwright
 
 
