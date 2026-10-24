@@ -26,8 +26,10 @@ data/
 ## Preferred: headless self-login (no Chrome)
 
 `scrapers/cal/scrape.mjs` logs in by itself (puppeteer, same flow as
-israeli-bank-scrapers' visaCal: `#ccLoginDesktopBtn` → `connect` iframe →
-`#regular-login` → username/password) with `CAL_USERNAME` / `CAL_PASSWORD`
+israeli-bank-scrapers' visaCal: `#ccLoginDesktopBtn` → `connect` iframe
+(opens on the OTP tab) → `#regular-login` → username/password; non-headless user
+agent because the WAF rejects `HeadlessChrome`, DOM clicks because mouse clicks
+hang when Chrome isn't painting — see `scrapers/cal/README.md`) with `CAL_USERNAME` / `CAL_PASSWORD`
 from the repo `.env` (the user fills these; agents never type them). It reads
 the `CALAuthScheme` token from `sessionStorage["auth-module"]` after login,
 takes the card / account ids from its own `account/init` response, and writes

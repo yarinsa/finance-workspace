@@ -40,15 +40,34 @@ if (missing.length) {
   process.exit(2);
 }
 
-/** The login form lives in an iframe served from connect.cal-online.co.il. */
+/** The login form lives in an iframe served from connect.cal-online.co.il (index.html -> send-otp). */
 async function loginFrame(page) {
   for (let i = 0; i < 30; i++) {
-    const f = page.frames().find((fr) => fr.url().includes('connect'));
+    const f = page.frames().find((fr) => fr.url().includes('connect.cal-online'));
     if (f) return f;
     await sleep(1000);
   }
   throw new Exit(1, 'LOGIN: login iframe never appeared');
 }
+
+/** Poll for a selector in a frame that may still be navigating (waitForSelector dies on it). */
+async function waitIn(frame, selector, what, secs = 30) {
+  for (let i = 0; i < secs; i++) {
+    if (await frame.$(selector).catch(() => null)) return;
+    await sleep(1000);
+  }
+  throw new Exit(1, `LOGIN: ${what} (${selector}) never appeared`);
+}
+
+/**
+ * In-page element.click(). Puppeteer's mouse click waits on a rendered frame and hangs when
+ * headless Chrome is not painting (seen with the Mac's display asleep); the DOM click works always.
+ */
+const domClick = (frame, selector) => frame.evaluate((sel) => {
+  const el = document.querySelector(sel);
+  if (el) el.click();
+  return !!el;
+}, selector).catch(() => false);
 
 /** The rotating CALAuthScheme token, written to sessionStorage by the SPA after login. */
 const readToken = (page) => page.evaluate(() => {
@@ -56,18 +75,40 @@ const readToken = (page) => page.evaluate(() => {
   catch { return ''; }
 }).catch(() => '');
 
+/** Save what the browser shows (screenshot best-effort, page + login-frame text) for a human. */
+async function saveLoginState(page, frame) {
+  fs.mkdirSync(outDir, { recursive: true });
+  await Promise.race([
+    page.screenshot({ path: path.join(outDir, 'login-unknown.png') }).catch(() => {}),
+    sleep(10000),
+  ]);
+  const pageText = await page.evaluate(() => document.body?.innerText || '').catch(() => '');
+  const frameText = frame ? await frame.evaluate(() => document.body?.innerText || '').catch(() => '') : '';
+  fs.writeFileSync(path.join(outDir, 'login-unknown.txt'),
+    `page: ${page.url()}\n\n${pageText}\n\n--- login frame: ${frame?.url() || '-'} ---\n${frameText}`, 'utf8');
+  console.error(`Saved login-unknown.png / login-unknown.txt to ${outDir}`);
+}
+
 /** Log in; returns the live token, otherwise throws Exit. */
 async function login(page) {
-  await page.goto(LOGIN_URL, { waitUntil: 'networkidle2' });
-  await page.waitForSelector('#ccLoginDesktopBtn', { visible: true });
-  await page.click('#ccLoginDesktopBtn');
+  await page.goto(LOGIN_URL, { waitUntil: 'domcontentloaded', timeout: 60000 });
+  const title = await page.title().catch(() => '');
+  if (/request rejected/i.test(title)) throw new Exit(1, 'LOGIN: cal-online WAF rejected the request (bot block)');
+  await page.waitForSelector('#ccLoginDesktopBtn', { visible: true, timeout: 30000 });
+  await domClick(page, '#ccLoginDesktopBtn');
   const frame = await loginFrame(page);
-  await frame.waitForSelector('#regular-login', { visible: true });
-  await frame.click('#regular-login');
-  await frame.waitForSelector('[formcontrolname="userName"]', { visible: true });
+  // The iframe opens on the ID + card-digits OTP tab (send-otp); switch to username/password.
+  await waitIn(frame, '#regular-login', 'username-login tab');
+  await domClick(frame, '#regular-login');
+  await waitIn(frame, '[formcontrolname="userName"]', 'username field');
+  await waitIn(frame, 'input[type="password"][formcontrolname="password"]', 'password field', 10);
+  if (await frame.$('[formcontrolname="id"]')) throw new Exit(1, 'LOGIN: still on the ID/OTP tab, not submitting');
   await frame.type('[formcontrolname="userName"]', process.env.CAL_USERNAME);
   await frame.type('[formcontrolname="password"]', process.env.CAL_PASSWORD);
-  await frame.click('button[type="submit"]');
+  // The "כניסה" submit of the form holding the password field (not the OTP or create-user buttons).
+  if (!(await domClick(frame, 'form:has([formcontrolname="password"]) button[type="submit"]'))) {
+    throw new Exit(1, 'LOGIN: submit button not found');
+  }
 
   for (let i = 0; i < 60; i++) {
     await sleep(1000);
@@ -78,15 +119,24 @@ async function login(page) {
       continue;
     }
     if (/renew|change-?password/i.test(url)) throw new Exit(3, 'LOGIN FAILED: CHANGE_PASSWORD');
-    const f = page.frames().find((fr) => fr.url().includes('connect'));
+    const f = page.frames().find((fr) => fr.url().includes('connect.cal-online'));
     if (!f) continue;
+    if (/change-?password/i.test(f.url())) throw new Exit(3, 'LOGIN FAILED: CHANGE_PASSWORD');
     const text = await f.evaluate(() => document.body?.innerText || '').catch(() => '');
     if (text.includes(INVALID_PASSWORD_MSG)) throw new Exit(3, 'LOGIN FAILED: INVALID_PASSWORD');
     if (/החלפת סיסמה|סיסמה חדשה|תוקף הסיסמה/.test(text)) throw new Exit(3, 'LOGIN FAILED: CHANGE_PASSWORD');
     if (/קוד אימות|קוד חד[ -]פעמי/.test(text) && !(await f.$('[formcontrolname="password"]'))) {
       throw new Exit(3, 'LOGIN FAILED: OTP_REQUIRED');
     }
+    const err = await f.evaluate(() =>
+      [...document.querySelectorAll('div.general-error > div, .err-desc')].map((e) => e.innerText.trim()).filter(Boolean).join(' | '),
+    ).catch(() => '');
+    if (err) {
+      await saveLoginState(page, f);
+      throw new Exit(3, `LOGIN FAILED: ${err}`);
+    }
   }
+  await saveLoginState(page, page.frames().find((fr) => fr.url().includes('connect.cal-online')));
   throw new Exit(1, `LOGIN FAILED: UNKNOWN ${page.url()}`);
 }
 
@@ -191,6 +241,8 @@ const browser = await puppeteer.launch({ headless: true });
 let code = 0;
 try {
   const page = await browser.newPage();
+  // cal-online's WAF answers a "HeadlessChrome" user agent with HTTP 400 "Request Rejected".
+  await page.setUserAgent((await browser.userAgent()).replace('HeadlessChrome', 'Chrome'));
   await page.setCacheEnabled(false);
   await page.setViewport({ width: 1280, height: 900 });
   const token = await login(page);
