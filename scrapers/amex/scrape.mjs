@@ -96,8 +96,14 @@ async function login(page) {
     try { seen[m[1]] = JSON.parse(await r.text()); } catch { seen[m[1]] = { unparsable: true }; }
   });
 
-  await page.goto(LOGIN_URL, { waitUntil: 'domcontentloaded', timeout: 60000 });
-  await page.waitForSelector('#otpLoginId_ID', { timeout: 30000 });
+  // The login page is sometimes slow to render its form (seen 2026-10-25 in a scheduled run).
+  // Nothing is typed yet, so loading it a second time cannot count as a failed login.
+  for (let attempt = 1; ; attempt++) {
+    await page.goto(LOGIN_URL, { waitUntil: 'domcontentloaded', timeout: 60000 });
+    const ok = await page.waitForSelector('#otpLoginId_ID', { timeout: 30000 }).then(() => true, () => false);
+    if (ok) break;
+    if (attempt === 2) throw new Exit(1, `login form did not render at ${page.url()} (page not loaded; nothing typed)`);
+  }
   await sleep(1500); // let Angular bind the form
   // The card shows the SMS face first; #flip turns it to the permanent-password face.
   if (await visible(page, '#flip')) await page.$eval('#flip', (el) => el.click());
