@@ -160,18 +160,17 @@ first, sends **one** macOS notification listing
 the dead logins (grouped by login), and waits up to 15m
 for `poetry run python sync/resume.py [source|group ...]`; still-dead sources are skipped as
 `needs_login`, never fatal. Live sources are scraped one at a time in registry order
-(Discount **business → mortgage → account**: the one Chrome app first, then the two
-self-login sources), each followed by
+(Discount **business → mortgage → account**, all three self-login), each followed by
 a `data/validate.py dump <source>` gate (skipped while that file doesn't exist); one
 failing source never stops the rest. Then digest chain once and
 `infra/deploy.sh --data-only` once (when `SYNC_PUBLISH=1`; withheld if a dump was
 rejected). It never authenticates a Chrome session. **One exception:**
-Discount mortgage and checking are scraped by `scrapers/discount/scrape-mortgage.mjs` and
-`scrape.mjs` (shared `lib.mjs`), which log in headless with
+Discount business, mortgage and checking are scraped by `scrapers/discount/scrape-business.mjs`,
+`scrape-mortgage.mjs` and `scrape.mjs` (shared `lib.mjs`), which log in headless with
 `DISCOUNT_ID`/`DISCOUNT_PASSWORD`/`DISCOUNT_NUM` from `.env` (check mode `self`, no
-Chrome) and write the same raw files as the CDP `dump.sh` scripts; a refused login becomes
-`needs_login` (and skips the other self-login source, which shares the credentials). They run
-after the Chrome app (business) because their login may end the human's telebank session.
+Chrome; business uses the SME login page, ID + password only) and write the same raw files
+as the CDP `dump.sh` scripts; a refused login becomes `needs_login` (and skips the other
+Discount sources, which share the credentials).
 CAL works the same way: `scrapers/cal/scrape.mjs` logs in headless with
 `CAL_USERNAME`/`CAL_PASSWORD` from `.env` (check mode `self`) and writes the same
 `data/cal/raw` files as `cal-refresh/scripts/dump.sh`; a refused login (or a demanded OTP) is `needs_login`.

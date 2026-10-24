@@ -14,6 +14,15 @@ app** and the **business account** (`0216859524`). Same `/Titan/gatewayAPI`
 backend as `discount-account-refresh` (personal), plus extra business products
 (securities, FX, guarantees, debit authorizations, liabilities).
 
+## Preferred: headless self-login (no Chrome)
+
+`node scrapers/discount/scrape-business.mjs [--out DIR]` logs in by itself through the SME
+login page with `DISCOUNT_ID` / `DISCOUNT_PASSWORD` from `.env`, writes the same files as
+`dump.sh`, and is what the scheduled sync runs. Then
+`poetry run python data/validate.py dump discount-business`. Exit codes: 0 ok · 1 failure ·
+2 missing env · 3 `LOGIN FAILED` (refused; never retry). Details: `scrapers/discount/README.md`.
+The Chrome flow below is the fallback.
+
 > Sibling skills: `discount-account-refresh` (personal checking),
 > `discount-mortgage-refresh` (mortgage). All share the same Chrome
 > session/login (CDP port 9223, profile `~/.chrome-cdp-discount`).

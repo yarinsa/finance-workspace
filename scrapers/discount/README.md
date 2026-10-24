@@ -41,3 +41,19 @@ replaces `.claude/skills/discount-mortgage-refresh/scripts/dump.sh`. Writes `acc
 The `mortgage/details` POST body is built from `accountsList` (`OldAccountInfo` per entry).
 
     node scrapers/discount/scrape-mortgage.mjs [--out DIR] [--account N]
+
+## Business (`scrape-business.mjs`)
+
+Replaces `.claude/skills/discount-business-refresh/scripts/dump.sh` and writes the same files to
+`data/discount-business/raw` (`infoAndBalance.json` and `transactions.json` required). Two
+differences from personal: it logs in through `LOGIN_PAGE_SME` (ID + password, no `#aidnum`;
+`login(page, 'LOGIN_PAGE_SME')` lands on `/apollo/business2/`), because a personal session that
+opens business2 is logged out by the server; and every call sends `site: sme`.
+The account defaults to dump.sh's `0216859524` (`--account` overrides).
+
+The bank answers "nothing here" as `{"Error": ...}` JSON (no credit line, loans, deposits or
+guarantees); those are written as-is, as dump.sh did. Any `actionRequired` body (`stepup`, or
+`{serviceName: "login", E9000100}` from a session not bound to the site) is an auth stub and
+is never written.
+
+    node scrapers/discount/scrape-business.mjs [--out DIR] [--account N] [--num-tx N]

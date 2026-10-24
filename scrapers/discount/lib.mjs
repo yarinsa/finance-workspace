@@ -45,19 +45,24 @@ async function fillInput(page, selector, value) {
 
 function classifyUrl(url) {
   const u = url.toLowerCase();
-  if (/^https:\/\/start\.telebank\.co\.il\/apollo\/retail\d*\/(#\/my_account_homepage)?$/.test(u)) return 'SUCCESS';
+  if (/^https:\/\/start\.telebank\.co\.il\/apollo\/(retail|business)\d*\/(#\/my_account_homepage)?$/.test(u)) return 'SUCCESS';
   if (u === `${BASE_URL}/apollo/core/templates/lobby/masterpage.html#/login_page`) return 'INVALID_PASSWORD';
   if (u === `${BASE_URL}/apollo/core/templates/lobby/masterpage.html#/pwd_renew`) return 'CHANGE_PASSWORD';
   return 'UNKNOWN';
 }
 
-/** Log in; returns on success, otherwise throws Exit with the right code. */
-export async function login(page) {
-  await page.goto(`${BASE_URL}/login/#/LOGIN_PAGE`, { waitUntil: 'load' });
+/**
+ * Log in; returns on success, otherwise throws Exit with the right code. `loginPage` is
+ * LOGIN_PAGE (personal, lands on retail3) or LOGIN_PAGE_SME (business, lands on business2: the
+ * personal session cannot open the SME app, the server logs it out).
+ */
+export async function login(page, loginPage = 'LOGIN_PAGE') {
+  await page.goto(`${BASE_URL}/login/#/${loginPage}`, { waitUntil: 'load' });
   await page.waitForSelector('#tzId');
   await fillInput(page, '#tzId', process.env.DISCOUNT_ID);
   await fillInput(page, '#tzPassword', process.env.DISCOUNT_PASSWORD);
-  await fillInput(page, '#aidnum', process.env.DISCOUNT_NUM);
+  // The SME form has no account-number field (ID + password only).
+  if (await page.$('#aidnum')) await fillInput(page, '#aidnum', process.env.DISCOUNT_NUM);
   await page.$eval('.sendBtn', (el) => el.click());
   try {
     await page.waitForNavigation();
@@ -79,7 +84,9 @@ export async function login(page) {
   throw new Exit(1, `LOGIN FAILED: UNKNOWN ${url}`);
 }
 
-const AUTH_ERROR_MARKERS = [/actionRequired["\s:]*["\s]*stepup/i, /SME\s*-\s*קלט לא תקין/];
+// `actionRequired` is either "stepup" or an object such as {serviceName: "login", error: E9000100}
+// (a session not bound to the requested site); both are auth stubs, never data.
+const AUTH_ERROR_MARKERS = [/"actionRequired"\s*:/, /SME\s*-\s*קלט לא תקין/];
 
 /**
  * Guarded writer. `dump(page, fname, urlPath, postBody)` fetches one gateway endpoint inside
@@ -136,14 +143,14 @@ export function createDumper(outDir, { account = '', site = 'retail', businesspr
  * Browser lifecycle: launch headless, log in, run `body(page)`, always close the browser, then
  * exit 0 / the Exit code / 1 when `state.failed`. `body` throws Exit for fatal conditions.
  */
-export async function runScrape(state, body) {
+export async function runScrape(state, body, { loginPage } = {}) {
   const browser = await puppeteer.launch({ headless: true });
   let code = 0;
   try {
     const page = await browser.newPage();
     await page.setCacheEnabled(false);
     await page.setViewport({ width: 1024, height: 768 });
-    await login(page);
+    await login(page, loginPage);
     await body(page);
   } catch (e) {
     if (!(e instanceof Exit)) throw e;

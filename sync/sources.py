@@ -85,13 +85,14 @@ _DISCOUNT = dict(port=9223, login_url="https://start.telebank.co.il/apollo/retai
                  app_host="telebank.co.il", login_group="discount", chrome="discount")
 
 _ALL = [
-    # The one Discount Chrome app. No tab sits on business2 until the human opens one, so the
-    # preflight can only look (TABS), and the scrape opens the app itself.
-    Source(name="discount-business", check=TABS, app_url="https://start.telebank.co.il/apollo/business2/",
-           **_DISCOUNT, dumps=(("discount-business-refresh/scripts/dump.sh", "{session}"),)),
-    # Mortgage and checking log in headless by themselves (scrapers/discount/scrape-mortgage.mjs,
-    # scrape.mjs), so they need no Chrome and are not in the "discount" login group. They run
-    # AFTER the Chrome app: their own login may end the human's telebank session.
+    # All three Discount sources log in headless by themselves with the same .env credentials
+    # (scrapers/discount/): business through the SME login page (scrape-business.mjs), mortgage
+    # and checking through the personal one. Each run is its own session, so the old
+    # "business rebinds the Chrome session" ordering no longer applies; they share one
+    # self-login group, so a refused login skips the other two.
+    Source(name="discount-business", port=0, login_url="https://start.telebank.co.il/login/#/LOGIN_PAGE_SME",
+           app_host="telebank.co.il", check=SELF, playwright=False,
+           dumps=((str(REPO_ROOT / "scrapers" / "discount" / "scrape-business.mjs"),),)),
     Source(name="discount-mortgage", port=0, login_url="https://start.telebank.co.il/login/",
            app_host="telebank.co.il", check=SELF, playwright=False,
            dumps=((str(REPO_ROOT / "scrapers" / "discount" / "scrape-mortgage.mjs"),),)),
