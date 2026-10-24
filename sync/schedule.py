@@ -1,4 +1,4 @@
-"""Create-or-update the finance sync schedule, 08:10 and 13:10 daily (idempotent).
+"""Create-or-update the finance sync schedule, 06:20 and 22:00 daily (idempotent).
 
   python3 sync/schedule.py                          create/update, every source
   python3 sync/schedule.py --sources amex,cal       ...only these (registry order is kept)
@@ -34,7 +34,7 @@ def build_schedule(names: list[str] | None = None) -> Schedule:
             id="finance-sync-run",  # schedule suffixes the fire time
             task_queue=TASK_QUEUE,
         ),
-        spec=ScheduleSpec(cron_expressions=["10 8 * * *", "10 13 * * *"], time_zone_name="Asia/Jerusalem"),
+        spec=ScheduleSpec(cron_expressions=["20 6 * * *", "0 22 * * *"], time_zone_name="Asia/Jerusalem"),
         policy=SchedulePolicy(overlap=ScheduleOverlapPolicy.SKIP, catchup_window=timedelta(hours=1)),
     )
 

@@ -152,7 +152,7 @@ Rules that keep it cheap and safe — keep them when changing anything here:
 **Proof of concept** (dev server, no persistence guarantees); see
 `sync/README.md` for status. Not yet the only refresh path — `refresh-all` remains.
 
-`sync/` runs `FinanceSyncWorkflow` daily at 08:10 and 13:10 Asia/Jerusalem over every scraped
+`sync/` runs `FinanceSyncWorkflow` daily at 06:20 and 22:00 Asia/Jerusalem over every scraped
 source (discount, discount-mortgage, discount-business, leumi, cal, amex, harel, more,
 analyst; RiseUp is out of scope) with the Temporal dev server in Docker Compose
 (`docker-compose.yml`) and the worker under launchd. It checks **every** session

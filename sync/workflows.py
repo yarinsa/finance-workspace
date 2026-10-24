@@ -24,7 +24,7 @@ with workflow.unsafe.imports_passed_through():
 
 TASK_QUEUE = "finance-sync"
 # Short: an OTP expires within minutes anyway, and a login missed now is retried by the
-# next scheduled run (08:10 / 13:10) instead of a waiting run swallowing it (overlap SKIP).
+# next scheduled run (06:20 / 22:00) instead of a waiting run swallowing it (overlap SKIP).
 LOGIN_WAIT = timedelta(minutes=15)
 
 QUICK = dict(

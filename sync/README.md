@@ -4,7 +4,7 @@
 > persistence guarantees) and is not wired into `refresh-all`. Keep `refresh-all`
 > as the manual path; use this as the unattended daily one.
 
-`FinanceSyncWorkflow` refreshes every scraped source daily at 08:10 and 13:10
+`FinanceSyncWorkflow` refreshes every scraped source daily at 06:20 and 22:00
 Asia/Jerusalem on this Mac, then digests and publishes once:
 
 ```
@@ -156,7 +156,7 @@ poetry run python sync/schedule.py --trigger            # run now
 poetry run python sync/schedule.py --pause              # / --unpause
 ```
 
-The schedule id is `finance-sync` (workflow `FinanceSyncWorkflow`, daily 08:10 and 13:10
+The schedule id is `finance-sync` (workflow `FinanceSyncWorkflow`, daily 06:20 and 22:00
 Asia/Jerusalem). It replaces the old AMEX-only `amex-sync` schedule, which
 `schedule.py` deletes when it creates or updates `finance-sync` so the two never both
 fire. Re-run `schedule.py` once after upgrading.
