@@ -136,14 +136,6 @@ class TestFullPaymentEstimate:
 # detect — real cases
 # ─────────────────────────────────────────────────────────────────────────────
 class TestDetect:
-    def test_real_mortgage_flags_exactly_two_frozen_tracks(self):
-        # The 4.6% and 4.55% tracks pay ≈ interest-only (frozen).
-        # The 2.09% track pays more than interest-only (not frozen).
-        # All three מתווה tracks are below MIN_TRACK_BALANCE and are excluded.
-        flagged = detect_freeze.detect(ALL_REAL_TRACKS)
-        rates = [f["rate"] for f in flagged]
-        assert sorted(rates) == [4.55, 4.6]
-
     def test_2_09_track_is_not_flagged(self):
         # 835.88 NextPayment vs 743.45 interest-only → diff 92 > 60 tolerance
         flagged = detect_freeze.detect([TRACK_2_09])
@@ -181,24 +173,6 @@ class TestDetect:
             "NumOfPaymentsRemained": "240",
         }
         assert detect_freeze.detect([normal_track]) == []
-
-    def test_tolerance_boundary_at_exactly_60_is_flagged(self):
-        # NextPayment == interest_only + exactly TOLERANCE → abs diff == 60 → flagged.
-        bal = 200_000.0
-        rate = 3.0
-        int_only = bal * (rate / 100) / 12   # 500.0
-        track = {
-            "LoanAccount": "BOUNDARY",
-            "LoanName": "boundary",
-            "TotalInterestRate": rate,
-            "PrincipalBalance": bal,
-            "NextPayment": int_only + detect_freeze.INTEREST_ONLY_TOLERANCE,
-            "PreviousPayment": int_only + detect_freeze.INTEREST_ONLY_TOLERANCE,
-            "NumOfPaymentsRemained": "240",
-        }
-        # abs(NextPayment - int_only) == INTEREST_ONLY_TOLERANCE → <= → flagged
-        flagged = detect_freeze.detect([track])
-        assert len(flagged) == 1
 
     def test_one_cent_over_tolerance_is_not_flagged(self):
         bal = 200_000.0

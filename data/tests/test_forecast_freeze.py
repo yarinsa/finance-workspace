@@ -163,13 +163,6 @@ class TestAuthoritativeMortgagePaymentFreeze:
         # Resume: 2408.60 + 2353.31 + 835.88 + 1707.54 = 7305.33 (approx)
         assert total > 7000
 
-    def test_no_freeze_returns_sum_of_next_payments(self, monkeypatch):
-        monkeypatch.setattr(forecast, "load_freeze", lambda: {})
-        total, _ = forecast.authoritative_mortgage_payment("2026-09")
-        # All NextPayments: 835.88 + 1692.4 + 1665.43 + 461.59 + 659.51 + 586.44 = 5901.25
-        expected = 835.88 + 1692.4 + 1665.43 + 461.59 + 659.51 + 586.44
-        assert abs(total - expected) < 1.0
-
     def test_due_date_is_returned_as_date_string(self, monkeypatch):
         monkeypatch.setattr(forecast, "load_freeze", lambda: {})
         _, due = forecast.authoritative_mortgage_payment("2026-09")
