@@ -1,0 +1,10 @@
+{
+  "name": "amex-scraper",
+  "private": true,
+  "type": "module",
+  "description": "Deterministic American Express Israel (Isracard/ICC) scraper (puppeteer, own login)",
+  "dependencies": {
+    "dotenv": "^16.6.1",
+    "puppeteer": "^24.43.1"
+  }
+}

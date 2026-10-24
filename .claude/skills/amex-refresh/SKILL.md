@@ -12,6 +12,26 @@ from the logged-in web app into `data/amex/raw/`. Built with the repo's standard
 CDP + playwright-cli pattern (see the `add-bank-source` skill and the existing
 `cal` / `discount-*` / `leumi` skills).
 
+## Preferred: headless self-login
+
+`scrapers/amex/scrape.mjs` logs in by itself (headless puppeteer) with `AMEX_ID`,
+`AMEX_CARD6_DIGITS` and `AMEX_PASSWORD` from the repo-root `.env`, and writes exactly the raw
+files `scripts/dump.sh` writes (same names, same guard). No Chrome, no CDP port, no human login:
+
+```bash
+cd scrapers/amex && npm install          # first time
+node scrapers/amex/scrape.mjs            # from repo root -> data/amex/raw
+node scrapers/amex/scrape.mjs --out /tmp/amex-try   # trial run that leaves data/amex/raw alone
+poetry run python data/validate.py dump amex        # gate before trusting it
+```
+
+Exit 0 ok · 1 retryable failure (unknown login state saved as `login-unknown.*` in the out dir)
+· 2 missing env var · 3 `LOGIN FAILED: INVALID_PASSWORD|CHANGE_PASSWORD|OTP_REQUIRED|ACCOUNT_BLOCKED`,
+meaning the site refused and a human must act. **Never retry an exit 3**, because repeated
+failures lock the card login. It drives the site's own password form, so the page supplies its
+own CSRF token and reCAPTCHA v3. Details are in `scrapers/amex/README.md`. The CDP flow below
+remains the fallback when the self-login is refused (e.g. an OTP or a password change).
+
 ## Output layout
 
 ```
