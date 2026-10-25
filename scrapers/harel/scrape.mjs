@@ -204,6 +204,11 @@ async function login(page) {
     await sleep(1000);
     if (!onLoginPage(page)) return;
   }
+  // "לא ניתן להשלים את התהליך ... ניתן לנסות שנית במועד מאוחר יותר": Harel refused the login itself
+  // (2026-10-25, second attempt that day). Waiting is the only fix; a retry risks a lockout.
+  if (await page.evaluate(() => document.body.innerText.includes('לא ניתן להשלים את התהליך')).catch(() => false)) {
+    throw new Exit(3, `LOGIN FAILED: LOGIN_ERROR (Harel refused the login, try again later; page saved to ${await saveDebug(page)})`);
+  }
   // Still on the login page: wrong or expired code. Never resubmit: that asks for another SMS.
   throw new Exit(3, `LOGIN FAILED: OTP_REJECTED (page saved to ${await saveDebug(page)})`);
 }
