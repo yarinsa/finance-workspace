@@ -39,6 +39,11 @@ export default function CategoryBreakdown({ month }: { month: string }) {
         {shekel(m.total)}
         {m.partial && <span className="text-sm font-semibold text-muted-foreground"> עד היום</span>}
       </div>
+      {m.excluded.savings.amount > 0 && (
+        <div className="-mt-1 mb-2 text-xs text-muted-foreground">
+          לא כולל חיסכון והפקדות {shekel(m.excluded.savings.amount)} (נספרים בהלוואות וחיסכון למעלה)
+        </div>
+      )}
       <ul className="divide-y divide-line">
         {m.by_category.map((c) => {
           const isOpen = open.has(c.name);

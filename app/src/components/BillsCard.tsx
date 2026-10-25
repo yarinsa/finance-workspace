@@ -1,7 +1,11 @@
+import { useState } from "react";
 import { Card, CardLabel } from "@/components/common";
 import { cashflow, num, shekel } from "@/lib/data";
 import type { BillItem } from "@/lib/bills";
 import { cn } from "@/lib/utils";
+
+/** Unpaid rows shown while `compact` is collapsed. */
+const COMPACT_ROWS = 5;
 
 const KIND: Record<BillItem["kind"], { text: string; cls: string }> = {
   bill: { text: "חשבון", cls: "pill-muted" },
@@ -11,11 +15,16 @@ const KIND: Record<BillItem["kind"], { text: string; cls: string }> = {
 
 /**
  * This cycle's bills and subscriptions, ordered by day: ✓ on paid rows,
- * amber "באיחור" on overdue ones, and a paid-vs-left bar on top.
+ * amber "באיחור" on overdue ones, and a paid-vs-left bar on top. `compact` lists only
+ * the first unpaid rows by day until "הצג הכל" expands the full list in place.
  */
-export default function BillsCard() {
+export default function BillsCard({ compact = false }: { compact?: boolean }) {
+  const [showAll, setShowAll] = useState(false);
   const bills = cashflow.bills;
   if (!bills || !bills.items.length) return null;
+
+  const collapsed = compact && !showAll;
+  const rows = collapsed ? bills.items.filter((it) => it.status !== "paid").slice(0, COMPACT_ROWS) : bills.items;
 
   const left = bills.upcoming_total + bills.overdue_total;
   const total = left + bills.paid_total;
@@ -42,7 +51,7 @@ export default function BillsCard() {
       </div>
 
       <ul className="m-0 mt-3 list-none p-0">
-        {bills.items.map((it, i) => {
+        {rows.map((it, i) => {
           const paid = it.status === "paid";
           const overdue = it.status === "overdue";
           return (
@@ -74,6 +83,15 @@ export default function BillsCard() {
           );
         })}
       </ul>
+      {compact && (
+        <button
+          type="button"
+          onClick={() => setShowAll((v) => !v)}
+          className="mt-1 w-full border-t border-line pt-3 text-start text-sm font-semibold text-brand"
+        >
+          {showAll ? "הצג פחות" : `הצג הכל (${bills.items.length})`}
+        </button>
+      )}
     </Card>
   );
 }

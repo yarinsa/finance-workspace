@@ -28,8 +28,11 @@ export default function MonthStrip({
   const C = useChartColors();
   const P = chartProps(C);
   const idx = months.findIndex((m) => m.month === selected);
+  // Near-zero months would be untappable slivers: plot them at a floor of 4% of the tallest bar.
+  const floor = Math.max(...months.map((m) => Math.abs(m.net)), 1) * 0.04;
   const data = months.map((m) => ({
     ...m,
+    bar: Math.abs(m.net) < floor ? (m.net < 0 ? -floor : floor) : m.net,
     label: shortMonth(m.month),
     caption: m.kind === "current" ? "החודש" : m.kind === "projected" ? "צפי" : "",
   }));
@@ -76,7 +79,7 @@ export default function MonthStrip({
             />
             <YAxis {...P.yAxis} />
             <ReferenceLine y={0} stroke={C.line} />
-            <Bar dataKey="net" radius={[3, 3, 3, 3]} maxBarSize={22} cursor="pointer" {...noAnim}>
+            <Bar dataKey="bar" radius={[3, 3, 3, 3]} maxBarSize={22} cursor="pointer" {...noAnim}>
               {data.map((m) => {
                 const projected = forecast || m.kind === "projected";
                 const isSel = m.month === selected;
@@ -95,8 +98,8 @@ export default function MonthStrip({
           </ComposedChart>
         </ResponsiveContainer>
       </div>
-      <div className="mt-2 flex items-center justify-between" dir="rtl">
-        {/* RTL: the right-hand button goes back in time, the left-hand one forward. */}
+      <div className="mt-2 flex items-center justify-between" dir="ltr">
+        {/* Follows the bars (time runs left→right): the left button goes to the earlier month, the right one to the later. */}
         <button
           type="button"
           aria-label="החודש הקודם"
@@ -104,9 +107,11 @@ export default function MonthStrip({
           onClick={() => step(-1)}
           className="grid size-9 place-items-center rounded-full bg-panel-2 disabled:opacity-30"
         >
-          <ChevronRight className="size-5" />
+          <ChevronLeft className="size-5" />
         </button>
-        <span className="text-xs text-muted-foreground">{forecast ? "תזרים נקי צפוי לכל חודש" : "תזרים נקי לכל חודש"} · לחצו על עמודה לבחירה</span>
+        <span className="text-xs text-muted-foreground" dir="rtl">
+          {forecast ? "נטו צפוי לחודש" : "נטו לכל חודש"} · לחצו לבחירה
+        </span>
         <button
           type="button"
           aria-label="החודש הבא"
@@ -114,7 +119,7 @@ export default function MonthStrip({
           onClick={() => step(1)}
           className="grid size-9 place-items-center rounded-full bg-panel-2 disabled:opacity-30"
         >
-          <ChevronLeft className="size-5" />
+          <ChevronRight className="size-5" />
         </button>
       </div>
     </Card>
