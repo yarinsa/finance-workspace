@@ -1,6 +1,5 @@
 import { Area, AreaChart, CartesianGrid, ReferenceDot, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { BigNumber, Card, CardLabel, Page, Section } from "@/components/common";
-import BillsCard from "@/components/BillsCard";
 import { chartProps, noAnim, useChartColors } from "@/components/chartTheme";
 import { cashflow, shekel, shekelSigned, type Runway as RunwayData } from "@/lib/data";
 
@@ -173,8 +172,6 @@ export default function Runway() {
       </Section>
 
       <Alerts r={r} />
-
-      <BillsCard />
 
       {r.events.length > 0 && (
         <Section title="תנועות קרובות">

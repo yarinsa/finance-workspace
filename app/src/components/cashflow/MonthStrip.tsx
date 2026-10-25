@@ -11,16 +11,19 @@ const shortMonth = (ym: string) =>
  * Copilot-style month strip: one signed net bar per month (green up / red down),
  * time left→right. Projected months are lighter with a dashed edge and a "צפי"
  * caption; the current month is outlined. Tap a bar (or use ‹ ›) to select.
- * Income/expense detail lives in the result card below, which keeps 13 bars legible at 390px.
+ * Income/expense detail lives in the hero card below, which keeps the bars legible at 390px.
  */
 export default function MonthStrip({
   months,
   selected,
   onSelect,
+  forecast = false,
 }: {
   months: MonthViewRow[];
   selected: string;
   onSelect: (month: string) => void;
+  /** Forecast view: every bar is an expectation, so all are drawn light and dashed. */
+  forecast?: boolean;
 }) {
   const C = useChartColors();
   const P = chartProps(C);
@@ -28,7 +31,7 @@ export default function MonthStrip({
   const data = months.map((m) => ({
     ...m,
     label: shortMonth(m.month),
-    caption: m.kind === "projected" ? "צפי" : m.kind === "current" ? "החודש" : "",
+    caption: m.kind === "current" ? "החודש" : m.kind === "projected" ? "צפי" : "",
   }));
   const step = (d: number) => {
     const next = months[idx + d];
@@ -38,7 +41,7 @@ export default function MonthStrip({
   return (
     <Card>
       <div className="chart" dir="ltr">
-        <ResponsiveContainer width="100%" height={190}>
+        <ResponsiveContainer width="100%" height={130}>
           <ComposedChart
             data={data}
             margin={{ top: 8, right: 4, left: 0, bottom: 0 }}
@@ -75,7 +78,7 @@ export default function MonthStrip({
             <ReferenceLine y={0} stroke={C.line} />
             <Bar dataKey="net" radius={[3, 3, 3, 3]} maxBarSize={22} cursor="pointer" {...noAnim}>
               {data.map((m) => {
-                const projected = m.kind === "projected";
+                const projected = forecast || m.kind === "projected";
                 const isSel = m.month === selected;
                 return (
                   <Cell
@@ -103,7 +106,7 @@ export default function MonthStrip({
         >
           <ChevronRight className="size-5" />
         </button>
-        <span className="text-xs text-muted-foreground">תזרים נקי לכל חודש · לחצו על עמודה לבחירה</span>
+        <span className="text-xs text-muted-foreground">{forecast ? "תזרים נקי צפוי לכל חודש" : "תזרים נקי לכל חודש"} · לחצו על עמודה לבחירה</span>
         <button
           type="button"
           aria-label="החודש הבא"

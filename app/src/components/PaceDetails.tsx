@@ -1,5 +1,4 @@
-import { Link } from "react-router-dom";
-import { cashflow, pct as fmtPct, shekel, shekelSigned, snapshot, type PaceAverage, type PaceSide } from "@/lib/data";
+import { pct as fmtPct, shekel, type Pace, type PaceAverage, type PaceSide } from "@/lib/data";
 
 const monthName = (ym: string) =>
   new Intl.DateTimeFormat("he-IL", { month: "long" }).format(new Date(`${ym}-01T12:00:00`));
@@ -43,89 +42,12 @@ function PaceSpark({ cur, prev, avg }: { cur: PaceSide; prev: PaceSide; avg?: Pa
 }
 
 /**
- * Change vs. last month, as a percent — or as a signed ₪ amount when `money`
- * is set (net can sit near or cross zero, where a percent like "2,133%" is noise).
+ * How this month is running against last month (and the multi-month average) at the
+ * same day: comparison chips, the cumulative-spend spark and its legend. Rendered
+ * inside the dark `wallet-card` hero.
  */
-function Delta({ now, before, goodWhenUp, money = false }: {
-  now: number; before: number; goodWhenUp: boolean; money?: boolean;
-}) {
-  const diff = now - before;
-  const pct = change(now, before);
-  if (!money && pct == null) return <span className="delta muted">—</span>;
-  const up = diff >= 0;
-  const good = up === goodWhenUp;
-  return (
-    <span className={`delta ${good ? "delta-good" : "delta-bad"}`}>
-      {up ? "▲" : "▼"} {money ? shekelSigned(diff) : fmtPct(Math.abs(pct!))}
-    </span>
-  );
-}
-
-/**
- * One month-to-date figure against the month's expectation. The bar fills to
- * actual/expected; the tick marks how much of the month has passed, so a bar
- * past the tick means income arrived early — or spending is running ahead.
- * Net has no meaningful "fill" (it can be negative), so it shows the target only.
- */
-function Stat({ label, now, before, avgBefore, expected, monthDone, goodWhenUp, money = false }: {
-  label: string;
-  now: number;
-  before: number;
-  /** Same-day 12-month average; adds a second "vs. average" delta. */
-  avgBefore?: number;
-  expected?: number;
-  monthDone: number;
-  goodWhenUp: boolean;
-  money?: boolean;
-}) {
-  const ratio = expected && expected > 0 ? now / expected : null;
-  const ahead = ratio != null && ratio > monthDone;
-  const barCls = ratio == null ? "" : ahead === goodWhenUp ? "fill-good" : "fill-warn";
-  return (
-    <div className="wstat">
-      <div className="wstat-line">
-        <span className="wstat-label">{label}</span>
-        <strong style={money ? { color: now >= 0 ? "var(--lg-good)" : "var(--lg-bad)" } : undefined}>{shekel(now)}</strong>
-      </div>
-      {ratio != null && !money && (
-        <div className="wstat-bar" aria-label={`${fmtPct(ratio * 100)} מהצפי`}>
-          <div className={`wstat-fill ${barCls}`} style={{ width: `${Math.min(ratio, 1) * 100}%` }} />
-          <div className="wstat-tick" style={{ insetInlineStart: `${monthDone * 100}%` }} />
-        </div>
-      )}
-      <div className="wstat-line wstat-meta">
-        <span>
-          {expected != null &&
-            (money
-              ? `צפי לסוף החודש ${shekel(expected)}`
-              : `${fmtPct((ratio ?? 0) * 100)} מתוך ${shekel(expected)} צפויים`)}
-        </span>
-        <span className="wstat-deltas">
-          <Delta now={now} before={before} goodWhenUp={goodWhenUp} money={money} />
-          {avgBefore != null && (
-            <span className="wstat-avg">
-              <Delta now={now} before={avgBefore} goodWhenUp={goodWhenUp} money={money} /> ממוצע
-            </span>
-          )}
-        </span>
-      </div>
-    </div>
-  );
-}
-
-/**
- * E-wallet style header: what's actually free right now, and whether this month
- * is running ahead of or behind last month at the same point.
- */
-export default function WalletHero() {
-  const pace = cashflow.pace;
-  const t = snapshot.totals;
-  const free = t.bank_balances_sum - t.credit_card_debt;
-
-  if (!pace) return null;
-  const { current: cur, previous: prev, as_of_day } = pace;
-  const exp = pace.expected ?? null;
-  const monthDone = as_of_day / (pace.days_in_month || 30);
+export function PaceTrend({ pace }: { pace: Pace }) {
+  const { current: cur, previous: prev } = pace;
   const prevName = monthName(prev.month);
   const spendPct = change(cur.expense, prev.expense);
   const spentLess = spendPct != null && spendPct < 0;
@@ -133,53 +55,28 @@ export default function WalletHero() {
   const avgPct = avg ? change(cur.expense, avg.expense) : null;
 
   return (
-    <section className="wallet">
-      <Link to="/cashflow" className="wallet-card">
-        <div className="wallet-top">
-          <span className="wallet-label">פנוי אחרי חיובי אשראי</span>
-          <span className="wallet-asof">נכון ל-{as_of_day} ב{monthName(cur.month)}</span>
-        </div>
-        <div className="wallet-balance">{shekel(free)}</div>
-        <div className="wallet-sub">
-          עו״ש {shekel(t.bank_balances_sum)} · אשראי לחיוב {shekel(t.credit_card_debt)}
-        </div>
-
-        <div className="wallet-chips">
-          {spendPct != null && (
-            <div className={`wallet-chip ${spentLess ? "chip-good" : "chip-bad"}`}>
-              {spentLess ? "▼" : "▲"} הוצאת {fmtPct(Math.abs(spendPct))}{" "}
-              {spentLess ? "פחות" : "יותר"} מ{prevName} באותה נקודה
-            </div>
-          )}
-          {avgPct != null && (
-            <div className={`wallet-chip ${avgPct < 0 ? "chip-good" : "chip-bad"}`}>
-              {avgPct < 0 ? "▼" : "▲"} {fmtPct(Math.abs(avgPct))} {avgPct < 0 ? "מתחת" : "מעל"} לממוצע{" "}
-              {avg!.months} החודשים האחרונים
-            </div>
-          )}
-        </div>
-
-        <PaceSpark cur={cur} prev={prev} avg={avg} />
-        <div className="wallet-legend">
-          <span><i className="lg-cur" /> {monthName(cur.month)}</span>
-          <span><i className="lg-prev" /> {prevName} {shekel(prev.month_expense)}</span>
-          {avg && <span><i className="lg-avg" /> ממוצע {shekel(avg.month_expense)}</span>}
-        </div>
-      </Link>
-
-      <div className="wallet-stats card">
-        <div className="wallet-stats-title">
-          <span>החודש מול הצפי</span>
-          {exp && <span className="muted">{fmtPct(monthDone * 100)} מהחודש עבר</span>}
-        </div>
-        <Stat label="הכנסות" now={cur.income} before={prev.income} expected={exp?.income} monthDone={monthDone} goodWhenUp />
-        <Stat label="הוצאות" now={cur.expense} before={prev.expense} avgBefore={avg?.expense} expected={exp?.expense} monthDone={monthDone} goodWhenUp={false} />
-        <Stat label="תזרים" now={cur.net} before={prev.net} expected={exp?.net} monthDone={monthDone} goodWhenUp money />
+    <>
+      <div className="wallet-chips">
+        {spendPct != null && (
+          <div className={`wallet-chip ${spentLess ? "chip-good" : "chip-bad"}`}>
+            {spentLess ? "▼" : "▲"} הוצאת {fmtPct(Math.abs(spendPct))}{" "}
+            {spentLess ? "פחות" : "יותר"} מ{prevName} באותה נקודה
+          </div>
+        )}
+        {avgPct != null && (
+          <div className={`wallet-chip ${avgPct < 0 ? "chip-good" : "chip-bad"}`}>
+            {avgPct < 0 ? "▼" : "▲"} {fmtPct(Math.abs(avgPct))} {avgPct < 0 ? "מתחת" : "מעל"} לממוצע{" "}
+            {avg!.months} החודשים האחרונים
+          </div>
+        )}
       </div>
-      <div className="wallet-foot muted">
-        ▲▼ מול 1–{as_of_day} ב{prevName}
-        {avg && <> ובממוצע {avg.months} החודשים הקודמים באותה נקודה</>} · הקו האנכי בפס = היום
+
+      <PaceSpark cur={cur} prev={prev} avg={avg} />
+      <div className="wallet-legend">
+        <span><i className="lg-cur" /> {monthName(cur.month)}</span>
+        <span><i className="lg-prev" /> {prevName} {shekel(prev.month_expense)}</span>
+        {avg && <span><i className="lg-avg" /> ממוצע {shekel(avg.month_expense)}</span>}
       </div>
-    </section>
+    </>
   );
 }

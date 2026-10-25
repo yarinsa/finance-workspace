@@ -4,8 +4,8 @@ import NetWorthChart from "@/components/NetWorthChart";
 const sections: { label: string; status: string; route: string }[] = [
   { label: "התחייבויות", status: "מלא", route: "/networth" },
   { label: "נכסים", status: "חלקי", route: "/networth" },
-  { label: "הכנסות", status: "חלקי", route: "/cashflow" },
-  { label: "הוצאות", status: "חלקי", route: "/cashflow" },
+  { label: "הכנסות", status: "חלקי", route: "/monthly" },
+  { label: "הוצאות", status: "חלקי", route: "/monthly" },
   { label: "יעדים", status: "חסר קלט", route: "/goals" },
 ];
 
