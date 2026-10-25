@@ -13,7 +13,9 @@ amtBeforeConvAndIndex, debCrdDate (billing date). Charges are stored as NEGATIVE
 
 `trnAmt` is NOT always ₪: for foreign purchases it is the original-currency
 figure and for installment deals it is the whole deal total. The ₪ charged this
-cycle is then `amtBeforeConvAndIndex` (see charge_amount, issue #35).
+cycle is `amtBeforeConvAndIndex` (see charge_amount, issue #35); rows it bills at
+₪0 (waived fee, loyalty accrual) are dropped. An installment deal repeats its
+trnIntId every cycle, so the id is trnIntId + "_<payment n>".
 
 Entities emitted: credit_cards, transactions.
 Common envelope: {"source", "entity", "generated_at", "records": [...]}
@@ -55,35 +57,65 @@ emit("credit_cards", cards)
 
 
 def charge_amount(t):
-    """₪ charged this billing cycle for one CAL transaction.
+    """₪ charged this billing cycle for one CAL transaction (unsigned; refunds < 0).
 
-    FX purchases and installment payments use `amtBeforeConvAndIndex`; every
-    other row keeps `trnAmt`, because `amtBeforeConvAndIndex` is 0 on card fees
-    and some refunds.
+    `amtBeforeConvAndIndex` is the ₪ CAL bills this cycle: Σ of it over a cycle is
+    the statement total. It is the right figure for FX purchases and installment
+    payments, and it is 0 when nothing is charged - a waived card fee ("...לפטור מלא
+    מעמלת דמי כרטיס ולכן לא חויבת") or a CashPro accrual to the loyalty club.
+    `trnAmt` is only a fallback for rows that lack it.
     """
-    foreign = (t.get("trnCurrencySymbol") or "₪") != "₪"
-    if foreign or (t.get("numOfPayments") or 0) > 0:
-        return abs(t.get("amtBeforeConvAndIndex") or 0)
-    return t.get("trnAmt", 0)
+    billed = t.get("amtBeforeConvAndIndex")
+    if billed is None:
+        amt = abs(t.get("trnAmt", 0))
+        return -amt if t.get("refundInd") else amt
+    return billed
 
 
-# ---- transactions (deduped across pulls by trnIntId) ----
-txns = {}                                         # trnIntId -> record
-for fp in sorted(glob.glob(str(RAW / "cardTransactions_*.json"))):
-    last4 = Path(fp).name.split("_")[1]           # cardTransactions_<last4>_<idx>.json
+def add_months(iso_day, n):
+    """'2025-07-02' + 15 -> '2026-10-02' (day clamped to the month's end)."""
+    y, m, d = (int(x) for x in iso_day.split("-"))
+    y, m = divmod(y * 12 + m - 1 + n, 12)
+    last = (datetime.date(y + (m + 1) // 12, (m + 1) % 12 + 1, 1) - datetime.timedelta(days=1)).day
+    return f"{y:04d}-{m + 1:02d}-{min(d, last):02d}"
+
+
+def raw_files(raw=RAW):
+    """Per-card pulls oldest-first, so the newest pull of a row wins the dedupe.
+
+    CAL renumbers its card index when the roster changes, which leaves old
+    cardTransactions_<last4>_<oldidx>.json files beside the fresh ones; by name a
+    stale _9 sorts after a fresh _10.
+    """
+    files = glob.glob(str(raw / "cardTransactions_*.json"))
+    return sorted(files, key=lambda f: (Path(f).stat().st_mtime, f))
+
+
+# ---- transactions (deduped across pulls by trnIntId + installment number) ----
+txns = {}                                         # id -> record
+for fp in raw_files():
+    last4 = Path(fp).name.split("_")[1]           # cardTransactions_<last4>_<idx>[_next].json
     data = json.load(open(fp, encoding="utf-8"))
     for acc in data.get("result", {}).get("bankAccounts", []):
         for dd in acc.get("debitDates", []):
             for t in dd.get("transactions", []):
-                amt = charge_amount(t)
-                signed = round(amt if t.get("refundInd") else -amt, 2)
+                billed = charge_amount(t)
+                if not billed:
+                    continue                      # nothing charged (waived fee, club accrual)
+                purchase = (t.get("trnPurchaseDate") or "")[:10]
+                # One installment deal keeps its trnIntId in every cycle; payment n is
+                # its own charge, dated purchase + (n-1) months as RiseUp dates it.
+                n = (t.get("curPaymentNum") or 0) if (t.get("numOfPayments") or 0) > 0 else 0
                 tid = t.get("trnIntId") or f"{last4}:{t.get('trnPurchaseDate')}:{t.get('trnAmt', 0)}"
+                if n:
+                    tid = f"{tid}_{n}"
                 txns[tid] = {
+                    "id": str(tid),
                     "card_last4": last4,
                     "card_name": card_name.get(last4),
-                    "date": (t.get("trnPurchaseDate") or "")[:10],
+                    "date": add_months(purchase, n - 1) if n and purchase else purchase,
                     "billing_date": (t.get("debCrdDate") or "")[:10],
-                    "amount": signed,
+                    "amount": round(-billed, 2),
                     "currency": "ILS",
                     "original_amount": t.get("trnAmt"),
                     "original_currency": t.get("trnCurrencySymbol") or "₪",

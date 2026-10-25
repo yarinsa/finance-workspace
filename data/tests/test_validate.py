@@ -384,6 +384,24 @@ def test_cal_cycle_with_incomplete_dump_is_told_apart_from_a_normalizer_bug():
     assert res["status"] == "fail" and "incomplete or paginated" in res["details"][0]["reason"]
 
 
+def test_cal_cycle_dumped_twice_by_a_stale_card_index_file_is_checked_once():
+    # data/cal/raw holds cardTransactions_9947_0.json (2026-10-16, old card index)
+    # beside cardTransactions_9947_1.json (2026-10-25): both carry the 2026-10-10
+    # cycle, which the report listed (and counted) twice.
+    cycles = validate.cal_cycles([("9947", CAL_CYCLE), ("9947", CAL_CYCLE)])
+    assert len(cycles) == 1
+    res = cal_check(BILLED + FEE_AND_ACCRUAL)
+    twice = validate.check_cal_statements(cycles, BILLED + FEE_AND_ACCRUAL)
+    assert twice["summary"] == res["summary"] == "1 of 1 CAL card cycles do not reconcile to the statement total"
+
+
+def test_cal_cycle_from_the_newest_file_wins():
+    stale = json.loads(json.dumps(CAL_CYCLE))
+    stale["result"]["bankAccounts"][0]["debitDates"][0]["totalDebits"][0]["amount"] = 1000
+    [c] = validate.cal_cycles([("9947", stale), ("9947", CAL_CYCLE)])     # files come oldest-first
+    assert c["statement"] == 259.66
+
+
 def voucher(d, name, billing, **kw):
     return {"purchaseDate": d, "businessName": name, "billingAmount": billing, "ilsAmount": billing,
             "seqVoucherNumber": kw.pop("seq", name), **kw}
