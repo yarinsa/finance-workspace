@@ -1,0 +1,9 @@
+{
+  "name": "harel-scraper",
+  "private": true,
+  "type": "module",
+  "description": "Deterministic Harel scraper (puppeteer, reuses the human-logged-in Chrome profile)",
+  "dependencies": {
+    "puppeteer": "^24.43.1"
+  }
+}

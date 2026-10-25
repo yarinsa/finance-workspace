@@ -5,6 +5,11 @@ description: Refresh the raw Harel (הראל ביטוח ופיננסים) pensio
 
 # Harel Raw Data Refresh
 
+> **Headless path (preferred, used by the scheduled sync):** once the user is logged in in the
+> `~/.chrome-cdp-harel` profile, `node scrapers/harel/scrape.mjs` writes the same four files with
+> no playwright-cli (`--check` only reports `VERDICT: LIVE|LOGGED_OUT`; exit 3 = log in again).
+> The manual flow below is how that login happens and remains the fallback.
+
 Pulls **raw** Harel API responses straight from the logged-in web app into
 `data/harel/raw/`. Harel holds the household's **pension (קרן פנסיה)** and
 **study funds (קרן השתלמות)** — long-term savings assets.

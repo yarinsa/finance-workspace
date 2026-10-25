@@ -137,42 +137,42 @@ def _fake_cmd(monkeypatch, output, seen=None):
     monkeypatch.setattr(activities, "run_cmd", fake)
 
 
-def test_check_uses_single_source_mode_and_timeout(monkeypatch):
+def test_check_uses_single_source_mode_and_timeout(monkeypatch, chrome_harel):
     seen = []
     _fake_cmd(monkeypatch, "harel        9227   live\n", seen)
-    assert run(activities.check_session("harel")) == "live"
+    assert run(activities.check_session("chrome-harel")) == "live"
     args, kw = seen[0]
     assert args[0].endswith("refresh-all/scripts/check_sessions.sh") and args[1] == "harel"
     assert kw["timeout"] == activities.SESSIONS_TIMEOUT
 
 
-def test_unknown_stays_unknown_without_a_login_page(monkeypatch):
+def test_unknown_stays_unknown_without_a_login_page(monkeypatch, chrome_harel):
     _fake_cmd(monkeypatch, "harel        9227   unknown (no tab on this app)\n")
     monkeypatch.setattr(activities, "_cdp_pages", lambda src: [{"type": "page", "url": "https://example.com/"}])
-    assert run(activities.check_session("harel")) == "unknown"
+    assert run(activities.check_session("chrome-harel")) == "unknown"
 
 
-def test_unknown_with_login_page_open_is_dead(monkeypatch):
+def test_unknown_with_login_page_open_is_dead(monkeypatch, chrome_harel):
     _fake_cmd(monkeypatch, "harel        9227   unknown (no tab on this app)\n")
     monkeypatch.setattr(activities, "_cdp_pages",
                         lambda src: [{"type": "page", "url": "https://digital-web.harel-group.co.il/login"}])
-    assert run(activities.check_session("harel")) == "dead"
+    assert run(activities.check_session("chrome-harel")) == "dead"
 
 
-def test_unreadable_tabs_are_unknown_not_dead(monkeypatch):
+def test_unreadable_tabs_are_unknown_not_dead(monkeypatch, chrome_harel):
     _fake_cmd(monkeypatch, "harel        9227   unknown (no tab on this app)\n")
 
     def boom(src):
         raise OSError("connection refused")
 
     monkeypatch.setattr(activities, "_cdp_pages", boom)
-    assert run(activities.check_session("harel")) == "unknown"
+    assert run(activities.check_session("chrome-harel")) == "unknown"
 
 
-def test_missing_row_is_an_infrastructure_error(monkeypatch):
+def test_missing_row_is_an_infrastructure_error(monkeypatch, chrome_harel):
     _fake_cmd(monkeypatch, "playwright-cli: command not found\n")
     with pytest.raises(ApplicationError):
-        run(activities.check_session("harel"))
+        run(activities.check_session("chrome-harel"))
 
 
 def test_amex_logs_in_by_itself(monkeypatch):
@@ -219,9 +219,9 @@ def scrape_env(monkeypatch):
     return cmds, results
 
 
-def test_scrape_passes_session_or_port_per_script(scrape_env):
+def test_scrape_passes_session_or_port_per_script(scrape_env, chrome_harel):
     cmds, _ = scrape_env
-    run(activities.scrape("harel"))
+    run(activities.scrape("chrome-harel"))
     run(activities.scrape("more"))
     runs = [c for c in cmds if c[0] == "run"]
     assert runs == [("run", "harel-refresh", ["harel"]), ("run", "more-refresh", ["9228"])]

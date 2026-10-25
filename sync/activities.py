@@ -50,7 +50,7 @@ EXPIRED_MARKERS = (
     "קלט לא תקין", "session likely", "probably logged out", "No logged-in", "No amitim",
     # self-login scrapers (scrapers/*): the bank refused the .env credentials or wants a human step
     "LOGIN FAILED: INVALID_PASSWORD", "LOGIN FAILED: CHANGE_PASSWORD",
-    "LOGIN FAILED: OTP_REQUIRED", "LOGIN FAILED: ACCOUNT_BLOCKED",
+    "LOGIN FAILED: OTP_REQUIRED", "LOGIN FAILED: ACCOUNT_BLOCKED", "LOGIN FAILED: SESSION_EXPIRED",
 )
 
 
@@ -257,8 +257,12 @@ async def ensure_chrome(source: str) -> str:
     on the bank, and, for playwright sources, has a playwright-cli session attached to
     that tab. Returns "already_running" or "launched"."""
     src = sources.get(source)
-    if src.check == sources.SELF:
+    if src.check in (sources.SELF, sources.HEADLESS):
         return "already_running"  # no Chrome: the dump runs its own headless browser
+    return await _open_chrome(src)
+
+
+async def _open_chrome(src) -> str:
     state = "already_running"
     if not await asyncio.to_thread(_cdp_up, src):
         state = "launched"
@@ -300,6 +304,14 @@ async def check_session(source: str) -> str:
     src = sources.get(source)
     if src.check == sources.SELF:
         return "live"  # the dump authenticates itself; a bad login surfaces from scrape()
+    if src.check == sources.HEADLESS:
+        rc, tail = await run_cmd([src.dumps[0][0], "--check"], timeout=SESSIONS_TIMEOUT)
+        live = parse_verdict(tail)
+        if live is None:
+            raise ApplicationError(f"{Path(src.dumps[0][0]).name} --check printed no VERDICT (rc={rc}):\n{tail}")
+        if not live:
+            await _open_chrome(src)  # the window the human logs in to; the recheck reuses it over CDP
+        return "live" if live else "dead"
     if src.check == sources.VERDICT:
         # AMEX's own check_session.sh: auth cookies + /IsLoggedIn, the strongest signal we have.
         rc, tail = await run_cmd([str(AMEX_CHECK), src.pw_session], timeout=PW_TIMEOUT)
