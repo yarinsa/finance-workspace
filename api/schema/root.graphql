@@ -40,6 +40,15 @@ type Mutation {
   clearTransactionOverride(input: ClearTransactionOverrideInput!): ClearTransactionOverridePayload!
   """Replace the full set of tags on a transaction; unknown names are created."""
   setTransactionTags(input: SetTransactionTagsInput!): SetTransactionTagsPayload!
+  """
+  Net (part of) a payback against an expense (קיזוז). The payback's offsets become
+  manual: its current links are kept and this one is added or its amount replaced.
+  """
+  linkOffset(input: LinkOffsetInput!): OffsetPayload!
+  """Remove one link; the payback stays manual (with no links it offsets nothing)."""
+  unlinkOffset(input: UnlinkOffsetInput!): OffsetPayload!
+  """Drop the manual decision on a payback: the digest's automatic offsets apply again."""
+  resetOffsets(input: ResetOffsetsInput!): ResetOffsetsPayload!
   updateTag(input: UpdateTagInput!): UpdateTagPayload!
   deleteTag(input: DeleteTagInput!): DeleteTagPayload!
   createGoal(input: CreateGoalInput!): CreateGoalPayload!
@@ -84,6 +93,38 @@ input SetTransactionTagsInput {
 type SetTransactionTagsPayload {
   clientMutationId: String
   transaction: Transaction!
+}
+
+input LinkOffsetInput {
+  clientMutationId: String
+  """Money in (an INCOME transaction)."""
+  paybackId: ID!
+  """Money out (an EXPENSE transaction)."""
+  expenseId: ID!
+  """₪ to net; default: as much as both rows have left."""
+  amount: Money
+}
+
+input UnlinkOffsetInput {
+  clientMutationId: String
+  paybackId: ID!
+  expenseId: ID!
+}
+
+type OffsetPayload {
+  clientMutationId: String
+  payback: Transaction!
+  expense: Transaction!
+}
+
+input ResetOffsetsInput {
+  clientMutationId: String
+  paybackId: ID!
+}
+
+type ResetOffsetsPayload {
+  clientMutationId: String
+  payback: Transaction!
 }
 
 input UpdateTagInput {

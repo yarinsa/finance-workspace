@@ -177,7 +177,8 @@ export interface HorizonBucket {
   count: number;
   /** The target share of income for this horizon (the `horizons` table), in percent. */
   target_pct?: number;
-  top: { date: string; description: string; amount: number; category?: string | null; overridden: boolean; tags?: string[]; goal?: string | null }[];
+  /** `amount` is the real charge (the row key); `offset` is the ₪ paid back and netted out of `amount` totals. */
+  top: { date: string; description: string; amount: number; category?: string | null; overridden: boolean; tags?: string[]; goal?: string | null; offset?: number }[];
 }
 
 /** A goal as listed under the horizon it is assigned to. */

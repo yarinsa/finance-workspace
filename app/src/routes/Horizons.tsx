@@ -165,6 +165,7 @@ export default function Horizons() {
                       tags={t.tags}
                       meta={t.goal || undefined}
                       edited={t.overridden}
+                      offset={t.offset}
                       onClick={() =>
                         setEditing({ date: t.date, amount: t.amount, merchant: t.description, category: t.category ?? "", overridden: t.overridden, tags: t.tags })
                       }

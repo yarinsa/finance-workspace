@@ -14,6 +14,7 @@ from pathlib import Path
 
 import freshness
 import horizons
+from finance import offsets
 
 ROOT = Path(__file__).resolve().parent          # .../Finance/data
 OUT = ROOT / "digested"
@@ -324,6 +325,50 @@ def consolidate_transactions(txns):
     return out
 
 
+# --- PayBox round trips -------------------------------------------------------
+# Loading PayBox from a card and cashing it out to a bank account is our own money
+# going around: the card leg (`PAYBOX`, −₪1,000 on amex) and the bank leg
+# (`מפייבוקס ש…`, +₪1,000 at Discount/Leumi a day or two later) are both
+# internal transfers, not a ₪1,000 expense plus ₪1,000 income.
+ROUND_TRIP_LEGS = [("PAYBOX", "פייבוקס")]       # (card-side merchant, bank-side credit)
+ROUND_TRIP_DAYS = 3
+
+
+def mark_round_trips(ledger):
+    """Flag each card-side load and its same-amount bank-side cash-out (0..3 days
+    later, nearest first) as `internal_transfer` + `round_trip`. A load with no
+    cash-out (paying someone through PayBox) stays spend. Mutates `ledger`."""
+    def day(t):
+        return datetime.date.fromisoformat(t["date"][:10])
+    used = set()
+    for card_pat, bank_pat in ROUND_TRIP_LEGS:
+        loads = sorted((t for t in ledger if t["amount"] < 0 and t.get("origin") in offsets.CARD_ORIGINS
+                        and card_pat in (t.get("description") or "").upper()), key=lambda t: t["date"])
+        outs = [t for t in ledger if t["amount"] > 0 and t.get("origin") in BANK_ORIGINS
+                and bank_pat in (t.get("description") or "")]
+        for load in loads:
+            match = [o for o in outs if id(o) not in used and abs(o["amount"] + load["amount"]) < 0.005
+                     and 0 <= (day(o) - day(load)).days <= ROUND_TRIP_DAYS]
+            if not match:
+                continue
+            o = min(match, key=lambda o: (day(o) - day(load)).days)
+            used.add(id(o))
+            for t in (load, o):
+                t["internal_transfer"] = True
+                t["round_trip"] = True
+    return ledger
+
+
+# Household offset rules (gitignored; personal names): a payer whose transfers pay
+# back a known expense, e.g. [{"payer": "<roommate>", "against": ["<landlord>"]}].
+# See finance/offsets.py.
+OFFSET_RULES = ROOT / "offsets" / "rules.json"
+
+
+def load_offset_rules(path=OFFSET_RULES):
+    return json.loads(path.read_text(encoding="utf-8")) if path.exists() else []
+
+
 def _iso_date(d):
     """Loan end dates arrive as '20530810' (Discount) or '2028-12-02' (Leumi)."""
     d = str(d or "")
@@ -608,8 +653,11 @@ def main():
 
     # one deduped, queryable transaction ledger across every source
     ledger = consolidate_transactions(entities.get("transactions", []))
+    mark_round_trips(ledger)
+    offsets.suggest(ledger, load_offset_rules())  # auto קיזוז, stored with the scraped row
     ledger = apply_overrides(ledger)              # human edits from Postgres, if configured
-    summary = spending_summary(ledger)
+    offsets.resolve(ledger)                       # manual links (from the DB) win over auto
+    summary = spending_summary(offsets.cashflow_view(ledger))
     (OUT / "transactions.json").write_text(json.dumps(
         {"generated_at": datetime.datetime.now().astimezone().isoformat(timespec="seconds"),
          "currency": "ILS",

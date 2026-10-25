@@ -19,6 +19,8 @@ import os
 from collections import defaultdict
 from datetime import datetime, timezone, timedelta
 
+from finance import offsets
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 DIGESTED = os.path.join(HERE, "digested")
 TRANSACTIONS = os.path.join(DIGESTED, "transactions.json")
@@ -545,7 +547,10 @@ def build():
     with open(SNAPSHOT, encoding="utf-8") as f:
         snapshot = json.load(f)
 
-    transactions = tx_doc.get("transactions", [])
+    # `ledger` is the real money (balances, runway, bills); `transactions` nets
+    # offsets out (a payback cancels the expense it repays) for spend/income figures.
+    ledger = tx_doc.get("transactions", [])
+    transactions = offsets.cashflow_view(ledger)
     months = aggregate_by_month(transactions)
     current = pick_current_month(months)
     if current is None:
@@ -563,12 +568,12 @@ def build():
     # Day-by-day combined checking balance + safe-to-spend until payday
     import runway
     runway_block = runway.build_runway(
-        transactions, snapshot["bank_accounts"], snapshot.get("savings", []),
+        ledger, snapshot["bank_accounts"], snapshot.get("savings", []),
         _local_today())
     # Mint-style monthly views (PRD 12): bills status, budgets, spending explorer
     import actions, bills, budgets, goals, horizons, spending, validate
     budget_doc = bills.load_budget()
-    bills_block = bills.build_bills(budget_doc, transactions, _local_today())
+    bills_block = bills.build_bills(budget_doc, ledger, _local_today())
     budgets_block = budgets.build_budgets(budget_doc, _local_today(), budgets.load_overrides())
     spending_block = spending.build_spending(transactions, today=_local_today())
     import months_view
@@ -589,7 +594,7 @@ def build():
         "today": charts["today"],
         "pace": {**build_pace(transactions, current, today=_local_today()),
                  "expected": expected_for_month(forecast, current)},
-        "fixed_expenses": fixed_expenses(forecast, transactions, current),
+        "fixed_expenses": fixed_expenses(forecast, ledger, current),
         "charts": {
             **{k: v for k, v in charts.items() if k != "today"},
             "net_worth": proj["chart"],
@@ -611,7 +616,7 @@ def build():
         "months_view": months_view_block,
         "actions": actions.build_actions(
             runway_block, bills_block, budgets_block,
-            fixed_expenses(forecast, transactions, current),
+            fixed_expenses(forecast, ledger, current),
             snapshot.get("syncs", []), _local_today(),
             validate.validation_actions(_load_optional(VALIDATION) or {})),
         "months": [

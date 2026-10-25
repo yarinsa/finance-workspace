@@ -5,7 +5,8 @@ CARD_BILL (-500, חיובי כרטיס). Each test is a question the dashboard a
 """
 import pytest
 
-from api.tests.conftest import PURCHASE_URL, WRITE
+import ledger
+from api.tests.conftest import LEDGER, ME, PURCHASE_URL, WRITE
 
 GQL = "/api/graphql"
 
@@ -359,3 +360,69 @@ def test_transaction_by_key_finds_the_row_the_static_json_knows(client):
     q = "query($d: Date!, $a: Money!) { transactionByKey(date: $d, absAmount: $a) { id amount } }"
     assert data(client, q, d="2026-01-15", a="123.45")["transactionByKey"] == {"id": PURCHASE_ID, "amount": "-123.45"}
     assert data(client, q, d="2026-01-15", a="9.99")["transactionByKey"] is None
+
+
+# --- offsets (קיזוז) ---------------------------------------------------------------
+
+REFUND = {"date": "2026-01-20", "amount": 23.45, "description": "חנות לדוגמה", "origin": "cal",
+          "is_income": True, "sources": ["cal"]}
+FRIEND = {"date": "2026-01-18", "amount": 50.0, "description": "מפייבוקס ש", "origin": "discount",
+          "is_income": True, "sources": ["discount"]}
+FRIEND_ID = to_global_id("Transaction", "2026-01-18:50.00")
+SALARY_ID = to_global_id("Transaction", "2026-01-10:1000.00")
+
+OFFSETS = """query($id: ID!) { node(id: $id) { ... on Transaction {
+  amount netAmount offsetAmount offsetsManual isRoundTrip
+  offsets { amount kind transaction { date description } }
+  offsetCandidates { totalCount edges { node { date amount } } } } } }"""
+LINK = """mutation($p: ID!, $e: ID!, $amount: Money) {
+  linkOffset(input: {paybackId: $p, expenseId: $e, amount: $amount}) {
+    payback { netAmount offsetsManual } expense { netAmount offsets { amount kind } } } }"""
+UNLINK = """mutation($p: ID!, $e: ID!) { unlinkOffset(input: {paybackId: $p, expenseId: $e}) {
+    payback { offsetsManual offsets { amount } } expense { netAmount } } }"""
+RESET = """mutation($p: ID!) { resetOffsets(input: {paybackId: $p}) { payback { offsetsManual } } }"""
+
+
+@pytest.fixture
+def with_paybacks(owner):
+    from finance import offsets
+    rows = offsets.suggest([dict(t) for t in [*LEDGER, REFUND, FRIEND]])   # what the digest stores
+    ledger.load(owner, rows)
+    owner.commit()
+
+
+def test_an_auto_refund_shows_on_the_purchase_with_its_net(client, with_paybacks):
+    t = data(client, OFFSETS, id=PURCHASE_ID)["node"]
+    assert (t["netAmount"], t["offsetAmount"], t["offsetsManual"]) == ("-100.00", "23.45", False)
+    assert t["offsets"] == [{"amount": "23.45", "kind": "REFUND",
+                             "transaction": {"date": "2026-01-20", "description": "חנות לדוגמה"}}]
+    # the refund is used up, so the friend's Bit and the salary are what's left to pick from
+    assert [e["node"]["date"] for e in t["offsetCandidates"]["edges"]] == ["2026-01-18", "2026-01-10"]
+
+
+def test_link_a_friends_bit_to_dinner_then_unlink_and_reset(client, owner, rebuilder, with_paybacks):
+    # As the household, a friend's ₪50 paid back part of the ₪123.45 purchase.
+    d = data(client, LINK, p=FRIEND_ID, e=PURCHASE_ID)["linkOffset"]
+    assert d["payback"] == {"netAmount": "0.00", "offsetsManual": True}
+    assert d["expense"]["netAmount"] == "-50.00"
+    assert sorted(o["kind"] for o in d["expense"]["offsets"]) == ["MANUAL", "REFUND"]
+    assert owner.execute("SELECT expense_date::text, amount::text FROM transaction_offsets").fetchall() \
+        == [("2026-01-15", "50.00")]
+    audit = owner.execute("SELECT actor, field, old, new FROM override_audit WHERE field = 'offsets'").fetchall()
+    assert audit == [(ME, "offsets", "auto", [{"date": "2026-01-15", "abs_amount": "123.45", "amount": "50.00"}])]
+
+    d = data(client, UNLINK, p=FRIEND_ID, e=PURCHASE_ID)["unlinkOffset"]
+    assert d["payback"] == {"offsetsManual": True, "offsets": []}       # decided: offsets nothing
+    assert d["expense"]["netAmount"] == "-100.00"
+    assert data(client, RESET, p=FRIEND_ID)["resetOffsets"]["payback"] == {"offsetsManual": False}
+    assert rebuilder.signals == 3
+
+
+def test_link_amounts_are_checked_against_what_is_left(client, with_paybacks):
+    status, body = gql(client, LINK, p=FRIEND_ID, e=PURCHASE_ID, amount="60.00")
+    assert "at most ₪50.00" in body["errors"][0]["message"]
+    status, body = gql(client, LINK, p=SALARY_ID, e=FRIEND_ID)
+    assert "must be money out" in body["errors"][0]["message"]
+    data(client, LINK, p=FRIEND_ID, e=PURCHASE_ID, amount="20.00")
+    d = data(client, LINK, p=FRIEND_ID, e=PURCHASE_ID, amount="30.00")["linkOffset"]   # replaces, not adds
+    assert d["payback"]["netAmount"] == "20.00"

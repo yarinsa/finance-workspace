@@ -112,10 +112,12 @@ def build_horizons(transactions, months=MONTHS, meta=None, goals=None):
                 "target_pct": targets.get(h, TARGET_PCT),
                 "gap_pts": round(pct - targets.get(h, TARGET_PCT), 1) if pct is not None else None,
                 "count": len(rows),
+                # `amount` is the real charge (the row's ledger key); `offset` was paid back
                 "top": [{"date": r["date"], "description": r.get("description", ""),
-                         "amount": r["amount"], "category": r.get("category"),
+                         "amount": r.get("gross_amount", r["amount"]), "category": r.get("category"),
                          "overridden": bool(r.get("overridden")), "tags": r.get("tags") or [],
-                         "goal": r.get("goal")}
+                         "goal": r.get("goal"),
+                         **({"offset": r["offset_amount"]} if r.get("offset_amount") else {})}
                         for r in top],
             }
         left = round(income - spent, 2)

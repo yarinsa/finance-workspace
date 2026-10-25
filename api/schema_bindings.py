@@ -39,12 +39,15 @@ BINDINGS: dict[str, Binding] = {
     "Transaction": Binding(
         models.LedgerTransaction,
         renames={"isCardBillPayment": "card_bill_payment", "isInternalTransfer": "internal_transfer",
-                 "isSavings": "savings"},
+                 "isSavings": "savings", "isRoundTrip": "round_trip"},
         resolved=frozenset({"id", "absAmount", "direction", "merchant", "category", "tags", "excluded",
-                            "raw", "auditLog", "horizon", "goal"}),
-        # exposed as the `category`, `direction`, `horizon` and `goal` objects
-        hidden=frozenset({"category_id", "is_income", "horizon_id", "goal_id"}),
-        never_null=frozenset({"card_bill_payment", "internal_transfer", "savings", "overridden"}),
+                            "raw", "auditLog", "horizon", "goal", "offsets", "netAmount", "offsetsManual",
+                            "offsetCandidates"}),
+        # exposed as the `category`, `direction`, `horizon` and `goal` objects; the stored
+        # offset layers (auto/manual) are exposed resolved, as `offsets` + `offsetsManual`
+        hidden=frozenset({"category_id", "is_income", "horizon_id", "goal_id", "auto_offsets", "manual_offsets"}),
+        never_null=frozenset({"card_bill_payment", "internal_transfer", "savings", "overridden", "round_trip",
+                              "offset_amount"}),
     ),
     "Category": Binding(tables.Category, resolved=frozenset({"id", "source", "transactions", "merchants", "tags", "horizons",
                                                              "goals"}),
@@ -79,6 +82,7 @@ STRUCTURAL = frozenset({
     "AuditEntryConnection", "AuditEntryEdge",
     "UpdateTransactionPayload", "ClearTransactionOverridePayload", "SetTransactionTagsPayload",
     "UpdateTagPayload", "DeleteTagPayload",
+    "Offset", "OffsetPayload", "ResetOffsetsPayload",
 })
 
 

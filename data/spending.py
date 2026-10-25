@@ -88,7 +88,14 @@ def build_spending(transactions, months=MONTHS, today=None):
         b["cats"][cat][1] += 1
         b["merchants"][merchant][0] += spent
         b["merchants"][merchant][1] += 1
-        row = {"date": d, "merchant": merchant, "amount": round(spent, 2), "category": cat}
+        # `amount` stays the real charge (it is the row's ledger key); totals above count
+        # the net, after a payback offset (finance/offsets.py) took `offset` off it.
+        row = {"date": d, "merchant": merchant, "amount": round(-float(t.get("gross_amount", amount)), 2),
+               "category": cat}
+        if t.get("offset_amount"):
+            row["offset"] = t["offset_amount"]
+            row["offsets"] = [{"date": str(o["date"])[:10], "description": o.get("description"),
+                               "amount": o["amount"], "kind": o["kind"]} for o in t.get("offsets") or []]
         if t.get("overridden"):
             row["overridden"] = True          # edited in the ledger DB; the app marks it
         if t.get("tags"):

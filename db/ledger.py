@@ -143,9 +143,30 @@ def seed_categories(cur, ledger):
 
 
 def materialize(conn):
-    """The `transactions` view as ledger rows, in the digested ledger's order."""
-    rows = conn.execute("SELECT record FROM transactions ORDER BY position").fetchall()
-    return [r[0] for r in rows]
+    """The `transactions` view as ledger rows, in the digested ledger's order.
+
+    A payback the user made a קיזוז decision on carries it as `manual_offsets`
+    (`[]` = "offsets nothing"); finance/offsets.py resolves them against auto."""
+    rows = [r[0] for r in conn.execute("SELECT record FROM transactions ORDER BY position").fetchall()]
+    links = manual_offsets(conn)
+    for t in rows:
+        k = key(t["date"], t["amount"])
+        if k in links:
+            t["manual_offsets"] = links[k]
+    return rows
+
+
+def manual_offsets(conn):
+    """{payback ledger key: [OffsetLink dict, ...]} from `transaction_offsets`."""
+    out = {}
+    for pd, pa, ed, ea, amount in conn.execute(
+            "SELECT payback_date, payback_abs_amount, expense_date, expense_abs_amount, amount "
+            "FROM transaction_offsets ORDER BY id"):
+        links = out.setdefault((pd.isoformat(), Decimal(pa)), [])
+        if ed is not None:
+            links.append({"date": ed.isoformat(), "abs_amount": float(ea), "amount": float(amount),
+                          "kind": "manual"})
+    return out
 
 
 def orphaned(conn):
@@ -171,11 +192,16 @@ def main():
     with connect() as conn:
         out = sync(conn, ledger)
         lost = orphaned(conn)
+        lost_offsets = conn.execute(
+            "SELECT payback_date, payback_abs_amount, expense_date, expense_abs_amount "
+            "FROM orphaned_offsets ORDER BY payback_date DESC").fetchall()
     hidden = len(ledger) - len(out)
     print(f"db: imported {len(ledger)} rows, {hidden} excluded by overrides", file=sys.stderr)
     for d, amt, *_ in lost:
         print(f"db: orphaned override {d} {amt} (no matching transaction; see `db/edit.py list --orphaned`)",
               file=sys.stderr)
+    for pd, pa, ed, ea in lost_offsets:
+        print(f"db: orphaned offset {pd} {pa} -> {ed} {ea} (a linked transaction is gone)", file=sys.stderr)
     json.dump(out, sys.stdout, ensure_ascii=False)
 
 

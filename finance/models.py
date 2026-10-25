@@ -144,6 +144,18 @@ ENTITIES: dict[str, type[Record]] = {
 }
 
 
+class OffsetLink(Record):
+    """One side of a קיזוז: the other transaction (by ledger key) and the ₪ netted.
+
+    On a payback it names an expense; on an expense, the payback. `amount` is the
+    positive share of money netted out, at most either row's magnitude."""
+    date: Date
+    abs_amount: float
+    amount: float
+    kind: Literal["refund", "rule", "manual"]
+    description: str | None = None
+
+
 class LedgerTransaction(Record):
     """One row of data/digested/transactions.json (and `scraped_transactions.record`)."""
     date: Date
@@ -167,6 +179,12 @@ class LedgerTransaction(Record):
     # set by the transactions view when a manual override applies
     note: str | None = None
     overridden: bool | None = None
+    # offsets (finance/offsets.py): a payback netted against the expense it pays back
+    round_trip: bool | None = None                    # one leg of a PayBox load + cash-out
+    auto_offsets: list[OffsetLink] | None = None      # digest's suggestion, on a payback
+    manual_offsets: list[OffsetLink] | None = None    # db transaction_offsets, on a payback ([] = none)
+    offsets: list[OffsetLink] | None = None           # the effective links, on both sides
+    offset_amount: float | None = None                # ₪ netted out of this row (positive)
 
 
 class SnapshotTotals(BaseModel):

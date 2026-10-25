@@ -29,13 +29,14 @@ from pydantic import BaseModel
 from api.schema_bindings import load_schema, snake
 
 from .inputs import (ClearTransactionOverrideInput, CreateGoalInput, DeleteGoalInput, DeleteTagInput, GroupArgs,
-                     GroupOrder, SetTransactionTagsInput, TransactionArgs, TransactionOrder, UpdateGoalInput,
-                     UpdateTagInput, UpdateTransactionInput)
-from .ledger import CENT, Ledger, Merchant, Txn, totals
+                     GroupOrder, LinkOffsetInput, ResetOffsetsInput, SetTransactionTagsInput, TransactionArgs,
+                     TransactionOrder, UnlinkOffsetInput, UpdateGoalInput, UpdateTagInput, UpdateTransactionInput)
+from .ledger import CENT, Ledger, Merchant, Txn, offset_candidates, totals
 from .relay import ConnectionArgs, GlobalId, paginate, to_global_id, validated
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "db"))   # the shared write paths
 import goal_store  # noqa: E402
+import offset_store  # noqa: E402
 import overrides  # noqa: E402
 import tags as tag_store  # noqa: E402
 
@@ -358,7 +359,10 @@ class TransactionResolver(NodeResolver[Txn]):
     def mutations(self):
         return {"updateTransaction": (UpdateTransactionInput, self.update),
                 "clearTransactionOverride": (ClearTransactionOverrideInput, self.clear),
-                "setTransactionTags": (SetTransactionTagsInput, self.set_tags)}
+                "setTransactionTags": (SetTransactionTagsInput, self.set_tags),
+                "linkOffset": (LinkOffsetInput, self.link_offset),
+                "unlinkOffset": (UnlinkOffsetInput, self.unlink_offset),
+                "resetOffsets": (ResetOffsetsInput, self.reset_offsets)}
 
     def _refetched(self, info, t):
         return lambda: {"transaction": ledger(info).by_key[t.key]}
@@ -382,6 +386,61 @@ class TransactionResolver(NodeResolver[Txn]):
         t = self.require(info, inp.id)
         tag_store.set_tags(ledger(info).conn, t.key, inp.tags, info.context["user"])
         return self._refetched(info, t)
+
+    # --- offsets (קיזוז) ---------------------------------------------------------
+
+    def _pair(self, inp, info):
+        p, e = self.require(info, inp.payback_id), self.require(info, inp.expense_id)
+        for t, direction, what in ((p, "INCOME", "payback"), (e, "EXPENSE", "expense")):
+            if t.direction != direction or t.is_transfer or t.is_savings or t.excluded:
+                raise GraphQLError(f"the {what} must be {'money in' if direction == 'INCOME' else 'money out'}, "
+                                   "not a transfer, savings or a hidden row")
+        return p, e
+
+    def _links_without(self, p, e):
+        """The payback's current effective links, minus the one to `e`, as stored links."""
+        return [(o.key, amount) for o, amount, _ in p.offset_links if o.key != e.key]
+
+    def _offset_payload(self, info, p, e):
+        return lambda: {"payback": ledger(info).by_key[p.key], "expense": ledger(info).by_key[e.key]}
+
+    def link_offset(self, inp, info):
+        p, e = self._pair(inp, info)
+        current = {o.key: a for o, a, _ in p.offset_links}.get(e.key, Decimal("0.00"))
+        p_free = p.abs_amount - p.offset_amount + current
+        e_free = e.abs_amount - e.offset_amount + current
+        amount = inp.amount if inp.amount is not None else min(p_free, e_free)
+        if amount <= 0:
+            raise GraphQLError("nothing left to offset: the payback or the expense is already fully netted")
+        if amount > p_free or amount > e_free:
+            raise GraphQLError(f"at most ₪{min(p_free, e_free):.2f} is left to offset between these two")
+        offset_store.set_offsets(ledger(info).conn, p.key, [*self._links_without(p, e), (e.key, amount)],
+                                 info.context["user"])
+        return self._offset_payload(info, p, e)
+
+    def unlink_offset(self, inp, info):
+        p, e = self.require(info, inp.payback_id), self.require(info, inp.expense_id)
+        if not any(o.key == e.key for o, _, _ in p.offset_links):
+            raise GraphQLError("these two are not offset against each other")
+        offset_store.set_offsets(ledger(info).conn, p.key, self._links_without(p, e), info.context["user"])
+        return self._offset_payload(info, p, e)
+
+    def reset_offsets(self, inp, info):
+        p = self.require(info, inp.payback_id)
+        offset_store.reset_offsets(ledger(info).conn, p.key, info.context["user"])
+        return lambda: {"payback": ledger(info).by_key[p.key]}
+
+    def resolve_offsets(self, t, info):
+        return [{"transaction": o, "amount": amount, "kind": kind} for o, amount, kind in t.offset_links]
+
+    def resolve_offset_candidates(self, t, info, **args):
+        """Ranked (same merchant, then nearest date), so the edge order is the rank."""
+        a = validated(ConnectionArgs, args)
+        rows = offset_candidates(ledger(info), t, 50)
+        rank = {r.key: i for i, r in enumerate(rows)}
+        conn = paginate([{"node": r} for r in rows], lambda e: (rank[e["node"].key],), a)
+        return {"edges": conn.edges, "page_info": conn.page_info, "total_count": conn.total_count,
+                "sum": totals(rows)["sum"]}
 
     def resolve_by_key(self, _, info, date, absAmount):
         return ledger(info).by_key.get((date, Decimal(absAmount).quantize(CENT)))
@@ -416,6 +475,9 @@ class TransactionResolver(NodeResolver[Txn]):
         q["incomes"].resolve = self.resolve_list("INCOME")
         fields["tags"].resolve = self.resolve_tags
         fields["auditLog"].resolve = self.resolve_audit_log
+        fields["offsets"].resolve = self.resolve_offsets
+        fields["offsetCandidates"].resolve = self.resolve_offset_candidates
+        fields["offsetsManual"].resolve = lambda t, info: t.manual_offsets is not None
 
 
 GOALS = GoalResolver()
@@ -468,7 +530,7 @@ def build():
     t["DateTime"].serialize = lambda v: v.isoformat()
     t["JSON"].serialize = lambda v: v
     t["Money"].parse_value = _parse_money
-    for enum in ("HorizonKey", "CategorySource", "GoalInterval"):
+    for enum in ("HorizonKey", "CategorySource", "GoalInterval", "OffsetKind"):
         for name, value in t[enum].values.items():
             value.value = name.lower()
     t["Node"].resolve_type = lambda obj, *_: obj.TYPENAME

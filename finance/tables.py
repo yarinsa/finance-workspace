@@ -5,12 +5,12 @@ This is the schema's source of truth: Alembic (db/migrations) autogenerates from
 and these classes disagree. Columns pulled out of a ledger row are typed from
 `finance.models.LedgerTransaction`; the full row is kept in `record`.
 
-The `transactions`, `orphaned_overrides` and `orphaned_tags` views are plain SQL in the migrations.
+The `transactions`, `orphaned_overrides`, `orphaned_tags` and `orphaned_offsets` views are plain SQL in the migrations.
 """
 import datetime as dt
 from decimal import Decimal
 
-from sqlalchemy import ARRAY, BigInteger, CheckConstraint, Column, ForeignKey, Integer, Numeric, Text, text
+from sqlalchemy import ARRAY, BigInteger, CheckConstraint, Column, ForeignKey, Integer, Numeric, Text, UniqueConstraint, text
 from sqlalchemy.dialects.postgresql import JSONB, TIMESTAMP
 from sqlmodel import Field, Relationship, SQLModel
 
@@ -187,3 +187,30 @@ class TransactionTag(SQLModel, table=True):
         "viewonly": True,
         "primaryjoin": "and_(foreign(TransactionTag.txn_date) == ScrapedTransaction.txn_date, "
                        "foreign(TransactionTag.abs_amount) == ScrapedTransaction.abs_amount)"})
+
+
+class TransactionOffset(SQLModel, table=True):
+    """A קיזוז the user decided: payback `payback_*` nets `amount` off expense `expense_*`.
+
+    Human layer keyed by ledger keys, no FK (scraped rows are replaced on every import);
+    the `orphaned_offsets` view lists links whose rows vanished. A payback with any
+    row here ignores the digest's auto suggestion; a row with no expense (all three
+    expense columns null) records "this payback offsets nothing"."""
+    __tablename__ = "transaction_offsets"
+    __table_args__ = (
+        CheckConstraint("payback_abs_amount >= 0", name="transaction_offsets_payback_abs_amount_check"),
+        CheckConstraint("(expense_date IS NULL) = (expense_abs_amount IS NULL) "
+                        "AND (expense_date IS NULL) = (amount IS NULL)",
+                        name="transaction_offsets_expense_check"),
+        CheckConstraint("amount > 0", name="transaction_offsets_amount_check"),
+        UniqueConstraint("payback_date", "payback_abs_amount", "expense_date", "expense_abs_amount",
+                         name="transaction_offsets_link_key"),
+    )
+
+    id: int | None = Field(default=None, primary_key=True)
+    payback_date: dt.date = Field(index=True)
+    payback_abs_amount: Decimal = Field(sa_type=Money)
+    expense_date: dt.date | None = Field(default=None, index=True)
+    expense_abs_amount: Decimal | None = Field(default=None, sa_type=Money)
+    amount: Decimal | None = Field(default=None, sa_type=Money)
+    created_at: dt.datetime | None = Field(default=None, sa_column=_now())

@@ -258,6 +258,7 @@ export default function Spending() {
                     onPickTag={setTag}
                     dotColor={catColor(t.category)}
                     edited={t.overridden || overlayFor(overlay, t)?.overridden}
+                    offset={t.offset}
                     onClick={() => setEditing(t)}
                   />
                 ))}

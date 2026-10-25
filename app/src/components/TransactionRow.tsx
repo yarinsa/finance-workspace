@@ -22,6 +22,8 @@ export interface TransactionRowProps {
   dotColor?: string;
   /** Shows the "נערך" pill. */
   edited?: boolean;
+  /** ₪ paid back (קיזוז): the row shows the net, with the real charge struck through. */
+  offset?: number;
   /** Extra meta item after the date (e.g. the goal name). */
   meta?: ReactNode;
   /** Slot after the amount; may hold its own button. */
@@ -40,10 +42,12 @@ export function TransactionRow({
   onPickTag,
   dotColor,
   edited,
+  offset,
   meta,
   trailing,
   onClick,
 }: TransactionRowProps) {
+  const net = offset ? (amount < 0 ? amount + offset : amount - offset) : amount;
   const content = (
     <>
       {dotColor ? <i className="size-2.5 shrink-0 rounded-full" style={{ background: dotColor }} /> : null}
@@ -57,11 +61,15 @@ export function TransactionRow({
             {meta ? <> · {meta}</> : null}
           </span>
           {edited ? <span className="rounded-full bg-brand/15 px-1.5 py-px text-[10px] font-semibold">נערך</span> : null}
+          {offset ? <span className="rounded-full bg-good/15 px-1.5 py-px text-[10px] font-semibold text-good">קוזז</span> : null}
         </div>
       </div>
-      <strong className={cn("shrink-0 tabular-nums font-semibold", amount > 0 && "text-good")}>
-        {amount > 0 ? shekelSigned(amount) : shekel(amount)}
-      </strong>
+      <div className="shrink-0 text-end tabular-nums">
+        <strong className={cn("block font-semibold", net > 0 && "text-good")}>
+          {net > 0 ? shekelSigned(net) : shekel(net)}
+        </strong>
+        {offset ? <s className="block text-xs text-muted-foreground">{shekel(amount)}</s> : null}
+      </div>
     </>
   );
   const body = "flex min-w-0 flex-1 items-center gap-3";

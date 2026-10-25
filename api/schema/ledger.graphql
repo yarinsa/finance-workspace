@@ -53,9 +53,42 @@ type Transaction implements Node {
   isCardBillPayment: Boolean!
   isInternalTransfer: Boolean!
   isSavings: Boolean!
+  """One leg of a PayBox load and its cash-out: our own money going around (also an internal transfer)."""
+  isRoundTrip: Boolean!
+  """
+  קיזוז links: on an expense, the paybacks netted against it; on a payback, the
+  expenses it pays back. Manual links win over the digest's automatic ones.
+  """
+  offsets: [Offset!]!
+  """₪ netted out of this row by its offsets (positive; 0 without any)."""
+  offsetAmount: Money!
+  """`amount` with offsets netted out: what spending and income figures count."""
+  netAmount: Money!
+  """A payback whose offsets the user set by hand (possibly none); false = automatic."""
+  offsetsManual: Boolean!
+  """For an expense: paybacks that could offset it, same merchant first then nearest date. Empty for income."""
+  offsetCandidates(first: Int, after: String): TransactionConnection!
   """The values as scraped, before any manual override."""
   raw: RawTransactionValues!
   auditLog(first: Int, after: String): AuditEntryConnection!
+}
+
+enum OffsetKind {
+  """A same-merchant card refund, matched by the digest."""
+  REFUND
+  """A household rule (data/offsets/rules.json), e.g. a roommate's share of the rent."""
+  RULE
+  """Linked by hand."""
+  MANUAL
+}
+
+"""One קיזוז link, seen from either side."""
+type Offset {
+  """The other row: the expense, seen from a payback; the payback, seen from an expense."""
+  transaction: Transaction!
+  """₪ netted out (positive)."""
+  amount: Money!
+  kind: OffsetKind!
 }
 
 type RawTransactionValues {

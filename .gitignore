@@ -87,3 +87,6 @@ __pycache__/
 .claude/screenshots/
 .claude/skills/dashboard-screenshots/node_modules/
 scrapers/**/node_modules/
+
+# Household offset rules (personal names) — see finance/offsets.py
+data/offsets/rules.json

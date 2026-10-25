@@ -4,6 +4,7 @@ These mirror the input types and argument lists in api/schema; the SDL stays the
 source of truth (a later step can generate this file from it).
 """
 import datetime as dt
+from decimal import Decimal
 from enum import Enum
 
 from pydantic import Field, field_validator, model_validator
@@ -130,6 +131,21 @@ class ClearTransactionOverrideInput(MutationInput):
 
 class SetTransactionTagsInput(MutationInput, TagSet):
     id: node_id_of("Transaction")
+
+
+class LinkOffsetInput(MutationInput):
+    payback_id: node_id_of("Transaction")
+    expense_id: node_id_of("Transaction")
+    amount: Decimal | None = Field(default=None, gt=0, max_digits=12, decimal_places=2)
+
+
+class UnlinkOffsetInput(MutationInput):
+    payback_id: node_id_of("Transaction")
+    expense_id: node_id_of("Transaction")
+
+
+class ResetOffsetsInput(MutationInput):
+    payback_id: node_id_of("Transaction")
 
 
 class UpdateTagInput(MutationInput, TagEdit):

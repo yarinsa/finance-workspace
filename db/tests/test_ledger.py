@@ -8,6 +8,7 @@ import json
 import edit
 import goal_store
 import ledger
+import offset_store
 import overrides
 import tags
 
@@ -210,3 +211,49 @@ def test_goals_are_imported_once_from_the_json_store(conn, tmp_path):
     assert goal_store.import_json(conn, store) == 0      # re-running adds nothing
     [g] = goal_store.all_goals(conn)
     assert (g["slug"], g["amount"], g["horizon"]) == ("phone-2026", 3000.0, "near")
+
+
+# --- offsets (קיזוז) -----------------------------------------------------------
+FRIEND_BIT = {"date": "2026-01-20", "amount": 100.0, "description": "העברה מחבר",
+              "origin": "discount", "is_income": True, "sources": ["discount"]}
+
+
+def test_a_manual_offset_survives_reimport_and_rides_on_the_payback(conn):
+    # As the household, a friend's ₪100 paid back part of the 123.45 dinner.
+    rows = [CAL_PURCHASE, SALARY, CARD_BILL, FRIEND_BIT]
+    ledger.load(conn, rows)
+    stored = offset_store.set_offsets(conn, k(FRIEND_BIT), [(k(CAL_PURCHASE), 100)], "cli")
+    assert stored == [{"date": "2026-01-15", "abs_amount": "123.45", "amount": "100.00"}]
+    out = ledger.sync(conn, rows)
+    assert out[3]["manual_offsets"] == [{"date": "2026-01-15", "abs_amount": 123.45, "amount": 100.0,
+                                         "kind": "manual"}]
+    assert all("manual_offsets" not in r for r in out[:3])
+
+
+def test_an_empty_offset_decision_is_stored_and_reset_returns_to_auto(conn):
+    ledger.load(conn, [CAL_PURCHASE, FRIEND_BIT])
+    offset_store.set_offsets(conn, k(FRIEND_BIT), [], "cli")
+    assert offset_store.offsets_of(conn, k(FRIEND_BIT)) == []
+    assert ledger.materialize(conn)[1]["manual_offsets"] == []
+    offset_store.reset_offsets(conn, k(FRIEND_BIT), "cli")
+    assert offset_store.offsets_of(conn, k(FRIEND_BIT)) is None
+    audit = conn.execute("SELECT old, new FROM override_audit WHERE field = 'offsets' ORDER BY id").fetchall()
+    assert audit == [("auto", []), ([], "auto")]
+
+
+def test_offset_amounts_must_be_positive_and_each_expense_linked_once(conn):
+    import pytest
+    ledger.load(conn, [CAL_PURCHASE, FRIEND_BIT])
+    with pytest.raises(ValueError):
+        offset_store.set_offsets(conn, k(FRIEND_BIT), [(k(CAL_PURCHASE), 0)], "cli")
+    with pytest.raises(ValueError):
+        offset_store.set_offsets(conn, k(FRIEND_BIT), [(k(CAL_PURCHASE), 50), (k(CAL_PURCHASE), 50)], "cli")
+
+
+def test_offset_whose_expense_vanished_is_reported_orphaned(conn):
+    ledger.load(conn, [CAL_PURCHASE, FRIEND_BIT])
+    offset_store.set_offsets(conn, k(FRIEND_BIT), [(k(CAL_PURCHASE), 100)], "cli")
+    ledger.sync(conn, [{**CAL_PURCHASE, "amount": -123.40}, FRIEND_BIT])
+    [(missing_payback, missing_expense)] = conn.execute(
+        "SELECT payback_missing, expense_missing FROM orphaned_offsets").fetchall()
+    assert (missing_payback, missing_expense) == (False, True)

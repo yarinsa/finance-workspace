@@ -35,7 +35,7 @@ def test_url():
 @pytest.fixture
 def conn(test_url):
     c = ledger.connect(test_url)
-    c.execute("TRUNCATE scraped_transactions, transaction_overrides, categories, transaction_tags, tags, override_audit, goals")
+    c.execute("TRUNCATE scraped_transactions, transaction_overrides, categories, transaction_tags, tags, override_audit, goals, transaction_offsets")
     c.commit()
     yield c
     c.close()

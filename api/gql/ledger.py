@@ -11,6 +11,7 @@ from dataclasses import dataclass, field
 from decimal import Decimal
 from functools import cached_property
 
+from finance import offsets as offset_rules
 from finance.merchants import merchant_name
 
 CENT = Decimal("0.01")
@@ -91,7 +92,27 @@ class Txn:
     is_card_bill_payment: bool
     is_internal_transfer: bool
     is_savings: bool
+    is_round_trip: bool = False
+    auto_offsets: list | None = None       # the digest's suggestion (scraped record), on a payback
+    manual_offsets: list | None = None     # transaction_offsets, on a payback ([] = offsets nothing)
     tag_links: list[tuple[Tag, dt.datetime]] = field(default_factory=list)
+    offset_links: list[tuple["Txn", Decimal, str]] = field(default_factory=list)   # (other row, ₪, kind)
+
+    @property
+    def offset_amount(self):
+        return sum((a for _, a, _ in self.offset_links), Decimal("0.00"))
+
+    @property
+    def net_amount(self):
+        return self.amount + self.offset_amount if self.amount < 0 else self.amount - self.offset_amount
+
+    def as_ledger_row(self):
+        """The dict finance/offsets.py works on."""
+        return {"date": self.date.isoformat(), "amount": float(self.amount), "description": self.description,
+                "origin": self.origin, "internal_transfer": self.is_internal_transfer,
+                "card_bill_payment": self.is_card_bill_payment, "savings": self.is_savings,
+                "auto_offsets": self.auto_offsets, "manual_offsets": self.manual_offsets,
+                "offset_amount": float(self.offset_amount) or None}
 
     @property
     def key(self):
@@ -126,7 +147,8 @@ SELECT s.txn_date, s.abs_amount, s.amount, s.description, s.origin, s.sources,
        s.record->>'account_id', s.record->>'card_last4',
        COALESCE((s.record->>'card_bill_payment')::boolean, false),
        COALESCE((s.record->>'internal_transfer')::boolean, false),
-       COALESCE((s.record->>'savings')::boolean, false)
+       COALESCE((s.record->>'savings')::boolean, false),
+       COALESCE((s.record->>'round_trip')::boolean, false), s.record->'auto_offsets'
 FROM scraped_transactions s
 LEFT JOIN transaction_overrides o USING (txn_date, abs_amount)
 LEFT JOIN categories sc ON sc.id = s.category_id
@@ -137,6 +159,11 @@ ORDER BY s.position
 TAG_LINKS = """
 SELECT tt.txn_date, tt.abs_amount, t.id, t.name, t.color, tt.created_at
 FROM transaction_tags tt JOIN tags t ON t.id = tt.tag_id ORDER BY t.name
+"""
+
+OFFSET_LINKS = """
+SELECT payback_date, payback_abs_amount, expense_date, expense_abs_amount, amount
+FROM transaction_offsets ORDER BY id
 """
 
 
@@ -154,15 +181,23 @@ class Ledger:
     def rows(self):
         out = []
         for (d, a, amount, desc, origin, sources, cid, cname, csrc, rid, rname, rsrc, note, excluded,
-             overridden, hid, raw_hid, goal_id, account_id, last4, bill, transfer, savings) in self.conn.execute(ROWS):
+             overridden, hid, raw_hid, goal_id, account_id, last4, bill, transfer, savings, round_trip,
+             auto) in self.conn.execute(ROWS):
             out.append(Txn(d, Decimal(a).quantize(CENT), Decimal(amount).quantize(CENT), desc or "", origin,
                            list(sources or []), _cat(cid, cname, csrc), _cat(rid, rname, rsrc), note, excluded,
                            overridden, self.horizons.get(hid), self.horizons.get(raw_hid), self.goals.get(goal_id),
-                           account_id, last4, bill, transfer, savings))
+                           account_id, last4, bill, transfer, savings, round_trip, auto))
         by_key = {t.key: t for t in out}
         for d, a, tid, name, color, at in self.conn.execute(TAG_LINKS):
             if (t := by_key.get((d, Decimal(a).quantize(CENT)))):
                 t.tag_links.append((Tag(tid, name, color), at))
+        for pd, pa, ed, ea, amount in self.conn.execute(OFFSET_LINKS):
+            if (t := by_key.get((pd, Decimal(pa).quantize(CENT)))):
+                t.manual_offsets = t.manual_offsets or []
+                if ed is not None:
+                    t.manual_offsets.append({"date": ed.isoformat(), "abs_amount": float(ea),
+                                             "amount": float(amount), "kind": "manual"})
+        _resolve_offsets([t for t in out if not t.excluded])
         return out
 
     @cached_property
@@ -203,6 +238,30 @@ class Ledger:
         return self.conn.execute(
             "SELECT id, at, actor, field, old, new FROM override_audit "
             "WHERE (txn_date, abs_amount) = (%s, %s) ORDER BY id DESC", txn.key).fetchall()
+
+
+def _key_of(link):
+    return dt.date.fromisoformat(str(link["date"])[:10]), Decimal(str(link["abs_amount"])).quantize(CENT)
+
+
+def _resolve_offsets(rows):
+    """Fill `offset_links` on both sides, exactly as the digest does (finance/offsets.py).
+    Excluded rows take no part, like in the `transactions` view."""
+    dicts = [t.as_ledger_row() for t in rows]
+    offset_rules.resolve(dicts)
+    by_key = {t.key: t for t in rows}
+    for t, d in zip(rows, dicts):
+        t.offset_links = [(by_key[_key_of(o)], Decimal(str(o["amount"])).quantize(CENT), o["kind"])
+                          for o in d.get("offsets") or []]
+
+
+def offset_candidates(lg, expense, first=20):
+    """Paybacks that could still offset `expense` (finance/offsets.py `candidates`)."""
+    if expense.direction != "EXPENSE" or expense.is_transfer or expense.is_savings or expense.excluded:
+        return []
+    rows = [t for t in lg.rows if not t.excluded]
+    found = offset_rules.candidates([t.as_ledger_row() for t in rows], expense.as_ledger_row(), limit=first)
+    return [lg.by_key[_key_of({"date": f["date"], "abs_amount": abs(f["amount"])})] for f in found]
 
 
 def totals(rows):

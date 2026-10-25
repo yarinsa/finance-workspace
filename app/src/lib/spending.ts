@@ -23,7 +23,20 @@ export interface SpendingTransaction {
   overridden?: boolean;
   /** Tag names from the DB `transaction_tags` table, sorted; absent when untagged. */
   tags?: string[];
+  /** ₪ paid back (קיזוז) and netted out of the month's totals; `amount` stays the real charge. */
+  offset?: number;
+  /** The paybacks behind `offset`. */
+  offsets?: { date: string; description: string | null; amount: number; kind: OffsetKind }[];
 }
+
+/** How a payback came to be netted against an expense (finance/offsets.py). */
+export type OffsetKind = "refund" | "rule" | "manual";
+
+export const OFFSET_KIND_LABEL: Record<OffsetKind, string> = {
+  refund: "זיכוי אוטומטי",
+  rule: "כלל קבוע",
+  manual: "ידני",
+};
 
 export interface ExcludedBucket {
   amount: number;
