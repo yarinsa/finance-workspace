@@ -189,7 +189,17 @@ async function login(page) {
   } else {
     await page.type(boxes[0], code);
   }
-  await clickButton(page, /כניסה|המשך|אישור|שליחה/).catch(() => page.keyboard.press('Enter'));
+  // Submit with the "המשך" of the code dialog itself: the nearest ancestor of the code field holding
+  // one. A page-wide text match hits the header's "כניסה" link first (2026-10-25: code never sent).
+  const submitted = await page.$eval(boxes[0], (input) => {
+    for (let el = input.parentElement; el; el = el.parentElement) {
+      const b = [...el.querySelectorAll('button')].find((e) =>
+        (e.offsetWidth || e.offsetHeight) && (e.innerText || '').trim() === 'המשך');
+      if (b) { b.click(); return true; }
+    }
+    return false;
+  });
+  if (!submitted) await page.keyboard.press('Enter');
   for (let i = 0; i < 30; i++) {
     await sleep(1000);
     if (!onLoginPage(page)) return;
