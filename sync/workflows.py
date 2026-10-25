@@ -110,6 +110,8 @@ class _FinanceSync:
         self._results: dict = {}
         self._published: dict = {}  # source -> last status sent to the dashboard
         self._steps: dict = {}
+        self._counts: dict = {}  # source -> {"records", "records_before", "latest_txn"} from the dump gate
+        self._log: dict = {}  # source -> [{"status", "at"}] for this run, the dashboard's timeline
         self._resumed = False
         self._all = False  # a signal without names re-checks every dead source
         self._named: set = set()
@@ -137,6 +139,11 @@ class _FinanceSync:
         if step is not None:
             self._steps[source] = step
         info = workflow.info()
+        now = workflow.now().isoformat()
+        log = self._log.setdefault(source, [])
+        if not log or log[-1]["status"] != status:
+            log.append({"status": status, "at": now})
+        counts = self._counts.get(source) or {}
         entry = {
             "status": status,
             "message": message or text.format(name=sources.LABEL_HE[source]),
@@ -145,8 +152,12 @@ class _FinanceSync:
             "workflow_id": info.workflow_id,
             "run_id": info.run_id,
             "started_at": info.start_time.isoformat(),
-            "updated_at": workflow.now().isoformat(),
+            "updated_at": now,
             "error": error,
+            "records": counts.get("records"),
+            "records_before": counts.get("records_before"),
+            "latest_txn": counts.get("latest_txn"),
+            "log": list(log),
         }
         try:
             await workflow.execute_activity("publish_status", args=[source, entry], **STATUS)
@@ -203,6 +214,9 @@ class _FinanceSync:
         await self._set(source, "validating")
         try:
             gate = await workflow.execute_activity("validate_dump", source, **VALIDATE)
+            if isinstance(gate, dict):  # older workers returned a bare "ok"
+                self._counts[source] = gate
+                gate = gate.get("gate", "ok")
         except ActivityError as e:
             self._res(source, REJECTED, _detail(e))
             await self._set(source, "rejected", error=_reason(e, lines=3))

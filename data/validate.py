@@ -522,7 +522,12 @@ def check_dump(source, data_dir=DEFAULT_DATA_DIR, as_of=None, dry_run=True, new=
                + f" (records {counts}, latest txn {latest or 'n/a'})")
     for f in findings:
         f["source"] = source
-    return result(cid, "dump", status, summary, findings)
+    res = result(cid, "dump", status, summary, findings)
+    # What this scrape brought in, for the dashboard's Syncs page (via the sync workflow).
+    res["records"] = counts
+    res["records_before"] = {e: len(rs) for e, rs in prev.items()}
+    res["latest_txn"] = latest
+    return res
 
 
 # ============================================================================
@@ -1407,6 +1412,8 @@ def main(argv=None):
     ap.add_argument("--out-dir", default=str(DEFAULT_OUT_DIR))
     ap.add_argument("--as-of", help="YYYY-MM-DD (default today)")
     ap.add_argument("--strict", action="store_true", help="exit 1 if any check fails")
+    ap.add_argument("--json", action="store_true",
+                    help="`dump`: also print one final `DUMP_JSON {...}` line (status, record counts)")
     args = ap.parse_args(argv)
     as_of = _d(args.as_of) if args.as_of else date.today()
 
@@ -1420,6 +1427,9 @@ def main(argv=None):
         print(("REJECT " if res["status"] == "fail" else "OK     ") + res["summary"])
         for d in res["details"]:
             print(f"  [{d['level']}] {d['reason']}")
+        if args.json:
+            keys = ("status", "summary", "records", "records_before", "latest_txn")
+            print("DUMP_JSON " + json.dumps({k: res.get(k) for k in keys}, ensure_ascii=False))
         return 1 if res["status"] == "fail" else 0
 
     report = run_all(args.data_dir, as_of)

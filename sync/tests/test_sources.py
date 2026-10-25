@@ -303,14 +303,38 @@ def test_discount_scrapes_touch_no_chrome(scrape_env):
 
 def test_validate_passes_when_validator_does_not_exist_yet(monkeypatch, tmp_path):
     monkeypatch.setattr(activities, "VALIDATOR", tmp_path / "validate.py")
-    assert run(activities.validate_dump("cal")) == "skipped"
+    assert run(activities.validate_dump("cal"))["gate"] == "skipped"
 
 
 def test_validate_runs_the_validator_with_dump_and_source(monkeypatch, tmp_path):
     v = tmp_path / "validate.py"
     v.write_text("import sys; print(sys.argv[1:]); sys.exit(0)")
     monkeypatch.setattr(activities, "VALIDATOR", v)
-    assert run(activities.validate_dump("cal")) == "ok"
+    assert run(activities.validate_dump("cal"))["gate"] == "ok"
+
+
+def test_validate_returns_the_dumps_record_counts(monkeypatch, tmp_path):
+    """What the Syncs page shows as "came in": AMEX 2026-10-25, 322 -> 360 transactions."""
+    v = tmp_path / "validate.py"
+    v.write_text("import sys\n"
+                 "assert sys.argv[1:] == ['dump', 'amex', '--json']\n"
+                 "print('OK     amex: ok')\n"
+                 "print('DUMP_JSON {\"status\": \"pass\", \"records\": {\"transactions\": 360}, '\n"
+                 "      '\"records_before\": {\"transactions\": 322}, \"latest_txn\": \"2026-10-22\"}')\n")
+    monkeypatch.setattr(activities, "VALIDATOR", v)
+    assert run(activities.validate_dump("amex")) == {
+        "gate": "ok", "records": {"transactions": 360}, "records_before": {"transactions": 322},
+        "latest_txn": "2026-10-22"}
+
+
+def test_rejection_message_leaves_out_the_json_line(monkeypatch, tmp_path):
+    v = tmp_path / "validate.py"
+    v.write_text("print('REJECT cal: latest transaction 2026-10-08 is 17 days old')\n"
+                 "print('DUMP_JSON {}')\nimport sys; sys.exit(1)\n")
+    monkeypatch.setattr(activities, "VALIDATOR", v)
+    with pytest.raises(ApplicationError) as e:
+        run(activities.validate_dump("cal"))
+    assert "17 days old" in str(e.value) and "DUMP_JSON" not in str(e.value)
 
 
 def test_validate_rejection_carries_the_validators_output(monkeypatch, tmp_path):
