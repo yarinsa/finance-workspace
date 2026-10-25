@@ -77,6 +77,12 @@ Views (`transactions`, `orphaned_overrides`) are plain SQL and depend on the col
   it, and a second FK on overrides (`goal_id`). Name a db/ module so it never shadows a
   `data/` script (`goal_store`, not `goals`): pytest puts both dirs on the path.
 
+- `0007_transaction_offsets.py` — a link **between two ledger keys** (payback → expense,
+  ORM module `db/offset_store.py`), with a nullable "decision" row (no expense = "offsets
+  nothing"). It leaves the `transactions` view alone: `db/ledger.py materialize` attaches
+  the rows in Python, and the API reads the table itself. Use this shape when a human
+  decision relates two transactions rather than labelling one.
+
 ## Gotcha: `ledger.orm_session` on a connection with pending writes
 
 The session shares the psycopg connection and its transaction. SQLAlchemy rolls back on

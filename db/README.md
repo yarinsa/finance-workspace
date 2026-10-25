@@ -17,6 +17,8 @@ ledger code is in `db/ledger.py`, the edit CLI is `db/edit.py`. The tables are S
 | `override_audit` | audit | `overrides.py` (CLI and API) | append-only: who changed which field, old and new value |
 | `transactions` (view) | read | nothing | scraped rows with overrides applied; excluded rows hidden |
 | `orphaned_overrides` (view) | read | nothing | overrides whose transaction no longer exists |
+| `transaction_offsets` | human | `offset_store.py` (API) | kept forever: a payback's קיזוז links to expenses (a row with null expense = "offsets nothing") |
+| `orphaned_offsets` (view) | read | nothing | offset links whose payback or expense no longer exists |
 
 Rows in both tables are keyed on the ledger dedup key `(date, abs(amount))`, the
 same key `data/digest.py` uses. An override field left null falls through to the
@@ -80,6 +82,11 @@ the consolidated ledger as before, then pipes it through
 `scraped_transactions` and returns the `transactions` view, in the same order, which
 is what gets written to `data/digested/transactions.json`. Cashflow, spending and
 the app all read that file, so they see your edits.
+
+`materialize` also attaches each payback's `transaction_offsets` rows as
+`manual_offsets`; digest then runs `finance/offsets.py resolve`, where a manual
+decision replaces the digest's automatic `auto_offsets` (stored in `record`). See
+"Offsets" in CLAUDE.md. Each sync prints a warning per orphaned offset link.
 
 Each row is validated as `finance.models.LedgerTransaction` before it is stored.
 

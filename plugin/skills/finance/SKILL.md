@@ -21,7 +21,7 @@ Digested outputs are under `<data_dir>/digested/`:
 
 | File | Holds |
 |---|---|
-| `transactions.json` | unified deduped ledger + `summary` (total_spent, total_income, by_category, by_origin) |
+| `transactions.json` | unified deduped ledger + `summary` (total_spent, total_income, by_category, by_origin — **net of offsets**) |
 | `snapshot.json` | balances, card debt, loans/mortgage, `savings[]` (pension/study funds), `totals`, detected salary |
 | `cashflow.json` | `metrics[]`, `today{income,expense,net}`, `months[]`, `projection` |
 | `forecast.json` | next-3-month cashflow forecast |
@@ -29,6 +29,13 @@ Digested outputs are under `<data_dir>/digested/`:
 
 Read them with the file tools or `python3 -c`. If none exist, tell the user to run
 `/finance-refresh` (scrape) then `/finance-digest` (build).
+
+**Offsets (קיזוז).** A payback (card refund, someone paying you back) carries
+`offsets[]` + `offset_amount`, and so does the expense it repays. `summary` and
+`cashflow.json` already count the net. When you sum `transactions[]` yourself,
+count each row as `amount + offset_amount` (expense) / `amount - offset_amount`
+(income), and skip `internal_transfer`, `card_bill_payment` and `savings` rows.
+Balances use the real `amount`.
 
 ## Digest → question map
 

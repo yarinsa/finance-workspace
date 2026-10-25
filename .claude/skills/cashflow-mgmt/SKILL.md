@@ -39,6 +39,12 @@ never be suggested as cuts.
   / fixed / variable / periodic / true emergency / **transfer**. Transfers
   between own accounts and card-bill payments are never spending. Avoid counting
   them twice.
+- **Paybacks are offsets, not income.** A refund, a friend's Bit for their share, or
+  the ex-roommate's rent share is netted against its expense (`offsets[]`,
+  `offset_amount` on both ledger rows; see "Offsets" in CLAUDE.md). For spend/income
+  use the net (`amount ± offset_amount`, or `cashflow.json`, which is already net);
+  for **balances and the runway** use the real `amount` — the money did arrive.
+  PayBox load + cash-out pairs carry `round_trip` and are transfers.
 
 ## Data to read
 

@@ -125,7 +125,13 @@ that take one `input` and echo `clientMutationId`.
 - **Limits:** a depth limit of 14 and an 8,000-character query. Introspection is on only
   with `FINANCE_API_DEV_USER`. Resolver crashes reach the client as `internal error`.
 - **Mutations** live on the entity they change (`TransactionResolver`: `updateTransaction`,
-  `clearTransactionOverride`, `setTransactionTags`; `TagResolver`: `updateTag`, `deleteTag`).
+  `clearTransactionOverride`, `setTransactionTags`, and the קיזוז trio `linkOffset` /
+  `unlinkOffset` / `resetOffsets`; `TagResolver`: `updateTag`, `deleteTag`). Offsets are
+  payback-centric: the first manual edit copies the payback's effective links into
+  `transaction_offsets` (via `db/offset_store.py`, audited as field `offsets`), so editing
+  one link never silently drops an automatic one. `Transaction.offsets`, `netAmount`,
+  `offsetCandidates` are resolved per request by the same `finance/offsets.py resolve`
+  the digest runs.
   Each input subclasses the REST body in `api/inputs.py`, so both paths validate alike, and
   nulls are kept: `null` clears a field, an omitted field is untouched. Writes go through
   `db/overrides.py` and `db/tags.py`, so they're audited the same way. Mutation fields run in
