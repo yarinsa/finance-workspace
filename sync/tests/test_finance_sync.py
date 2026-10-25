@@ -289,3 +289,37 @@ def test_merge_status_advances_last_success_only_on_done():
         doc = activities.merge_status(doc, source, {"status": status, "updated_at": at})
     assert doc["sources"]["cal"]["last_success_at"] == "t1"
     assert doc["sources"]["amex"]["last_success_at"] is None
+
+
+def test_dashboard_entry_carries_the_dump_counts_and_a_step_log():
+    fake = Fake(counts={"amex": {"records": {"transactions": 360}, "records_before": {"transactions": 322},
+                                 "latest_txn": "2026-10-22"}})
+    result_of(fake, args=[["amex", "cal"]])
+    done = [e for s, e in fake.statuses if s == "amex"][-1]
+    assert done["status"] == "done"
+    assert done["records"] == {"transactions": 360} and done["records_before"] == {"transactions": 322}
+    assert [step["status"] for step in done["log"]] == [
+        "checking_session", "scraping", "validating", "digesting", "publishing", "done"]
+    assert all(step["at"] for step in done["log"])
+    cal = [e for s, e in fake.statuses if s == "cal"][-1]
+    assert cal["records"] is None  # a validator that printed no counts shows none, not zeros
+
+
+def test_failed_source_log_ends_on_the_failure():
+    fake = Fake(scrape_errors={"cal": moved()})
+    result_of(fake, args=[["cal"]])
+    last = [e for s, e in fake.statuses if s == "cal"][-1]
+    assert [step["status"] for step in last["log"]] == ["checking_session", "scraping", "failed"]
+    assert last["error"]
+
+
+def test_failed_scrape_error_carries_the_scripts_own_error_line():
+    """CAL 2026-10-25 08:13: the dashboard only said "scrape.mjs failed for cal (rc=1)"."""
+    out = ("== account / cards ==\nTimeoutError: Waiting for selector `#ccLoginDesktopBtn` failed\n"
+           "    at CdpFrame.waitForSelector (file:///x/Frame.js:541:21)\n")
+    err = ApplicationError("scrape.mjs failed for cal (rc=1)", out, type="ScrapeFailed", non_retryable=True)
+    fake = Fake(scrape_errors={"cal": err})
+    result_of(fake, args=[["cal"]])
+    last = [e for s, e in fake.statuses if s == "cal"][-1]
+    assert last["error"].splitlines() == [
+        "ScrapeFailed: scrape.mjs failed for cal (rc=1)", "TimeoutError: Waiting for selector `#ccLoginDesktopBtn` failed"]

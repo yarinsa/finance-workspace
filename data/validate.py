@@ -522,7 +522,12 @@ def check_dump(source, data_dir=DEFAULT_DATA_DIR, as_of=None, dry_run=True, new=
                + f" (records {counts}, latest txn {latest or 'n/a'})")
     for f in findings:
         f["source"] = source
-    return result(cid, "dump", status, summary, findings)
+    res = result(cid, "dump", status, summary, findings)
+    # What this scrape brought in, for the dashboard's Syncs page (via the sync workflow).
+    res["records"] = counts
+    res["records_before"] = {e: len(rs) for e, rs in prev.items()}
+    res["latest_txn"] = latest
+    return res
 
 
 # ============================================================================
@@ -726,6 +731,13 @@ def check_card_bills(statements, bank_rows, as_of, coverage, gaps):
 # 3. Card transactions <-> statement total
 # ============================================================================
 
+def _cal_ledger_date(t):
+    """The date cal/normalize.py gives a row: installment n is dated purchase + (n-1) months."""
+    d = (t.get("trnPurchaseDate") or "")[:10]
+    n = (t.get("curPaymentNum") or 0) if (t.get("numOfPayments") or 0) > 0 else 0
+    return add_months(_d(d), n - 1).isoformat() if d and n > 1 else d
+
+
 def cal_cycles(files):
     """[(last4, cardTransactions body)] -> one summary per card cycle.
 
@@ -734,27 +746,31 @@ def cal_cycles(files):
     purchases (it is in the foreign unit) nor for installments (it is the whole
     deal), which is what the statement total exposes. `txns` keeps each raw row's
     billed amount so a mismatch can be pinned on the rows behind it.
+
+    Files come oldest-first; one cycle dumped twice (a stale
+    cardTransactions_<last4>_<old card index>.json beside the fresh pull) is
+    kept once, from the newest file.
     """
-    cycles = []
+    cycles = {}
     for last4, body in files:
         for ba in ((body or {}).get("result") or {}).get("bankAccounts", []) or []:
             for dd in ba.get("debitDates", []) or []:
                 total = sum(t.get("amount", 0) for t in dd.get("totalDebits", []) or []
                             if t.get("currencySymbol") == "₪")
                 raw = dd.get("transactions") or []
-                cycles.append({
+                cycles[(last4, _d(dd["date"]))] = {
                     "card": last4, "billing_date": _d(dd["date"]), "statement": round(total, 2),
                     "billed": round(sum(t.get("amtBeforeConvAndIndex", 0) for t in raw), 2),
                     "count": len(raw),
-                    "txns": [{"date": (t.get("trnPurchaseDate") or "")[:10],
+                    "txns": [{"date": _cal_ledger_date(t),
                               "description": (t.get("merchantName") or "").strip(),
                               "billed": -round(t.get("amtBeforeConvAndIndex", 0), 2),
                               "trn_amt": t.get("trnAmt"), "type": t.get("trnType"),
                               "currency": t.get("trnCurrencySymbol"),
                               "installment": (f"{t.get('curPaymentNum')}/{t.get('numOfPayments')}"
                                               if t.get("numOfPayments") else None)}
-                             for t in raw]})
-    return cycles
+                             for t in raw]}
+    return list(cycles.values())
 
 
 def _cal_offenders(cycle, ledger_rows):
@@ -1248,8 +1264,8 @@ def run_all(data_dir=DEFAULT_DATA_DIR, as_of=None, dry_run=True):
 
     # 3. card transactions vs statement totals
     def cal_stmt():
-        files = [(fp.name.split("_")[1], json.loads(fp.read_text(encoding="utf-8")))
-                 for fp in ds.raw_files("cal", "cardTransactions_*.json")]
+        fps = sorted(ds.raw_files("cal", "cardTransactions_*.json"), key=lambda f: (f.stat().st_mtime, f))
+        files = [(fp.name.split("_")[1], json.loads(fp.read_text(encoding="utf-8"))) for fp in fps]
         return check_cal_statements(cal_cycles(files), ds.normalized("cal", "transactions"))
     checks.append(_safe("card_statements.cal", "card_statement", cal_stmt))
     checks.append(_safe("card_statements.amex", "card_statement",
@@ -1407,6 +1423,8 @@ def main(argv=None):
     ap.add_argument("--out-dir", default=str(DEFAULT_OUT_DIR))
     ap.add_argument("--as-of", help="YYYY-MM-DD (default today)")
     ap.add_argument("--strict", action="store_true", help="exit 1 if any check fails")
+    ap.add_argument("--json", action="store_true",
+                    help="`dump`: also print one final `DUMP_JSON {...}` line (status, record counts)")
     args = ap.parse_args(argv)
     as_of = _d(args.as_of) if args.as_of else date.today()
 
@@ -1420,6 +1438,9 @@ def main(argv=None):
         print(("REJECT " if res["status"] == "fail" else "OK     ") + res["summary"])
         for d in res["details"]:
             print(f"  [{d['level']}] {d['reason']}")
+        if args.json:
+            keys = ("status", "summary", "records", "records_before", "latest_txn")
+            print("DUMP_JSON " + json.dumps({k: res.get(k) for k in keys}, ensure_ascii=False))
         return 1 if res["status"] == "fail" else 0
 
     report = run_all(args.data_dir, as_of)

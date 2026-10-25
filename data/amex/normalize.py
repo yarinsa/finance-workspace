@@ -5,9 +5,11 @@ Reads:
     raw/cardList.json              -> the cards + their next/last billing totals
     raw/transactions_<suffix>_*.json -> per-card monthly transaction pulls
 
-AMEX puts EVERY transaction (domestic + foreign) in one list:
+AMEX puts every statement transaction (domestic + foreign) in one list:
     data.israelAbroadVouchers.vouchers.israelAbroadVouchersList
-`isIsraelDeal` distinguishes the two; `billingAmount`/`ilsAmount` is the ₪ charge.
+and the ones billed on their own date (cash withdrawals, tax-free refunds,
+credit repayments) under data.israelAbroadVouchers.outOfStatementChargeDateVouchers
+[].immediateVouchersCurrencyDate. `isIsraelDeal` distinguishes domestic/foreign; `billingAmount`/`ilsAmount` is the ₪ charge.
 Charges are stored as NEGATIVE amounts (money out) to match the other sources.
 
 Entities emitted: credit_cards, transactions.
@@ -58,23 +60,38 @@ emit("credit_cards", cards)
 
 
 # ---- transactions (deduped across the monthly pulls) ----
+def vouchers_of(data):
+    """(voucher, immediate billing date or None) for every voucher in one pull.
+
+    The statement list holds the cycle's charges. Charges AMEX bills on their own
+    date - cash withdrawals, tax-free refunds, early credit repayments - sit apart,
+    under outOfStatementChargeDateVouchers, and are real card movements too.
+    """
+    block = data.get("israelAbroadVouchers") or {}
+    for t in ((block.get("vouchers") or {}).get("israelAbroadVouchersList")) or []:
+        yield t, None
+    for grp in block.get("outOfStatementChargeDateVouchers") or []:
+        billed = (grp.get("totalVouchersCurrencyDate") or {}).get("dateImmediateVouchers")
+        for t in grp.get("immediateVouchersCurrencyDate") or []:
+            yield t, billed
+
+
 txns = {}                                         # voucher id -> record
 for fp in sorted(glob.glob(str(RAW / "transactions_*.json"))):
     suffix = Path(fp).name.split("_")[1]          # transactions_<suffix>_<month>.json
     data = json.load(open(fp, encoding="utf-8")).get("data") or {}
-    voucher = (((data.get("israelAbroadVouchers") or {})
-               .get("vouchers") or {})
-               .get("israelAbroadVouchersList")) or []
-    for t in voucher:
+    for t, billed in vouchers_of(data):
         # stable id; fall back to a composite when missing
         vid = t.get("seqVoucherNumber") or f"{suffix}:{t.get('purchaseDate')}:{t.get('voucherNumber')}"
         ils = t.get("billingAmount")
         if ils is None:
             ils = t.get("ilsAmount", 0)
         txns[vid] = {
+            "id": str(vid),
             "card_last4": suffix,
             "card_name": card_name.get(suffix),
             "date": iso(t.get("purchaseDate")),
+            "billing_date": iso(billed) if billed else None,
             "amount": round(-ils, 2),             # charge = money out
             "currency": "ILS",
             "original_amount": t.get("originalAmount"),

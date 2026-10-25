@@ -188,6 +188,24 @@ body {
 .live-progress > span { display: block; height: 100%; background: var(--lg-accent); border-radius: inherit; transition: width .4s ease; }
 .live-meta { font-size: 12px; margin-bottom: 4px; }
 
+/* One collapsible row per source */
+.sync-item { border-bottom: 1px solid var(--lg-line); }
+.sync-item:last-child { border-bottom: 0; }
+.sync-item summary::-webkit-details-marker { display: none; }
+.sync-body { padding: 0 0 12px; padding-inline-start: 18px; display: flex; flex-direction: column; gap: 10px; }
+.sync-error {
+  margin: 0; padding: 8px 10px; border-radius: 8px; font: 12px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace;
+  white-space: pre-wrap; word-break: break-word; color: var(--lg-bad);
+  background: color-mix(in srgb, var(--lg-bad) 10%, transparent);
+}
+.sync-intake { display: flex; flex-direction: column; gap: 2px; }
+.sync-timeline { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
+.sync-timeline li { display: grid; grid-template-columns: 16px 1fr auto; align-items: center; gap: 8px; }
+.sync-step-icon { font-weight: 800; text-align: center; }
+.sync-facts { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 2px 12px; font-size: 13px; }
+.sync-facts dt { color: var(--lg-muted); }
+.sync-facts dd { margin: 0; }
+
 /* ---- Mortgage card ------------------------------------------------------ */
 .list-foot.no-rule { border-top: 0; margin-top: 0; padding-top: 8px; }
 .mini-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 12px 0 4px; }

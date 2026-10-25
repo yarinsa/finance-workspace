@@ -37,10 +37,11 @@ class Fake:
     """
 
     def __init__(self, sessions=None, scrape_errors=None, validate_errors=None, check_errors=(), chrome_errors=(),
-                 digest_error=None, status_error=False, digest_delay=0.0):
+                 digest_error=None, status_error=False, digest_delay=0.0, counts=None):
         self.sessions = {k: list(v) if isinstance(v, list) else [v] for k, v in (sessions or {}).items()}
         self.scrape_errors = scrape_errors or {}
         self.validate_errors = validate_errors or {}
+        self.counts = counts or {}  # source -> validate_dump's dict; others return the old bare "ok"
         self.check_errors = set(check_errors)
         self.chrome_errors = set(chrome_errors)
         self.digest_error = digest_error
@@ -88,11 +89,11 @@ class Fake:
             return "ok"
 
         @activity.defn(name="validate_dump")
-        async def validate_dump(source: str) -> str:
+        async def validate_dump(source: str):
             self.calls.append(("validate", source))
             if source in self.validate_errors:
                 raise self.validate_errors[source]
-            return "ok"
+            return {"gate": "ok", **self.counts[source]} if source in self.counts else "ok"
 
         @activity.defn(name="digest")
         async def digest(normalize: bool = True) -> dict:

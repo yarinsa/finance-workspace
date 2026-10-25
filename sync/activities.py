@@ -366,18 +366,33 @@ async def scrape(source: str) -> str:
 
 
 @activity.defn
-async def validate_dump(source: str) -> str:
-    """Gate a fresh dump: `python3 data/validate.py dump <source>` (exit 0 = good). Returns
-    "ok", or "skipped" while data/validate.py does not exist yet. A rejection raises
+async def validate_dump(source: str) -> dict:
+    """Gate a fresh dump: `python3 data/validate.py dump <source> --json` (exit 0 = good).
+    Returns {"gate": "ok" | "skipped", "records", "records_before", "latest_txn"} (the counts
+    are None when the validator printed none, or does not exist yet). A rejection raises
     non-retryable with the validator's output, so the workflow does not count the scrape."""
     sources.get(source)
     if not VALIDATOR.exists():
-        return "skipped"
-    rc, tail = await run_cmd([sys.executable, str(VALIDATOR), "dump", source], timeout=VALIDATE_TIMEOUT)
+        return {"gate": "skipped", "records": None, "records_before": None, "latest_txn": None}
+    rc, tail = await run_cmd([sys.executable, str(VALIDATOR), "dump", source, "--json"], timeout=VALIDATE_TIMEOUT)
     if rc != 0:
-        raise ApplicationError(f"validate.py rejected the {source} dump (rc={rc}):\n{tail}",
+        human = "\n".join(l for l in tail.splitlines() if not l.startswith("DUMP_JSON "))
+        raise ApplicationError(f"validate.py rejected the {source} dump (rc={rc}):\n{human}",
                                type=VALIDATION_FAILED, non_retryable=True)
-    return "ok"
+    return {"gate": "ok", **parse_dump_json(tail)}
+
+
+def parse_dump_json(output: str) -> dict:
+    """Record counts from validate.py's `DUMP_JSON {...}` line; Nones when it is missing."""
+    info = {"records": None, "records_before": None, "latest_txn": None}
+    for line in reversed(output.splitlines()):
+        if line.startswith("DUMP_JSON "):
+            try:
+                body = json.loads(line[len("DUMP_JSON "):])
+            except ValueError:
+                break
+            return {k: body.get(k) for k in info}
+    return info
 
 
 DIGEST_STEPS = ["digest.py", "validate.py", "forecast.py", "cashflow.py", "goals.py"]  # order matters (sync-data skill)

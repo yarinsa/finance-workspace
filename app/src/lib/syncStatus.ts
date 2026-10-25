@@ -36,6 +36,13 @@ export interface SourceStatus {
   last_success_at: string | null;
   /** One-line root cause when status is `failed` or `rejected`. */
   error: string | null;
+  /** Normalized record counts per entity after / before this run's scrape (dump gate); absent on older entries. */
+  records?: Record<string, number> | null;
+  records_before?: Record<string, number> | null;
+  /** Newest transaction in the fresh dump. */
+  latest_txn?: string | null;
+  /** This run's steps in order, each with when it started; absent on older entries. */
+  log?: { status: SyncState; at: string }[];
 }
 
 export interface SyncStatusDoc {
@@ -101,6 +108,7 @@ const LOGIN_LABEL: Record<string, string> = {
   leumi: "לאומי",
   cal: "כאל",
   amex: "אמריקן אקספרס",
+  max: "מקס",
   harel: "הראל",
   more: "מור",
   analyst: "אנליסט",
