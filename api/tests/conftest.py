@@ -87,6 +87,7 @@ def pool(test_url, owner):
 class FakeRebuilder:
     def __init__(self):
         self.signals = 0
+        self.logins, self.codes = [], []
         self.state = {"state": "idle", "last_published_at": None, "last_error": None}
 
     def signal_edited(self):
@@ -98,6 +99,20 @@ class FakeRebuilder:
 
     def ping(self):
         return True
+
+    # App logins (Harel): what was asked of Temporal, and whether it "answered".
+    logins: list
+    codes: list
+    up = True
+    waiting = True
+
+    def start_login(self, source):
+        self.logins.append(source)
+        return self.up
+
+    def submit_otp(self, source, code):
+        self.codes.append((source, code))
+        return self.up and self.waiting
 
 
 @pytest.fixture

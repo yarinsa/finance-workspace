@@ -1,8 +1,8 @@
 """Regression tests for the 2026-10-16 incident: the AMEX Chrome (9226) had run
 for 7 days holding only More/Harel tabs (plus browser_ui/omnibox and extension
 targets), and `playwright-cli attach` / `run-code` hung forever. AMEX now logs in headless,
-so Harel (the remaining playwright source) carries the same scenario: its Chrome holding only
-other banks' tabs."""
+and Harel scrapes headless too, so a Chrome-style Harel (the chrome_harel fixture) carries the
+same scenario: its Chrome holding only other banks' tabs."""
 import asyncio
 import sys
 import time
@@ -39,9 +39,9 @@ def test_harel_tab_index_skips_internal_targets():
     assert activities._tab_index(HAREL, pages) == 2  # after More and AMEX, not browser_ui/omnibox
 
 
-def test_ensure_chrome_opens_harel_tab_and_selects_it(monkeypatch):
+def test_ensure_chrome_opens_harel_tab_and_selects_it(monkeypatch, chrome_harel):
     pages = [t for t in INCIDENT_TARGETS if t["type"] == "page"]
-    listings = [pages, pages + [{"type": "page", "url": HAREL.open_url}]]
+    listings = [pages, pages + [{"type": "page", "url": chrome_harel.open_url}]]
     opened, calls = [], []
 
     async def no_sleep(_):
@@ -57,8 +57,8 @@ def test_ensure_chrome_opens_harel_tab_and_selects_it(monkeypatch):
     monkeypatch.setattr(activities, "run_cmd", fake_run_cmd)
     monkeypatch.setattr(activities.asyncio, "sleep", no_sleep)
 
-    assert _run(activities.ensure_chrome("harel")) == "already_running"
-    assert opened == [HAREL.open_url]
+    assert _run(activities.ensure_chrome("chrome-harel")) == "already_running"
+    assert opened == [chrome_harel.open_url]
     attach, select = calls
     assert "attach" in attach[0] and attach[1]["timeout"] == activities.PW_TIMEOUT
     assert "--cdp=http://127.0.0.1:9227" in attach[0]
@@ -87,7 +87,7 @@ def test_raw_cdp_sources_get_a_tab_but_no_playwright_session(monkeypatch):
     assert calls == []  # more/analyst dump over raw CDP; attaching playwright has hung on shared Chrome
 
 
-def test_ensure_chrome_launches_with_the_sources_own_port_and_profile(monkeypatch):
+def test_ensure_chrome_launches_with_the_sources_own_port_and_profile(monkeypatch, chrome_harel):
     launched, up = [], []
 
     async def no_sleep(_):
@@ -105,8 +105,8 @@ def test_ensure_chrome_launches_with_the_sources_own_port_and_profile(monkeypatc
     monkeypatch.setattr(activities, "_cdp_pages", lambda src: [{"type": "page", "url": "https://www.harel-group.co.il/x"}])
     monkeypatch.setattr(activities, "run_cmd", fake_run_cmd)
     monkeypatch.setattr(activities.asyncio, "sleep", no_sleep)
-    assert _run(activities.ensure_chrome("harel")) == "launched"
-    assert launched == ["harel"]
+    assert _run(activities.ensure_chrome("chrome-harel")) == "launched"
+    assert launched == ["chrome-harel"]
     assert sources.get("harel").port == 9227 and sources.get("harel").profile.name == ".chrome-cdp-harel"
 
 
@@ -125,7 +125,7 @@ def test_run_cmd_without_timeout_unchanged():
     assert (rc, tail) == (0, "ok")
 
 
-def test_check_session_hang_is_bounded(monkeypatch):
+def test_check_session_hang_is_bounded(monkeypatch, chrome_harel):
     seen = {}
 
     async def fake_run_cmd(args, **kw):
@@ -133,5 +133,55 @@ def test_check_session_hang_is_bounded(monkeypatch):
         return 0, "harel        9227   live\n"
 
     monkeypatch.setattr(activities, "run_cmd", fake_run_cmd)
-    assert _run(activities.check_session("harel")) == "live"
+    assert _run(activities.check_session("chrome-harel")) == "live"
     assert seen["timeout"] == activities.SESSIONS_TIMEOUT
+
+
+# --- Harel headless: `scrape.mjs --check` is the session check, no Chrome until a human must log in ---
+
+def test_harel_is_headless_and_needs_no_chrome(monkeypatch):
+    assert HAREL.check == sources.HEADLESS and not HAREL.playwright
+    monkeypatch.setattr(activities, "_cdp_up", lambda src: pytest.fail("must not touch Chrome"))
+    assert _run(activities.ensure_chrome("harel")) == "already_running"
+
+
+def _harel_check(monkeypatch, rc, out):
+    seen, opened = [], []
+
+    async def fake_run_cmd(args, **kw):
+        seen.append((args, kw))
+        return rc, out
+
+    async def fake_open(src):
+        opened.append(src.name)
+        return "launched"
+
+    monkeypatch.setattr(activities, "run_cmd", fake_run_cmd)
+    monkeypatch.setattr(activities, "_open_chrome", fake_open)
+    return seen, opened
+
+
+def test_harel_live_session_opens_no_window(monkeypatch):
+    seen, opened = _harel_check(monkeypatch, 0, "VERDICT: LIVE\n")
+    assert _run(activities.check_session("harel")) == "live"
+    (args, kw), = seen
+    assert args[0].endswith("scrapers/harel/scrape.mjs") and args[1:] == ["--check"]
+    assert kw["timeout"] == activities.SESSIONS_TIMEOUT
+    assert opened == []
+
+
+def test_harel_dead_session_opens_the_login_window(monkeypatch):
+    _, opened = _harel_check(monkeypatch, 3, "LOGIN FAILED: SESSION_EXPIRED\nVERDICT: LOGGED_OUT\n")
+    assert _run(activities.check_session("harel")) == "dead"
+    assert opened == ["harel"]  # the human logs in there; the recheck reuses it over CDP
+
+
+def test_harel_check_without_verdict_is_an_infrastructure_error(monkeypatch):
+    _, opened = _harel_check(monkeypatch, 1, "Error: Failed to launch the browser process\n")
+    with pytest.raises(ApplicationError):
+        _run(activities.check_session("harel"))
+    assert opened == []
+
+
+def test_harel_session_expiring_mid_scrape_is_needs_login():
+    assert activities.looks_expired("LOGIN FAILED: SESSION_EXPIRED\n")

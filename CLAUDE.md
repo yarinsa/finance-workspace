@@ -178,6 +178,16 @@ Max does the same: `scrapers/max/scrape.mjs` logs in headless with `MAX_USERNAME
 (check mode `self`, its own login group) and writes `data/max/raw/`.
 Leumi too: `scrapers/leumi/scrape.mjs` logs in headless with `LEUMI_USERNAME`/`LEUMI_PASSWORD`
 (check mode `self`) and makes the `dump.sh` + `dump-loans.sh` calls, writing the same `data/leumi/raw/` files.
+Harel can't self-login (its only login is ID + phone + OTP), so it is headless the other way:
+`scrapers/harel/scrape.mjs` reuses the human's login in `~/.chrome-cdp-harel` (check mode
+`headless`: `scrape.mjs --check`, no Chrome window unless the session is dead, then the normal
+login notification opens it; about one login a month). It can also log in **from the app**: the
+`/syncs` Harel row's "התחבר עם קוד SMS" calls `POST /api/sync/harel/login`, which starts a
+one-source sync (`finance-sync-login-harel`); `scrape.mjs --login` types `HAREL_ID`/`HAREL_PHONE`
+from `.env`, Harel texts a code, the human types it in the app (`POST /api/sync/harel/otp` ->
+`submit_otp` signal -> `deliver_otp` writes `~/.finance-otp/harel.code`, 0600, read once). The code
+is typed by the human, never read from SMS/email; scheduled runs never request one, and a rejected
+code is never resubmitted.
 The source registry is `sync/sources.py`.
 Every source's progress (checking_session → waiting_for_login → scraping → validating →
 digesting → publishing → done, or needs_login / failed / rejected) is published as its own

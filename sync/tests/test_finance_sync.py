@@ -1,4 +1,6 @@
 """FinanceSyncWorkflow: preflight, grouped login, scrape order, isolation, validation gate."""
+import asyncio
+
 import pytest
 from temporalio.exceptions import ApplicationError
 
@@ -323,3 +325,62 @@ def test_failed_scrape_error_carries_the_scripts_own_error_line():
     last = [e for s, e in fake.statuses if s == "cal"][-1]
     assert last["error"].splitlines() == [
         "ScrapeFailed: scrape.mjs failed for cal (rc=1)", "TimeoutError: Waiting for selector `#ccLoginDesktopBtn` failed"]
+
+
+# --- Harel OTP login from the app -------------------------------------------------------
+
+async def until_status(fake, source, status):
+    for _ in range(400):
+        if status in fake.published(source):
+            return
+        await asyncio.sleep(0.02)
+    raise AssertionError(f"{source} never reached {status}: {fake.published(source)}")
+
+
+def test_app_started_harel_run_logs_in_with_the_typed_code():
+    fake = Fake(sessions={"harel": "dead"})
+
+    async def scenario(env, h):
+        await until_status(fake, "harel", "waiting_for_otp")
+        await h.signal(FinanceSyncWorkflow.submit_otp, args=["harel", "123456"])
+        return await h.result()
+
+    result = run(fake, scenario, args=[["harel"]])
+    assert result["harel"]["status"] == "ok"
+    assert fake.of("scrape_login") == ["harel"] and fake.of("scrape") == []
+    assert ("deliver_otp", "harel", "123456") in fake.calls
+    assert fake.login_notes() and "Chrome" not in fake.login_notes()[0]  # no 15-minute Chrome wait
+    assert "waiting_for_login" not in fake.published("harel")
+
+
+def test_scheduled_run_never_sends_a_code():
+    fake = Fake(sessions={"harel": "dead"})
+    result = result_of(fake)  # no names: the schedule
+    assert fake.of("scrape_login") == []
+    assert result["harel"]["status"] == "needs_login"
+
+
+def test_wrong_code_is_needs_login_and_not_resubmitted():
+    fake = Fake(sessions={"harel": "dead"})
+
+    async def scenario(env, h):
+        await until_status(fake, "harel", "waiting_for_otp")
+        await h.signal(FinanceSyncWorkflow.submit_otp, args=["harel", "999999"])
+        await h.signal(FinanceSyncWorkflow.submit_otp, args=["harel", "123456"])  # too late: one code per login
+        return await h.result()
+
+    result = run(fake, scenario, args=[["harel"]])
+    assert result["harel"]["status"] == "needs_login"
+    assert [c for c in fake.calls if c[0] == "deliver_otp"] == [("deliver_otp", "harel", "999999")]
+
+
+def test_code_for_a_source_not_waiting_is_ignored():
+    fake = Fake(sessions={"harel": "live"})
+
+    async def scenario(env, h):
+        await h.signal(FinanceSyncWorkflow.submit_otp, args=["harel", "123456"])
+        return await h.result()
+
+    result = run(fake, scenario, args=[["harel"]])
+    assert result["harel"]["status"] == "ok" and fake.of("deliver_otp") == []
+    assert fake.of("scrape") == ["harel"]  # a live session needs no code

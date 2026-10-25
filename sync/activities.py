@@ -50,7 +50,8 @@ EXPIRED_MARKERS = (
     "קלט לא תקין", "session likely", "probably logged out", "No logged-in", "No amitim",
     # self-login scrapers (scrapers/*): the bank refused the .env credentials or wants a human step
     "LOGIN FAILED: INVALID_PASSWORD", "LOGIN FAILED: CHANGE_PASSWORD",
-    "LOGIN FAILED: OTP_REQUIRED", "LOGIN FAILED: ACCOUNT_BLOCKED",
+    "LOGIN FAILED: OTP_REQUIRED", "LOGIN FAILED: ACCOUNT_BLOCKED", "LOGIN FAILED: SESSION_EXPIRED",
+    "LOGIN FAILED: OTP_TIMEOUT", "LOGIN FAILED: OTP_REJECTED", "LOGIN FAILED: LOGIN_ERROR",
 )
 
 
@@ -257,8 +258,12 @@ async def ensure_chrome(source: str) -> str:
     on the bank, and, for playwright sources, has a playwright-cli session attached to
     that tab. Returns "already_running" or "launched"."""
     src = sources.get(source)
-    if src.check == sources.SELF:
+    if src.check in (sources.SELF, sources.HEADLESS):
         return "already_running"  # no Chrome: the dump runs its own headless browser
+    return await _open_chrome(src)
+
+
+async def _open_chrome(src) -> str:
     state = "already_running"
     if not await asyncio.to_thread(_cdp_up, src):
         state = "launched"
@@ -300,6 +305,14 @@ async def check_session(source: str) -> str:
     src = sources.get(source)
     if src.check == sources.SELF:
         return "live"  # the dump authenticates itself; a bad login surfaces from scrape()
+    if src.check == sources.HEADLESS:
+        rc, tail = await run_cmd([src.dumps[0][0], "--check"], timeout=SESSIONS_TIMEOUT)
+        live = parse_verdict(tail)
+        if live is None:
+            raise ApplicationError(f"{Path(src.dumps[0][0]).name} --check printed no VERDICT (rc={rc}):\n{tail}")
+        if not live:
+            await _open_chrome(src)  # the window the human logs in to; the recheck reuses it over CDP
+        return "live" if live else "dead"
     if src.check == sources.VERDICT:
         # AMEX's own check_session.sh: auth cookies + /IsLoggedIn, the strongest signal we have.
         rc, tail = await run_cmd([str(AMEX_CHECK), src.pw_session], timeout=PW_TIMEOUT)
@@ -351,6 +364,46 @@ async def scrape(source: str) -> str:
             raise ApplicationError(f"{Path(argv[0]).name} failed for {source} (rc={rc})", tail,
                                    type=SCRAPE_FAILED, non_retryable=True)
     return tail
+
+
+@activity.defn
+async def scrape_login(source: str) -> str:
+    """Like `scrape`, but the dump may log in (`--login`) with a code the human types in the app,
+    which `deliver_otp` drops into the source's OTP file. Never retried: a retry is another SMS."""
+    src = sources.get(source)
+    if not src.otp:
+        raise ApplicationError(f"{source} has no app login", type=SCRAPE_FAILED, non_retryable=True)
+    otp_file = otp_path(source)
+    otp_file.unlink(missing_ok=True)  # a code left from an earlier run is stale
+    argv = [src.dumps[0][0], "--login", "--otp-file", str(otp_file)]
+    try:
+        rc, tail = await run_cmd(argv)
+    finally:
+        otp_file.unlink(missing_ok=True)
+    if rc != 0:
+        if looks_expired(tail):
+            raise ApplicationError(f"{source} login failed", tail, type=SESSION_EXPIRED, non_retryable=True)
+        raise ApplicationError(f"{Path(argv[0]).name} --login failed for {source} (rc={rc})", tail,
+                               type=SCRAPE_FAILED, non_retryable=True)
+    return tail
+
+
+def otp_path(source: str) -> Path:
+    return sources.OTP_DIR / f"{sources.get(source).name}.code"
+
+
+@activity.defn
+async def deliver_otp(source: str, code: str) -> None:
+    """Hand the human's code to the waiting `scrape_login` dump: an 0600 file it reads once and deletes."""
+    if not sources.get(source).otp or not re.fullmatch(r"\d{4,8}", code or ""):
+        raise ApplicationError("not a code", non_retryable=True)
+    sources.OTP_DIR.mkdir(mode=0o700, exist_ok=True)
+    target = otp_path(source)
+    tmp = target.with_suffix(".tmp")
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w") as fh:
+        fh.write(code)
+    os.replace(tmp, target)
 
 
 @activity.defn
@@ -540,4 +593,4 @@ async def publish_status(source: str, entry: dict) -> str:
         return f"error: {e}"
 
 
-ALL_ACTIVITIES = [ensure_chrome, check_session, scrape, validate_dump, digest, publish_data, notify, publish_status]
+ALL_ACTIVITIES = [ensure_chrome, check_session, scrape, scrape_login, deliver_otp, validate_dump, digest, publish_data, notify, publish_status]

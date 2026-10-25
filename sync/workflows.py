@@ -4,7 +4,10 @@ ever logging in.
   preflight   check every requested session first
   login       if any are dead, ONE notification listing them (grouped by login), then wait
               up to 15m for the `session_refreshed` signal (sync/resume.py)
-  scrape      live (and unknown) sources in registry order; one failing never stops the rest
+  scrape      live (and unknown) sources in registry order; one failing never stops the rest.
+              A dead `otp` source (Harel) the human started by name from the app logs in
+              instead: its dump asks for an SMS and the code typed in the app arrives as the
+              `submit_otp` signal (status waiting_for_otp). Scheduled runs never send a code.
   gate        validate_dump after each scrape; a rejected dump does not count
   finish      digest once, publish once, if at least one source scraped
 
@@ -33,6 +36,13 @@ QUICK = dict(
     retry_policy=RetryPolicy(maximum_attempts=3, initial_interval=timedelta(seconds=10)),
 )
 # Retrying cannot fix a dead session or a moved endpoint, so those never retry.
+# An OTP login: the dump waits up to 8 minutes for the code. One attempt: a retry is another SMS.
+LOGIN = dict(
+    start_to_close_timeout=timedelta(minutes=10),
+    heartbeat_timeout=timedelta(seconds=60),
+    retry_policy=RetryPolicy(maximum_attempts=1),
+)
+
 SCRAPE = dict(
     start_to_close_timeout=timedelta(minutes=10),
     heartbeat_timeout=timedelta(seconds=60),
@@ -72,6 +82,7 @@ TOTAL_STEPS = 5
 STEPS = {
     "checking_session": (1, "{name}: בודק חיבור"),
     "waiting_for_login": (1, "{name}: ממתין שתתחבר ב-Chrome במק"),
+    "waiting_for_otp": (1, "{name}: נשלח קוד ב-SMS — הזן אותו כאן"),
     "scraping": (2, "{name}: מוריד נתונים"),
     "validating": (3, "{name}: בודק את הנתונים"),
     "digesting": (4, "{name}: בונה מחדש את הנתונים"),
@@ -126,6 +137,16 @@ class _FinanceSync:
         self._resumed = False
         self._all = False  # a signal without names re-checks every dead source
         self._named: set = set()
+        self._requested: set = set()  # sources named when the run was started (empty: scheduled run)
+        self._otp_waiting: str | None = None  # the source whose dump is waiting for a code
+
+    async def submit_otp(self, source: str, code: str) -> None:
+        """The human typed a code in the app. Ignored unless that source's login is waiting for one."""
+        if source != self._otp_waiting or not (code or "").isdigit() or not 4 <= len(code) <= 8:
+            return
+        self._otp_waiting = None  # one code per login: a second submit is not relayed
+        await workflow.execute_activity("deliver_otp", args=[source, code], **QUICK)
+        await self._set(source, "scraping", f"{sources.LABEL_HE[source]}: הקוד התקבל — מתחבר")
 
     def refreshed(self, names=None) -> None:
         self._resumed = True
@@ -205,16 +226,30 @@ class _FinanceSync:
     def _was_named(self, source: str) -> bool:
         return self._all or source in self._named
 
-    async def _scrape_one(self, source: str, unverified: bool) -> str:
-        """scrape + validate. Returns "ok" | "needs_login" | "failed" | "rejected"."""
+    async def _scrape_one(self, source: str, unverified: bool, login: bool = False) -> str:
+        """scrape (or, with `login`, log in with the app's code and scrape) + validate.
+        Returns "ok" | "needs_login" | "failed" | "rejected"."""
         name = sources.LABEL_HE[source]
         self._res(source, "scraping")
-        await self._set(source, "scraping")
         try:
-            await workflow.execute_activity("scrape", source, **SCRAPE)
+            if login:
+                self._otp_waiting = source
+                await self._set(source, "waiting_for_otp")
+                await self._say(LOGIN_TITLE, f"{source}: enter the SMS code in the app (/syncs)")
+                try:
+                    await workflow.execute_activity("scrape_login", source, **LOGIN)
+                finally:
+                    self._otp_waiting = None
+            else:
+                await self._set(source, "scraping")
+                await workflow.execute_activity("scrape", source, **SCRAPE)
         except ActivityError as e:
             kind, _ = _cause(e)
             if kind == "SessionExpired":
+                if login:
+                    self._res(source, NEEDS_LOGIN, _detail(e))
+                    await self._set(source, "needs_login", f"{name}: ההתחברות לא הושלמה — נסה שוב", error=_reason(e))
+                    return NEEDS_LOGIN
                 self._res(source, NEEDS_LOGIN, "session expired during scrape")
                 await self._set(source, "needs_login", f"{name}: החיבור פג באמצע ההורדה — התחבר והפעל שוב")
                 return NEEDS_LOGIN
@@ -253,6 +288,7 @@ class _FinanceSync:
         except ValueError as e:
             raise ApplicationError(str(e), non_retryable=True)
         self._results = {s: {"status": PENDING, "detail": ""} for s in order}
+        self._requested = set(order) if requested else set()
 
         # 1. Preflight: every session, before anything is scraped.
         self._phase = "preflight"
@@ -260,6 +296,8 @@ class _FinanceSync:
         for s in order:
             await self._set(s, "checking_session")
             state[s] = await self._probe(s)
+            if state[s] == "dead" and sources.get(s).otp and s in self._requested:
+                state[s] = "otp"  # started from the app: log in with a code there, no Chrome wait
 
         # 2. One grouped notification, one wait. The human logs in once per group.
         dead = [s for s in order if state[s] == "dead"]
@@ -289,14 +327,14 @@ class _FinanceSync:
         self._phase = "scraping"
         expired_groups: dict = {}
         for s in order:
-            if state[s] not in ("live", "unknown"):
+            if state[s] not in ("live", "unknown", "otp"):
                 continue
             group = sources.get(s).group
             if group in expired_groups:
                 self._res(s, NEEDS_LOGIN, f"login expired while scraping {expired_groups[group]}")
                 await self._set(s, "needs_login")
                 continue
-            if await self._scrape_one(s, unverified=state[s] == "unknown") == NEEDS_LOGIN:
+            if await self._scrape_one(s, unverified=state[s] == "unknown", login=state[s] == "otp") == NEEDS_LOGIN:
                 expired_groups[group] = s
 
         # 4. Digest and publish once. A rejected dump is already on disk and the digest
@@ -357,6 +395,11 @@ class FinanceSyncWorkflow:
         """The human logged in again. Optionally name sources or login groups ("discount"
         covers all three Discount apps); without names every dead source is re-checked."""
         self._sync.refreshed(names)
+
+    @workflow.signal
+    async def submit_otp(self, source: str, code: str) -> None:
+        """A login code the human typed in the app (api POST /api/sync/{source}/otp)."""
+        await self._sync.submit_otp(source, code)
 
     @workflow.query
     def status(self) -> dict:

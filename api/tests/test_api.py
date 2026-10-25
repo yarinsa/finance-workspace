@@ -479,3 +479,42 @@ def test_goal_writes_need_csrf_and_unknown_goals_are_404_or_422(client):
     assert client.delete("/api/goals/999", headers=WRITE).status_code == 404
     assert client.patch(PURCHASE_URL, json={"goal_id": 999}, headers=WRITE).status_code == 422
     assert client.patch("/api/goals/1", json={"amount": None}, headers=WRITE).status_code == 422
+
+
+# --- Harel login from the app: start a one-source sync, relay the typed SMS code ----------
+
+def test_start_login_starts_the_harel_sync(client, rebuilder):
+    r = client.post("/api/sync/harel/login", headers=WRITE)
+    assert r.status_code == 202 and rebuilder.logins == ["harel"]
+
+
+def test_only_otp_sources_can_log_in_from_the_app(client, rebuilder):
+    assert client.post("/api/sync/cal/login", headers=WRITE).status_code == 404
+    assert client.post("/api/sync/cal/otp", json={"code": "123456"}, headers=WRITE).status_code == 404
+    assert rebuilder.logins == [] and rebuilder.codes == []
+
+
+def test_login_needs_csrf_and_a_session(client, build, rebuilder):
+    assert client.post("/api/sync/harel/login").status_code == 403
+    anon = TestClient(build())
+    anon.headers.update({"X-Origin-Secret": SECRET})
+    assert anon.post("/api/sync/harel/otp", json={"code": "123456"}, headers=WRITE).status_code == 401
+    assert rebuilder.logins == [] and rebuilder.codes == []
+
+
+def test_code_is_relayed(client, rebuilder):
+    r = client.post("/api/sync/harel/otp", json={"code": "123456"}, headers=WRITE)
+    assert r.status_code == 202 and rebuilder.codes == [("harel", "123456")]
+
+
+@pytest.mark.parametrize("code", ["12", "12a456", "123456789", " 123456", 123456])
+def test_only_digit_codes_are_relayed(client, rebuilder, code):
+    r = client.post("/api/sync/harel/otp", json={"code": code}, headers=WRITE)
+    assert r.status_code == 422 and rebuilder.codes == []
+
+
+def test_no_waiting_login_is_409_and_temporal_down_is_503(client, rebuilder):
+    rebuilder.waiting = False
+    assert client.post("/api/sync/harel/otp", json={"code": "123456"}, headers=WRITE).status_code == 409
+    rebuilder.up = False
+    assert client.post("/api/sync/harel/login", headers=WRITE).status_code == 503

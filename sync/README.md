@@ -31,9 +31,19 @@ commands, session-check strategy). Registry order is the scrape order.
 | `cal` | 9225 | cal | `check_sessions.sh cal` |
 | `amex` | none | (self-login) | `self`: `scrapers/amex/scrape.mjs` logs in headless from `.env` |
 | `max` | — | — | self: `scrapers/max/scrape.mjs` logs in headless from `.env` |
-| `harel` | 9227 | harel | `check_sessions.sh harel` |
+| `harel` | 9227 (only to log in) | harel | `headless`: `scrapers/harel/scrape.mjs --check` reuses the profile's login; Chrome opens only when it is dead |
 | `more` | 9228 | more | `check_sessions.sh more` |
 | `analyst` | 9229 | analyst | `check_sessions.sh analyst` |
+
+Harel cannot log in by itself (ID + phone + a one-time code, never automated), so it uses
+check mode `headless`: `scrapers/harel/scrape.mjs` reuses the login the human left in
+`~/.chrome-cdp-harel`, connecting over CDP when that Chrome is open on 9227 and otherwise
+running the same Google Chrome binary headless on the profile. Only when `--check` says
+LOGGED_OUT does the preflight open the visible window for the normal login notification.
+A Harel-only run started from the app (`POST /api/sync/harel/login`, workflow id
+`finance-sync-login-harel`) logs in instead: status `waiting_for_otp`, the `submit_otp(source, code)`
+signal relays the code typed on `/syncs` through `deliver_otp` to the waiting `scrape_login`. The
+code is in that workflow's Temporal history (single-use, minutes-long, local dev server).
 
 No Discount source needs Chrome any more. Business, mortgage and checking
 (`scrapers/discount/scrape-business.mjs`, `scrape-mortgage.mjs`, `scrape.mjs`, sharing

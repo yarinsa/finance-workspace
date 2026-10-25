@@ -20,6 +20,16 @@ SIGNAL = "edited"
 QUERY = "status"
 TIMEOUT = 3.0
 
+# Logging in from the app: a one-source FinanceSyncWorkflow whose dump asks for an SMS and waits
+# for the code the human types (signal `submit_otp`). Only these sources have an app login.
+SYNC_WORKFLOW = "FinanceSyncWorkflow"
+OTP_SOURCES = frozenset({"harel"})
+OTP_SIGNAL = "submit_otp"
+
+
+def login_workflow_id(source):
+    return f"finance-sync-login-{source}"
+
 IDLE = {"state": "idle", "last_published_at": None, "last_error": None}
 
 
@@ -57,6 +67,30 @@ class Rebuilder:
             return {**IDLE, **{k: result.get(k) for k in IDLE if k in result}}
         except Exception:
             return dict(IDLE)
+
+    def start_login(self, source):
+        """Start (or join the running) one-source sync that logs in with an app-typed code. True on success."""
+        async def go(client):
+            await client.start_workflow(
+                SYNC_WORKFLOW, [source], id=login_workflow_id(source), task_queue=TASK_QUEUE,
+                id_conflict_policy=WorkflowIDConflictPolicy.USE_EXISTING)
+        try:
+            self._run(go)
+            return True
+        except Exception:
+            log.exception("could not start the %s login", source)
+            return False
+
+    def submit_otp(self, source, code):
+        """Relay the human's code to that login's sync (ignored there unless it is waiting). True on success."""
+        async def go(client):
+            await client.get_workflow_handle(login_workflow_id(source)).signal(OTP_SIGNAL, args=[source, code])
+        try:
+            self._run(go)
+            return True
+        except Exception:
+            log.warning("could not deliver the %s code (no login waiting?)", source)  # never log the code
+            return False
 
     def ping(self):
         """True if the Temporal frontend answers."""

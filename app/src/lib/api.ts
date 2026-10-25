@@ -239,6 +239,13 @@ export async function request<T>(method: string, path: string, body?: unknown): 
 
 const txPath = (key: LedgerKey) => `/transactions/${encodeURIComponent(key.date)}/${encodeURIComponent(key.abs_amount)}`;
 
+/** Start a one-source sync that logs in with an SMS code typed in the app (Harel). */
+export const startLogin = (source: string) => request<{ ok: true }>("POST", `/sync/${encodeURIComponent(source)}/login`);
+
+/** Hand the SMS code to the waiting login. 409 `not_waiting` when no login is waiting for one. */
+export const submitOtp = (source: string, code: string) =>
+  request<{ ok: true }>("POST", `/sync/${encodeURIComponent(source)}/otp`, { code });
+
 export const getHealth = () => request<Health>("GET", "/health");
 
 export async function listTransactions(q: ListQuery = {}): Promise<Row[]> {

@@ -137,42 +137,42 @@ def _fake_cmd(monkeypatch, output, seen=None):
     monkeypatch.setattr(activities, "run_cmd", fake)
 
 
-def test_check_uses_single_source_mode_and_timeout(monkeypatch):
+def test_check_uses_single_source_mode_and_timeout(monkeypatch, chrome_harel):
     seen = []
     _fake_cmd(monkeypatch, "harel        9227   live\n", seen)
-    assert run(activities.check_session("harel")) == "live"
+    assert run(activities.check_session("chrome-harel")) == "live"
     args, kw = seen[0]
     assert args[0].endswith("refresh-all/scripts/check_sessions.sh") and args[1] == "harel"
     assert kw["timeout"] == activities.SESSIONS_TIMEOUT
 
 
-def test_unknown_stays_unknown_without_a_login_page(monkeypatch):
+def test_unknown_stays_unknown_without_a_login_page(monkeypatch, chrome_harel):
     _fake_cmd(monkeypatch, "harel        9227   unknown (no tab on this app)\n")
     monkeypatch.setattr(activities, "_cdp_pages", lambda src: [{"type": "page", "url": "https://example.com/"}])
-    assert run(activities.check_session("harel")) == "unknown"
+    assert run(activities.check_session("chrome-harel")) == "unknown"
 
 
-def test_unknown_with_login_page_open_is_dead(monkeypatch):
+def test_unknown_with_login_page_open_is_dead(monkeypatch, chrome_harel):
     _fake_cmd(monkeypatch, "harel        9227   unknown (no tab on this app)\n")
     monkeypatch.setattr(activities, "_cdp_pages",
                         lambda src: [{"type": "page", "url": "https://digital-web.harel-group.co.il/login"}])
-    assert run(activities.check_session("harel")) == "dead"
+    assert run(activities.check_session("chrome-harel")) == "dead"
 
 
-def test_unreadable_tabs_are_unknown_not_dead(monkeypatch):
+def test_unreadable_tabs_are_unknown_not_dead(monkeypatch, chrome_harel):
     _fake_cmd(monkeypatch, "harel        9227   unknown (no tab on this app)\n")
 
     def boom(src):
         raise OSError("connection refused")
 
     monkeypatch.setattr(activities, "_cdp_pages", boom)
-    assert run(activities.check_session("harel")) == "unknown"
+    assert run(activities.check_session("chrome-harel")) == "unknown"
 
 
-def test_missing_row_is_an_infrastructure_error(monkeypatch):
+def test_missing_row_is_an_infrastructure_error(monkeypatch, chrome_harel):
     _fake_cmd(monkeypatch, "playwright-cli: command not found\n")
     with pytest.raises(ApplicationError):
-        run(activities.check_session("harel"))
+        run(activities.check_session("chrome-harel"))
 
 
 def test_amex_logs_in_by_itself(monkeypatch):
@@ -219,9 +219,9 @@ def scrape_env(monkeypatch):
     return cmds, results
 
 
-def test_scrape_passes_session_or_port_per_script(scrape_env):
+def test_scrape_passes_session_or_port_per_script(scrape_env, chrome_harel):
     cmds, _ = scrape_env
-    run(activities.scrape("harel"))
+    run(activities.scrape("chrome-harel"))
     run(activities.scrape("more"))
     runs = [c for c in cmds if c[0] == "run"]
     assert runs == [("run", "harel-refresh", ["harel"]), ("run", "more-refresh", ["9228"])]
@@ -371,3 +371,39 @@ def test_cal_logs_in_by_itself(monkeypatch):
     assert e.value.type == "SessionExpired" and e.value.non_retryable
     script = Path(__file__).resolve().parents[2] / "scrapers" / "cal" / "scrape.mjs"
     assert seen == [[str(script)]] and script.is_file()
+
+
+def test_harel_login_passes_its_own_otp_file(scrape_env, tmp_path, monkeypatch):
+    cmds, _ = scrape_env
+    monkeypatch.setattr(sources, "OTP_DIR", tmp_path)
+    run(activities.scrape_login("harel"))
+    (kind, parent, argv), = [c for c in cmds if c[0] == "run"]
+    assert parent == "scrapers" and argv == ["--login", "--otp-file", str(tmp_path / "harel.code")]
+
+
+def test_harel_bad_code_is_needs_login(scrape_env, tmp_path, monkeypatch):
+    _, results = scrape_env
+    monkeypatch.setattr(sources, "OTP_DIR", tmp_path)
+    results.append((3, "LOGIN FAILED: OTP_REJECTED (page saved to /tmp/x)\n"))
+    with pytest.raises(ApplicationError) as e:
+        run(activities.scrape_login("harel"))
+    assert e.value.type == activities.SESSION_EXPIRED and e.value.non_retryable
+
+
+def test_only_otp_sources_log_in_from_the_app():
+    with pytest.raises(ApplicationError):
+        run(activities.scrape_login("cal"))
+
+
+def test_deliver_otp_writes_a_private_file_and_refuses_non_codes(tmp_path, monkeypatch):
+    import os
+    import stat
+    monkeypatch.setattr(sources, "OTP_DIR", tmp_path / "otp")
+    run(activities.deliver_otp("harel", "123456"))
+    f = tmp_path / "otp" / "harel.code"
+    assert f.read_text() == "123456" and stat.S_IMODE(os.stat(f).st_mode) == 0o600
+    for bad in ["12", "12345a", "1; rm -rf /", ""]:
+        with pytest.raises(ApplicationError):
+            run(activities.deliver_otp("harel", bad))
+    with pytest.raises(ApplicationError):
+        run(activities.deliver_otp("cal", "123456"))
