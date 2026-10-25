@@ -1,19 +1,25 @@
 #!/usr/bin/env node
 // Deterministic Harel scrape, headless. Harel's only login is ID + phone + a one-time code (SMS or
-// email), which an agent never handles, so this does NOT log in: it reuses the session the human
-// left in the Chrome profile ~/.chrome-cdp-harel (port 9227).
+// email). By default this does NOT log in: it reuses the session the human left in the Chrome
+// profile ~/.chrome-cdp-harel (port 9227). With --login (only from a sync the human started in the
+// app) it fills HAREL_ID / HAREL_PHONE from .env, asks for an SMS, and waits for the code the HUMAN
+// typed in the app, which the sync worker drops into --otp-file. It never reads SMS or email itself.
 //   - Chrome on 9227 is up  -> connect over CDP and work in a new tab of it (the profile is locked).
 //   - otherwise             -> launch the same Google Chrome binary headless on that profile (the
 //                              same binary, so it can decrypt the profile's Keychain-encrypted cookies).
 // Then it loads client-view.aspx, recovers the per-page-load `ticket` from the page's own XHRs, and
 // writes the same files as harel-refresh/scripts/dump.sh to data/harel/raw/.
 //
-//   node scrapers/harel/scrape.mjs [--out DIR] [--check]
-//     --check  only report whether the session is live (writes nothing)
+//   node scrapers/harel/scrape.mjs [--out DIR] [--check] [--login --otp-file PATH]
+//     --check     only report whether the session is live (writes nothing)
+//     --login     log in when the session lapsed; the code is read once from --otp-file
+//                 (then deleted). A rejected code is never resubmitted.
 //
 // Exit codes: 0 ok / live; 1 failure (retryable); 2 bad args;
-// 3 LOGIN FAILED: SESSION_EXPIRED (a human must log in in the Chrome window; never retried).
+// 3 LOGIN FAILED: SESSION_EXPIRED | OTP_TIMEOUT | OTP_REJECTED | LOGIN_ERROR (a human must act;
+//   never retried).
 import puppeteer from 'puppeteer';
+import dotenv from 'dotenv';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -21,6 +27,7 @@ import { fileURLToPath } from 'node:url';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const repo = path.resolve(here, '../..');
+dotenv.config({ path: path.join(repo, '.env'), quiet: true });
 
 const PORT = 9227;
 const PROFILE = path.join(os.homedir(), '.chrome-cdp-harel');
@@ -42,7 +49,16 @@ function opt(name, def) {
   return i >= 0 && args[i + 1] ? args[i + 1] : def;
 }
 const checkOnly = args.includes('--check');
+const doLogin = args.includes('--login');
+const otpFile = opt('--otp-file', '');
 const outDir = path.resolve(opt('--out', path.join(repo, 'data/harel/raw')));
+const OTP_WAIT_MS = 8 * 60_000;  // inside the sync's 10-minute scrape timeout
+const DEBUG_DIR = path.join(os.tmpdir(), 'harel-login-debug');
+if (doLogin) {
+  if (!otpFile) { console.error('--login needs --otp-file'); process.exit(2); }
+  const missing = ['HAREL_ID', 'HAREL_PHONE'].filter((k) => !process.env[k]);
+  if (missing.length) { console.error(`Missing env: ${missing.join(', ')}`); process.exit(2); }
+}
 
 async function cdpUp() {
   try {
@@ -84,14 +100,102 @@ async function ticket(page) {
   });
   await page.goto(CLIENT_VIEW, { waitUntil: 'domcontentloaded', timeout: 60000 });
   for (let i = 0; i < 45 && !found; i++) {
-    if (/\/login-page\/|Login\.aspx/i.test(page.url())) throw new Exit(3, 'LOGIN FAILED: SESSION_EXPIRED');
+    if (onLoginPage(page)) throw new Exit(3, 'LOGIN FAILED: SESSION_EXPIRED');
     await sleep(1000);
   }
   if (!found) {
-    if (/\/login-page\/|Login\.aspx/i.test(page.url())) throw new Exit(3, 'LOGIN FAILED: SESSION_EXPIRED');
+    if (onLoginPage(page)) throw new Exit(3, 'LOGIN FAILED: SESSION_EXPIRED');
     throw new Exit(1, `no ticket after 45s on ${page.url()}`);
   }
   return found;
+}
+
+const onLoginPage = (page) => /\/login-page\/|Login\.aspx/i.test(page.url());
+
+async function visible(page, selector) {
+  return page.$eval(selector, (el) => !!(el.offsetWidth || el.offsetHeight || el.getClientRects().length))
+    .catch(() => false);
+}
+
+/** Keep what the page showed, so the next fix is not a blind retry against a live login. */
+async function saveDebug(page) {
+  fs.mkdirSync(DEBUG_DIR, { recursive: true });
+  await page.screenshot({ path: path.join(DEBUG_DIR, 'page.png') }).catch(() => {});
+  fs.writeFileSync(path.join(DEBUG_DIR, 'page.txt'), await page.evaluate(() => document.body.innerText).catch(() => ''));
+  return DEBUG_DIR;
+}
+
+/** Click the visible submit button whose text matches `re` (Harel's buttons have no ids). */
+async function clickButton(page, re) {
+  const ok = await page.evaluate((src) => {
+    const re = new RegExp(src);
+    const b = [...document.querySelectorAll('button')].find((e) =>
+      (e.offsetWidth || e.offsetHeight) && re.test((e.innerText || '').trim()));
+    if (b) b.click();
+    return !!b;
+  }, re.source);
+  if (!ok) throw new Exit(1, `no "${re.source}" button (page saved to ${await saveDebug(page)})`);
+}
+
+/** Visible inputs of the code step: one field, or one box per digit. */
+async function otpInputs(page) {
+  return page.evaluate(() => {
+    const els = [...document.querySelectorAll('input')].filter((e) =>
+      !['uid', 'phone'].includes(e.id) && !['hidden', 'radio', 'checkbox', 'submit', 'button'].includes(e.type)
+      && (e.offsetWidth || e.offsetHeight || e.getClientRects().length));
+    return els.map((e, i) => { e.setAttribute('data-harel-otp', String(i)); return `[data-harel-otp="${i}"]`; });
+  });
+}
+
+/** Wait for the code the human typed in the app; read it once and delete it. */
+async function waitForCode() {
+  const end = Date.now() + OTP_WAIT_MS;
+  while (Date.now() < end) {
+    try {
+      const code = fs.readFileSync(otpFile, 'utf8').trim();
+      fs.rmSync(otpFile, { force: true });
+      if (/^\d{4,8}$/.test(code)) return code;
+    } catch {}
+    await sleep(1000);
+  }
+  throw new Exit(3, 'LOGIN FAILED: OTP_TIMEOUT (no code was entered in the app)');
+}
+
+/** ID + phone -> SMS -> the code from the app. Leaves the page logged in (or throws). */
+async function login(page) {
+  if (!onLoginPage(page)) await page.goto(`${PORTAL}/Pages/login-page/Login.aspx?LoginOriginatingAction=PersonalInfoPage&isshowlogin=true&Source=%2fpersonal-info%2fmy-harel%2fPages%2fclient-view.aspx`,
+    { waitUntil: 'domcontentloaded', timeout: 60000 });
+  await page.waitForSelector('#uid', { visible: true, timeout: 30000 });
+  for (const [sel, v] of [['#uid', process.env.HAREL_ID], ['#phone', process.env.HAREL_PHONE]]) {
+    await page.$eval(sel, (el) => { el.value = ''; });
+    await page.type(sel, v);
+  }
+  if (await visible(page, '#otp-channel-sms')) await page.$eval('#otp-channel-sms', (el) => el.click());
+  await clickButton(page, /^המשך$/);
+
+  // The code step replaces the form (the uid field goes away and a code field appears).
+  let boxes = [];
+  for (let i = 0; i < 30 && !boxes.length; i++) {
+    await sleep(1000);
+    if (!(await visible(page, '#uid'))) boxes = await otpInputs(page);
+  }
+  if (!boxes.length) {
+    throw new Exit(3, `LOGIN FAILED: LOGIN_ERROR (no code step after ID + phone; page saved to ${await saveDebug(page)})`);
+  }
+  console.log('OTP_REQUESTED');  // the code is on its way to the phone
+  const code = await waitForCode();
+  if (boxes.length >= code.length && boxes.length > 1) {
+    for (let i = 0; i < code.length; i++) await page.type(boxes[i], code[i]);
+  } else {
+    await page.type(boxes[0], code);
+  }
+  await clickButton(page, /כניסה|המשך|אישור|שליחה/).catch(() => page.keyboard.press('Enter'));
+  for (let i = 0; i < 30; i++) {
+    await sleep(1000);
+    if (!onLoginPage(page)) return;
+  }
+  // Still on the login page: wrong or expired code. Never resubmit: that asks for another SMS.
+  throw new Exit(3, `LOGIN FAILED: OTP_REJECTED (page saved to ${await saveDebug(page)})`);
 }
 
 let failed = false;
@@ -122,7 +226,14 @@ let code = 0;
 let session;
 try {
   session = await open();
-  const t = await ticket(session.page);
+  let t;
+  try {
+    t = await ticket(session.page);
+  } catch (e) {
+    if (!(doLogin && e instanceof Exit && e.message === 'LOGIN FAILED: SESSION_EXPIRED')) throw e;
+    await login(session.page);
+    t = await ticket(session.page);
+  }
   if (checkOnly) {
     console.log('VERDICT: LIVE');
   } else {

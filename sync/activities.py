@@ -51,6 +51,7 @@ EXPIRED_MARKERS = (
     # self-login scrapers (scrapers/*): the bank refused the .env credentials or wants a human step
     "LOGIN FAILED: INVALID_PASSWORD", "LOGIN FAILED: CHANGE_PASSWORD",
     "LOGIN FAILED: OTP_REQUIRED", "LOGIN FAILED: ACCOUNT_BLOCKED", "LOGIN FAILED: SESSION_EXPIRED",
+    "LOGIN FAILED: OTP_TIMEOUT", "LOGIN FAILED: OTP_REJECTED", "LOGIN FAILED: LOGIN_ERROR",
 )
 
 
@@ -366,6 +367,46 @@ async def scrape(source: str) -> str:
 
 
 @activity.defn
+async def scrape_login(source: str) -> str:
+    """Like `scrape`, but the dump may log in (`--login`) with a code the human types in the app,
+    which `deliver_otp` drops into the source's OTP file. Never retried: a retry is another SMS."""
+    src = sources.get(source)
+    if not src.otp:
+        raise ApplicationError(f"{source} has no app login", type=SCRAPE_FAILED, non_retryable=True)
+    otp_file = otp_path(source)
+    otp_file.unlink(missing_ok=True)  # a code left from an earlier run is stale
+    argv = [src.dumps[0][0], "--login", "--otp-file", str(otp_file)]
+    try:
+        rc, tail = await run_cmd(argv)
+    finally:
+        otp_file.unlink(missing_ok=True)
+    if rc != 0:
+        if looks_expired(tail):
+            raise ApplicationError(f"{source} login failed", tail, type=SESSION_EXPIRED, non_retryable=True)
+        raise ApplicationError(f"{Path(argv[0]).name} --login failed for {source} (rc={rc})", tail,
+                               type=SCRAPE_FAILED, non_retryable=True)
+    return tail
+
+
+def otp_path(source: str) -> Path:
+    return sources.OTP_DIR / f"{sources.get(source).name}.code"
+
+
+@activity.defn
+async def deliver_otp(source: str, code: str) -> None:
+    """Hand the human's code to the waiting `scrape_login` dump: an 0600 file it reads once and deletes."""
+    if not sources.get(source).otp or not re.fullmatch(r"\d{4,8}", code or ""):
+        raise ApplicationError("not a code", non_retryable=True)
+    sources.OTP_DIR.mkdir(mode=0o700, exist_ok=True)
+    target = otp_path(source)
+    tmp = target.with_suffix(".tmp")
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w") as fh:
+        fh.write(code)
+    os.replace(tmp, target)
+
+
+@activity.defn
 async def validate_dump(source: str) -> dict:
     """Gate a fresh dump: `python3 data/validate.py dump <source> --json` (exit 0 = good).
     Returns {"gate": "ok" | "skipped", "records", "records_before", "latest_txn"} (the counts
@@ -552,4 +593,4 @@ async def publish_status(source: str, entry: dict) -> str:
         return f"error: {e}"
 
 
-ALL_ACTIVITIES = [ensure_chrome, check_session, scrape, validate_dump, digest, publish_data, notify, publish_status]
+ALL_ACTIVITIES = [ensure_chrome, check_session, scrape, scrape_login, deliver_otp, validate_dump, digest, publish_data, notify, publish_status]

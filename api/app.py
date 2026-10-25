@@ -17,7 +17,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import JSONResponse
 from fastapi.concurrency import run_in_threadpool
-from pydantic import ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "db"))   # the shared override code
@@ -28,9 +28,10 @@ import tags  # noqa: E402
 from .auth import TokenVerifier, check_csrf, check_origin, current_user  # noqa: E402
 from .config import Settings  # noqa: E402
 from .errors import ApiError  # noqa: E402
+
 from .inputs import GoalEdit, Patch, TagEdit, TagSet  # noqa: E402
 from .gql import endpoint  # noqa: E402
-from .rebuild import Rebuilder  # noqa: E402
+from .rebuild import OTP_SOURCES, Rebuilder  # noqa: E402
 
 log = logging.getLogger("finance_api")
 
@@ -84,6 +85,11 @@ async def read_json_body(request: Request, limit=MAX_BODY):
         if len(body) > limit:
             raise ApiError(413, "too_large", f"body must be at most {limit} bytes")
     return body
+
+
+class OtpBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    code: str = Field(pattern=r"^\d{4,8}$")
 
 
 def create_app(settings=None, pool=None, rebuilder=None, verifier=None):
@@ -321,6 +327,25 @@ def create_app(settings=None, pool=None, rebuilder=None, verifier=None):
         if writes:
             await run_in_threadpool(signal_rebuild, request)
         return JSONResponse(jsonable_encoder(out), status_code=status)
+
+    @app.post("/api/sync/{source}/login", dependencies=[Depends(check_csrf)], status_code=202)
+    def start_login(source: str, request: Request, user=Depends(current_user)):
+        """Start a one-source sync that logs in with a code typed here (Harel). Scheduled runs never do."""
+        if source not in OTP_SOURCES:
+            raise ApiError(404, "not_found", "no app login for this source")
+        if not request.app.state.rebuilder.start_login(source):
+            raise ApiError(503, "unavailable", "the sync worker is not reachable")
+        log.info("login started for %s by %s", source, user)
+        return {"ok": True}
+
+    @app.post("/api/sync/{source}/otp", dependencies=[Depends(check_csrf)], status_code=202)
+    def submit_otp(source: str, body: OtpBody, request: Request, user=Depends(current_user)):
+        """Hand the SMS code to the waiting login. The code is never stored or logged here."""
+        if source not in OTP_SOURCES:
+            raise ApiError(404, "not_found", "no app login for this source")
+        if not request.app.state.rebuilder.submit_otp(source, body.code):
+            raise ApiError(409, "not_waiting", "no login is waiting for a code")
+        return {"ok": True}
 
     @app.get("/api/rebuild")
     def rebuild_status(request: Request, user=Depends(current_user)):

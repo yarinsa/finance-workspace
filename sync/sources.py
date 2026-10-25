@@ -47,6 +47,7 @@ class Source:
     tab_url: str = ""         # page opened when the profile has no tab on the bank (defaults to login_url)
     app_url: str = ""         # page opened at SCRAPE time when no tab is on the app itself (Discount business)
     playwright: bool = True   # False: the dump talks raw CDP (more, analyst), no playwright-cli session
+    otp: bool = False         # the dump can log in with a code the human types in the app (`<dump> --login`)
 
     @property
     def group(self) -> str:
@@ -121,7 +122,7 @@ _ALL = [
     # Harel's only login is ID + phone + a one-time code, which is never automated: the human logs
     # in once in ~/.chrome-cdp-harel and scrapers/harel/scrape.mjs reuses that session headless.
     Source(name="harel", port=9227, login_url="https://www.harel-group.co.il/personal-info/my-harel/Pages/client-view.aspx",
-           app_host="harel-group.co.il", check=HEADLESS, playwright=False,
+           app_host="harel-group.co.il", check=HEADLESS, playwright=False, otp=True,
            dumps=((str(REPO_ROOT / "scrapers" / "harel" / "scrape.mjs"),),)),
     Source(name="more", port=9228, login_url="https://my-account.more.co.il/personalarea/dashboard",
            app_host="more.co.il", check=SESSIONS, playwright=False,
@@ -130,6 +131,10 @@ _ALL = [
            app_host="analyst.co.il", check=SESSIONS, playwright=False,
            dumps=(("analyst-refresh/scripts/dump.sh", "{port}"),)),
 ]
+
+# Codes the human types in the app are handed to the waiting dump through one file per source here
+# (0600, read once and deleted by the dump).
+OTP_DIR = Path.home() / ".finance-otp"
 
 # Hebrew names for the dashboard (the same labels app/src/routes/Syncs.tsx uses).
 LABEL_HE = {

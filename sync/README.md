@@ -40,6 +40,10 @@ check mode `headless`: `scrapers/harel/scrape.mjs` reuses the login the human le
 `~/.chrome-cdp-harel`, connecting over CDP when that Chrome is open on 9227 and otherwise
 running the same Google Chrome binary headless on the profile. Only when `--check` says
 LOGGED_OUT does the preflight open the visible window for the normal login notification.
+A Harel-only run started from the app (`POST /api/sync/harel/login`, workflow id
+`finance-sync-login-harel`) logs in instead: status `waiting_for_otp`, the `submit_otp(source, code)`
+signal relays the code typed on `/syncs` through `deliver_otp` to the waiting `scrape_login`. The
+code is in that workflow's Temporal history (single-use, minutes-long, local dev server).
 
 No Discount source needs Chrome any more. Business, mortgage and checking
 (`scrapers/discount/scrape-business.mjs`, `scrape-mortgage.mjs`, `scrape.mjs`, sharing

@@ -299,3 +299,11 @@ body {
 .pill-muted { background: var(--lg-panel-2); color: var(--lg-muted); }
 .fixed-group .pill-muted { background: var(--lg-panel); }
 .fixed-group summary::-webkit-details-marker { display: none; }
+
+/* Harel's in-app login: the button, or the SMS code field once the login is waiting. */
+.sync-otp {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  padding-block: 0.25rem 0.5rem;
+}

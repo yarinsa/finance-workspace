@@ -14,6 +14,15 @@ and writes `online-data.json`, `customer-products.json`, `client-claims-by-area.
 `client-requests.json` to `data/harel/raw/` (atomic; HTML / non-JSON / non-200 is not written and
 fails the run).
 
+## Logging in from the app (`--login`)
+
+`node scrapers/harel/scrape.mjs --login --otp-file PATH` logs in when the session lapsed: it types
+`HAREL_ID` and `HAREL_PHONE` from `.env`, picks SMS, prints `OTP_REQUESTED`, and waits up to 8
+minutes for the code to appear in `PATH` (read once, then deleted). The sync worker writes that file
+from the code the human typed on `/syncs`. A rejected code exits 3 `OTP_REJECTED` and is never
+resubmitted (that would send another SMS). On an unexpected page it saves
+`$TMPDIR/harel-login-debug/page.{png,txt}`.
+
 ## Run
 
     cd scrapers/harel && npm install   # first time
@@ -24,7 +33,9 @@ fails the run).
 
 - 0 ok / live
 - 1 failure (no ticket, a file rejected, browser failed to start); retryable
-- 3 `LOGIN FAILED: SESSION_EXPIRED`: log in in the Chrome window, then `sync/resume.py harel`
+- 3 `LOGIN FAILED: SESSION_EXPIRED` (log in in the Chrome window, then `sync/resume.py harel`, or from
+  the app), `OTP_TIMEOUT`, `OTP_REJECTED`, `LOGIN_ERROR`: a human must act, never retried
+- 2 bad args, or `--login` without `HAREL_ID` / `HAREL_PHONE` in `.env`
 
 If Harel keeps its login only in session cookies, closing that Chrome logs you out; leaving the
 window open keeps the CDP path working between syncs.

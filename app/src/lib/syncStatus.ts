@@ -14,6 +14,7 @@ export type SyncState =
   | "starting"
   | "checking_session"
   | "waiting_for_login"
+  | "waiting_for_otp"
   | "scraping"
   | "validating"
   | "digesting"
@@ -53,7 +54,10 @@ export interface SyncStatusDoc {
 /** States where the workflow is still moving on its own. */
 const RUNNING: ReadonlySet<SyncState> = new Set(["starting", "checking_session", "scraping", "validating", "digesting", "publishing"]);
 /** States that need the human (or a look at the Temporal UI). */
-const ATTENTION: ReadonlySet<SyncState> = new Set(["waiting_for_login", "needs_login", "rejected", "failed"]);
+const ATTENTION: ReadonlySet<SyncState> = new Set(["waiting_for_login", "waiting_for_otp", "needs_login", "rejected", "failed"]);
+
+/** Sources that log in with an SMS code typed in the app (sync/sources.py `otp`). */
+export const OTP_SOURCES: ReadonlySet<string> = new Set(["harel"]);
 
 /** A running status this old means the worker died mid-run; don't keep claiming progress. */
 export const STALE_AFTER_MS = 15 * 60_000;
@@ -74,7 +78,13 @@ export const needsAttention = (d: Display) => d !== "stale" && ATTENTION.has(d);
 /** Poll fast only while some source is actually mid-run. */
 export function pollInterval(doc: SyncStatusDoc | null, now = Date.now()): number {
   if (!doc) return POLL_IDLE_MS;
-  return Object.values(doc.sources).some((s) => isRunning(displayState(s, now))) ? POLL_ACTIVE_MS : POLL_IDLE_MS;
+  // A login waiting for its code also polls fast, so the row moves on right after you submit it.
+  return Object.values(doc.sources).some((s) => {
+    const d = displayState(s, now);
+    return isRunning(d) || d === "waiting_for_otp";
+  })
+    ? POLL_ACTIVE_MS
+    : POLL_IDLE_MS;
 }
 
 export const STATE_PILL: Record<Display, { text: string; cls: string }> = {
@@ -85,6 +95,7 @@ export const STATE_PILL: Record<Display, { text: string; cls: string }> = {
   digesting: { text: "מעבד", cls: "pill-run" },
   publishing: { text: "מפרסם", cls: "pill-run" },
   waiting_for_login: { text: "ממתין להתחברות", cls: "pill-warn" },
+  waiting_for_otp: { text: "ממתין לקוד", cls: "pill-warn" },
   needs_login: { text: "נדרשת התחברות", cls: "pill-bad" },
   rejected: { text: "הנתונים נדחו", cls: "pill-bad" },
   failed: { text: "נכשל", cls: "pill-bad" },
@@ -124,7 +135,11 @@ export function syncActions(doc: SyncStatusDoc | null, now = Date.now()): HomeAc
     // Keyed by run so dismissing one run's alert doesn't hide the next run's.
     const id = `sync-${source}-${d}-${s.run_id}`;
     const cta = { label: "לסנכרונים", to: "/syncs" };
-    if (d === "waiting_for_login" || d === "needs_login") {
+    if (d === "waiting_for_otp") {
+      out.push({ id, severity: "high", title: `הזן את קוד ה-SMS של ${name}`, detail: s.message, cta, amount: null });
+    } else if (d === "needs_login" && OTP_SOURCES.has(source)) {
+      out.push({ id, severity: "medium", title: `התחבר ל${name}`, detail: "קוד ב-SMS, מכאן מהאפליקציה", cta, amount: null });
+    } else if (d === "waiting_for_login" || d === "needs_login") {
       out.push({
         id,
         severity: d === "waiting_for_login" ? "high" : "medium",

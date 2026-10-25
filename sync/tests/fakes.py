@@ -49,6 +49,8 @@ class Fake:
         self.digest_args = []  # the `normalize` flag of each digest call
         self.status_error = status_error
         self.calls = []
+        self.otp_code = "123456"  # the code scrape_login accepts
+        self.otp_delivered = []
         self.statuses = []  # every publish_status (source, entry), in order
 
     # --- helpers for assertions
@@ -88,6 +90,24 @@ class Fake:
                 raise self.scrape_errors[source]
             return "ok"
 
+        @activity.defn(name="scrape_login")
+        async def scrape_login(source: str) -> str:
+            """Waits (like the real dump) until deliver_otp hands it a code; a wrong one is refused."""
+            self.calls.append(("scrape_login", source))
+            for _ in range(200):
+                if self.otp_delivered:
+                    code = self.otp_delivered.pop(0)
+                    if code != self.otp_code:
+                        raise expired("LOGIN FAILED: OTP_REJECTED")
+                    return "ok"
+                await asyncio.sleep(0.05)
+            raise expired("LOGIN FAILED: OTP_TIMEOUT")
+
+        @activity.defn(name="deliver_otp")
+        async def deliver_otp(source: str, code: str) -> None:
+            self.calls.append(("deliver_otp", source, code))
+            self.otp_delivered.append(code)
+
         @activity.defn(name="validate_dump")
         async def validate_dump(source: str):
             self.calls.append(("validate", source))
@@ -121,7 +141,7 @@ class Fake:
                 raise RuntimeError("bucket unreachable")
             return "local"
 
-        return [ensure_chrome, check_session, scrape, validate_dump, digest, publish_data, notify, publish_status]
+        return [ensure_chrome, check_session, scrape, scrape_login, deliver_otp, validate_dump, digest, publish_data, notify, publish_status]
 
 
 def run(fake, scenario, workflow=FinanceSyncWorkflow, args=()):

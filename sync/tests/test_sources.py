@@ -371,3 +371,39 @@ def test_cal_logs_in_by_itself(monkeypatch):
     assert e.value.type == "SessionExpired" and e.value.non_retryable
     script = Path(__file__).resolve().parents[2] / "scrapers" / "cal" / "scrape.mjs"
     assert seen == [[str(script)]] and script.is_file()
+
+
+def test_harel_login_passes_its_own_otp_file(scrape_env, tmp_path, monkeypatch):
+    cmds, _ = scrape_env
+    monkeypatch.setattr(sources, "OTP_DIR", tmp_path)
+    run(activities.scrape_login("harel"))
+    (kind, parent, argv), = [c for c in cmds if c[0] == "run"]
+    assert parent == "scrapers" and argv == ["--login", "--otp-file", str(tmp_path / "harel.code")]
+
+
+def test_harel_bad_code_is_needs_login(scrape_env, tmp_path, monkeypatch):
+    _, results = scrape_env
+    monkeypatch.setattr(sources, "OTP_DIR", tmp_path)
+    results.append((3, "LOGIN FAILED: OTP_REJECTED (page saved to /tmp/x)\n"))
+    with pytest.raises(ApplicationError) as e:
+        run(activities.scrape_login("harel"))
+    assert e.value.type == activities.SESSION_EXPIRED and e.value.non_retryable
+
+
+def test_only_otp_sources_log_in_from_the_app():
+    with pytest.raises(ApplicationError):
+        run(activities.scrape_login("cal"))
+
+
+def test_deliver_otp_writes_a_private_file_and_refuses_non_codes(tmp_path, monkeypatch):
+    import os
+    import stat
+    monkeypatch.setattr(sources, "OTP_DIR", tmp_path / "otp")
+    run(activities.deliver_otp("harel", "123456"))
+    f = tmp_path / "otp" / "harel.code"
+    assert f.read_text() == "123456" and stat.S_IMODE(os.stat(f).st_mode) == 0o600
+    for bad in ["12", "12345a", "1; rm -rf /", ""]:
+        with pytest.raises(ApplicationError):
+            run(activities.deliver_otp("harel", bad))
+    with pytest.raises(ApplicationError):
+        run(activities.deliver_otp("cal", "123456"))

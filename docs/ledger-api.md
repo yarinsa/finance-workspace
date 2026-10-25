@@ -79,6 +79,8 @@ Key: a transaction is `(date, abs_amount)` — ISO date and the absolute amount 
 | GET | `/api/overrides/orphaned` | — | `{"overrides":[{date,abs_amount,category,note,excluded}]}` |
 | GET | `/api/audit` | `?limit=50` | `{"entries":[{at,actor,date,abs_amount,field,old,new}]}` |
 | GET | `/api/rebuild` | — | `{"state":"idle\|pending\|running","last_published_at":iso\|null,"last_error":str\|null}` |
+| POST | `/api/sync/{source}/login` | — | 202 `{"ok":true}`; starts the one-source login sync `finance-sync-login-{source}` (only `harel`; else 404; Temporal down 503) |
+| POST | `/api/sync/{source}/otp` | `{"code":"\\d{4,8}"}` | 202; signals `submit_otp` on that sync (409 `not_waiting` when there is none). The code is never stored or logged |
 
 Errors: `{"error":"<code>","message":"…"}` with 400/401/403/404/413/422/503.
 Any successful write (POST/PUT/PATCH/DELETE) signals a rebuild.

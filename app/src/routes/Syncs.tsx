@@ -1,15 +1,21 @@
+import { useState, type FormEvent } from "react";
 import { Card, Page, StubNotice } from "@/components/common";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { ApiError, startLogin, submitOtp } from "@/lib/api";
 import { daysSince, snapshot, type SourceSync } from "@/lib/data";
 import {
   displayState,
   isRunning,
   needsAttention,
+  OTP_SOURCES,
   STATE_PILL,
   useSyncStatus,
   type Display,
   type SourceStatus,
   type SyncState,
 } from "@/lib/syncStatus";
+import { useLedgerApi } from "@/lib/useLedgerApi";
 import { cn } from "@/lib/utils";
 
 const SOURCE_LABEL: Record<string, string> = {
@@ -94,7 +100,7 @@ const STEP_MARK: Record<"ok" | "run" | "bad" | "warn", { icon: string; cls: stri
 
 function stepMark(status: SyncState, last: boolean, running: boolean): (typeof STEP_MARK)["ok"] {
   if (status === "failed" || status === "rejected" || status === "needs_login") return STEP_MARK.bad;
-  if (status === "waiting_for_login") return STEP_MARK.warn;
+  if (status === "waiting_for_login" || status === "waiting_for_otp") return STEP_MARK.warn;
   if (last && running) return STEP_MARK.run;
   return STEP_MARK.ok;
 }
@@ -169,6 +175,78 @@ function Timeline({ live, running }: { live: SourceStatus; running: boolean }) {
   );
 }
 
+/**
+ * Log in to an OTP source (Harel) from here: start a one-source sync on the Mac, which sends the
+ * SMS, then type the code. The code goes straight to the waiting login and is never stored.
+ * Needs the ledger API (Mac on); scheduled runs never send a code on their own.
+ */
+function OtpLogin({ source, display }: { source: string; display?: Display }) {
+  const { online } = useLedgerApi();
+  const [code, setCode] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [sent, setSent] = useState<"login" | "code" | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const waiting = display === "waiting_for_otp";
+  if (display && isRunning(display) && !waiting) return null;
+
+  async function act(fn: () => Promise<unknown>, done: "login" | "code") {
+    setBusy(true);
+    setError(null);
+    try {
+      await fn();
+      setSent(done);
+      if (done === "code") setCode("");
+    } catch (e) {
+      setError(
+        e instanceof ApiError && e.code === "not_waiting"
+          ? "ההתחברות כבר לא ממתינה לקוד — התחל מחדש"
+          : e instanceof ApiError
+            ? e.message || "הפעולה נכשלה"
+            : "המק לא זמין כרגע",
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function onSubmit(e: FormEvent) {
+    e.preventDefault();
+    if (/^\d{4,8}$/.test(code)) void act(() => submitOtp(source, code), "code");
+  }
+
+  if (online === false) return <p className="text-xs text-muted-foreground">התחברות מהאפליקציה זמינה כשהמק פועל.</p>;
+
+  return (
+    <div className="sync-otp">
+      {waiting && sent !== "code" ? (
+        <form onSubmit={onSubmit} className="flex items-center gap-2">
+          <Input
+            value={code}
+            onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 8))}
+            inputMode="numeric"
+            autoComplete="one-time-code"
+            placeholder="קוד מה-SMS"
+            aria-label="קוד אימות"
+            dir="ltr"
+            className="w-36 text-center tabular-nums tracking-widest"
+            autoFocus
+          />
+          <Button type="submit" size="sm" disabled={busy || code.length < 4}>
+            שלח קוד
+          </Button>
+        </form>
+      ) : waiting ? (
+        <p className="text-xs text-muted-foreground">הקוד נשלח — מתחבר…</p>
+      ) : (
+        <Button size="sm" variant="outline" disabled={busy || sent === "login"} onClick={() => void act(() => startLogin(source), "login")}>
+          {sent === "login" ? "שולח SMS…" : "התחבר עם קוד SMS"}
+        </Button>
+      )}
+      {error && <p className="text-xs text-bad">{error}</p>}
+    </div>
+  );
+}
+
 function SyncItem({ it }: { it: Item }) {
   const { data, live, display } = it;
   const days = data ? daysSince(data.last_synced) : null;
@@ -227,6 +305,7 @@ function SyncItem({ it }: { it: Item }) {
             {live.error}
           </pre>
         )}
+        {OTP_SOURCES.has(it.source) && <OtpLogin key={live?.run_id} source={it.source} display={display} />}
         {live && <Intake live={live} />}
         {live && <Timeline live={live} running={running} />}
 
