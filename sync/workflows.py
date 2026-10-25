@@ -13,6 +13,7 @@ sync-status.json, which the dashboard polls: checking_session -> waiting_for_log
 scraping -> validating -> digesting -> publishing -> done, or needs_login / failed /
 rejected. Publishing is best-effort and never fails the sync.
 """
+import re
 from datetime import timedelta
 
 from temporalio import workflow
@@ -95,11 +96,21 @@ def _detail(e: ActivityError, limit=600) -> str:
     return (f"{_cause(e)[1]}\n{extra}".strip())[-limit:]
 
 
+_ERROR_LINE = re.compile(r"LOGIN FAILED|Error:|failed|NOT WRITTEN|rejected|refused|timed out|Missing env", re.I)
+
+
 def _reason(e: BaseException, lines: int = 1) -> str:
-    """One short line for the dashboard: the root cause's message (first `lines` lines), no tracebacks."""
+    """Short text for the dashboard: the root cause's message (first `lines` lines), followed by
+    the dump script's own error lines when the activity attached its output (no tracebacks)."""
     while isinstance(e, ActivityError) and e.cause is not None:
         e = e.cause
-    return " · ".join((str(e).splitlines() or [type(e).__name__])[:lines])[:200]
+    head = " · ".join((str(e).splitlines() or [type(e).__name__])[:lines])[:200]
+    details = getattr(e, "details", None) or ()
+    output = details[0] if details and isinstance(details[0], str) else ""
+    hits = [l.strip() for l in output.splitlines()
+            if _ERROR_LINE.search(l) and not l.lstrip().startswith("at ")]
+    hits = list(dict.fromkeys(hits))[-3:]  # last few distinct ones: the script stops at its first fatal error
+    return "\n".join([head, *(h[:240] for h in hits)])
 
 
 class _FinanceSync:

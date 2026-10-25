@@ -311,3 +311,15 @@ def test_failed_source_log_ends_on_the_failure():
     last = [e for s, e in fake.statuses if s == "cal"][-1]
     assert [step["status"] for step in last["log"]] == ["checking_session", "scraping", "failed"]
     assert last["error"]
+
+
+def test_failed_scrape_error_carries_the_scripts_own_error_line():
+    """CAL 2026-10-25 08:13: the dashboard only said "scrape.mjs failed for cal (rc=1)"."""
+    out = ("== account / cards ==\nTimeoutError: Waiting for selector `#ccLoginDesktopBtn` failed\n"
+           "    at CdpFrame.waitForSelector (file:///x/Frame.js:541:21)\n")
+    err = ApplicationError("scrape.mjs failed for cal (rc=1)", out, type="ScrapeFailed", non_retryable=True)
+    fake = Fake(scrape_errors={"cal": err})
+    result_of(fake, args=[["cal"]])
+    last = [e for s, e in fake.statuses if s == "cal"][-1]
+    assert last["error"].splitlines() == [
+        "ScrapeFailed: scrape.mjs failed for cal (rc=1)", "TimeoutError: Waiting for selector `#ccLoginDesktopBtn` failed"]
