@@ -5,6 +5,7 @@ import {
   ClipboardList,
   Gauge,
   House,
+  Inbox as InboxIcon,
   Landmark,
   Lightbulb,
   RefreshCw,
@@ -22,6 +23,7 @@ import {
 } from "lucide-react";
 import Cashflow from "./Cashflow";
 import Overview from "./Overview";
+import Inbox from "./Inbox";
 import Summary from "./Summary";
 import Goals from "./Goals";
 import Recommendations from "./Recommendations";
@@ -72,6 +74,7 @@ export const groups: GroupDef[] = [
 /** Every page keeps its own path (deep links); `group` only decides where it is listed. */
 export const routes: RouteDef[] = [
   { path: "/overview", label: "מבט על", icon: House, group: "overview", hub: true, Component: Overview },
+  { path: "/inbox", label: "אינבוקס", icon: InboxIcon, group: "overview", Component: Inbox },
   { path: "/networth", label: "שווי נקי", icon: Landmark, group: "overview", Component: Networth },
 
   { path: "/monthly", label: "החודש", icon: CalendarCheck, group: "monthly", hub: true, Component: Monthly },

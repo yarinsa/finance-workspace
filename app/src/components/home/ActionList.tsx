@@ -1,30 +1,9 @@
-import { useState } from "react";
 import { Link } from "react-router-dom";
-import { Check, X } from "lucide-react";
+import { Archive, Check } from "lucide-react";
 import { Card, Section } from "@/components/common";
 import { cn } from "@/lib/utils";
 import type { HomeAction } from "@/lib/data";
-
-const STORAGE_KEY = "plangram.dismissed-actions";
-const VISIBLE = 4;
-
-function readDismissed(): string[] {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    const v = raw ? JSON.parse(raw) : [];
-    return Array.isArray(v) ? v.filter((x) => typeof x === "string") : [];
-  } catch {
-    return [];
-  }
-}
-
-function writeDismissed(ids: string[]) {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(ids));
-  } catch {
-    /* storage unavailable: dismissal lasts for this session only */
-  }
-}
+import { useDismissed } from "@/lib/inbox";
 
 const DOT: Record<HomeAction["severity"], string> = {
   critical: "bg-bad",
@@ -33,35 +12,28 @@ const DOT: Record<HomeAction["severity"], string> = {
   low: "bg-muted-foreground/50",
 };
 
-/** Copilot-style "to review" list. Renders nothing when the pipeline emits no actions. */
+/** Inbox list: each item can be archived (kept locally); archived ones can be restored. */
 export default function ActionList({ actions }: { actions: HomeAction[] | undefined }) {
-  const [dismissed, setDismissed] = useState<string[]>(readDismissed);
-  const [expanded, setExpanded] = useState(false);
-  if (!actions) return null;
+  const [dismissed, update] = useDismissed();
+  const list = actions ?? [];
+  const open = list.filter((a) => !dismissed.includes(a.id));
+  const hidden = list.length - open.length;
 
-  const open = actions.filter((a) => !dismissed.includes(a.id));
-  const hidden = actions.length - open.length;
-  const shown = expanded ? open : open.slice(0, VISIBLE);
-
-  const update = (ids: string[]) => {
-    setDismissed(ids);
-    writeDismissed(ids);
-  };
+  const restore =
+    hidden > 0 ? (
+      <button type="button" className="text-sm font-semibold text-brand" onClick={() => update([])}>
+        שחזר מהארכיון ({hidden})
+      </button>
+    ) : undefined;
 
   return (
     <Section
       title={
         <>
-          לטיפול{open.length > 0 && <span className="text-muted-foreground"> · {open.length}</span>}
+          פתוחים{open.length > 0 && <span className="text-muted-foreground"> · {open.length}</span>}
         </>
       }
-      action={
-        hidden > 0 && open.length > 0 ? (
-          <button type="button" className="text-sm font-semibold text-brand" onClick={() => update([])}>
-            הצג שהוסתרו
-          </button>
-        ) : undefined
-      }
+      action={open.length > 0 ? restore : undefined}
     >
       {open.length === 0 ? (
         <Card>
@@ -69,17 +41,13 @@ export default function ActionList({ actions }: { actions: HomeAction[] | undefi
             <span className="grid size-8 shrink-0 place-items-center rounded-full bg-good/15 text-good">
               <Check className="size-4" />
             </span>
-            <span className="flex-1 font-bold">הכל מטופל ✓</span>
-            {hidden > 0 && (
-              <button type="button" className="text-sm font-semibold text-brand" onClick={() => update([])}>
-                הצג שהוסתרו
-              </button>
-            )}
+            <span className="flex-1 font-bold">האינבוקס ריק ✓</span>
+            {restore}
           </div>
         </Card>
       ) : (
         <div className="overflow-hidden rounded-[20px] border border-line bg-panel shadow-[var(--shadow)]">
-          {shown.map((a) => (
+          {open.map((a) => (
             <div key={a.id} className="flex items-start gap-3 border-b border-line px-4 py-3 last:border-b-0">
               <span className={cn("mt-2 size-2.5 shrink-0 rounded-full", DOT[a.severity])} aria-hidden />
               <div className="min-w-0 flex-1">
@@ -96,23 +64,14 @@ export default function ActionList({ actions }: { actions: HomeAction[] | undefi
               </div>
               <button
                 type="button"
-                aria-label="הסתר"
+                aria-label="העבר לארכיון"
                 className="-m-2 shrink-0 p-2 text-muted-foreground/70"
                 onClick={() => update([...dismissed, a.id])}
               >
-                <X className="size-4" />
+                <Archive className="size-4" />
               </button>
             </div>
           ))}
-          {!expanded && open.length > VISIBLE && (
-            <button
-              type="button"
-              className="w-full px-4 py-2.5 text-sm font-semibold text-brand"
-              onClick={() => setExpanded(true)}
-            >
-              עוד {open.length - VISIBLE}
-            </button>
-          )}
         </div>
       )}
     </Section>

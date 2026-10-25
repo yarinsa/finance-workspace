@@ -1,11 +1,10 @@
 import { Nudge, Page } from "@/components/common";
 import AccountRows from "@/components/home/AccountRows";
-import ActionList from "@/components/home/ActionList";
+import InboxButton from "@/components/home/InboxButton";
 import RecentTransactions from "@/components/home/RecentTransactions";
 import StatusTiles from "@/components/home/StatusTiles";
 import UpcomingChips from "@/components/home/UpcomingChips";
 import { cashflow, daysSince, num, snapshot } from "@/lib/data";
-import { syncActions, useSyncStatus } from "@/lib/syncStatus";
 
 function greeting(hour: number): string {
   if (hour < 5) return "לילה טוב";
@@ -15,14 +14,11 @@ function greeting(hour: number): string {
   return "לילה טוב";
 }
 
-/** Action-first home: status tiles, to-do list, next 14 days, accounts, recent spending. */
+/** Action-first home: status tiles, next 14 days (to-dos live in /inbox), accounts, recent spending. */
 export default function Overview() {
   const age = daysSince(cashflow.generated_at);
   // A pipeline-emitted stale-data action replaces the generic nudge.
   const hasStaleAction = (cashflow.actions ?? []).some((a) => /stale|sync|refresh/i.test(a.id));
-  // Live sync alerts (login needed, failed) go first: they block fresh numbers.
-  const live = syncActions(useSyncStatus());
-  const actions = cashflow.actions || live.length ? [...live, ...(cashflow.actions ?? [])] : undefined;
   const netWorth = snapshot.totals.net_position_with_savings ?? cashflow.projection?.net_worth_today ?? null;
 
   return (
@@ -33,12 +29,12 @@ export default function Overview() {
         </Nudge>
       )}
 
-      <header className="greeting">
+      <header className="greeting flex items-center justify-between">
         <h1>{greeting(new Date().getHours())} 👋</h1>
+        <InboxButton />
       </header>
 
       <StatusTiles />
-      <ActionList actions={actions} />
       <UpcomingChips runway={cashflow.runway} />
       <AccountRows netWorth={netWorth} />
       <RecentTransactions />
