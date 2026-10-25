@@ -51,6 +51,11 @@ function tileValue(n: number): string {
   return Math.abs(n) < 10_000 ? shekel(n) : shekelCompact(n);
 }
 
+/** "33.8K" with no ₪ sign, for two amounts sharing one narrow line. */
+function kilo(n: number): string {
+  return Math.abs(n) < 1000 ? String(Math.round(n)) : `${(n / 1000).toFixed(1)}K`;
+}
+
 function metric(key: string) {
   return cashflow.metrics.find((m) => m.key === key);
 }
@@ -60,13 +65,14 @@ function pct(v: number | null | undefined, signed = false): string {
   return `${signed && v > 0 ? "+" : ""}${v.toFixed(1)}%`;
 }
 
-/** Monzo-style summary tiles: checking balance, month spend vs last month, budget left;
+/** Monzo-style summary tiles: checking balance, this month's spend vs income, budget left;
  * below them the 5-year growth index and the debt-repayment share of expenses. */
 export default function StatusTiles() {
   const bank = snapshot.totals.bank_balances_sum;
   const cur = cashflow.pace?.current.expense ?? null;
-  const prev = cashflow.pace?.previous.expense ?? null;
-  const diff = cur != null && prev != null ? cur - prev : null;
+  const income = cashflow.pace?.current.income ?? null;
+  // This month's spend as a share of this month's income: over 100% = spending more than came in.
+  const ratio = cur != null && income ? (cur / income) * 100 : null;
   const b = cashflow.budgets;
   const perDay = b?.per_day ?? null;
 
@@ -87,15 +93,13 @@ export default function StatusTiles() {
           />
           <Tile
             to="/spending"
-            label="הוצאות"
-            value={cur != null ? tileValue(cur) : "—"}
+            label="הוצאות/הכנסה"
+            value={ratio != null ? `${Math.round(ratio)}%` : cur != null ? tileValue(cur) : "—"}
+            tone={ratio != null && ratio > 100 ? "bad" : undefined}
             sub={
-              diff != null && diff !== 0
-                ? `${diff > 0 ? "▲" : "▼"} ${shekelCompact(Math.abs(diff))}`
+              cur != null && income != null
+                ? `${kilo(cur)}/${kilo(income)}`
                 : undefined
-            }
-            subTone={
-              diff == null || diff === 0 ? undefined : diff > 0 ? "bad" : "good"
             }
           />
           <Tile
