@@ -4,6 +4,7 @@ import { ChevronDown, ChevronLeft } from "lucide-react";
 import { Card, CardLabel } from "@/components/common";
 import { TransactionList, TransactionRow } from "@/components/TransactionRow";
 import TransactionEditSheet, { type EditTarget } from "@/components/TransactionEditSheet";
+import { useQuickEdit } from "@/components/QuickEditSheets";
 import { cashflow, shekel, useDataVersion } from "@/lib/data";
 import { applyOverlay, overlayFor } from "@/lib/ledgerOverlay";
 import { useLedgerApi } from "@/lib/useLedgerApi";
@@ -21,6 +22,7 @@ export default function CategoryBreakdown({ month }: { month: string }) {
   const { overlay } = useLedgerApi();
   const [open, setOpen] = useState<ReadonlySet<string>>(new Set());
   const [editing, setEditing] = useState<EditTarget | null>(null);
+  const { swipeProps, sheets } = useQuickEdit();
   const months = useMemo(() => applyOverlay(cashflow.spending?.months ?? [], overlay), [overlay]);
   const m = months.find((x) => x.month === month);
   if (!m || !m.by_category.length) return null;
@@ -80,6 +82,7 @@ export default function CategoryBreakdown({ month }: { month: string }) {
                           edited={t.overridden || overlayFor(overlay, t)?.overridden}
                           offset={t.offset}
                           onClick={() => setEditing(t)}
+                          {...swipeProps(t, -t.amount)}
                         />
                       ))}
                     </TransactionList>
@@ -98,6 +101,7 @@ export default function CategoryBreakdown({ month }: { month: string }) {
         <ChevronLeft className="size-4" />
       </Link>
       <TransactionEditSheet tx={editing} onClose={() => setEditing(null)} />
+      {sheets}
     </Card>
   );
 }

@@ -8,6 +8,7 @@ import ExcludedSpendingCard from "@/components/ExcludedSpendingCard";
 import { noAnim, useChartColors } from "@/components/chartTheme";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import TransactionEditSheet, { type EditTarget } from "@/components/TransactionEditSheet";
+import { useQuickEdit } from "@/components/QuickEditSheets";
 import HiddenTransactionsSheet from "@/components/HiddenTransactionsSheet";
 import { Input } from "@/components/ui/input";
 import { cashflow, monthYear, pct, shekel, useDataVersion } from "@/lib/data";
@@ -29,6 +30,7 @@ export default function Spending() {
   useDataVersion(); // re-render when a published rebuild is re-fetched
   const { overlay, updating, rebuild } = useLedgerApi();
   const [editing, setEditing] = useState<EditTarget | null>(null);
+  const { swipeProps, sheets } = useQuickEdit();
   const [hiddenOpen, setHiddenOpen] = useState(false);
   const spending = cashflow.spending;
   const months = useMemo(() => applyOverlay(spending?.months ?? [], overlay), [spending, overlay]);
@@ -260,6 +262,7 @@ export default function Spending() {
                     edited={t.overridden || overlayFor(overlay, t)?.overridden}
                     offset={t.offset}
                     onClick={() => setEditing(t)}
+                    {...swipeProps(t, -t.amount)}
                   />
                 ))}
               </TransactionList>
@@ -294,6 +297,7 @@ export default function Spending() {
 
       <ExcludedSpendingCard excluded={m.excluded} />
       <TransactionEditSheet tx={editing} onClose={() => setEditing(null)} />
+      {sheets}
       <HiddenTransactionsSheet open={hiddenOpen} onClose={() => setHiddenOpen(false)} />
     </Page>
   );

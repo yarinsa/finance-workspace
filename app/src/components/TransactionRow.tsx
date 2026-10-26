@@ -1,5 +1,6 @@
 import { Children, type ReactNode } from "react";
 import CategoryTag from "@/components/CategoryTag";
+import { SwipeableRow } from "@/components/SwipeableRow";
 import TagChips from "@/components/TagChips";
 import { shekel, shekelSigned } from "@/lib/data";
 import { cn } from "@/lib/utils";
@@ -30,6 +31,10 @@ export interface TransactionRowProps {
   trailing?: ReactNode;
   /** Makes the row content a button. `trailing` stays outside it, so buttons never nest. */
   onClick?: () => void;
+  /** Swipe the row left (physical) to assign a category; enables the swipe surface. */
+  onSwipeCategory?: () => void;
+  /** Swipe the row right (physical) to offset (קיזוז) it against a payback; omit for rows that can't be offset. */
+  onSwipeOffset?: () => void;
 }
 
 /** The single anatomy of a ledger transaction row: merchant, category/tags/date/meta line, signed amount. Render inside `TransactionList`. */
@@ -46,6 +51,8 @@ export function TransactionRow({
   meta,
   trailing,
   onClick,
+  onSwipeCategory,
+  onSwipeOffset,
 }: TransactionRowProps) {
   const net = offset ? (amount < 0 ? amount + offset : amount - offset) : amount;
   const content = (
@@ -73,7 +80,7 @@ export function TransactionRow({
     </>
   );
   const body = "flex min-w-0 flex-1 items-center gap-3";
-  return (
+  const row = (
     <div className="flex w-full items-center gap-3 py-2.5 text-[15px] leading-5">
       {onClick ? (
         <button type="button" onClick={onClick} className={cn(body, "text-start")}>
@@ -84,6 +91,12 @@ export function TransactionRow({
       )}
       {trailing}
     </div>
+  );
+  if (!onSwipeCategory && !onSwipeOffset) return row;
+  return (
+    <SwipeableRow onSwipeLeft={onSwipeCategory} onSwipeRight={onSwipeOffset}>
+      {row}
+    </SwipeableRow>
   );
 }
 

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Section } from "@/components/common";
 import { TransactionList, TransactionRow } from "@/components/TransactionRow";
 import TransactionEditSheet, { type EditTarget } from "@/components/TransactionEditSheet";
+import { useQuickEdit } from "@/components/QuickEditSheets";
 import { cashflow, transactions } from "@/lib/data";
 import { applyOverlay } from "@/lib/ledgerOverlay";
 import { useLedgerApi } from "@/lib/useLedgerApi";
@@ -30,6 +31,7 @@ function recent(overlay: ReturnType<typeof useLedgerApi>["overlay"]): Row[] {
 export default function RecentTransactions() {
   const { overlay } = useLedgerApi();
   const [editing, setEditing] = useState<EditTarget | null>(null);
+  const { swipeProps, sheets } = useQuickEdit();
   const rows = recent(overlay);
   if (rows.length === 0) return null;
   return (
@@ -46,11 +48,13 @@ export default function RecentTransactions() {
               tags={r.tags}
               edited={r.overridden}
               onClick={() => setEditing(r)}
+              {...swipeProps(r, -r.amount)}
             />
           ))}
         </TransactionList>
       </div>
       <TransactionEditSheet tx={editing} onClose={() => setEditing(null)} />
+      {sheets}
     </Section>
   );
 }

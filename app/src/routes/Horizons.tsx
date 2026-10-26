@@ -2,6 +2,7 @@ import { TransactionList, TransactionRow } from "@/components/TransactionRow";
 import { useState } from "react";
 import { BigNumber, Card, CardLabel, Page, Section } from "@/components/common";
 import TransactionEditSheet, { HORIZON_LABEL, type EditTarget } from "@/components/TransactionEditSheet";
+import { useQuickEdit } from "@/components/QuickEditSheets";
 import type { Horizon } from "@/lib/api";
 import { cashflow, shekel, type Horizons as HorizonsData } from "@/lib/data";
 
@@ -52,10 +53,20 @@ function SplitBar({ m, order }: { m: Month; order: Horizon[] }) {
   );
 }
 
+const editTarget = (t: { date: string; amount: number; description: string; category?: string | null; overridden?: boolean; tags?: string[] }): EditTarget => ({
+  date: t.date,
+  amount: t.amount,
+  merchant: t.description,
+  category: t.category ?? "",
+  overridden: t.overridden,
+  tags: t.tags,
+});
+
 export default function Horizons() {
   const data = cashflow.horizons;
   const [idx, setIdx] = useState(0);
   const [editing, setEditing] = useState<EditTarget | null>(null);
+  const { swipeProps, sheets } = useQuickEdit();
 
   if (!data || data.months.length === 0) {
     return (
@@ -166,9 +177,8 @@ export default function Horizons() {
                       meta={t.goal || undefined}
                       edited={t.overridden}
                       offset={t.offset}
-                      onClick={() =>
-                        setEditing({ date: t.date, amount: t.amount, merchant: t.description, category: t.category ?? "", overridden: t.overridden, tags: t.tags })
-                      }
+                      onClick={() => setEditing(editTarget(t))}
+                      {...swipeProps(editTarget(t), t.amount)}
                     />
                   ))}
                 </TransactionList>
@@ -179,6 +189,7 @@ export default function Horizons() {
       ))}
 
       <TransactionEditSheet tx={editing} onClose={() => setEditing(null)} />
+      {sheets}
     </Page>
   );
 }
