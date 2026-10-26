@@ -3,6 +3,8 @@ import { graphql, useMutation, usePreloadedQuery, useQueryLoader, type Preloaded
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Input } from "@/components/ui/input";
 import OptionChips from "@/components/OptionChips";
+import { CategoryPickerSheet } from "@/components/CategoryPicker";
+import { readRecentCategories } from "@/components/QuickEditSheets";
 import { ApiOffline, ledgerKey, type Horizon, type Row } from "@/lib/api";
 import { shekel } from "@/lib/data";
 import { buildPatch } from "@/lib/editPatch";
@@ -197,6 +199,7 @@ function Body({ tx, onClose, txn, categories = [], tagNames = [], goals = [], lo
       ? { category: base.category, note: base.note ?? "", excluded: base.excluded, horizon: base.horizon ?? undefined }
       : { category: tx.category, note: "", excluded: false },
   );
+  const [pickingCategory, setPickingCategory] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -308,26 +311,29 @@ function Body({ tx, onClose, txn, categories = [], tagNames = [], goals = [], lo
         )}
         {updating && <div className="text-xs text-muted-foreground">מתעדכן…</div>}
 
-        <label className="block">
+        <div>
           <span className="mb-1 block text-xs text-muted-foreground">קטגוריה</span>
-          <Input
-            value={form.category}
+          <button
+            type="button"
             disabled={disabled}
-            maxLength={64}
-            onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))}
-          />
-          <OptionChips
-            label="קטגוריות"
-            options={categories}
-            query={form.category}
-            selected={form.category}
-            disabled={disabled}
+            onClick={() => setPickingCategory(true)}
+            className="flex min-h-11 w-full items-center justify-between rounded-lg border border-line px-3 text-start text-[15px] disabled:opacity-40"
+          >
+            <span className={form.category ? "" : "text-muted-foreground"}>{form.category || "בחירת קטגוריה"}</span>
+            <span className="text-muted-foreground" aria-hidden>‹</span>
+          </button>
+          <CategoryPickerSheet
+            open={pickingCategory}
+            onClose={() => setPickingCategory(false)}
+            categories={categories}
+            current={form.category}
+            recent={readRecentCategories()}
             onPick={(c) => setForm((f) => ({ ...f, category: c }))}
           />
           {base && base.scraped_category && base.scraped_category !== form.category && (
             <span className="mt-1 block text-xs text-muted-foreground">מקור: {base.scraped_category}</span>
           )}
-        </label>
+        </div>
 
         <div>
           <span className="mb-1 block text-xs text-muted-foreground">תגיות</span>

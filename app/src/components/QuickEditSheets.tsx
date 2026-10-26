@@ -1,8 +1,7 @@
 import { useState, type ReactNode } from "react";
 import { graphql, useMutation } from "react-relay";
 import { SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { Input } from "@/components/ui/input";
-import OptionChips from "@/components/OptionChips";
+import { CategoryList } from "@/components/CategoryPicker";
 import OffsetSection from "@/components/OffsetSection";
 import LiveTransactionSheet from "@/components/LiveTransactionSheet";
 import type { EditTarget } from "@/components/TransactionEditSheet";
@@ -77,8 +76,8 @@ const OfflineNotice = () => (
 );
 
 /**
- * Bottom sheet for the "assign category" swipe: recently used categories as one-tap chips,
- * then every category with a filter that doubles as "new category". Tapping saves at once
+ * Bottom sheet for the "assign category" swipe: a searchable `CategoryList` (recently used
+ * first, then every category; the search doubles as "new category"). Tapping saves at once
  * with `updateTransaction` carrying only `{ id, category }` (note, hide and horizon are left
  * as they are), records the row in the shared overlay and closes.
  */
@@ -118,7 +117,6 @@ function CategoryBody({
 }) {
   const { online, recordEdit, markOffline, updating } = useLedgerApi();
   const [commit] = useMutation<QuickEditSheetsCategoryMutation>(SET_CATEGORY);
-  const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [recent] = useState(readRecentCategories);
@@ -126,7 +124,6 @@ function CategoryBody({
   const readOnly = online !== true || !txn;
   const disabled = readOnly || busy || loading;
   const current = txn ? (txn.category?.name ?? "") : tx.category;
-  const typed = draft.trim().slice(0, 64);
 
   const save = (category: string) => {
     if (!txn || !category) return;
@@ -156,64 +153,13 @@ function CategoryBody({
         {readOnly && !loading && <OfflineNotice />}
         {updating && <div className="text-xs text-muted-foreground">מתעדכן…</div>}
 
-        {recent.length > 0 && (
-          <div>
-            <span className="mb-1 block text-xs text-muted-foreground">בשימוש לאחרונה</span>
-            <div className="flex flex-wrap gap-1.5" role="listbox" aria-label="קטגוריות אחרונות">
-              {recent.map((c) => (
-                <button
-                  key={c}
-                  type="button"
-                  role="option"
-                  aria-selected={c === current}
-                  disabled={disabled}
-                  onClick={() => save(c)}
-                  className={`rounded-full border px-3 py-1.5 text-sm disabled:opacity-40 ${
-                    c === current ? "border-brand bg-brand/15 font-semibold" : "border-line"
-                  }`}
-                >
-                  {c}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
-        <div>
-          <span className="mb-1 block text-xs text-muted-foreground">כל הקטגוריות</span>
-          <Input
-            value={draft}
-            disabled={disabled}
-            maxLength={64}
-            placeholder="חיפוש או קטגוריה חדשה"
-            aria-label="חיפוש קטגוריה"
-            onChange={(e) => setDraft(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && typed) {
-                e.preventDefault();
-                save(typed);
-              }
-            }}
-          />
-          <OptionChips
-            label="קטגוריות"
-            options={categories}
-            query={draft}
-            selected={current}
-            disabled={disabled}
-            onPick={save}
-          />
-          {typed && !categories.includes(typed) && (
-            <button
-              type="button"
-              disabled={disabled}
-              onClick={() => save(typed)}
-              className="mt-2 w-full rounded-lg border border-dashed border-line px-3 py-2 text-sm disabled:opacity-40"
-            >
-              + קטגוריה חדשה: {typed}
-            </button>
-          )}
-        </div>
+        <CategoryList
+          categories={categories}
+          current={current}
+          recent={recent}
+          disabled={disabled}
+          onPick={save}
+        />
 
         {busy && <div className="text-xs text-muted-foreground">שומר…</div>}
         {error && <div className="text-sm text-bad">{error}</div>}
