@@ -6,7 +6,7 @@ human layer of the transactions database (`transaction_overrides`). The database
 stays on the Mac; nothing new is hosted.
 
 ```
-browser ─► CloudFront my-finance.yarinsa.me   (WAF rate limit + edge-auth on every path)
+browser ─► CloudFront my-finance.yarinsa.me   (edge-auth on every path)
             ├─ /*      → S3            static app + /data/*.json  (read path, unchanged)
             └─ /api/*  → Tailscale Funnel https://<mac>.<tailnet>.ts.net
                           → 127.0.0.1:8787  finance-api (Docker Compose)
@@ -25,7 +25,7 @@ edits), so CloudFront invalidations stay far below the 1,000/month free quota.
 
 1. **Edge** — `/api/*` runs the same edge-auth viewer-request function. For `/api/*`
    an unauthenticated request gets `401 {"error":"unauthenticated"}` instead of the
-   302 to the login page. WAF rate-limits as for every path.
+   302 to the login page.
 2. **Origin secret** — CloudFront adds `X-Origin-Secret` (Terraform
    `random_password`, copied to `.env` as `FINANCE_API_ORIGIN_SECRET`). The API
    rejects anything without it (constant-time compare), so the public Funnel URL is
