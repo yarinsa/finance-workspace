@@ -7,6 +7,7 @@
 
 import { useSyncExternalStore } from "react";
 import { setAppStatus } from "./appStatus";
+import { FRESH_HEADER } from "./swRoutes";
 import { SessionExpiredError, isExpiredNetworkError, isSessionExpired } from "./dataFetch";
 
 export type Rank = "good" | "bad" | "warning" | null;
@@ -423,10 +424,11 @@ export const dataMeta: { fetchedAt: number; fromCache: boolean; cachedAt: number
   cachedAt: null,
 };
 
-async function loadDigested<T>(name: string): Promise<T> {
+
+async function loadDigested<T>(name: string, fresh = false): Promise<T> {
   let res: Response;
   try {
-    res = await fetch(`/data/${name}.json`, { cache: "no-store" });
+    res = await fetch(`/data/${name}.json`, { cache: "no-store", headers: fresh ? { [FRESH_HEADER]: "1" } : undefined });
   } catch (err) {
     if (isExpiredNetworkError(err, navigator.onLine)) {
       void clearCachedData();
@@ -434,7 +436,7 @@ async function loadDigested<T>(name: string): Promise<T> {
     }
     throw err;
   }
-  if (isSessionExpired(res)) {
+  if (isSessionExpired({ status: res.status, redirected: res.redirected, type: res.type, contentType: res.headers.get("content-type") })) {
     void clearCachedData();
     throw new SessionExpiredError();
   }
@@ -456,26 +458,30 @@ async function clearCachedData(): Promise<void> {
 }
 
 /** forecast.json is a nice-to-have: pages that read it render without it. */
-async function loadOptional<T>(name: string): Promise<T | null> {
+async function loadOptional<T>(name: string, fresh = false): Promise<T | null> {
   try {
-    return await loadDigested<T>(name);
+    return await loadDigested<T>(name, fresh);
   } catch {
     return null;
   }
 }
 
-async function loadAll() {
+/**
+ * `fresh: false` (boot) lets the service worker answer from its cache instantly; `reloadData`
+ * always goes to the network.
+ */
+async function loadAll(fresh = false) {
   const before = { ...dataMeta };
   dataMeta.fromCache = false;
   dataMeta.cachedAt = null;
   let all;
   try {
     all = await Promise.all([
-      loadDigested<Cashflow>("cashflow"),
-      loadDigested<Snapshot>("snapshot"),
-      loadDigested<Transactions>("transactions"),
-      loadDigested<Goals>("goals"),
-      loadOptional<Forecast>("forecast"),
+      loadDigested<Cashflow>("cashflow", fresh),
+      loadDigested<Snapshot>("snapshot", fresh),
+      loadDigested<Transactions>("transactions", fresh),
+      loadDigested<Goals>("goals", fresh),
+      loadOptional<Forecast>("forecast", fresh),
     ]);
   } catch (err) {
     Object.assign(dataMeta, before); // a failed refresh leaves the old data, and its provenance, on screen
@@ -501,7 +507,7 @@ const dataListeners = new Set<() => void>();
 export async function reloadData(): Promise<void> {
   let next;
   try {
-    next = await loadAll();
+    next = await loadAll(true);
   } catch (err) {
     // Keep showing the old data, but tell the user why it isn't refreshing.
     if (err instanceof SessionExpiredError) setAppStatus({ sessionExpired: true });

@@ -12,16 +12,19 @@ export interface FetchedInfo {
   status: number;
   redirected: boolean;
   type: string;
+  contentType: string | null;
 }
 
 /**
- * True when a response to /data/<name>.json means "log in again": a 401/403 or a redirect
- * (the edge bounces an unauthenticated page request to Cognito). HTML on a 200 is NOT this:
+ * True when a response to /data/<name>.json means "log in again": a 401/403, or a redirect that
+ * did not end in JSON (the edge bounces an unauthenticated request to Cognito). A redirect that
+ * ends in JSON is the edge renewing the session from the refresh cookie (307 to the same URL). HTML on a 200 is NOT this:
  * with a valid session CloudFront maps a missing S3 key to the SPA shell, so that stays the
  * "file not published" error.
  */
-export function isSessionExpired(r: Pick<FetchedInfo, "status" | "redirected" | "type">): boolean {
-  return r.status === 401 || r.status === 403 || r.redirected || r.type === "opaqueredirect";
+export function isSessionExpired(r: FetchedInfo): boolean {
+  if (r.status === 401 || r.status === 403 || r.type === "opaqueredirect") return true;
+  return r.redirected && !/json/i.test(r.contentType ?? "");
 }
 
 /**

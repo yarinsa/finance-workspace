@@ -21,7 +21,7 @@ function fail(err: unknown) {
         // The cookie lapsed: a full navigation lets the edge send us through the login again.
         <button
           type="button"
-          onClick={() => location.assign("/")}
+          onClick={() => location.assign("/?login=1")}
           style={{ marginTop: "1rem", padding: ".6rem 1.2rem", borderRadius: 999, border: 0, background: "#14b48c", color: "#fff", fontSize: "1rem", fontWeight: 700 }}
         >
           התחבר מחדש

@@ -163,7 +163,10 @@ export function unauthenticated(): Error {
     const last = Number(sessionStorage.getItem(AUTH_RELOAD_KEY));
     if (!(now - last < AUTH_RELOAD_WINDOW_MS)) {
       sessionStorage.setItem(AUTH_RELOAD_KEY, String(now));
-      globalThis.location.reload();
+      // ?login skips the service worker's cached shell so the edge can refresh the cookie.
+      const url = new URL(globalThis.location.href);
+      url.searchParams.set("login", "1");
+      globalThis.location.assign(url.href);
       return new ApiError(401, "unauthenticated", "session expired");
     }
   } catch {

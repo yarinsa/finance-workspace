@@ -8,9 +8,14 @@ import { useInboxCount } from "@/lib/inbox";
  * Native-feeling "refresh on foreground": when the app becomes visible again, or the network
  * returns, re-fetch the digested data if the last fetch is more than two minutes old
  * (`shouldRefreshOnResume`), and look for a new service worker. Failures are silent here:
+ * A cold open that booted from cached data refreshes once on mount.
  * `reloadData` records an expired session itself, and the offline banner covers the rest.
  */
 export function useResumeRefresh(): void {
+  // A cold open boots from the worker's cached data; fetch the network copy right after.
+  useEffect(() => {
+    if (dataMeta.fromCache) void reloadData().catch(() => undefined);
+  }, []);
   useEffect(() => {
     const resume = () => {
       if (document.visibilityState !== "visible") return;

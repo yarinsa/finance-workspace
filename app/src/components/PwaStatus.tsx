@@ -65,7 +65,7 @@ export function PwaStatus() {
             type="button"
             className="rounded-full bg-brand px-3 py-1"
             style={{ color: "var(--lg-on-accent)" }}
-            onClick={() => location.assign("/")}
+            onClick={() => location.assign("/?login=1")}
           >
             התחבר
           </button>

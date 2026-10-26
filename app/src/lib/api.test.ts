@@ -18,7 +18,7 @@ beforeEach(() => {
   fetchMock.mockReset();
   reload.mockReset();
   vi.stubGlobal("fetch", fetchMock);
-  vi.stubGlobal("location", { reload });
+  vi.stubGlobal("location", { href: "https://app.test/syncs", assign: reload });
   vi.stubGlobal("sessionStorage", memoryStorage());
 });
 afterEach(() => vi.unstubAllGlobals());
@@ -35,7 +35,7 @@ describe("error mapping", () => {
   it("reloads the page on the first 401", async () => {
     fetchMock.mockResolvedValue(json({ error: "unauthenticated" }, 401));
     await expect(getHealth()).rejects.toBeInstanceOf(ApiError);
-    expect(reload).toHaveBeenCalledOnce();
+    expect(reload).toHaveBeenCalledWith("https://app.test/syncs?login=1");
   });
 
   it("goes offline instead of reloading on a repeat 401 within a minute", async () => {

@@ -1,9 +1,9 @@
 /// <reference lib="webworker" />
 // Service worker (vite-plugin-pwa, injectManifest). Goals: instant launch and read-only
-// offline. Hashed assets are precached; pages and /data/*.json go to the network first.
+// offline. The shell and hashed assets are precached; /data/*.json is stale-while-revalidate.
 // It never intercepts /api/*, /_callback or /_passkey (see lib/swRoutes.ts).
 import { cleanupOutdatedCaches, matchPrecache, precacheAndRoute } from "workbox-precaching";
-import { DATA_TIMEOUT_MS, classifyRequest, isCacheableData } from "./lib/swRoutes";
+import { DATA_TIMEOUT_MS, FRESH_HEADER, classifyRequest, isCacheableData } from "./lib/swRoutes";
 
 declare const self: ServiceWorkerGlobalScope;
 
@@ -35,11 +35,10 @@ function fromCache(res: Response): Response {
   return new Response(res.body, { status: res.status, statusText: res.statusText, headers });
 }
 
-async function data(event: FetchEvent): Promise<Response> {
-  const cache = await caches.open(DATA_CACHE);
-  const key = new URL(event.request.url).pathname; // ignore ?query so one file = one entry
-  const network = fetch(event.request).then(async (res) => {
-    if (res.status === 401) await caches.delete(DATA_CACHE);
+/** Fetch /data JSON and save a clean copy; the response is returned without waiting on the cache write. */
+function refresh(event: FetchEvent, cache: Cache, key: string): Promise<Response> {
+  const network = fetch(event.request).then((res) => {
+    if (res.status === 401) event.waitUntil(caches.delete(DATA_CACHE));
     else if (
       isCacheableData({
         status: res.status,
@@ -48,13 +47,29 @@ async function data(event: FetchEvent): Promise<Response> {
         contentType: res.headers.get("content-type"),
       })
     ) {
-      await cache.put(key, await stamp(res.clone()));
+      event.waitUntil(stamp(res.clone()).then((r) => cache.put(key, r)));
     }
     return res;
   });
-  // Let a slow response still refresh the cache after we gave up waiting for it.
   event.waitUntil(network.catch(() => undefined));
+  return network;
+}
 
+/**
+ * Stale-while-revalidate: a cached copy is answered instantly (marked x-sw-from-cache, so the
+ * app re-fetches with FRESH_HEADER once it is on screen) while the cache refreshes behind it.
+ * A fresh request, or no cached copy, waits on the network, falling back to the cache after
+ * DATA_TIMEOUT_MS or on a network error.
+ */
+async function data(event: FetchEvent): Promise<Response> {
+  const cache = await caches.open(DATA_CACHE);
+  const key = new URL(event.request.url).pathname; // ignore ?query so one file = one entry
+  const hit = await cache.match(key);
+  if (hit && !event.request.headers.has(FRESH_HEADER)) {
+    void refresh(event, cache, key);
+    return fromCache(hit);
+  }
+  const network = refresh(event, cache, key);
   const timeout = new Promise<"timeout">((r) => setTimeout(() => r("timeout"), DATA_TIMEOUT_MS));
   try {
     const first = await Promise.race([network, timeout]);
@@ -62,20 +77,24 @@ async function data(event: FetchEvent): Promise<Response> {
   } catch {
     /* network error: fall through to the cache */
   }
-  const hit = await cache.match(key);
   return hit ? fromCache(hit) : network;
 }
 
+/**
+ * The app shell is precached, so a cold open paints from it with no round trip through the
+ * edge. An expired session still surfaces: the /data fetches come back as a redirect and the
+ * app shows its "log in again" screen, whose full navigation bypasses this (see below).
+ */
 async function navigation(event: FetchEvent): Promise<Response> {
+  const shell = await matchPrecache("/index.html");
+  if (shell && !new URL(event.request.url).searchParams.has("login")) return shell;
   try {
     // Redirects (an expired session bouncing to Cognito) come back as-is: never cached, never replaced.
     return await fetch(event.request);
   } catch {
-    // Only a network error falls back to the shell; the SPA then boots from cached data.
-    return (await matchPrecache("/index.html")) ?? Response.error();
+    return shell ?? Response.error();
   }
 }
-
 self.addEventListener("fetch", (event) => {
   const kind = classifyRequest({
     url: event.request.url,

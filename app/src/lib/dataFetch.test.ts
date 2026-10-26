@@ -13,13 +13,17 @@ describe("shouldRefreshOnResume", () => {
 });
 
 describe("isSessionExpired", () => {
-  const ok = { status: 200, redirected: false, type: "basic" };
+  const ok = { status: 200, redirected: false, type: "basic", contentType: "application/json" };
   it("treats a clean response as a live session", () => expect(isSessionExpired(ok)).toBe(false));
   it("treats 401/403 and redirects as an expired login", () => {
     expect(isSessionExpired({ ...ok, status: 401 })).toBe(true);
     expect(isSessionExpired({ ...ok, status: 403 })).toBe(true);
-    expect(isSessionExpired({ ...ok, redirected: true })).toBe(true);
-    expect(isSessionExpired({ status: 0, redirected: false, type: "opaqueredirect" })).toBe(true);
+    expect(isSessionExpired({ ...ok, redirected: true, contentType: "text/html" })).toBe(true);
+    expect(isSessionExpired({ ...ok, status: 0, type: "opaqueredirect", contentType: null })).toBe(true);
+  });
+
+  it("accepts the edge's silent session renewal (a redirect that ends in JSON)", () => {
+    expect(isSessionExpired({ ...ok, redirected: true })).toBe(false);
   });
   it("does not blame the session for a missing key (SPA shell on 200, or a plain 404)", () => {
     expect(isSessionExpired({ ...ok, status: 404 })).toBe(false);

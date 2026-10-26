@@ -49,12 +49,16 @@ export interface ResponseInfo {
 
 /**
  * Only a clean 200 JSON from our own origin may enter the data cache. An expired session
- * comes back as a redirect or the login/SPA HTML, and caching that would poison the
- * offline copy.
+ * comes back as an opaque redirect or the login/SPA HTML, and caching that would poison the
+ * offline copy. A followed same-origin redirect that ends in JSON is the edge renewing the
+ * session, so `redirected` alone does not disqualify it.
  */
 export function isCacheableData(r: ResponseInfo): boolean {
-  return r.status === 200 && !r.redirected && r.type === "basic" && /json/i.test(r.contentType ?? "");
+  return r.status === 200 && r.type === "basic" && /json/i.test(r.contentType ?? "");
 }
+
+/** Request header for a /data fetch that must skip the cached copy (app refresh after boot). */
+export const FRESH_HEADER = "x-sw-fresh";
 
 /** Network wait before `/data/*.json` falls back to the cached copy. */
 export const DATA_TIMEOUT_MS = 4000;

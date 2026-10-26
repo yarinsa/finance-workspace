@@ -46,8 +46,12 @@ describe("isCacheableData", () => {
     expect(isCacheableData({ ...ok, contentType: "text/html; charset=utf-8" })).toBe(false);
     expect(isCacheableData({ ...ok, contentType: null })).toBe(false);
   });
-  it("rejects redirects, errors and opaque responses", () => {
-    expect(isCacheableData({ ...ok, redirected: true })).toBe(false);
+  it("caches the JSON at the end of the edge's session-renewal redirect", () => {
+    expect(isCacheableData({ ...ok, redirected: true })).toBe(true);
+  });
+
+  it("rejects HTML redirects, errors and opaque responses", () => {
+    expect(isCacheableData({ ...ok, redirected: true, contentType: "text/html" })).toBe(false);
     expect(isCacheableData({ ...ok, status: 401 })).toBe(false);
     expect(isCacheableData({ ...ok, status: 304 })).toBe(false);
     expect(isCacheableData({ ...ok, type: "opaqueredirect", status: 0 })).toBe(false);
