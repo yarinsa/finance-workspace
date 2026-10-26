@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Card, Page, Section } from "@/components/common";
 import BillsCard from "@/components/BillsCard";
+import { RunwayCard } from "@/components/RunwayChart";
 import CategoryBreakdown from "@/components/CategoryBreakdown";
 import MonthStrip from "@/components/cashflow/MonthStrip";
 import MonthHero, { type MonthViewMode } from "@/components/cashflow/MonthHero";
@@ -110,10 +111,10 @@ export default function Monthly() {
 
       {forecast ? (
         <>
+          {m.kind === "current" && <RunwayCard r={cashflow.runway} />}
           <UpcomingDebits month={m.month} />
           <MonthLinks
             links={[
-              { to: "/runway", label: "יתרה צפויה" },
               { to: "/timeline", label: "ציר זמן" },
               { to: "/fixed", label: "הוצאות קבועות" },
               { to: "/metrics", label: "התקדמות" },

@@ -1,6 +1,7 @@
 import { Nudge, Page } from "@/components/common";
 import AccountRows from "@/components/home/AccountRows";
 import InboxButton from "@/components/home/InboxButton";
+import { RunwayCard } from "@/components/RunwayChart";
 import RecentTransactions from "@/components/home/RecentTransactions";
 import StatusTiles from "@/components/home/StatusTiles";
 import UpcomingChips from "@/components/home/UpcomingChips";
@@ -14,7 +15,7 @@ function greeting(hour: number): string {
   return "לילה טוב";
 }
 
-/** Action-first home: status tiles, next 14 days (to-dos live in /inbox), accounts, recent spending. */
+/** Action-first home: status tiles, balance runway chart, next 14 days (to-dos live in /inbox), accounts, recent spending. */
 export default function Overview() {
   const age = daysSince(cashflow.generated_at);
   // A pipeline-emitted stale-data action replaces the generic nudge.
@@ -35,6 +36,7 @@ export default function Overview() {
       </header>
 
       <StatusTiles />
+      <RunwayCard r={cashflow.runway} />
       <UpcomingChips runway={cashflow.runway} />
       <AccountRows netWorth={netWorth} />
       <RecentTransactions />
