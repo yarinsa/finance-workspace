@@ -35,6 +35,12 @@ class Binding:
     never_null: frozenset[str] = frozenset()                # optional model fields the resolver fills in
 
 
+def _notification(*extra):
+    """Every notification subtype reads the one `notifications` row; `extra` are its subject's fields."""
+    return Binding(tables.Notification, resolved=frozenset({"id", *extra}), hidden=frozenset({"subject"}),
+                   never_null=frozenset({"created_at", "updated_at"}))   # filled by the database default
+
+
 BINDINGS: dict[str, Binding] = {
     "Transaction": Binding(
         models.LedgerTransaction,
@@ -69,6 +75,13 @@ BINDINGS: dict[str, Binding] = {
     "Savings": Binding(models.Savings, hidden=frozenset({"currency", "account_id", "topic_id", "section",
                                                          "policies_count", "work_state"})),
     "IncomeSource": Binding(models.Income, hidden=frozenset({"currency", "detail"})),
+    "CashflowNotification": _notification("date"),
+    "BudgetNotification": _notification("budgetCategories", "cycleStart"),
+    "BillNotification": _notification("billName", "dueDate"),
+    "ServiceNotification": _notification("services"),
+    "SyncNotification": _notification("sources"),
+    "TransactionNotification": _notification("transaction"),
+    "GenericNotification": _notification(),
 }
 
 # Object types with no model behind them: Relay plumbing, payloads, roots, and
@@ -83,6 +96,8 @@ STRUCTURAL = frozenset({
     "UpdateTransactionPayload", "ClearTransactionOverridePayload", "SetTransactionTagsPayload",
     "UpdateTagPayload", "DeleteTagPayload",
     "Offset", "OffsetPayload", "ResetOffsetsPayload",
+    "NotificationAction", "NotificationConnection", "NotificationEdge", "NotificationPayload",
+    "BulkNotificationPayload",
 })
 
 

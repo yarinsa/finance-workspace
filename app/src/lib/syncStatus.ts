@@ -182,6 +182,13 @@ let errors = 0;
 /** True while S3 polling is the transport (SSE failed). */
 let polling = false;
 const listeners = new Set<() => void>();
+const notificationListeners = new Set<() => void>();
+
+/** Run `fn` whenever the server says an inbox notification changed (SSE `notification` event). */
+export function onNotificationEvent(fn: () => void): () => void {
+  notificationListeners.add(fn);
+  return () => void notificationListeners.delete(fn);
+}
 
 async function fetchStatus(): Promise<SyncStatusDoc | null> {
   try {
@@ -291,6 +298,7 @@ function openStream() {
   stream = es;
   es.addEventListener("snapshot", onSnapshot as EventListener);
   es.addEventListener("source", onSource as EventListener);
+  es.addEventListener("notification", () => notificationListeners.forEach((l) => l()));
   es.onerror = onStreamError;
 }
 

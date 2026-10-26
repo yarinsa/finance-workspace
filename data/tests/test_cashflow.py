@@ -356,3 +356,14 @@ class TestFixedExpenses:
 
     def test_stale_forecast_gives_nothing(self):
         assert cashflow.fixed_expenses(self.FORECAST, [], "2026-11") is None
+
+
+def test_inbox_sync_never_stops_the_digest(monkeypatch, capsys):
+    """No database configured, or one that is down: the digest carries on."""
+    import goals
+    model = {"actions": [{"id": "stale:amex", "severity": "low", "title": "נתונים לא עדכניים"}]}
+    monkeypatch.setattr(goals, "database_url", lambda: None)
+    assert cashflow.sync_inbox(model) is None
+    monkeypatch.setattr(goals, "database_url", lambda: "postgresql://nobody@127.0.0.1:1/none?connect_timeout=1")
+    assert cashflow.sync_inbox(model) is None
+    assert "inbox: database unavailable" in capsys.readouterr().err

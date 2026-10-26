@@ -1394,7 +1394,8 @@ def validation_actions(report, include_warn=False):
 
     Ids are stable for the report's month so a per-device dismiss sticks until the
     situation changes. Dump and salary failures are critical; the rest are high.
-    Warnings are low-severity and only included on request.
+    Warnings are low-severity (category WARNING, failures PROBLEM) and only included on
+    request. Dump checks point at their source (a sync subject); the rest have no subject.
     """
     month = str(report.get("generated_at", ""))[:7]
     actions = []
@@ -1406,9 +1407,12 @@ def validation_actions(report, include_warn=False):
             amounts = [abs(d["amount"]) for d in c.get("details", [])
                        if d.get("level", "fail") == ("fail" if fail else "warn") and d.get("amount")]
             actions.append({
-                "id": f"validation:{c['id']}:{month}", "severity": severity, "title": title,
+                "id": f"validation:{c['id']}:{month}", "severity": severity,
+                "category": "PROBLEM" if fail else "WARNING", "type": "validationFailed", "title": title,
                 "detail": c["summary"], "cta": {"label": "לסנכרונים", "to": "/syncs"},
                 "amount": round(sum(amounts), 2) if amounts else None,
+                "subject": {"kind": "sync", "sources": [c["id"].split(".", 1)[1]]}
+                           if c["type"] == "dump" else None,
             })
     return actions
 

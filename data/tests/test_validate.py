@@ -830,6 +830,10 @@ def test_validation_actions_follow_the_actions_py_shape():
     assert [a["id"] for a in acts] == ["validation:dump.discount:2026-10", "validation:balance.leumi:2026-10"]
     assert [a["severity"] for a in acts] == ["critical", "high"]
     assert acts[1]["amount"] == 2186.92 and acts[1]["cta"] == {"label": "לסנכרונים", "to": "/syncs"}
-    assert set(acts[0]) == {"id", "severity", "title", "detail", "cta", "amount"}
+    assert set(acts[0]) == {"id", "severity", "category", "type", "title", "detail", "cta", "amount", "subject"}
+    assert [(a["category"], a["type"]) for a in acts] == [("PROBLEM", "validationFailed")] * 2
+    assert acts[0]["subject"] == {"kind": "sync", "sources": ["discount"]}   # a dump check points at its source
+    assert acts[1]["subject"] is None
     low = validate.validation_actions(report, include_warn=True)
     assert low[-1]["severity"] == "low" and low[-1]["id"].startswith("validation:loans.mortgage")
+    assert low[-1]["category"] == "WARNING"

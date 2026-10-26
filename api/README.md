@@ -75,7 +75,26 @@ and a failed signal is logged. `/api/rebuild` reports `idle` when there is no wo
 `: ping` comment every 15 s. It closes after 10 minutes (clients reconnect and get a new snapshot), allows at
 most 20 concurrent streams (503 beyond), and drops clients that fall 100 events behind. One `LISTEN sync_status`
 connection per API process feeds all streams (`api/sse.py`); it reconnects with 1-30 s backoff. Details:
-docs/ledger-api.md, "Live sync status".
+docs/ledger-api.md, "Live sync status". The same connection also `LISTEN`s on `notifications` and the
+stream emits `event: notification` with `{"id"}` when an inbox row changes (refetch it over GraphQL).
+
+## Notifications inbox
+
+The home "לטיפול" actions (`data/actions.py`, plus validation failures) are mirrored into the `notifications`
+table by `data/cashflow.py` after each digest (`db/inbox.py sync`, best-effort: no database never stops the
+digest). Each carries a `category` (PROBLEM, WARNING, REMINDER, SUGGESTION, INFO), a camelCase `type`
+(`limitBreach`, `budgetOver`, ...) and a `subject` that picks the GraphQL subtype (`BudgetNotification`, ...;
+`api/schema/inbox.graphql`). Ids are the actions' period-stable ids, so a situation is one row across digests.
+
+- **Visible** = not archived, not resolved (the digest stamps `resolved_at` when the action disappears) and not
+  snoozed past now; **unread** = visible with no `read_at`. Snoozing also marks the item unread.
+- The digest never touches `read_at`, `snoozed_until_at` or `archived_at`; `finance_api` may update only those
+  three columns.
+- Queries: `notifications(filter)` (most severe first, then newest), `notificationsUnreadCount(category)`.
+  Mutations: `updateNotification` (read, snooze), `archiveNotification` / `unarchiveNotification`, and the bulk
+  `markAllNotificationsRead` / `archiveAllNotifications` / `snoozeAllNotifications` (visible items only).
+- Inbox mutations are not ledger edits: they do **not** signal `LedgerRebuildWorkflow` (`rebuilds = False` on
+  the resolver).
 
 ## Kill switch
 

@@ -71,7 +71,10 @@ def test_category_source_enum_matches_the_table_check():
 
 def test_every_node_type_is_refetchable():
     node = SCHEMA.type_map["Node"]
-    assert {t.name for t in SCHEMA.get_possible_types(node)} == {"Transaction", "Merchant", "Category", "Tag", "Horizon", "Goal"}
+    assert {t.name for t in SCHEMA.get_possible_types(node)} == {
+        "Transaction", "Merchant", "Category", "Tag", "Horizon", "Goal", "CashflowNotification", "BudgetNotification",
+        "BillNotification", "ServiceNotification", "SyncNotification", "TransactionNotification",
+        "GenericNotification"}
 
 
 def test_connections_follow_the_relay_spec():
@@ -125,3 +128,20 @@ def test_plural_relations_are_paginated_both_ways():
         for f, gql in t.fields.items():
             if _unwrap(gql.type).name.endswith("Connection") and name != "Transaction":
                 assert {"first", "after", "last", "before"} <= set(gql.args), f"{name}.{f}"
+
+
+def test_every_notification_subtype_carries_the_interface_fields():
+    iface = SCHEMA.type_map["Notification"]
+    subtypes = SCHEMA.get_possible_types(iface)
+    assert len(subtypes) == 7
+    for t in subtypes:
+        assert set(iface.fields) <= set(t.fields), t.name
+        assert iface in t.interfaces and SCHEMA.type_map["Node"] in t.interfaces, t.name
+
+
+def test_notification_enums_match_the_table_checks():
+    from finance.tables import Notification
+    checks = {c.name: str(c.sqltext) for c in Notification.__table_args__}
+    for enum, check, fold in (("NotificationCategory", "notifications_category_check", str),
+                              ("NotificationSeverity", "notifications_severity_check", str.lower)):
+        assert all(f"'{fold(v)}'" in checks[check] for v in SCHEMA.type_map[enum].values), enum

@@ -1,6 +1,6 @@
 import { animate, motion, useMotionValue, useReducedMotion, useTransform } from "motion/react";
 import { ArrowLeftRight, Tag } from "lucide-react";
-import { useCallback, useEffect, useId, useRef, type ReactNode } from "react";
+import { useCallback, useEffect, useId, useRef, type ComponentType, type ReactNode } from "react";
 import { ACTION_WIDTH, COMMIT_RATIO, resolveSwipe } from "@/lib/swipe";
 
 const OPEN_EVENT = "swipe-row-open";
@@ -13,6 +13,11 @@ export interface SwipeableRowProps {
   onSwipeRight?: () => void;
   leftLabel?: string;
   rightLabel?: string;
+  /** Icons and colours of the revealed actions; default to the transaction-row pair (tag / offset). */
+  leftIcon?: ComponentType<{ className?: string }>;
+  rightIcon?: ComponentType<{ className?: string }>;
+  leftClass?: string;
+  rightClass?: string;
 }
 
 /** Gmail-iOS-style swipe row: drag to reveal a tappable action, or swipe all the way / flick to run it. Only one row stays open at a time. */
@@ -22,6 +27,10 @@ export function SwipeableRow({
   onSwipeRight,
   leftLabel = "שייך קטגוריה",
   rightLabel = "קזז",
+  leftIcon: LeftIcon = Tag,
+  rightIcon: RightIcon = ArrowLeftRight,
+  leftClass = "bg-sky-600",
+  rightClass = "bg-good",
 }: SwipeableRowProps) {
   const id = useId();
   const reduced = useReducedMotion();
@@ -96,10 +105,10 @@ export function SwipeableRow({
           aria-hidden
           style={{ opacity: rightOpacity, width: ACTION_WIDTH }}
           onClick={() => run(onSwipeLeft)}
-          className="absolute inset-y-0 right-0 flex flex-col items-center justify-center gap-1 bg-sky-600 text-[11px] font-semibold text-white"
+          className={`absolute inset-y-0 right-0 flex flex-col items-center justify-center gap-1 ${leftClass} text-[11px] font-semibold text-white`}
         >
           <motion.span style={{ scale: rightScale }} className="flex">
-            <Tag className="size-5" />
+            <LeftIcon className="size-5" />
           </motion.span>
           {leftLabel}
         </motion.button>
@@ -111,10 +120,10 @@ export function SwipeableRow({
           aria-hidden
           style={{ opacity: leftOpacity, width: ACTION_WIDTH }}
           onClick={() => run(onSwipeRight)}
-          className="absolute inset-y-0 left-0 flex flex-col items-center justify-center gap-1 bg-good text-[11px] font-semibold text-white"
+          className={`absolute inset-y-0 left-0 flex flex-col items-center justify-center gap-1 ${rightClass} text-[11px] font-semibold text-white`}
         >
           <motion.span style={{ scale: leftScale }} className="flex">
-            <ArrowLeftRight className="size-5" />
+            <RightIcon className="size-5" />
           </motion.span>
           {rightLabel}
         </motion.button>

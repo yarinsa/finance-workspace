@@ -145,6 +145,12 @@ export interface HomeAction {
   detail: string;
   cta: { label: string; to: string } | null;
   amount: number | null;
+  /** Inbox bucket; absent in data published before categories existed (see `categoryOf`). */
+  category?: "PROBLEM" | "WARNING" | "REMINDER" | "SUGGESTION" | "INFO";
+  /** Which rule produced it (limitBreach, billOverdue, ...). */
+  type?: string;
+  /** What the item is about; `kind` picks the detail chip. */
+  subject?: ({ kind: "cashflow" | "budget" | "bill" | "service" | "sync" | "transaction" } & Record<string, unknown>) | null;
 }
 
 export interface Cashflow {

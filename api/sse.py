@@ -1,9 +1,13 @@
-"""Live sync status over Server-Sent Events.
+"""Live sync status (and inbox changes) over Server-Sent Events.
 
 `SyncBroadcaster` owns one dedicated Postgres connection running `LISTEN sync_status`
 (the table's trigger does `pg_notify('sync_status', source)` on every write). Each notify
 re-reads that row and fans `{"source", "entry"}` out to the subscribers, one bounded queue
 per open `GET /api/sync/events` stream. The API role only SELECTs; it never writes status.
+
+The same connection listens on `notifications` (the inbox table's trigger sends the
+notification id). Those fan out as an `Event("notification", {"id"})`, which the stream
+frames as `event: notification`; the client refetches the item over GraphQL.
 
 A subscriber whose queue fills is a slow client and is dropped; when the LISTEN connection
 drops, every subscriber is ended after reconnecting. Either way the client reconnects and
@@ -12,16 +16,24 @@ starts again from a fresh snapshot, so no change can be silently missed.
 import asyncio
 import json
 import logging
+from typing import Any, NamedTuple
 
 import psycopg
 
 log = logging.getLogger("finance_api")
 
 CHANNEL = "sync_status"
+INBOX_CHANNEL = "notifications"
 QUEUE_SIZE = 100
 BACKOFF_START, BACKOFF_MAX = 1.0, 30.0
 
 END = object()   # queued to tell a stream to finish (dropped, resync, or shutdown)
+
+
+class Event(NamedTuple):
+    """A queued item that names its own SSE event; a bare dict is a `source` change."""
+    name: str
+    data: Any
 
 
 class Subscription:
@@ -119,12 +131,16 @@ class SyncBroadcaster:
             try:
                 async with await psycopg.AsyncConnection.connect(self.database_url, autocommit=True) as conn:
                     await conn.execute(f"LISTEN {CHANNEL}")
+                    await conn.execute(f"LISTEN {INBOX_CHANNEL}")
                     backoff = BACKOFF_START
                     if not first:
                         self.resync_all()   # changes may have been missed while we were away
                     first = False
                     async for note in conn.notifies():
-                        await self._on_notify(note.payload)
+                        if note.channel == INBOX_CHANNEL:
+                            self.publish(Event("notification", {"id": note.payload}))
+                        else:
+                            await self._on_notify(note.payload)
                 raise psycopg.OperationalError("listen connection closed")
             except asyncio.CancelledError:
                 raise

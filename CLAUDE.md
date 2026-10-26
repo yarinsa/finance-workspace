@@ -147,6 +147,17 @@ Rules that keep it cheap and safe — keep them when changing anything here:
   `terraform apply`, copying the secret into `.env`. SPA routing lives in the edge-auth
   Lambda (not CloudFront error responses, which would swallow API 403/404s).
 
+### Notifications inbox
+
+The "לטיפול" actions (`data/actions.py` + `validation_actions`) are also mirrored into Postgres
+`notifications` by `data/cashflow.py` (best-effort, via `db/inbox.py sync`; a dead DB never stops the
+digest). Every action carries `category` (PROBLEM | WARNING | REMINDER | SUGGESTION | INFO), `type`
+(camelCase event) and `subject` (`{kind, ...}`), and its period-stable `id` is the row key. The digest owns
+the content and `resolved_at`; the household owns `read_at` / `snoozed_until_at` / `archived_at` (the only
+columns `finance_api` can update). Visible = not archived, not resolved, not
+snoozed; snoozing marks unread. GraphQL: `api/schema/inbox.graphql`; inbox mutations do **not** signal a
+ledger rebuild. Live changes arrive as `event: notification` on `/api/sync/events`. Details: `api/README.md`.
+
 ### Automated sync (Temporal) — POC
 
 **Proof of concept** (dev server, no persistence guarantees); see

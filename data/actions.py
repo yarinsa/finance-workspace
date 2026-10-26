@@ -5,7 +5,10 @@ fixed_expenses) and the snapshot's sync list; reads and writes nothing. Each
 action carries an id that is stable for its period (cycle / month / date) so a
 per-device dismiss sticks until the situation changes.
 
-Action shape: {id, severity, title, detail, cta: {label, to} | null, amount}.
+Action shape: {id, severity, category, type, title, detail, cta: {label, to} | null,
+amount, subject}. `category` is the inbox bucket (PROBLEM, WARNING, REMINDER, SUGGESTION,
+INFO), `type` the camelCase event, and `subject` what it is about: a dict with a `kind`
+(cashflow, budget, bill, service, sync, transaction) plus that kind's fields, or None.
 """
 from collections import defaultdict
 from datetime import date, datetime, time, timedelta
@@ -28,11 +31,13 @@ def _dm(iso):
     return f"{d.day}/{d.month}"
 
 
-def _action(id_, severity, title, detail, cta=None, amount=None):
+def _action(id_, severity, category, type_, title, detail, cta=None, amount=None, subject=None):
     return {
-        "id": id_, "severity": severity, "title": title, "detail": detail,
+        "id": id_, "severity": severity, "category": category, "type": type_,
+        "title": title, "detail": detail,
         "cta": {"label": cta[0], "to": cta[1]} if cta else None,
         "amount": round(float(amount), 2) if amount is not None else None,
+        "subject": subject,
     }
 
 
@@ -52,37 +57,43 @@ def _runway_actions(runway):
         if total > 0:
             detail += f" · אפשר להעביר {shekel(total)} מ{buffer[0]['label']}"
         overshoot = abs(low) - (runway.get("overdraft_limit") or 0)
-        out.append(_action(f"limit-breach:{breach}", "critical", f"חריגה מהמסגרת ב-{_dm(breach)}",
-                           detail, ("לתוכנית התזרים", "/monthly?view=forecast"), max(overshoot, 0)))
+        out.append(_action(f"limit-breach:{breach}", "critical", "PROBLEM", "limitBreach",
+                           f"חריגה מהמסגרת ב-{_dm(breach)}",
+                           detail, ("לתוכנית התזרים", "/monthly?view=forecast"), max(overshoot, 0),
+                           {"kind": "cashflow", "date": breach}))
     safe = runway.get("safe_to_spend")
     if safe is not None and safe < 0:
         payday = (runway.get("next_payday") or {}).get("date") or runway.get("as_of", "")
-        out.append(_action(f"short-until-payday:{payday}", "high",
+        out.append(_action(f"short-until-payday:{payday}", "high", "WARNING", "shortUntilPayday",
                            f"חסרים {shekel(safe)} עד המשכורת",
                            "הוצאות קבועות צפויות לעבור את היתרה לפני המשכורת הבאה",
-                           ("לתוכנית התזרים", "/monthly?view=forecast"), abs(safe)))
+                           ("לתוכנית התזרים", "/monthly?view=forecast"), abs(safe),
+                           {"kind": "cashflow", "date": payday}))
     return out
 
 
 def _budget_actions(budgets):
     if not budgets:
         return []
-    month = str(budgets.get("cycle_start", ""))[:7]
+    cycle = str(budgets.get("cycle_start", ""))[:10] or None
+    month = (cycle or "")[:7]
     over = [c for c in budgets.get("categories", [])
             if c.get("over") and (c.get("planned") or 0) >= MIN_BUDGET_PLAN]
     over.sort(key=lambda c: c["spent"] - c["planned"], reverse=True)
     out = []
     for c in over[:MAX_BUDGET_ITEMS]:
         extra = c["spent"] - c["planned"]
-        out.append(_action(f"budget-over:{c['name']}:{month}", "high", f"חריגה בתקציב {c['name']}",
+        out.append(_action(f"budget-over:{c['name']}:{month}", "high", "WARNING", "budgetOver", f"חריגה בתקציב {c['name']}",
                            f"{shekel(c['spent'])} מתוך {shekel(c['planned'])} (+{shekel(extra)})",
-                           ("לתקציב", "/budgets"), extra))
+                           ("לתקציב", "/budgets"), extra,
+                           {"kind": "budget", "categories": [c["name"]], "cycle_start": cycle}))
     rest = over[MAX_BUDGET_ITEMS:]
     if rest:
         extra = sum(c["spent"] - c["planned"] for c in rest)
-        out.append(_action(f"budget-over-more:{month}", "medium", ("עוד קטגוריה בחריגה" if len(rest) == 1 else f"עוד {len(rest)} קטגוריות בחריגה"),
+        out.append(_action(f"budget-over-more:{month}", "medium", "WARNING", "budgetOverMore", ("עוד קטגוריה בחריגה" if len(rest) == 1 else f"עוד {len(rest)} קטגוריות בחריגה"),
                            ", ".join(c["name"] for c in rest) + f" · +{shekel(extra)}",
-                           ("לתקציב", "/budgets"), extra))
+                           ("לתקציב", "/budgets"), extra,
+                           {"kind": "budget", "categories": [c["name"] for c in rest], "cycle_start": cycle}))
     return out
 
 
@@ -92,9 +103,11 @@ def _bill_actions(bills):
         if b.get("status") != "overdue":
             continue
         out.append(_action(f"bill-overdue:{b['name']}:{str(b['due_date'])[:7]}", "medium",
+                           "WARNING", "billOverdue",
                            f"לא נמצא תשלום ל{b['name']}",
                            f"{shekel(b['amount'])} · היה צפוי ב-{_dm(b['due_date'])}",
-                           ("לחשבונות", "/monthly"), b["amount"]))
+                           ("לחשבונות", "/monthly"), b["amount"],
+                           {"kind": "bill", "name": b["name"], "due_date": str(b["due_date"])[:10]}))
     return out
 
 
@@ -108,8 +121,9 @@ def _card_actions(runway, as_of):
     for d, evs in by_date.items():
         total = -sum(e["amount"] for e in evs)
         issuers = ", ".join(f"{e['name'].split(',')[0]} {shekel(e['amount'])}" for e in evs)
-        out.append(_action(f"card-bills:{d}", "medium", f"חיובי אשראי {shekel(total)} ב-{_dm(d)}",
-                           issuers, ("לתוכנית התזרים", "/monthly?view=forecast"), total))
+        out.append(_action(f"card-bills:{d}", "medium", "REMINDER", "cardBills", f"חיובי אשראי {shekel(total)} ב-{_dm(d)}",
+                           issuers, ("לתוכנית התזרים", "/monthly?view=forecast"), total,
+                           {"kind": "cashflow", "date": d}))
     return out
 
 
@@ -139,10 +153,11 @@ def _duplicate_actions(fixed):
             continue
         total = sum(i["amount"] for i in items)
         names = " + ".join(f"{i['name']} {shekel(i['amount'])}" for i in items)
-        out.append(_action(f"dup:{key}:{month}", "low", f"שירות כפול: {key}",
+        out.append(_action(f"dup:{key}:{month}", "low", "SUGGESTION", "duplicateService", f"שירות כפול: {key}",
                            names if key != items[0]["name"] else
                            f"{GENERIC_DUP_REASON} · " + " + ".join(shekel(i["amount"]) for i in items),
-                           ("לבדיקה", "/monthly"), total))
+                           ("לבדיקה", "/monthly"), total,
+                           {"kind": "service", "services": [i["name"] for i in items]}))
     return out
 
 
@@ -170,8 +185,9 @@ def _stale_actions(syncs, as_of):
     detail = ", ".join(
         f"{r['source']} ({freshness.fmt_span(r['age'])}, יעד {freshness.fmt_span(r['target'])}, "
         f"באיחור {freshness.fmt_span(freshness.lateness(r))})" for r in late)
-    return [_action("stale:" + ",".join(r["source"] for r in late), "low", "נתונים לא עדכניים",
-                    detail, ("לסנכרונים", "/syncs"))]
+    return [_action("stale:" + ",".join(r["source"] for r in late), "low", "REMINDER", "staleData",
+                    "נתונים לא עדכניים", detail, ("לסנכרונים", "/syncs"),
+                    subject={"kind": "sync", "sources": [r["source"] for r in late]})]
 
 
 def build_actions(runway, bills, budgets, fixed_expenses, syncs, as_of, validation=()):

@@ -6,7 +6,6 @@ import {
   House,
   Inbox as InboxIcon,
   Landmark,
-  Lightbulb,
   RefreshCw,
   PieChart,
   Sparkles,
@@ -24,7 +23,6 @@ import Overview from "./Overview";
 import Inbox from "./Inbox";
 import Summary from "./Summary";
 import Goals from "./Goals";
-import Recommendations from "./Recommendations";
 import Networth from "./Networth";
 import Portfolio from "./Portfolio";
 import Metrics from "./Metrics";
@@ -86,7 +84,6 @@ export const routes: RouteDef[] = [
   { path: "/horizons", label: "היום · קרוב · פרישה", icon: Scale, group: "plan", Component: HorizonsPage },
   { path: "/goals", label: "יעדים", icon: Target, group: "plan", Component: Goals },
   { path: "/summary", label: "סיכום התוכנית", icon: ClipboardList, group: "plan", Component: Summary },
-  { path: "/recommendations", label: "המלצות", icon: Lightbulb, group: "plan", Component: Recommendations },
   { path: "/my-plan", label: "תכנון פלוס", icon: Sparkles, group: "plan", Component: MyPlan },
   { path: "/portfolio", label: "השקעות", icon: PieChart, group: "plan", Component: Portfolio },
 
@@ -98,6 +95,7 @@ export const redirects: { from: string; to: string }[] = [
   { from: "/cashflow", to: "/monthly?view=forecast" },
   { from: "/forecast", to: "/monthly?view=forecast" },
   { from: "/runway", to: "/monthly?view=forecast" },
+  { from: "/recommendations", to: "/inbox?tab=suggestions" },
 ];
 
 /** The group a pathname belongs to (undefined for unknown paths). */

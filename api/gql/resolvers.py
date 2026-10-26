@@ -5,6 +5,7 @@
                           `<entity>.transactions`, the root `Query.<plural>` connection with
                           edge totals, and an M:M connection to every other group entity
     TransactionResolver   the ledger row itself
+    NotificationResolver  the inbox (db/inbox.py): not ledger data, so its mutations never signal a rebuild
 
 Mutations live on the entity they change: a resolver lists them in `mutations()` as
 {field: (input model, method)}, and `NodeResolver.bind` wraps each one (validate the
@@ -28,14 +29,18 @@ from pydantic import BaseModel
 
 from api.schema_bindings import load_schema, snake
 
-from .inputs import (ClearTransactionOverrideInput, CreateGoalInput, DeleteGoalInput, DeleteTagInput, GroupArgs,
-                     GroupOrder, LinkOffsetInput, ResetOffsetsInput, SetTransactionTagsInput, TransactionArgs,
-                     TransactionOrder, UnlinkOffsetInput, UpdateGoalInput, UpdateTagInput, UpdateTransactionInput)
+from .inputs import (BulkNotificationInput, ClearTransactionOverrideInput, CreateGoalInput, DeleteGoalInput, DeleteTagInput, GroupArgs,
+                     GroupOrder, LinkOffsetInput, NotificationArgs, NotificationIdInput, ResetOffsetsInput,
+                     SetTransactionTagsInput, SnoozeAllNotificationsInput, TransactionArgs, TransactionOrder,
+                     UnlinkOffsetInput, UnreadCountArgs, UpdateGoalInput, UpdateNotificationInput, UpdateTagInput,
+                     UpdateTransactionInput)
+from .inbox import TYPENAMES, Notification
 from .ledger import CENT, Ledger, Merchant, Txn, offset_candidates, totals
 from .relay import ConnectionArgs, GlobalId, paginate, to_global_id, validated
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "db"))   # the shared write paths
 import goal_store  # noqa: E402
+import inbox  # noqa: E402
 import offset_store  # noqa: E402
 import overrides  # noqa: E402
 import tags as tag_store  # noqa: E402
@@ -81,6 +86,7 @@ def transaction_connection(rows, args: TransactionArgs):
 class NodeResolver(Generic[T]):
     """An SDL type implementing `Node`: a global ID and a way back from it."""
     type_name: ClassVar[str]
+    rebuilds: ClassVar[bool] = True   # its mutations change ledger data, so the app signals a rebuild
 
     def key(self, obj: T) -> str:
         """The part of the global ID after the type name."""
@@ -108,8 +114,9 @@ class NodeResolver(Generic[T]):
         def resolve(_, info, input):
             inp = validated(model, input, keep_null=True)
             payload = method(inp, info)
-            info.context["writes"] += 1
-            ledger(info).invalidate()
+            if self.rebuilds:
+                info.context["writes"] += 1
+                ledger(info).invalidate()
             return {"client_mutation_id": inp.client_mutation_id, **payload()}
         return resolve
 
@@ -480,10 +487,93 @@ class TransactionResolver(NodeResolver[Txn]):
         fields["offsetsManual"].resolve = lambda t, info: t.manual_offsets is not None
 
 
+def _now():
+    return dt.datetime.now(dt.timezone.utc)
+
+
+class NotificationResolver(NodeResolver[Notification]):
+    """The inbox. The global id says "Notification" for every subtype, since which one an item
+    is follows its subject and can change; `Query.node` returns whichever fits."""
+    type_name = "Notification"
+    rebuilds = False
+
+    def key(self, n):
+        return n.id
+
+    def fetch(self, lg, key):
+        row = inbox.get(lg.conn, key)
+        return Notification.from_row(row) if row else None
+
+    def mutations(self):
+        return {"updateNotification": (UpdateNotificationInput, self.update),
+                "archiveNotification": (NotificationIdInput, self.archive),
+                "unarchiveNotification": (NotificationIdInput, self.unarchive),
+                "markAllNotificationsRead": (BulkNotificationInput, self.read_all),
+                "archiveAllNotifications": (BulkNotificationInput, self.archive_all),
+                "snoozeAllNotifications": (SnoozeAllNotificationsInput, self.snooze_all)}
+
+    def _set(self, info, ref, changes):
+        n = self.require(info, ref)
+        row = inbox.update(ledger(info).conn, n.id, changes, now=_now())
+        return lambda: {"notification": Notification.from_row(row)}
+
+    def update(self, inp, info):
+        changes = inp.changes(_now())
+        if not changes:
+            raise GraphQLError("send read and/or snoozedUntilAt")
+        return self._set(info, inp.id, changes)
+
+    def archive(self, inp, info):
+        return self._set(info, inp.id, {"archived_at": _now()})
+
+    def unarchive(self, inp, info):
+        return self._set(info, inp.id, {"archived_at": None})
+
+    def _bulk(self, info, run):
+        count = run(ledger(info).conn)
+        return lambda: {"count": count}
+
+    def read_all(self, inp, info):
+        return self._bulk(info, lambda conn: inbox.mark_all_read(conn, inp.categories()))
+
+    def archive_all(self, inp, info):
+        return self._bulk(info, lambda conn: inbox.archive_all(conn, inp.categories()))
+
+    def snooze_all(self, inp, info):
+        return self._bulk(info, lambda conn: inbox.snooze_all(conn, inp.snoozed_until_at, inp.categories()))
+
+    def resolve_list(self, _, info, **args):
+        a = validated(NotificationArgs, args)
+        f = a.filter
+        rows = inbox.select(ledger(info).conn, [c.value for c in f.category] if f.category is not None else None,
+                            f.unread, f.include_archived, f.include_resolved, f.include_snoozed)
+        edges = sorted(({"node": Notification.from_row(r)} for r in rows), key=lambda e: e["node"].sort_key)
+        return paginate(edges, lambda e: e["node"].sort_key, a)
+
+    def resolve_unread_count(self, _, info, **args):
+        categories = validated(UnreadCountArgs, args).category
+        return inbox.unread_count(ledger(info).conn, [c.value for c in categories] if categories is not None else None)
+
+    def resolve_transaction(self, n, info):
+        key = n.transaction_key
+        return ledger(info).by_key.get(key) if key else None
+
+    def bind(self, schema):
+        for name in TYPENAMES:   # `id` is a field of every subtype (an interface's resolver is never run)
+            schema.type_map[name].fields["id"].resolve = self.resolve_id
+        for field, (model, method) in self.mutations().items():
+            schema.mutation_type.fields[field].resolve = self._mutation(model, method)
+        schema.type_map["Notification"].resolve_type = lambda obj, *_: obj.TYPENAME
+        schema.query_type.fields["notifications"].resolve = self.resolve_list
+        schema.query_type.fields["notificationsUnreadCount"].resolve = self.resolve_unread_count
+        schema.type_map["TransactionNotification"].fields["transaction"].resolve = self.resolve_transaction
+
+
 GOALS = GoalResolver()
 ENTITIES: list[GroupResolver] = [MerchantResolver(), CategoryResolver(), TagResolver(), HorizonResolver(GOALS), GOALS]
 TRANSACTIONS = TransactionResolver(GOALS)
-NODES: dict[str, NodeResolver] = {r.type_name: r for r in [TRANSACTIONS, *ENTITIES]}
+NOTIFICATIONS = NotificationResolver()
+NODES: dict[str, NodeResolver] = {r.type_name: r for r in [TRANSACTIONS, *ENTITIES, NOTIFICATIONS]}
 
 
 class _NodeArgs(BaseModel):
@@ -520,6 +610,15 @@ def _parse_date(v):
         raise GraphQLError(f"not an ISO date: {v!r}") from None
 
 
+def _parse_datetime(v):
+    """An ISO 8601 timestamp; one without an offset is taken as UTC."""
+    try:
+        parsed = dt.datetime.fromisoformat(v)
+    except (TypeError, ValueError):
+        raise GraphQLError(f"not an ISO 8601 timestamp: {v!r}") from None
+    return parsed if parsed.tzinfo else parsed.replace(tzinfo=dt.timezone.utc)
+
+
 def build():
     """The executable schema: the SDL with resolvers, scalars and enum values attached."""
     schema = load_schema()
@@ -528,16 +627,22 @@ def build():
     t["Date"].serialize = lambda v: v.isoformat()
     t["Date"].parse_value = _parse_date
     t["DateTime"].serialize = lambda v: v.isoformat()
+    t["DateTime"].parse_value = _parse_datetime
     t["JSON"].serialize = lambda v: v
     t["Money"].parse_value = _parse_money
     for enum in ("HorizonKey", "CategorySource", "GoalInterval", "OffsetKind"):
         for name, value in t[enum].values.items():
             value.value = name.lower()
+    for name in t["NotificationCategory"].values:
+        t["NotificationCategory"].values[name].value = name
+    for name, value in t["NotificationSeverity"].values.items():
+        value.value = name.lower()
     t["Node"].resolve_type = lambda obj, *_: obj.TYPENAME
 
     schema.query_type.fields["node"].resolve = resolve_node
     schema.query_type.fields["snapshot"].resolve = resolve_snapshot
     TRANSACTIONS.bind(schema)
+    NOTIFICATIONS.bind(schema)
     for entity in ENTITIES:
         entity.bind(schema, ENTITIES)
     return schema

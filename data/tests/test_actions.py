@@ -55,11 +55,15 @@ def test_limit_breach_is_critical_with_buffer_hint():
     assert "₪11,695" in a["detail"] and "₪10,000" in a["detail"]
     assert "אפשר להעביר ₪2,490 מנזיל יומי+" in a["detail"]
     assert a["cta"] == {"label": "לתוכנית התזרים", "to": "/monthly?view=forecast"}
+    assert (a["category"], a["type"]) == ("PROBLEM", "limitBreach")
+    assert a["subject"] == {"kind": "cashflow", "date": "2026-11-11"}
 
 
 def test_short_until_payday_is_high():
     a = by_id(build(), "short-until-payday:")[0]
     assert a["severity"] == "high" and a["title"] == "חסרים ₪5,969 עד המשכורת"
+    assert (a["category"], a["type"]) == ("WARNING", "shortUntilPayday")
+    assert a["subject"] == {"kind": "cashflow", "date": "2026-11-08"}
 
 
 def test_budget_over_skips_placeholder():
@@ -68,6 +72,8 @@ def test_budget_over_skips_placeholder():
     assert ids == ["budget-over:פנאי:2026-10"]
     a = by_id(acts, "budget-over")[0]
     assert a["severity"] == "high" and a["detail"] == "₪1,763 מתוך ₪1,200 (+₪563)"
+    assert (a["category"], a["type"]) == ("WARNING", "budgetOver")
+    assert a["subject"] == {"kind": "budget", "categories": ["פנאי"], "cycle_start": "2026-10-01"}
 
 
 def test_budget_over_caps_at_three_and_groups_rest():
@@ -76,12 +82,16 @@ def test_budget_over_caps_at_three_and_groups_rest():
     assert len([a for a in acts if a["id"].startswith("budget-over:")]) == 3
     more = by_id(acts, "budget-over-more:")[0]
     assert more["severity"] == "medium" and more["title"] == "עוד 2 קטגוריות בחריגה"
+    assert (more["category"], more["type"]) == ("WARNING", "budgetOverMore")
+    assert more["subject"] == {"kind": "budget", "categories": ["c1", "c0"], "cycle_start": "2026-10-01"}
 
 
 def test_overdue_water_bill_is_medium():
     a = by_id(build(), "bill-overdue:")[0]
     assert a["id"] == "bill-overdue:מי אביבים חיוב תקופת:2026-10"
     assert a["severity"] == "medium" and a["detail"] == "₪267 · היה צפוי ב-11/10"
+    assert (a["category"], a["type"]) == ("WARNING", "billOverdue")
+    assert a["subject"] == {"kind": "bill", "name": "מי אביבים חיוב תקופת", "due_date": "2026-10-11"}
 
 
 def test_card_events_summed_per_date_within_window():
@@ -89,6 +99,8 @@ def test_card_events_summed_per_date_within_window():
     a = by_id(build(as_of=date(2026, 11, 1)), "card-bills:")[0]
     assert a["id"] == "card-bills:2026-11-10" and a["title"] == "חיובי אשראי ₪15,734 ב-10/11"
     assert "אמריקן אקס ₪8,340" in a["detail"]
+    assert (a["category"], a["type"]) == ("REMINDER", "cardBills")
+    assert a["subject"] == {"kind": "cashflow", "date": "2026-11-10"}
 
 
 def test_duplicate_service_is_low():
@@ -97,6 +109,8 @@ def test_duplicate_service_is_low():
     assert a["amount"] == 109.4
     # Duplicates are flagged in FixedExpenses on /monthly; /cashflow never shows them.
     assert a["cta"]["to"] == "/monthly"
+    assert (a["category"], a["type"]) == ("SUGGESTION", "duplicateService")
+    assert a["subject"] == {"kind": "service", "services": ["APPLE.COM/BILL CORK IRL"] * 2}
 
 
 NOON = datetime(2026, 10, 16, 12, 0, tzinfo=timezone(timedelta(hours=3)))
@@ -109,6 +123,8 @@ def test_stale_source_nine_days():
     assert "discount-business (9 ימים, יעד 24 שעות, באיחור 8 ימים)" in a["detail"]
     assert "amex" not in a["detail"]
     assert a["cta"]["to"] == "/syncs"
+    assert (a["category"], a["type"]) == ("REMINDER", "staleData")
+    assert a["subject"] == {"kind": "sync", "sources": ["discount-business"]}
 
 
 def test_stale_uses_per_source_targets():
@@ -162,6 +178,7 @@ def test_validation_failures_join_the_list_by_severity():
     """A failing card-statement check from validate.py lands in "לטיפול" next to the
     built-in actions, sorted by severity like everything else."""
     failing = {"id": "validation:card_statements.amex:2026-10", "severity": "high",
+               "category": "PROBLEM", "type": "validationFailed", "subject": None,
                "title": "חיובי כרטיס חסרים", "detail": "29 raw vouchers missing from the ledger",
                "cta": {"label": "לסנכרונים", "to": "/syncs"}, "amount": 5212.89}
     out = actions.build_actions(None, None, None, [], [], date(2026, 10, 16), [failing])

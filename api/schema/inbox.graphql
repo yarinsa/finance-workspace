@@ -1,0 +1,240 @@
+# The notifications inbox: the digest's "לטיפול" actions plus the household's read / snooze /
+# archive state on them (db/inbox.py). Rows are keyed by the action's period-stable id.
+# Inbox mutations change no ledger data, so they do NOT signal a ledger rebuild.
+#
+# Every notification is a Node whose global id names the type "Notification" (the concrete
+# subtype follows the subject and can change), so `node(id)` refetches any of them.
+
+enum NotificationCategory {
+  """Something is wrong now (a limit breach, a rejected dump)."""
+  PROBLEM
+  """Heading for trouble (over budget, an unpaid bill)."""
+  WARNING
+  """A heads-up about something coming (card bills, stale data)."""
+  REMINDER
+  """An optional improvement (a duplicate service)."""
+  SUGGESTION
+  INFO
+}
+
+enum NotificationSeverity {
+  CRITICAL
+  HIGH
+  MEDIUM
+  LOW
+}
+
+type NotificationAction {
+  label: String!
+  """An app route, e.g. "/budgets"."""
+  to: String!
+}
+
+"""
+Visible = not archived, not resolved and not snoozed past now; unread = visible with no
+`readAt`. `resolvedAt` is set by the digest when the situation went away.
+"""
+interface Notification implements Node {
+  id: ID!
+  type: String!
+  category: NotificationCategory!
+  severity: NotificationSeverity!
+  title: String!
+  detail: String
+  amount: Money
+  cta: NotificationAction
+  createdAt: DateTime!
+  updatedAt: DateTime!
+  readAt: DateTime
+  snoozedUntilAt: DateTime
+  archivedAt: DateTime
+  resolvedAt: DateTime
+}
+
+"""A day on the balance runway: a limit breach, a short stretch until payday, card bills landing."""
+type CashflowNotification implements Notification & Node {
+  id: ID!
+  type: String!
+  category: NotificationCategory!
+  severity: NotificationSeverity!
+  title: String!
+  detail: String
+  amount: Money
+  cta: NotificationAction
+  createdAt: DateTime!
+  updatedAt: DateTime!
+  readAt: DateTime
+  snoozedUntilAt: DateTime
+  archivedAt: DateTime
+  resolvedAt: DateTime
+  date: Date
+}
+
+"""Budget categories over their plan in a RiseUp cycle."""
+type BudgetNotification implements Notification & Node {
+  id: ID!
+  type: String!
+  category: NotificationCategory!
+  severity: NotificationSeverity!
+  title: String!
+  detail: String
+  amount: Money
+  cta: NotificationAction
+  createdAt: DateTime!
+  updatedAt: DateTime!
+  readAt: DateTime
+  snoozedUntilAt: DateTime
+  archivedAt: DateTime
+  resolvedAt: DateTime
+  budgetCategories: [String!]!
+  cycleStart: Date
+}
+
+"""A fixed bill that has not been paid."""
+type BillNotification implements Notification & Node {
+  id: ID!
+  type: String!
+  category: NotificationCategory!
+  severity: NotificationSeverity!
+  title: String!
+  detail: String
+  amount: Money
+  cta: NotificationAction
+  createdAt: DateTime!
+  updatedAt: DateTime!
+  readAt: DateTime
+  snoozedUntilAt: DateTime
+  archivedAt: DateTime
+  resolvedAt: DateTime
+  billName: String!
+  dueDate: Date!
+}
+
+"""Services worth a look, e.g. a duplicate subscription."""
+type ServiceNotification implements Notification & Node {
+  id: ID!
+  type: String!
+  category: NotificationCategory!
+  severity: NotificationSeverity!
+  title: String!
+  detail: String
+  amount: Money
+  cta: NotificationAction
+  createdAt: DateTime!
+  updatedAt: DateTime!
+  readAt: DateTime
+  snoozedUntilAt: DateTime
+  archivedAt: DateTime
+  resolvedAt: DateTime
+  services: [String!]!
+}
+
+"""Data sources that need attention: a rejected dump, a stale sync."""
+type SyncNotification implements Notification & Node {
+  id: ID!
+  type: String!
+  category: NotificationCategory!
+  severity: NotificationSeverity!
+  title: String!
+  detail: String
+  amount: Money
+  cta: NotificationAction
+  createdAt: DateTime!
+  updatedAt: DateTime!
+  readAt: DateTime
+  snoozedUntilAt: DateTime
+  archivedAt: DateTime
+  resolvedAt: DateTime
+  sources: [String!]!
+}
+
+"""About one transaction, e.g. a payback that could offset an expense (קיזוז)."""
+type TransactionNotification implements Notification & Node {
+  id: ID!
+  type: String!
+  category: NotificationCategory!
+  severity: NotificationSeverity!
+  title: String!
+  detail: String
+  amount: Money
+  cta: NotificationAction
+  createdAt: DateTime!
+  updatedAt: DateTime!
+  readAt: DateTime
+  snoozedUntilAt: DateTime
+  archivedAt: DateTime
+  resolvedAt: DateTime
+  transaction: Transaction
+}
+
+"""Anything without a more specific subject."""
+type GenericNotification implements Notification & Node {
+  id: ID!
+  type: String!
+  category: NotificationCategory!
+  severity: NotificationSeverity!
+  title: String!
+  detail: String
+  amount: Money
+  cta: NotificationAction
+  createdAt: DateTime!
+  updatedAt: DateTime!
+  readAt: DateTime
+  snoozedUntilAt: DateTime
+  archivedAt: DateTime
+  resolvedAt: DateTime
+}
+
+input NotificationFilter {
+  category: [NotificationCategory!]
+  """true: only unread; false: only read."""
+  unread: Boolean
+  includeArchived: Boolean = false
+  includeResolved: Boolean = false
+  """Also list items whose snooze has not run out."""
+  includeSnoozed: Boolean = false
+}
+
+type NotificationConnection {
+  edges: [NotificationEdge!]!
+  pageInfo: PageInfo!
+  totalCount: Int!
+}
+
+type NotificationEdge {
+  cursor: String!
+  node: Notification!
+}
+
+input UpdateNotificationInput {
+  clientMutationId: String
+  id: ID!
+  read: Boolean
+  snoozedUntilAt: DateTime
+}
+
+input NotificationIdInput {
+  clientMutationId: String
+  id: ID!
+}
+
+input BulkNotificationInput {
+  clientMutationId: String
+  category: [NotificationCategory!]
+}
+
+input SnoozeAllNotificationsInput {
+  clientMutationId: String
+  snoozedUntilAt: DateTime!
+  category: [NotificationCategory!]
+}
+
+type NotificationPayload {
+  clientMutationId: String
+  notification: Notification!
+}
+
+type BulkNotificationPayload {
+  clientMutationId: String
+  count: Int!
+}

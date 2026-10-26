@@ -34,7 +34,7 @@ from .errors import ApiError  # noqa: E402
 from .inputs import GoalEdit, Patch, PushSubscribe, PushUnsubscribe, TagEdit, TagSet  # noqa: E402
 from .gql import endpoint  # noqa: E402
 from .rebuild import OTP_SOURCES, Rebuilder  # noqa: E402
-from .sse import END, SyncBroadcaster, sse  # noqa: E402
+from .sse import END, Event, SyncBroadcaster, sse  # noqa: E402
 
 log = logging.getLogger("finance_api")
 
@@ -410,7 +410,7 @@ def create_app(settings=None, pool=None, rebuilder=None, verifier=None, broadcas
                         continue
                     if item is END:
                         return
-                    yield sse("source", item)
+                    yield sse(item.name, item.data) if isinstance(item, Event) else sse("source", item)
             finally:
                 release(sub)
 

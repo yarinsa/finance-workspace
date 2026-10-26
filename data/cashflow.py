@@ -16,6 +16,7 @@ Pipeline position::
 
 import json
 import os
+import sys
 from collections import defaultdict
 from datetime import datetime, timezone, timedelta
 
@@ -830,7 +831,31 @@ document.getElementById('note').textContent = (document.getElementById('note').t
 """
 
 
+def sync_inbox(model):
+    """Mirror `model["actions"]` into the notifications inbox (db/inbox.py).
+
+    Best-effort: with no database configured, or an unreachable one, this prints to
+    stderr and returns None so the digest carries on."""
+    import goals
+    url = goals.database_url()
+    if not url:
+        return None
+    db = os.path.join(os.path.dirname(HERE), "db")
+    sys.path.insert(0, db)
+    try:
+        import inbox
+        from ledger import connect
+        with connect(url) as conn:
+            return inbox.sync(conn, model["actions"])
+    except Exception as e:   # noqa: BLE001 — a dead DB must not stop the digest
+        print(f"inbox: database unavailable ({e})", file=sys.stderr)
+        return None
+    finally:
+        sys.path.remove(db)
+
+
 if __name__ == "__main__":
     m = build()
+    sync_inbox(m)
     print(f"cashflow.json written — current month {m['current_month']}, "
           f"net {m['today']['net']:,.0f} ₪, {len(m['months'])} months")

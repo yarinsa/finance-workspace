@@ -2,6 +2,7 @@
 
 Skips the whole module when Postgres isn't reachable (docker compose not up).
 """
+import os
 import sys
 from pathlib import Path
 
@@ -14,7 +15,7 @@ from psycopg.conninfo import conninfo_to_dict, make_conninfo  # noqa: E402
 
 import ledger  # noqa: E402
 
-TEST_DB = "finance_test"
+TEST_DB = os.environ.get("FINANCE_TEST_DB", "finance_test")   # a branch with other migrations uses its own
 
 
 @pytest.fixture(scope="session")
@@ -35,7 +36,7 @@ def test_url():
 @pytest.fixture
 def conn(test_url):
     c = ledger.connect(test_url)
-    c.execute("TRUNCATE scraped_transactions, transaction_overrides, categories, transaction_tags, tags, override_audit, goals, transaction_offsets")
+    c.execute("TRUNCATE scraped_transactions, transaction_overrides, categories, transaction_tags, tags, override_audit, goals, transaction_offsets, notifications")
     c.commit()
     yield c
     c.close()

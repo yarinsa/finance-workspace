@@ -33,6 +33,14 @@ class GroupOrder(str, Enum):
     TOTAL_ASC = "TOTAL_ASC"
 
 
+class NotificationCategory(str, Enum):
+    PROBLEM = "PROBLEM"
+    WARNING = "WARNING"
+    REMINDER = "REMINDER"
+    SUGGESTION = "SUGGESTION"
+    INFO = "INFO"
+
+
 class DateRange(_GraphQLModel):
     from_: dt.date | None = Field(default=None, alias="from")
     to: dt.date | None = None
@@ -92,6 +100,22 @@ class TransactionFilter(_GraphQLModel):
 class TransactionArgs(ConnectionArgs):
     filter: TransactionFilter = TransactionFilter()
     order_by: TransactionOrder = TransactionOrder.DATE_DESC
+
+
+class NotificationFilter(_GraphQLModel):
+    category: list[NotificationCategory] | None = None
+    unread: bool | None = None
+    include_archived: bool = False
+    include_resolved: bool = False
+    include_snoozed: bool = False
+
+
+class NotificationArgs(ConnectionArgs):
+    filter: NotificationFilter = NotificationFilter()
+
+
+class UnreadCountArgs(_GraphQLModel):
+    category: list[NotificationCategory] | None = None
 
 
 class GroupArgs(ConnectionArgs):
@@ -181,3 +205,33 @@ class UpdateGoalInput(MutationInput, GoalEdit):
 
 class DeleteGoalInput(MutationInput):
     id: node_id_of("Goal")
+
+
+class UpdateNotificationInput(MutationInput):
+    id: node_id_of("Notification")
+    read: bool | None = None
+    snoozed_until_at: dt.datetime | None = None   # null clears the snooze
+
+    def changes(self, now):
+        """The inbox columns to set: `read` stamps or clears `read_at`; a sent `snoozedUntilAt` replaces the snooze."""
+        out = {}
+        if self.read is not None:
+            out["read_at"] = now if self.read else None
+        if "snoozed_until_at" in self.model_fields_set:
+            out["snoozed_until_at"] = self.snoozed_until_at
+        return out
+
+
+class NotificationIdInput(MutationInput):
+    id: node_id_of("Notification")
+
+
+class BulkNotificationInput(MutationInput):
+    category: list[NotificationCategory] | None = None
+
+    def categories(self):
+        return [c.value for c in self.category] if self.category is not None else None
+
+
+class SnoozeAllNotificationsInput(BulkNotificationInput):
+    snoozed_until_at: dt.datetime

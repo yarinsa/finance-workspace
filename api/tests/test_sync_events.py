@@ -11,7 +11,7 @@ from fastapi.testclient import TestClient
 
 from api.app import create_app
 from api.auth import COOKIE, TokenVerifier
-from api.sse import END, Subscription, SyncBroadcaster
+from api.sse import END, Event, Subscription, SyncBroadcaster
 from api.tests.conftest import SECRET, FakeJwks, settings
 
 SNAPSHOT = {"updated_at": "2026-10-26T06:20:00+00:00",
@@ -93,6 +93,13 @@ def test_snapshot_comes_first_then_changes_as_source_events(make_client):
     assert f[2].startswith("event: source\ndata: ")
     assert json.loads(f[2].split("data: ")[1]) == CHANGE
     assert all(line.count("\n") == 1 for line in f[1:3])   # compact: one data line each
+
+
+def test_inbox_changes_are_framed_as_notification_events(make_client):
+    b = FakeBroadcaster(preload=[Event("notification", {"id": "budget-over:פנאי:2026-10"}), CHANGE])
+    f = frames(make_client(b).get("/api/sync/events").text)
+    assert f[2] == 'event: notification\ndata: {"id":"budget-over:פנאי:2026-10"}'
+    assert f[3].startswith("event: source\ndata: ")   # source events are unchanged
 
 
 def test_a_quiet_stream_gets_pings(make_client):
@@ -191,3 +198,28 @@ def test_notify_reaches_a_subscriber(test_url):
             asyncio.run(go())
         finally:
             admin.execute("DELETE FROM sync_status WHERE source = 'sse-test'")
+
+
+def test_inbox_notify_reaches_a_subscriber_as_a_notification_event(test_url):
+    import psycopg
+
+    with psycopg.connect(test_url, autocommit=True) as admin:
+        try:
+            admin.execute("SELECT 1 FROM notifications LIMIT 1")
+        except psycopg.errors.UndefinedTable:
+            pytest.skip("notifications migration not applied")
+
+        async def go():
+            b = SyncBroadcaster(test_url)
+            sub = b.subscribe()
+            try:
+                await asyncio.sleep(0.5)   # let LISTEN start
+                admin.execute("INSERT INTO notifications (id, type, category, severity, title) "
+                              "VALUES ('sse-test', 'staleData', 'REMINDER', 'low', 't')")
+                assert await asyncio.wait_for(sub.get(), 5) == Event("notification", {"id": "sse-test"})
+            finally:
+                await b.stop()
+        try:
+            asyncio.run(go())
+        finally:
+            admin.execute("DELETE FROM notifications WHERE id = 'sse-test'")

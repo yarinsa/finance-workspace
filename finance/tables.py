@@ -243,3 +243,40 @@ class PushSubscription(SQLModel, table=True):
     user_agent: str | None = Field(default=None, sa_column=Column(Text, nullable=True))
     created_at: dt.datetime | None = Field(default=None, sa_column=_now())
     last_success_at: dt.datetime | None = Field(default=None, sa_column=Column(TIMESTAMP(timezone=True), nullable=True))
+
+
+def _when(**kw):
+    return Column(TIMESTAMP(timezone=True), nullable=True, **kw)
+
+
+class Notification(SQLModel, table=True):
+    """One inbox entry: a "לטיפול" action (data/actions.py) the household can read, snooze or archive.
+
+    The action `id` is the key and is period-stable, so the same situation is the same row on
+    every digest. The digest (db/inbox.py `sync`) refreshes the content columns and stamps
+    `resolved_at` when the action disappears; it never touches `read_at`, `snoozed_until_at`
+    or `archived_at`, the household's own state, which `finance_api` may update. Every
+    insert/update fires `pg_notify('notifications', id)` (trigger in migration 0009)."""
+    __tablename__ = "notifications"
+    __table_args__ = (
+        CheckConstraint("category IN ('PROBLEM', 'WARNING', 'REMINDER', 'SUGGESTION', 'INFO')",
+                        name="notifications_category_check"),
+        CheckConstraint("severity IN ('critical', 'high', 'medium', 'low')", name="notifications_severity_check"),
+    )
+
+    id: str = Field(sa_column=Column(Text, primary_key=True))
+    type: str = Field(sa_type=Text)                 # camelCase event: limitBreach, budgetOver, ...
+    category: str = Field(sa_type=Text)
+    severity: str = Field(sa_type=Text)
+    title: str = Field(sa_type=Text)
+    detail: str | None = Field(default=None, sa_type=Text)
+    amount: Decimal | None = Field(default=None, sa_type=Money)
+    cta: dict | None = Field(default=None, sa_column=Column(JSONB))       # {label, to}
+    subject: dict | None = Field(default=None, sa_column=Column(JSONB))   # {kind, ...}: what it is about
+    created_at: dt.datetime | None = Field(default=None, sa_column=_now())   # first produced
+    updated_at: dt.datetime | None = Field(default=None, sa_column=_now())   # last produced
+    read_at: dt.datetime | None = Field(default=None, sa_column=_when())
+    snoozed_until_at: dt.datetime | None = Field(default=None, sa_column=_when())
+    archived_at: dt.datetime | None = Field(default=None, sa_column=_when())
+    resolved_at: dt.datetime | None = Field(default=None, sa_column=_when())
+

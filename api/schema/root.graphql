@@ -28,10 +28,18 @@ type Query {
         dateRange: DateRange, orderBy: GroupOrder = NAME_ASC): GoalConnection!
 
   snapshot: Snapshot!
+
+  # inbox (inbox.graphql)
+  """Most severe first, then most recently updated."""
+  notifications(first: Int, after: String, last: Int, before: String,
+                filter: NotificationFilter): NotificationConnection!
+  """Unread notifications among the visible ones, optionally within some categories."""
+  notificationsUnreadCount(category: [NotificationCategory!]): Int!
 }
 
 # Relay mutation convention: one `input`, one payload, `clientMutationId` echoed back.
-# Every mutation needs the CSRF headers and signals a ledger rebuild on success.
+# Every mutation needs the CSRF headers and signals a ledger rebuild on success, except the
+# inbox's (inbox.graphql), which change no ledger data.
 
 type Mutation {
   """Set any of the override fields; a null field clears that override."""
@@ -55,6 +63,16 @@ type Mutation {
   updateGoal(input: UpdateGoalInput!): UpdateGoalPayload!
   """Delete a goal; transactions assigned to it are unassigned."""
   deleteGoal(input: DeleteGoalInput!): DeleteGoalPayload!
+
+  # inbox (inbox.graphql): no ledger rebuild
+  """Mark read or unread, and/or snooze (or clear the snooze with a null). Snoozing marks it unread."""
+  updateNotification(input: UpdateNotificationInput!): NotificationPayload!
+  archiveNotification(input: NotificationIdInput!): NotificationPayload!
+  unarchiveNotification(input: NotificationIdInput!): NotificationPayload!
+  """Over the visible notifications (in `category`, if given); returns how many changed."""
+  markAllNotificationsRead(input: BulkNotificationInput!): BulkNotificationPayload!
+  archiveAllNotifications(input: BulkNotificationInput!): BulkNotificationPayload!
+  snoozeAllNotifications(input: SnoozeAllNotificationsInput!): BulkNotificationPayload!
 }
 
 input UpdateTransactionInput {

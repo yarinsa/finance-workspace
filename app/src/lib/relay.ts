@@ -12,7 +12,8 @@ interface GraphQLResponseBody {
   errors?: { message: string; path?: (string | number)[] }[];
 }
 
-const fetchGraphQL: FetchFunction = async (operation, variables) => {
+/** POST one GraphQL document and map failures onto ApiOffline/ApiError (shared by Relay and `graphqlRequest`). */
+async function postGraphQL(text: string | null | undefined, variables: unknown, operationName?: string): Promise<GraphQLResponseBody> {
   let res: Response;
   try {
     res = await fetch("/api/graphql", {
@@ -20,7 +21,7 @@ const fetchGraphQL: FetchFunction = async (operation, variables) => {
       credentials: "same-origin",
       cache: "no-store",
       headers: { "Content-Type": "application/json", "X-Requested-With": "finance-app", Accept: "application/json" },
-      body: JSON.stringify({ query: operation.text, variables, operationName: operation.name }),
+      body: JSON.stringify({ query: text, variables, operationName }),
     });
   } catch (err) {
     throw new ApiOffline(err instanceof Error ? err.message : "network error");
@@ -46,8 +47,20 @@ const fetchGraphQL: FetchFunction = async (operation, variables) => {
     const fields = body.data && typeof body.data === "object" ? Object.values(body.data) : [];
     if (fields.length > 0 && fields.every((v) => v == null)) throw new ApiError(200, "graphql", body.errors[0].message);
   }
-  return body as never;
-};
+  return body;
+}
+
+const fetchGraphQL: FetchFunction = async (operation, variables) =>
+  (await postGraphQL(operation.text, variables, operation.name)) as never;
+
+/**
+ * Run a plain GraphQL document outside Relay's store, for lists that are held in their own
+ * module-level store (the notifications inbox) and updated optimistically. Same transport,
+ * same errors as the Relay environment.
+ */
+export async function graphqlRequest<T>(query: string, variables?: Record<string, unknown>): Promise<T> {
+  return (await postGraphQL(query, variables)).data as T;
+}
 
 export function createEnvironment(): Environment {
   return new Environment({ network: Network.create(fetchGraphQL), store: new Store(new RecordSource()) });
