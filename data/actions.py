@@ -53,14 +53,14 @@ def _runway_actions(runway):
             detail += f" · אפשר להעביר {shekel(total)} מ{buffer[0]['label']}"
         overshoot = abs(low) - (runway.get("overdraft_limit") or 0)
         out.append(_action(f"limit-breach:{breach}", "critical", f"חריגה מהמסגרת ב-{_dm(breach)}",
-                           detail, ("לתוכנית התזרים", "/runway"), max(overshoot, 0)))
+                           detail, ("לתוכנית התזרים", "/monthly?view=forecast"), max(overshoot, 0)))
     safe = runway.get("safe_to_spend")
     if safe is not None and safe < 0:
         payday = (runway.get("next_payday") or {}).get("date") or runway.get("as_of", "")
         out.append(_action(f"short-until-payday:{payday}", "high",
                            f"חסרים {shekel(safe)} עד המשכורת",
                            "הוצאות קבועות צפויות לעבור את היתרה לפני המשכורת הבאה",
-                           ("לתוכנית התזרים", "/runway"), abs(safe)))
+                           ("לתוכנית התזרים", "/monthly?view=forecast"), abs(safe)))
     return out
 
 
@@ -109,7 +109,7 @@ def _card_actions(runway, as_of):
         total = -sum(e["amount"] for e in evs)
         issuers = ", ".join(f"{e['name'].split(',')[0]} {shekel(e['amount'])}" for e in evs)
         out.append(_action(f"card-bills:{d}", "medium", f"חיובי אשראי {shekel(total)} ב-{_dm(d)}",
-                           issuers, ("לתוכנית התזרים", "/runway"), total))
+                           issuers, ("לתוכנית התזרים", "/monthly?view=forecast"), total))
     return out
 
 

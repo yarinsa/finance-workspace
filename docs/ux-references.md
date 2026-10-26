@@ -11,9 +11,9 @@ Gathered 2026-10-16 while choosing the next feature (→ balance runway, below).
 
 | Pattern | Status in app | Best references |
 |---|---|---|
-| Projected daily balance to payday, low-point warning | **Building**: `/runway` (יתרה צפויה) | bunq, Monzo, Quicken, Cash App |
-| Safe-to-spend / per-day allowance | **Building**: hero card on `/runway` | Rocket Money, Cleo, Revolut, Quicken |
-| Upcoming bills with balance-after per row | **Building**: list on `/runway` | Quicken, Copilot |
+| Projected daily balance to payday, low-point warning | **Shipped**: chart in the תחזית view of `/monthly` and on the home page (יתרה צפויה) | bunq, Monzo, Quicken, Cash App |
+| Safe-to-spend / per-day allowance | **Shipped**: line in the תחזית month hero | Rocket Money, Cleo, Revolut, Quicken |
+| Upcoming bills with balance-after per row | **Shipped**: "תנועות צפויות" in the תחזית view | Quicken, Copilot |
 | Bills / subscriptions calendar | Not started; natural second view of runway data | Rocket Money, Orbit |
 | What-if scenario simulator (sliders → future net worth) | Stub (`/my-plan`, תכנון פלוס) | Wealthfront, Monzo, Stake |
 | Loan / prepayment simulator | Not started; pairs with the "הקטנת התשלום" advice in CLAUDE.md | Zopa, Shopee |

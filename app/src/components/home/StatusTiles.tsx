@@ -86,7 +86,7 @@ export default function StatusTiles() {
     <div className="grid gap-2.5">
         <div className="grid grid-cols-3 gap-2.5">
           <Tile
-            to="/runway"
+            to="/monthly?view=forecast"
             label="בעו״ש"
             value={tileValue(bank)}
             tone={bank < 0 ? "bad" : undefined}

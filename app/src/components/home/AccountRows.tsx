@@ -28,7 +28,7 @@ export default function AccountRows({ netWorth }: { netWorth: number | null }) {
   return (
     <Section title="חשבונות" to="/networth">
       <div className="overflow-hidden rounded-[20px] border border-line bg-panel shadow-[var(--shadow)]">
-        <Row to="/runway" label="מזומן ופיקדון נזיל" value={t.bank_balances_sum + (t.liquid_savings ?? 0)} />
+        <Row to="/monthly?view=forecast" label="מזומן ופיקדון נזיל" value={t.bank_balances_sum + (t.liquid_savings ?? 0)} />
         <Row to="/monthly" label="כרטיסי אשראי" value={-t.credit_card_debt} />
         <Row to="/networth" label="הלוואות" value={-t.consumer_loan_balance} />
         <Row to="/networth" label="משכנתא" value={-t.mortgage_balance} />

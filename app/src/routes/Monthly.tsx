@@ -1,47 +1,17 @@
 import { useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
-import { Card, Page, Section } from "@/components/common";
+import { Card, Page } from "@/components/common";
 import BillsCard from "@/components/BillsCard";
-import { RunwayCard } from "@/components/RunwayChart";
+import { RunwayCard, RunwayEvents, RunwayFootnote } from "@/components/RunwayChart";
 import CategoryBreakdown from "@/components/CategoryBreakdown";
 import MonthStrip from "@/components/cashflow/MonthStrip";
 import MonthHero, { type MonthViewMode } from "@/components/cashflow/MonthHero";
 import { MonthGroups, MonthLinks } from "@/components/cashflow/MonthDetail";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { cashflow, shekel } from "@/lib/data";
+import { cashflow } from "@/lib/data";
 
 /** How many months the "בפועל" strip shows, ending with the current one. */
 const ACTUAL_MONTHS = 6;
-/** Upcoming debits listed in the forecast view. */
-const UPCOMING_LIMIT = 5;
-
-const shortDate = (iso: string) =>
-  new Intl.DateTimeFormat("he-IL", { day: "numeric", month: "short" }).format(new Date(`${iso.slice(0, 10)}T12:00:00`));
-
-/** The largest future debits of the selected month from the balance runway (card bills, mortgage, loans…), in date order. */
-function UpcomingDebits({ month }: { month: string }) {
-  const r = cashflow.runway;
-  if (!r) return null;
-  const events = r.events
-    .filter((e) => e.amount < 0 && e.date >= r.as_of && e.date.startsWith(month))
-    .sort((a, b) => a.amount - b.amount)
-    .slice(0, UPCOMING_LIMIT)
-    .sort((a, b) => a.date.localeCompare(b.date));
-  if (!events.length) return null;
-  return (
-    <Section title="חיובים גדולים צפויים" to="/runway">
-      <Card>
-        {events.map((e, i) => (
-          <div key={`${e.date}-${e.name}-${i}`} className="flex items-center gap-3 border-b border-line py-2.5 last:border-b-0">
-            <span className="w-12 shrink-0 text-sm text-muted-foreground tabular-nums">{shortDate(e.date)}</span>
-            <span className="min-w-0 flex-1 truncate">{e.name}</span>
-            <strong className="shrink-0 tabular-nums">צפוי {shekel(-e.amount)}</strong>
-          </div>
-        ))}
-      </Card>
-    </Section>
-  );
-}
 
 /**
  * "החודש": one month-by-month screen with a בפועל | תחזית toggle. The strip, hero and
@@ -112,7 +82,7 @@ export default function Monthly() {
       {forecast ? (
         <>
           {m.kind === "current" && <RunwayCard r={cashflow.runway} />}
-          <UpcomingDebits month={m.month} />
+          <RunwayEvents r={cashflow.runway} month={m.month} current={m.kind === "current"} />
           <MonthLinks
             links={[
               { to: "/timeline", label: "ציר זמן" },
@@ -120,6 +90,7 @@ export default function Monthly() {
               { to: "/metrics", label: "התקדמות" },
             ]}
           />
+          <RunwayFootnote r={cashflow.runway} />
         </>
       ) : (
         <>

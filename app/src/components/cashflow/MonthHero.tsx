@@ -15,7 +15,8 @@ const shortDate = (iso: string) =>
  * The one number of the month screen, per view:
  * - actual, current month: net so far on the dark hero, with the pace-vs-last-month trend;
  * - actual, past month: the month's final net;
- * - forecast, current month: expected end-of-month net plus the lowest balance before payday;
+ * - forecast, current month: expected end-of-month net plus the runway's safe-to-spend and lowest
+ *   balance before payday;
  * - forecast, later month: the expected net, flagged "תחזית" and drawn with a dashed edge so
  *   it never reads as money that moved.
  */
@@ -62,6 +63,7 @@ export default function MonthHero({ m, mode }: { m: MonthViewRow; mode: MonthVie
   const income = end ? end.income : m.income;
   const expense = end ? end.expense : m.expense;
   const low = m.kind === "current" && runway ? (runway.low_before_payday ?? runway.low_point) : null;
+  const safe = runway?.safe_to_spend ?? null;
 
   return (
     <Card className={cn("border-dashed", projected && "bg-panel-2/40")}>
@@ -78,13 +80,29 @@ export default function MonthHero({ m, mode }: { m: MonthViewRow; mode: MonthVie
           עד היום <strong className="tabular-nums">{shekelSigned(m.net)}</strong>
         </div>
       )}
-      {low && (
-        <div className="mt-3 border-t border-line pt-3 text-sm">
-          <span className="text-muted-foreground">היתרה הנמוכה ביותר עד המשכורת </span>
-          <strong className={cn("tabular-nums", low.balance < 0 ? "text-bad" : "text-foreground")}>
-            {shekel(low.balance)}
-          </strong>
-          <span className="text-muted-foreground"> · {shortDate(low.date)}</span>
+      {low && runway && (
+        <div className="mt-3 space-y-1 border-t border-line pt-3 text-sm">
+          {safe != null && (
+            <div className={cn("font-semibold", safe > 0 ? "text-good" : "text-bad")}>
+              {safe > 0 ? `${shekel(safe)} פנוי עד המשכורת` : `חסרים ${shekel(-safe)} עד המשכורת`}
+              {safe > 0 && runway.safe_per_day != null && runway.days_to_payday != null && (
+                <span className="font-normal text-muted-foreground">
+                  {" "}· {shekel(runway.safe_per_day)} ליום · {runway.days_to_payday} ימים
+                </span>
+              )}
+            </div>
+          )}
+          <div>
+            <span className="text-muted-foreground">היתרה הנמוכה ביותר עד המשכורת </span>
+            <strong className={cn("tabular-nums", low.balance < 0 ? "text-bad" : "text-foreground")}>
+              {shekel(low.balance)}
+            </strong>
+            <span className="text-muted-foreground"> · {shortDate(low.date)}</span>
+          </div>
+          <div className="text-xs text-muted-foreground">
+            {runway.next_payday && `משכורת ${shortDate(runway.next_payday.date)} · ${shekel(runway.next_payday.amount)} · `}
+            בעו״ש {shekel(runway.start_balance)} נכון ל-{shortDate(runway.as_of)}
+          </div>
         </div>
       )}
     </Card>

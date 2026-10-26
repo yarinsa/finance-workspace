@@ -234,11 +234,12 @@ projects the **combined Discount + Leumi checking balance day by day** for 45 da
 recurring ledger items (≥2 of the last 3 months) re-posted on their day of month,
 Fri/Sat → Sunday. It reports the low point before payday, overdraft breaches and
 **safe-to-spend**. It is bills-only (no discretionary spend), and card bills are
-estimated from last month's bill. The app shows it at `/runway`.
+estimated from last month's bill. The app shows it in the month screen's תחזית view
+(`/monthly?view=forecast`; `/runway` redirects there) and as a chart on the home page.
 
 Mint-style monthly views (`docs/plangram-prd/12-mint-cashflow.md`) are generated
 from RiseUp's current budget the same way and written to `cashflow.json`:
-`bills.py` (fixed envelopes as paid/upcoming/overdue, shown on `/runway`),
+`bills.py` (fixed envelopes as paid/upcoming/overdue, shown on `/monthly`),
 `budgets.py` (tracking-category plan vs. actual per RiseUp cycle, `/budgets`;
 optional overrides in gitignored `data/budgets/budgets.json`), and `spending.py`
 (per-month category/merchant/transaction breakdown with excluded buckets, `/spending`).

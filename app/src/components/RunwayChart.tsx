@@ -1,7 +1,7 @@
 import { Area, AreaChart, CartesianGrid, ReferenceDot, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { Card, Section } from "@/components/common";
 import { chartProps, noAnim, useChartColors } from "@/components/chartTheme";
-import { shekel, type Runway as RunwayData } from "@/lib/data";
+import { shekel, shekelSigned, type Runway as RunwayData } from "@/lib/data";
 
 const shortDate = (iso: string) =>
   new Intl.DateTimeFormat("he-IL", { day: "numeric", month: "short" }).format(new Date(`${iso.slice(0, 10)}T12:00:00`));
@@ -86,11 +86,14 @@ export function RunwayAlerts({ r }: { r: RunwayData }) {
   );
 }
 
-/** The runway chart as a section for the home and forecast screens, linking to the full /runway page. */
-export function RunwayCard({ r }: { r: RunwayData | undefined }) {
+/** Where the runway lives: the forecast view of the month screen. */
+export const RUNWAY_PATH = "/monthly?view=forecast";
+
+/** The runway chart and its overdraft pills as a section; `to` adds a "הכל" link (the home card links to the forecast view). */
+export function RunwayCard({ r, to }: { r: RunwayData | undefined; to?: string }) {
   if (!r || r.days.length === 0) return null;
   return (
-    <Section title="יתרה צפויה" to="/runway">
+    <Section title="יתרה צפויה" to={to}>
       <Card>
         <RunwayChart r={r} height={200} />
       </Card>
@@ -98,5 +101,74 @@ export function RunwayCard({ r }: { r: RunwayData | undefined }) {
         <RunwayAlerts r={r} />
       </div>
     </Section>
+  );
+}
+
+const KIND_LABEL: Record<RunwayData["events"][number]["kind"], string> = {
+  income: "הכנסה",
+  loan: "הלוואה",
+  card: "אשראי",
+  housing: "דיור",
+  bill: "חשבון",
+};
+
+function EventRow({ e, limit }: { e: RunwayData["events"][number]; limit: number }) {
+  const breach = e.balance_after < -Math.abs(limit);
+  return (
+    <div className="flex items-center gap-3 border-b border-line py-2.5 last:border-b-0">
+      <span className="w-12 shrink-0 text-sm text-muted-foreground tabular-nums">{shortDate(e.date)}</span>
+      <div className="flex min-w-0 flex-1 flex-col">
+        <span className="truncate">{e.name}</span>
+        <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+          <span className="rounded-full bg-panel-2 px-2 py-0.5">{KIND_LABEL[e.kind] ?? e.kind}</span>
+          {e.confidence === "inferred" && <span>משוער</span>}
+        </span>
+      </div>
+      <div className="flex shrink-0 flex-col items-end">
+        <strong className={`tabular-nums ${e.amount > 0 ? "text-good" : ""}`}>{shekelSigned(e.amount)}</strong>
+        <span className={`text-xs tabular-nums ${breach ? "font-semibold text-bad" : "text-muted-foreground"}`}>
+          {shekel(e.balance_after)}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The runway's upcoming movements, each with the balance after it. The current month runs
+ * through the next payday (the stretch that decides the overdraft, often into next month);
+ * a later month shows only what falls after that.
+ */
+export function RunwayEvents({ r, month, current }: { r: RunwayData | undefined; month: string; current: boolean }) {
+  if (!r) return null;
+  const monthEnd = `${r.as_of.slice(0, 7)}-31`;
+  const payday = r.next_payday?.date ?? "";
+  const cutoff = payday > monthEnd ? payday : monthEnd;
+  const events = r.events.filter((e) =>
+    current ? e.date >= r.as_of && e.date <= cutoff : e.date.startsWith(month) && e.date > cutoff,
+  );
+  if (!events.length) return null;
+  return (
+    <Section title={current && payday > monthEnd ? "תנועות צפויות עד המשכורת" : "תנועות צפויות"}>
+      <Card>
+        {events.map((e, i) => (
+          <EventRow key={`${e.date}-${e.name}-${i}`} e={e} limit={r.overdraft_limit} />
+        ))}
+      </Card>
+    </Section>
+  );
+}
+
+/** What the runway leaves out: the liquid deposit that could cover a shortfall, and that daily spend is not projected. */
+export function RunwayFootnote({ r }: { r: RunwayData | undefined }) {
+  if (!r) return null;
+  const buffer = r.liquid_buffer.reduce((a, b) => a + b.balance, 0);
+  return (
+    <>
+      {buffer > 0 && <Card className="text-muted-foreground">יש {shekel(buffer)} בפיקדון נזיל — אפשר לכסות מכאן</Card>}
+      <p className="text-xs leading-relaxed text-muted-foreground">
+        היתרה הצפויה כוללת הוצאות קבועות בלבד (ללא הוצאות יומיומיות); חיובי האשראי מוערכים לפי החודש הקודם.
+      </p>
+    </>
   );
 }

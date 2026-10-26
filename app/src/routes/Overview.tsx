@@ -1,7 +1,7 @@
 import { Nudge, Page } from "@/components/common";
 import AccountRows from "@/components/home/AccountRows";
 import InboxButton from "@/components/home/InboxButton";
-import { RunwayCard } from "@/components/RunwayChart";
+import { RUNWAY_PATH, RunwayCard } from "@/components/RunwayChart";
 import RecentTransactions from "@/components/home/RecentTransactions";
 import StatusTiles from "@/components/home/StatusTiles";
 import UpcomingChips from "@/components/home/UpcomingChips";
@@ -36,7 +36,7 @@ export default function Overview() {
       </header>
 
       <StatusTiles />
-      <RunwayCard r={cashflow.runway} />
+      <RunwayCard r={cashflow.runway} to={RUNWAY_PATH} />
       <UpcomingChips runway={cashflow.runway} />
       <AccountRows netWorth={netWorth} />
       <RecentTransactions />

@@ -54,7 +54,7 @@ def test_limit_breach_is_critical_with_buffer_hint():
     assert a["title"] == "חריגה מהמסגרת ב-11/11"
     assert "₪11,695" in a["detail"] and "₪10,000" in a["detail"]
     assert "אפשר להעביר ₪2,490 מנזיל יומי+" in a["detail"]
-    assert a["cta"] == {"label": "לתוכנית התזרים", "to": "/runway"}
+    assert a["cta"] == {"label": "לתוכנית התזרים", "to": "/monthly?view=forecast"}
 
 
 def test_short_until_payday_is_high():

@@ -24,7 +24,7 @@ export default function UpcomingChips({ runway }: { runway: Runway | undefined }
   if (items.length === 0) return null;
 
   return (
-    <Section title="הבאים בתור" to="/runway">
+    <Section title="הבאים בתור" to="/monthly?view=forecast">
       <div className="-mx-4 flex gap-2.5 overflow-x-auto px-4 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {items.map(({ e, days }, i) => (
           <div

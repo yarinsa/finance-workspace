@@ -8,7 +8,6 @@ import {
   Landmark,
   Lightbulb,
   RefreshCw,
-  CalendarClock,
   PieChart,
   Sparkles,
   Target,
@@ -32,7 +31,6 @@ import Metrics from "./Metrics";
 import Timeline from "./Timeline";
 import MyPlan from "./MyPlan";
 import Syncs from "./Syncs";
-import Runway from "./Runway";
 import Budgets from "./Budgets";
 import Spending from "./Spending";
 import Monthly from "./Monthly";
@@ -81,7 +79,6 @@ export const routes: RouteDef[] = [
   { path: "/spending", label: "הוצאות החודש", icon: Receipt, group: "monthly", Component: Spending },
   { path: "/fixed", label: "הוצאות קבועות", icon: Repeat, group: "monthly", Component: Fixed },
 
-  { path: "/runway", label: "יתרה צפויה", icon: CalendarClock, group: "monthly", Component: Runway },
   { path: "/timeline", label: "ציר זמן", icon: CalendarRange, group: "monthly", Component: Timeline },
   { path: "/metrics", label: "התקדמות", icon: Gauge, group: "monthly", Component: Metrics },
 
@@ -100,6 +97,7 @@ export const routes: RouteDef[] = [
 export const redirects: { from: string; to: string }[] = [
   { from: "/cashflow", to: "/monthly?view=forecast" },
   { from: "/forecast", to: "/monthly?view=forecast" },
+  { from: "/runway", to: "/monthly?view=forecast" },
 ];
 
 /** The group a pathname belongs to (undefined for unknown paths). */
