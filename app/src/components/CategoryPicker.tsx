@@ -116,7 +116,7 @@ export function CategoryPickerSheet({
 }: { open: boolean; onClose: () => void } & Parameters<typeof CategoryList>[0]) {
   return (
     <Sheet open={open} onOpenChange={(o) => !o && onClose()}>
-      <SheetContent side="bottom" className="max-h-[85vh] overflow-y-auto" dir="rtl">
+      <SheetContent side="bottom" className="max-h-[85dvh] overflow-y-auto" dir="rtl">
         <SheetHeader>
           <SheetTitle className="text-lg font-bold">בחירת קטגוריה</SheetTitle>
         </SheetHeader>

@@ -1,10 +1,12 @@
 import { defineConfig, loadEnv, type Connect, type Plugin, type ProxyOptions } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
+import { VitePWA } from "vite-plugin-pwa";
 import { readFile } from "node:fs/promises";
 import { basename, resolve } from "node:path";
 
-const DIGESTED = resolve(__dirname, "../data/digested");
+// DIGESTED_DIR lets a worktree without its own data/ read another checkout's (read-only).
+const DIGESTED = process.env.DIGESTED_DIR ?? resolve(__dirname, "../data/digested");
 
 // The app fetches the pipeline's digested JSON from /data/*.json at runtime (in
 // production that path is the private S3 bucket behind the auth gate). Locally,
@@ -72,7 +74,27 @@ function apiProxy(mode: string): Record<string, ProxyOptions> {
 }
 
 export default defineConfig(({ mode }) => ({
-  plugins: [relayTags(), react(), tailwindcss(), serveDigested()],
+  plugins: [
+    relayTags(),
+    react(),
+    tailwindcss(),
+    serveDigested(),
+    // Hand-rolled worker in src/sw.ts (injectManifest) because the data/navigation rules are
+    // custom. "prompt": a new version waits for the user's tap. The manifest is a static file in
+    // public/ (it needs crossorigin="use-credentials" in index.html), so the plugin makes none.
+    VitePWA({
+      strategies: "injectManifest",
+      srcDir: "src",
+      filename: "sw.ts",
+      registerType: "prompt",
+      injectRegister: false,
+      manifest: false,
+      injectManifest: {
+        globPatterns: ["**/*.{js,css,html,png,svg,webmanifest}", "**/*latin-wght-normal*.woff2"],
+        globIgnores: ["**/icon-maskable-512.png"],
+      },
+    }),
+  ],
   server: { proxy: apiProxy(mode) },
   preview: { proxy: apiProxy(mode) },
   resolve: {

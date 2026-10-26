@@ -8,7 +8,7 @@ import { useLedgerApi } from "@/lib/useLedgerApi";
 export default function HiddenTransactionsSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
   return (
     <Sheet open={open} onOpenChange={(o) => !o && onClose()}>
-      <SheetContent side="bottom" className="max-h-[90vh] overflow-y-auto" dir="rtl">
+      <SheetContent side="bottom" className="max-h-[90dvh] overflow-y-auto" dir="rtl">
         {open && <Body />}
       </SheetContent>
     </Sheet>

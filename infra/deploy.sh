@@ -40,16 +40,31 @@ if [[ $MODE != data ]]; then
 
   echo "==> uploading bundle to s3://$BUCKET"
   # Hashed assets can cache hard; index.html must not, or a deploy looks like a
-  # no-op. data/* is excluded so --delete never wipes the published data.
+  # no-op. sw.js and the web manifest are un-hashed and must revalidate too, or an
+  # installed phone never sees a new version. data/* is excluded so --delete never
+  # wipes the published data.
   aws s3 sync "$REPO/app/dist/" "s3://$BUCKET/" \
     --delete \
     --exclude "index.html" \
+    --exclude "sw.js" \
+    --exclude "manifest.webmanifest" \
     --exclude "data/*" \
     --cache-control "public,max-age=31536000,immutable"
 
   aws s3 cp "$REPO/app/dist/index.html" "s3://$BUCKET/index.html" \
     --cache-control "no-cache,no-store,must-revalidate" \
     --content-type "text/html; charset=utf-8"
+
+  # Service worker + manifest (PWA). Explicit content types: S3 would guess
+  # text/plain or octet-stream for .webmanifest, and the browser rejects a worker
+  # that is not served as JavaScript.
+  aws s3 cp "$REPO/app/dist/sw.js" "s3://$BUCKET/sw.js" \
+    --cache-control "no-cache,no-store,must-revalidate" \
+    --content-type "application/javascript; charset=utf-8"
+
+  aws s3 cp "$REPO/app/dist/manifest.webmanifest" "s3://$BUCKET/manifest.webmanifest" \
+    --cache-control "no-cache,no-store,must-revalidate" \
+    --content-type "application/manifest+json; charset=utf-8"
 fi
 
 if [[ $MODE != app ]]; then

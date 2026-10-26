@@ -20,7 +20,7 @@ export function MobileTabBar() {
   return (
     <nav
       aria-label="ניווט ראשי"
-      className="fixed inset-x-0 z-40 flex items-center justify-center gap-3 px-4 md:hidden"
+      className="tab-bar fixed inset-x-0 z-40 flex items-center justify-center gap-3 px-4 md:hidden"
       style={{ bottom: "calc(env(safe-area-inset-bottom) + 12px)" }}
     >
       <div className="flex h-16 flex-1 items-center justify-around rounded-full border bg-background/80 px-2 shadow-lg backdrop-blur-xl">
@@ -28,6 +28,7 @@ export function MobileTabBar() {
           <NavLink
             key={key}
             to={path}
+            viewTransition
             aria-label={label}
             className={cn(
               "flex size-12 items-center justify-center rounded-full transition-colors active:scale-95",

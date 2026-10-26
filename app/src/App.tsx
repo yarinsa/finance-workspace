@@ -23,6 +23,7 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { MobileTabBar } from "@/components/MobileTabBar";
+import { PwaStatus } from "@/components/PwaStatus";
 
 /**
  * "Updated N days ago" — tap-able so the stale warning works on touch. The dot
@@ -82,7 +83,7 @@ function AppSidebar({ days }: { days: number }) {
                   .map(({ path, label, icon: Icon, hub }) => (
                     <SidebarMenuItem key={path} className={hub ? undefined : "ps-3"}>
                       <SidebarMenuButton asChild isActive={pathname === path}>
-                        <NavLink to={path} onClick={() => setOpenMobile(false)}>
+                        <NavLink to={path} viewTransition onClick={() => setOpenMobile(false)}>
                           <Icon />
                           {label}
                         </NavLink>
@@ -127,6 +128,7 @@ export default function App() {
         <AppSidebar days={days} />
         <SidebarInset>
           <DevBanner />
+          <PwaStatus />
           <header
             className="sticky top-0 z-30 flex h-12 items-center justify-between border-b bg-background/80 px-4 backdrop-blur-xl md:hidden"
             style={{ paddingTop: "env(safe-area-inset-top)", boxSizing: "content-box" }}

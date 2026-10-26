@@ -41,6 +41,39 @@
 
 
 
+/* Native feel (installed PWA): no rubber-band reveal of white, no grey tap flash, no iOS text
+   inflation, no double-tap-zoom delay. */
+html, body {
+  overscroll-behavior: none;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  touch-action: manipulation;
+}
+
+/* App chrome isn't text: stop long-press selection on it. Figures and copy stay selectable. */
+header, nav, button, [role="tab"], [role="button"], .pill, .tab-bar {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+/* Only when launched from the home screen. */
+@media (display-mode: standalone) {
+  /* Desktop-width installs have no tab bar; keep content off the translucent title area. */
+  @media (min-width: 768px) {
+    .content { padding-top: calc(env(safe-area-inset-top) + 28px); }
+  }
+}
+
+/* Route transitions (document.startViewTransition via NavLink viewTransition): a quick
+   cross-fade, and the fixed tab bar is pulled out of the snapshot so it doesn't flicker. */
+::view-transition-old(root), ::view-transition-new(root) { animation-duration: .18s; }
+.tab-bar { view-transition-name: tab-bar; }
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(*), ::view-transition-old(*), ::view-transition-new(*) { animation: none !important; }
+}
+
 body {
   background: var(--lg-bg);
   color: var(--lg-text);
@@ -53,7 +86,11 @@ body {
   background: var(--lg-warn); margin-inline-start: 6px; vertical-align: middle;
 }
 
-.content { flex: 1; min-width: 0; padding: 28px 36px; max-width: 1100px; }
+.content {
+  flex: 1; min-width: 0; padding: 28px 36px; max-width: 1100px;
+  /* Landscape phones: stay clear of the notch / home indicator. */
+  padding-inline: max(36px, env(safe-area-inset-left), env(safe-area-inset-right));
+}
 
 
 .grid { display: grid; gap: 14px; }
@@ -66,7 +103,9 @@ body {
 /* Phones: one column for the wide grids, two for the KPI rows. */
 @media (max-width: 767px) {
   /* Extra bottom room so the floating tab bar never covers content. */
-  .content { padding: 16px 16px calc(env(safe-area-inset-bottom) + 112px); }
+  .content {
+    padding: 16px max(16px, env(safe-area-inset-right)) calc(env(safe-area-inset-bottom) + 112px) max(16px, env(safe-area-inset-left));
+  }
   .grid-2, .grid-3 { grid-template-columns: 1fr; }
   .grid-4, .grid-5 { grid-template-columns: repeat(2, 1fr); }
 }

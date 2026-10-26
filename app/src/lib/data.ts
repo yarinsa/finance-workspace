@@ -6,6 +6,8 @@
 // /data/* straight from ../data/digested.
 
 import { useSyncExternalStore } from "react";
+import { setAppStatus } from "./appStatus";
+import { SessionExpiredError, isExpiredNetworkError, isSessionExpired } from "./dataFetch";
 
 export type Rank = "good" | "bad" | "warning" | null;
 
@@ -411,14 +413,46 @@ export interface Forecast {
   months: ForecastMonth[];
 }
 
+/**
+ * When the data was last fetched, and whether the service worker answered from its cache
+ * (no network) instead — `cachedAt` is then when that copy was saved.
+ */
+export const dataMeta: { fetchedAt: number; fromCache: boolean; cachedAt: number | null } = {
+  fetchedAt: Date.now(),
+  fromCache: false,
+  cachedAt: null,
+};
+
 async function loadDigested<T>(name: string): Promise<T> {
-  const res = await fetch(`/data/${name}.json`, { cache: "no-store" });
+  let res: Response;
+  try {
+    res = await fetch(`/data/${name}.json`, { cache: "no-store" });
+  } catch (err) {
+    if (isExpiredNetworkError(err, navigator.onLine)) {
+      void clearCachedData();
+      throw new SessionExpiredError();
+    }
+    throw err;
+  }
+  if (isSessionExpired(res)) {
+    void clearCachedData();
+    throw new SessionExpiredError();
+  }
   // A missing key comes back as the SPA's index.html (CloudFront maps S3's
   // 403/404 to it), so check the content type, not just the status.
   if (!res.ok || !res.headers.get("content-type")?.includes("json")) {
     throw new Error(`data/${name}.json not available — run python3 data/digest.py and publish it`);
   }
+  if (res.headers.get("x-sw-from-cache")) {
+    dataMeta.fromCache = true;
+    dataMeta.cachedAt = Number(res.headers.get("x-sw-cached-at")) || null;
+  }
   return (await res.json()) as T;
+}
+
+/** Ask the service worker to drop its copy of the financial JSON (expired session). */
+async function clearCachedData(): Promise<void> {
+  (await navigator.serviceWorker?.getRegistration())?.active?.postMessage({ type: "CLEAR_DATA" });
 }
 
 /** forecast.json is a nice-to-have: pages that read it render without it. */
@@ -430,14 +464,26 @@ async function loadOptional<T>(name: string): Promise<T | null> {
   }
 }
 
-function loadAll() {
-  return Promise.all([
-    loadDigested<Cashflow>("cashflow"),
-    loadDigested<Snapshot>("snapshot"),
-    loadDigested<Transactions>("transactions"),
-    loadDigested<Goals>("goals"),
-    loadOptional<Forecast>("forecast"),
-  ]);
+async function loadAll() {
+  const before = { ...dataMeta };
+  dataMeta.fromCache = false;
+  dataMeta.cachedAt = null;
+  let all;
+  try {
+    all = await Promise.all([
+      loadDigested<Cashflow>("cashflow"),
+      loadDigested<Snapshot>("snapshot"),
+      loadDigested<Transactions>("transactions"),
+      loadDigested<Goals>("goals"),
+      loadOptional<Forecast>("forecast"),
+    ]);
+  } catch (err) {
+    Object.assign(dataMeta, before); // a failed refresh leaves the old data, and its provenance, on screen
+    throw err;
+  }
+  dataMeta.fetchedAt = Date.now();
+  setAppStatus({ sessionExpired: false });
+  return all;
 }
 
 // `let` exports are live bindings: importers see the new value after reloadData().
@@ -453,7 +499,14 @@ const dataListeners = new Set<() => void>();
  * old ones until a full reload.
  */
 export async function reloadData(): Promise<void> {
-  const next = await loadAll();
+  let next;
+  try {
+    next = await loadAll();
+  } catch (err) {
+    // Keep showing the old data, but tell the user why it isn't refreshing.
+    if (err instanceof SessionExpiredError) setAppStatus({ sessionExpired: true });
+    throw err;
+  }
   [cashflow, snapshot, transactions, goals, forecast] = next;
   dataVersion += 1;
   dataListeners.forEach((l) => l());

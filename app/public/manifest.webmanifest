@@ -1,0 +1,22 @@
+{
+  "id": "/",
+  "name": "תמונת מצב פיננסית",
+  "short_name": "תמונת מצב",
+  "lang": "he",
+  "dir": "rtl",
+  "display": "standalone",
+  "start_url": "/overview",
+  "scope": "/",
+  "theme_color": "#eef4f2",
+  "background_color": "#0d1117",
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "החודש", "url": "/monthly", "icons": [{ "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" }] },
+    { "name": "הוצאות", "url": "/spending", "icons": [{ "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" }] },
+    { "name": "סנכרונים", "url": "/syncs", "icons": [{ "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" }] }
+  ]
+}

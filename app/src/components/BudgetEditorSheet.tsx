@@ -28,7 +28,7 @@ export default function BudgetEditorSheet({
 }) {
   return (
     <Sheet open={category != null} onOpenChange={(o) => !o && onClose()}>
-      <SheetContent side="bottom" className="max-h-[90vh] overflow-y-auto" dir="rtl">
+      <SheetContent side="bottom" className="max-h-[90dvh] overflow-y-auto" dir="rtl">
         {category && <Body key={category.name} c={category} />}
       </SheetContent>
     </Sheet>

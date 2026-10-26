@@ -109,7 +109,7 @@ export default function TransactionEditSheet({ tx, onClose }: { tx: EditTarget |
 
   return (
     <Sheet open={tx != null} onOpenChange={(o) => !o && onClose()}>
-      <SheetContent side="bottom" className="max-h-[90vh] overflow-y-auto" dir="rtl">
+      <SheetContent side="bottom" className="max-h-[90dvh] overflow-y-auto" dir="rtl">
         {tx &&
           (online === true && queryRef ? (
             <OfflineFallback key={`${tx.date}/${tx.amount}`} tx={tx} onClose={onClose}>

@@ -45,7 +45,7 @@ export default function LiveTransactionSheet<Q extends OperationType>({
 
   return (
     <Sheet open={tx != null} onOpenChange={(o) => !o && onClose()}>
-      <SheetContent side="bottom" className={`max-h-[90vh] overflow-y-auto ${className}`} dir="rtl">
+      <SheetContent side="bottom" className={`max-h-[90dvh] overflow-y-auto ${className}`} dir="rtl">
         {tx &&
           (online === true && queryRef ? (
             <Fallback key={`${tx.date}/${tx.amount}`} fallback={fallback}>
