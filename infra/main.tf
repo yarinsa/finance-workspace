@@ -424,6 +424,9 @@ resource "aws_cloudfront_distribution" "site" {
   aliases             = [var.domain_name]
   default_root_object = "index.html"
   price_class         = "PriceClass_100"
+  // No WAF: edge-auth gates every request. Explicit "" because the provider keeps a
+  // previously attached web ACL when the attribute is just left out.
+  web_acl_id = ""
 
   origin {
     domain_name              = aws_s3_bucket.site.bucket_regional_domain_name
