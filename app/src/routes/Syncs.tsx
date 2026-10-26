@@ -1,8 +1,9 @@
-import { useState, type FormEvent } from "react";
-import { Card, Page, StubNotice } from "@/components/common";
+import { useEffect, useState, type FormEvent } from "react";
+import { Card, CardLabel, Page, StubNotice } from "@/components/common";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ApiError, startLogin, submitOtp } from "@/lib/api";
+import { currentSubscription, disablePush, enablePush, pushState, readPushEnv, type PushState } from "@/lib/push";
 import { daysSince, snapshot, type SourceSync } from "@/lib/data";
 import {
   displayState,
@@ -247,6 +248,70 @@ function OtpLogin({ source, display }: { source: string; display?: Display }) {
   );
 }
 
+const PUSH_HINT: Record<PushState, string> = {
+  unsupported: "הדפדפן הזה לא תומך בהתראות.",
+  "ios-install": "הוסף למסך הבית כדי לקבל התראות",
+  denied: "ההתראות חסומות — אפשר לאפשר אותן בהגדרות הדפדפן.",
+  offline: "הגדרת התראות זמינה כשהמק פועל.",
+  off: "התראה כשצריך להתחבר, כשסנכרון נכשל, על פריטים חדשים לטיפול וסיכום יומי ב-22:00.",
+  on: "מופעלות במכשיר הזה.",
+};
+
+/** Opt this device in or out of the push notifications the Mac sends (finance/push.py). */
+function NotificationsCard() {
+  const { online } = useLedgerApi();
+  const [subscribed, setSubscribed] = useState(false);
+  const [permission, setPermission] = useState(readPushEnv().permission);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    void currentSubscription().then((sub) => setSubscribed(sub != null));
+  }, []);
+
+  const state = pushState({ ...readPushEnv(), permission }, online, subscribed);
+  const usable = state === "on" || state === "off";
+
+  async function toggle() {
+    setBusy(true);
+    setError(null);
+    try {
+      if (state === "on") {
+        await disablePush();
+        setSubscribed(false);
+      } else {
+        const result = await enablePush();
+        setSubscribed(result === "on");
+      }
+    } catch (e) {
+      setError(
+        e instanceof ApiError && e.code === "not_configured"
+          ? "ההתראות עוד לא הוגדרו בשרת (מפתחות VAPID)"
+          : e instanceof ApiError
+            ? e.message || "הפעולה נכשלה"
+            : "המק לא זמין כרגע",
+      );
+    } finally {
+      setPermission(readPushEnv().permission);
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Card className="mb-3">
+      <CardLabel>התראות</CardLabel>
+      <div className="flex items-center justify-between gap-3">
+        <p className="m-0 text-sm text-muted-foreground">{PUSH_HINT[state]}</p>
+        {usable && (
+          <Button size="sm" variant={state === "on" ? "outline" : "default"} disabled={busy} onClick={() => void toggle()}>
+            {busy ? "רגע…" : state === "on" ? "כבה" : "הפעל"}
+          </Button>
+        )}
+      </div>
+      {error && <p className="mt-2 mb-0 text-xs text-bad">{error}</p>}
+    </Card>
+  );
+}
+
 function SyncItem({ it }: { it: Item }) {
   const { data, live, display } = it;
   const days = data ? daysSince(data.last_synced) : null;
@@ -381,6 +446,7 @@ export default function Syncs() {
         {stale ? `${stale} מקורות לא סונכרנו מעל שבוע.` : "כל המקורות סונכרנו בשבוע האחרון."} הנתונים חושבו{" "}
         {ago(daysSince(snapshot.generated_at))}.
       </p>
+      <NotificationsCard />
       <Card>
         {items.map((it) => (
           <SyncItem key={it.source} it={it} />

@@ -25,6 +25,7 @@ from temporalio.exceptions import ActivityError, ApplicationError
 
 with workflow.unsafe.imports_passed_through():
     import sources
+    from finance import push  # repo root is on sys.path (worker.py, tests/conftest.py)
 
 TASK_QUEUE = "finance-sync"
 # Short: an OTP expires within minutes anyway, and a login missed now is retried by the
@@ -137,6 +138,7 @@ class _FinanceSync:
         self._resumed = False
         self._all = False  # a signal without names re-checks every dead source
         self._named: set = set()
+        self._pushed_failures: set = set()  # (source, status) already pushed, one push each per run
         self._requested: set = set()  # sources named when the run was started (empty: scheduled run)
         self._otp_waiting: str | None = None  # the source whose dump is waiting for a code
 
@@ -195,9 +197,20 @@ class _FinanceSync:
             await workflow.execute_activity("publish_status", args=[source, entry], **STATUS)
         except ActivityError:
             pass
+        if status in (FAILED, REJECTED) and (source, status) not in self._pushed_failures:
+            self._pushed_failures.add((source, status))
+            await self._push("push_event", push.failure_payload(source, sources.LABEL_HE[source], status, error))
 
-    async def _say(self, title: str, message: str) -> None:
-        await workflow.execute_activity("notify", args=[title, message], **NOTIFY)
+    async def _say(self, title: str, message: str, pushes: list | None = None) -> None:
+        """macOS banner, plus Web Push for each payload in `pushes`."""
+        await workflow.execute_activity("notify", args=[title, message, pushes or []], **NOTIFY)
+
+    async def _push(self, activity_name: str, *args) -> None:
+        """A best-effort Web Push activity: one attempt, any failure is swallowed."""
+        try:
+            await workflow.execute_activity(activity_name, args=list(args), **NOTIFY)
+        except ActivityError:
+            pass
 
     async def _probe(self, source: str) -> str:
         """ensure_chrome + check_session -> "live" | "dead" | "unknown" | "failed".
@@ -235,7 +248,9 @@ class _FinanceSync:
             if login:
                 self._otp_waiting = source
                 await self._set(source, "waiting_for_otp")
-                await self._say(LOGIN_TITLE, f"{source}: enter the SMS code in the app (/syncs)")
+                await self._say(LOGIN_TITLE, f"{source}: enter the SMS code in the app (/syncs)", [
+                    {"title": "נדרש קוד SMS", "body": f"{name}: הזן את הקוד באפליקציה",
+                     "url": "/syncs", "tag": f"login-{source}"}])
                 try:
                     await workflow.execute_activity("scrape_login", source, **LOGIN)
                 finally:
@@ -308,7 +323,8 @@ class _FinanceSync:
                     await self._set(s, "waiting_for_login")
                 elif state[s] in ("live", "unknown"):  # connected, but queued behind the wait
                     await self._set(s, "checking_session", f"{sources.LABEL_HE[s]}: החיבור תקין — בתור לסנכרון")
-            await self._say(LOGIN_TITLE, self._login_message(dead))
+            await self._say(LOGIN_TITLE, self._login_message(dead),
+                            push.login_payloads(sources.login_groups(dead), sources.LABEL_HE))
             try:
                 await workflow.wait_condition(lambda: self._resumed, timeout=LOGIN_WAIT)
             except TimeoutError:
@@ -366,6 +382,10 @@ class _FinanceSync:
                 if rejected:  # scraped fine, but the numbers are not pushed while a bad dump is on disk
                     msg += " · הפרסום לדשבורד הוחזק (נתונים שנדחו)"
                 await self._set(s, "done", msg)
+
+        if finish:  # new לטיפול items, and the evening summary (the activity decides from the start time)
+            await self._push("push_new_actions")
+            await self._push("push_daily_summary", workflow.info().start_time.isoformat())
 
         self._phase = "done"
         await self._say("Finance sync", self._summary(order, finish))

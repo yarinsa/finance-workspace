@@ -51,6 +51,9 @@ class Fake:
         self.calls = []
         self.otp_code = "123456"  # the code scrape_login accepts
         self.otp_delivered = []
+        self.pushes = []  # every Web Push payload handed to notify or push_event
+        self.summary_calls = []  # started_at of each push_daily_summary
+        self.action_pushes = 0
         self.statuses = []  # every publish_status (source, entry), in order
 
     # --- helpers for assertions
@@ -131,8 +134,9 @@ class Fake:
             return "published"
 
         @activity.defn(name="notify")
-        async def notify(title: str, message: str) -> None:
+        async def notify(title: str, message: str, pushes: list | None = None) -> None:
             self.calls.append(("notify", title, message))
+            self.pushes.extend(pushes or [])
 
         @activity.defn(name="publish_status")
         async def publish_status(source: str, entry: dict) -> str:
@@ -141,7 +145,23 @@ class Fake:
                 raise RuntimeError("bucket unreachable")
             return "local"
 
-        return [ensure_chrome, check_session, scrape, scrape_login, deliver_otp, validate_dump, digest, publish_data, notify, publish_status]
+        @activity.defn(name="push_event")
+        async def push_event(payload: dict) -> str:
+            self.pushes.append(payload)
+            return "1 delivered"
+
+        @activity.defn(name="push_new_actions")
+        async def push_new_actions() -> str:
+            self.action_pushes += 1
+            return "0 new"
+
+        @activity.defn(name="push_daily_summary")
+        async def push_daily_summary(started_at: str) -> str:
+            self.summary_calls.append(started_at)
+            return "skipped"
+
+        return [ensure_chrome, check_session, scrape, scrape_login, deliver_otp, validate_dump, digest, publish_data, notify, publish_status,
+                push_event, push_new_actions, push_daily_summary]
 
 
 def run(fake, scenario, workflow=FinanceSyncWorkflow, args=()):

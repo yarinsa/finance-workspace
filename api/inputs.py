@@ -66,3 +66,24 @@ class TagEdit(BaseModel):
     @classmethod
     def valid_name(cls, v):
         return tags.clean_name(v) if v is not None else None
+
+
+class PushKeys(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    p256dh: str = Field(min_length=20, max_length=200, pattern=r"^[A-Za-z0-9_-]+={0,2}$")
+    auth: str = Field(min_length=8, max_length=100, pattern=r"^[A-Za-z0-9_-]+={0,2}$")
+
+
+class PushSubscribe(BaseModel):
+    """A PushSubscription.toJSON() from the browser."""
+    model_config = ConfigDict(extra="ignore")   # expirationTime
+
+    endpoint: str = Field(min_length=20, max_length=1000, pattern=r"^https://")
+    keys: PushKeys
+
+
+class PushUnsubscribe(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    endpoint: str = Field(min_length=20, max_length=1000)

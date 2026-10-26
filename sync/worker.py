@@ -1,6 +1,10 @@
 """Temporal worker for the finance sync. Run via launchd (sync/launchd/)."""
 import asyncio
 import os
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # finance.push (workflows, activities)
 
 from temporalio.client import Client
 from temporalio.worker import Worker

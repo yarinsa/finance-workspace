@@ -227,3 +227,19 @@ class SyncStatus(SQLModel, table=True):
     source: str = Field(sa_column=Column(Text, primary_key=True))
     entry: dict = Field(sa_column=Column(JSONB, nullable=False))
     updated_at: dt.datetime | None = Field(default=None, sa_column=_now())
+
+class PushSubscription(SQLModel, table=True):
+    """A browser's Web Push subscription (the installed PWA), one row per endpoint.
+
+    The API role may only insert and delete these; the sender on the Mac (sync/push.py) reads
+    them with the owner connection, stamps `last_success_at` and prunes dead endpoints."""
+    __tablename__ = "push_subscriptions"
+
+    id: int | None = Field(default=None, primary_key=True)
+    endpoint: str = Field(sa_column=Column(Text, nullable=False, unique=True))
+    p256dh: str = Field(sa_column=Column(Text, nullable=False))
+    auth: str = Field(sa_column=Column(Text, nullable=False))
+    email: str = Field(sa_column=Column(Text, nullable=False))
+    user_agent: str | None = Field(default=None, sa_column=Column(Text, nullable=True))
+    created_at: dt.datetime | None = Field(default=None, sa_column=_now())
+    last_success_at: dt.datetime | None = Field(default=None, sa_column=Column(TIMESTAMP(timezone=True), nullable=True))

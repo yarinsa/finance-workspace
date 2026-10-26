@@ -199,6 +199,14 @@ on start.
 Install with `sync/install.sh`; UI at http://localhost:8233. `temporalio` is in the
 Poetry `sync` group.
 
+**Push notifications.** The PWA subscribes to Web Push from the `/syncs` "התראות" card; the API only
+stores subscriptions (`push_subscriptions`, role `finance_api` gets select/insert/delete; `POST
+/api/push/subscribe|unsubscribe`, `GET /api/push/key`) and holds just `PUSH_VAPID_PUBLIC_KEY`. The
+VAPID private key (`PUSH_VAPID_PRIVATE_KEY`, `PUSH_VAPID_SUBJECT`) lives only in the Mac's `.env`;
+`finance/push.py` (owner `DATABASE_URL`) sends from the sync activities: login needed, failed/rejected
+source, new לטיפול ids (state in gitignored `data/push/sent.json`), and the 22:00 daily summary. It never
+raises. Keys: `poetry run python sync/push_keys.py <email>`; steps in `sync/README.md`.
+
 ### Freshness targets
 
 `data/freshness.py` holds a per-source target (max age + grace) instead of one

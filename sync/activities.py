@@ -500,8 +500,9 @@ async def publish_data() -> str:
 
 
 @activity.defn
-async def notify(title: str, message: str) -> None:
-    """macOS notification via osascript. Never raises."""
+async def notify(title: str, message: str, pushes: list | None = None) -> None:
+    """macOS notification via osascript, plus Web Push for each payload in `pushes`
+    ({title, body, url, tag}). Never raises."""
     try:
         # Values go in as argv, so quotes in the text cannot break the script.
         await run_cmd([
@@ -513,6 +514,57 @@ async def notify(title: str, message: str) -> None:
         ])
     except Exception:
         pass
+    if pushes:
+        await _push(pushes)
+
+
+PUSH_TIMEOUT = 20.0  # inside NOTIFY's 30s start_to_close; a slow push service must not stall a sync
+
+
+def _push_module():
+    if str(REPO_ROOT) not in sys.path:
+        sys.path.insert(0, str(REPO_ROOT))
+    from finance import push
+    return push
+
+
+async def _push(payloads) -> dict | None:
+    """Send Web Push payloads from a thread (psycopg/pywebpush block). Never raises."""
+    try:
+        return await asyncio.wait_for(asyncio.to_thread(_push_module().send, payloads), timeout=PUSH_TIMEOUT)
+    except BaseException as e:
+        if isinstance(e, asyncio.CancelledError):
+            raise
+        return None
+
+
+@activity.defn
+async def push_event(payload: dict) -> str:
+    """Web Push one {title, body, url, tag}: a source failed or its dump was rejected. Never raises."""
+    res = await _push(payload)
+    return f"{res['sent']} delivered" if res else "push unavailable"
+
+
+@activity.defn
+async def push_new_actions() -> str:
+    """Push the לטיפול items in cashflow.json that were not pushed before. Never raises."""
+    try:
+        return await asyncio.wait_for(asyncio.to_thread(_push_module().push_new_actions), timeout=PUSH_TIMEOUT)
+    except Exception as e:
+        return f"error: {e}"[:200]
+
+
+@activity.defn
+async def push_daily_summary(started_at: str) -> str:
+    """After the evening run only (decided here from the workflow's start time, not in workflow
+    code): balance, spent today and safe-to-spend. Never raises."""
+    try:
+        push = _push_module()
+        if not push.is_evening_run(started_at):
+            return "skipped (not the evening run)"
+        return await asyncio.wait_for(asyncio.to_thread(push.push_daily_summary), timeout=PUSH_TIMEOUT)
+    except Exception as e:
+        return f"error: {e}"[:200]
 
 
 STATUS_FILE = REPO_ROOT / "data" / "digested" / "sync-status.json"
@@ -657,4 +709,5 @@ async def publish_status(source: str, entry: dict) -> str:
         return f"error: {e}"
 
 
-ALL_ACTIVITIES = [ensure_chrome, check_session, scrape, scrape_login, deliver_otp, validate_dump, digest, publish_data, notify, publish_status]
+ALL_ACTIVITIES = [ensure_chrome, check_session, scrape, scrape_login, deliver_otp, validate_dump, digest, publish_data, notify, publish_status,
+                  push_event, push_new_actions, push_daily_summary]

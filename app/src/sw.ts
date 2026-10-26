@@ -87,3 +87,53 @@ self.addEventListener("fetch", (event) => {
   else if (kind === "data") event.respondWith(data(event));
   else if (kind === "navigation") event.respondWith(navigation(event));
 });
+
+/** What the Mac pushes (finance/push.py): {title, body, url, tag}. */
+interface PushPayload {
+  title?: string;
+  body?: string;
+  url?: string;
+  tag?: string;
+}
+
+self.addEventListener("push", (event) => {
+  let p: PushPayload = {};
+  try {
+    p = event.data?.json() ?? {};
+  } catch {
+    p = { body: event.data?.text() };
+  }
+  event.waitUntil(
+    self.registration.showNotification(p.title || "Plangram", {
+      body: p.body,
+      icon: "/icon-192.png",
+      badge: "/favicon-32.png",
+      tag: p.tag, // a repeat of the same tag replaces the earlier notification
+      data: { url: p.url || "/" },
+      dir: "rtl",
+      lang: "he",
+    }),
+  );
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const url = new URL((event.notification.data as { url?: string } | null)?.url || "/", self.location.origin).href;
+  event.waitUntil(
+    (async () => {
+      const windows = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+      const open = windows.find((w) => new URL(w.url).origin === self.location.origin);
+      if (open) {
+        await open.focus();
+        // navigate() is missing or rejected in some browsers: fall back to a message the app can route on.
+        try {
+          await open.navigate(url);
+        } catch {
+          open.postMessage({ type: "NAVIGATE", url });
+        }
+        return;
+      }
+      await self.clients.openWindow(url);
+    })(),
+  );
+});

@@ -20,6 +20,7 @@ class Settings:
     dev_user: str | None = None
     database_url: str = ""
     temporal_address: str = "localhost:7233"
+    push_public_key: str = ""   # VAPID public key only; the private key never reaches this process
 
     @property
     def issuer(self):
@@ -60,4 +61,5 @@ class Settings:
             dev_user=(env.get("FINANCE_API_DEV_USER") or "").strip().lower() or None,
             database_url=env.get("API_DATABASE_URL", ""),
             temporal_address=env.get("TEMPORAL_ADDRESS", "localhost:7233"),
+            push_public_key=env.get("PUSH_VAPID_PUBLIC_KEY", ""),
         ).validate()

@@ -31,7 +31,7 @@ from .auth import TokenVerifier, check_csrf, check_origin, current_user  # noqa:
 from .config import Settings  # noqa: E402
 from .errors import ApiError  # noqa: E402
 
-from .inputs import GoalEdit, Patch, TagEdit, TagSet  # noqa: E402
+from .inputs import GoalEdit, Patch, PushSubscribe, PushUnsubscribe, TagEdit, TagSet  # noqa: E402
 from .gql import endpoint  # noqa: E402
 from .rebuild import OTP_SOURCES, Rebuilder  # noqa: E402
 from .sse import END, SyncBroadcaster, sse  # noqa: E402
@@ -417,6 +417,41 @@ def create_app(settings=None, pool=None, rebuilder=None, verifier=None, broadcas
         return StreamingResponse(
             stream(), media_type="text/event-stream", background=BackgroundTask(release, sub),
             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+    @app.get("/api/push/key")
+    def push_key(user=Depends(current_user)):
+        """The VAPID public key the browser subscribes with. 404 until push is configured."""
+        if not settings.push_public_key:
+            raise ApiError(404, "not_configured", "push notifications are not configured")
+        return {"key": settings.push_public_key}
+
+    @app.post("/api/push/subscribe", dependencies=[Depends(check_csrf)])
+    async def push_subscribe(request: Request, user=Depends(current_user)):
+        """Store (or refresh) this browser's push subscription, keyed by endpoint."""
+        body = parse_body(PushSubscribe, await read_json_body(request))
+        agent = (request.headers.get("user-agent") or "")[:300] or None
+
+        def work():
+            with db(request) as conn:
+                conn.execute(
+                    "INSERT INTO push_subscriptions (endpoint, p256dh, auth, email, user_agent) "
+                    "VALUES (%s, %s, %s, %s, %s) ON CONFLICT (endpoint) DO UPDATE "
+                    "SET p256dh = EXCLUDED.p256dh, auth = EXCLUDED.auth, "
+                    "email = EXCLUDED.email, user_agent = EXCLUDED.user_agent",
+                    (body.endpoint, body.keys.p256dh, body.keys.auth, user, agent))
+        await run_in_threadpool(work)
+        return {"ok": True}
+
+    @app.post("/api/push/unsubscribe", dependencies=[Depends(check_csrf)])
+    async def push_unsubscribe(request: Request, user=Depends(current_user)):
+        """Forget this browser's subscription (idempotent)."""
+        body = parse_body(PushUnsubscribe, await read_json_body(request))
+
+        def work():
+            with db(request) as conn:
+                return conn.execute("DELETE FROM push_subscriptions WHERE endpoint = %s AND email = %s",
+                                    (body.endpoint, user)).rowcount
+        return {"ok": True, "removed": await run_in_threadpool(work)}
 
     @app.get("/api/rebuild")
     def rebuild_status(request: Request, user=Depends(current_user)):

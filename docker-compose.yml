@@ -50,6 +50,7 @@ services:
       FINANCE_API_COGNITO_POOL_ID: ${FINANCE_API_COGNITO_POOL_ID:-}
       FINANCE_API_COGNITO_CLIENT_ID: ${FINANCE_API_COGNITO_CLIENT_ID:-}
       FINANCE_API_ALLOWED_EMAILS: ${FINANCE_API_ALLOWED_EMAILS:-}
+      PUSH_VAPID_PUBLIC_KEY: ${PUSH_VAPID_PUBLIC_KEY:-}   # public half only; the private key stays on the Mac
     read_only: true
     tmpfs: [/tmp]
     cap_drop: [ALL]

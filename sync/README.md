@@ -214,6 +214,27 @@ poetry run python sync/resume.py discount amex       # re-check only these (a so
 This signals every running sync workflow. After 15m without a signal, or for sources
 still dead on the re-check, the status is `needs_login` and nothing is scraped for them.
 
+## Push notifications (Web Push)
+
+The installed PWA gets pushes for: a login is needed (one per login group), a source failed or
+its dump was rejected, new "לטיפול" items (ids already pushed are remembered in the gitignored
+`data/push/sent.json`; more than 3 new become one grouped push), and a daily summary after the
+22:00 run (balance, spent today, safe-to-spend). Sending is `finance/push.py` (pywebpush, owner
+`DATABASE_URL`), called from the `notify`, `push_event`, `push_new_actions` and
+`push_daily_summary` activities. A push failure is swallowed and never fails a sync.
+
+One-time setup (the VAPID private key stays on the Mac; only the public key reaches the API):
+
+```bash
+poetry run python sync/push_keys.py you@example.com     # prints 3 lines; paste them into .env
+poetry run alembic -c db/alembic.ini upgrade head      # creates push_subscriptions (or let the next digest do it)
+docker compose up -d --build api                        # the API now serves /api/push/key
+sync/install.sh                                         # restart the worker (new activities, pywebpush)
+```
+
+Then deploy the app (`deploy-app`), open `/syncs` on the phone (iOS: add to the home screen first),
+and tap "הפעל" in the התראות card. Regenerating the keys invalidates subscriptions: toggle off and on.
+
 ## Logs
 
 Worker: `~/Library/Logs/finance-sync/worker.log` and `.err.log`.

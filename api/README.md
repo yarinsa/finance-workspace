@@ -44,6 +44,7 @@ Set in `.env` (see `.env.example`); compose passes exactly these, never `env_fil
 | `FINANCE_API_DB_PASSWORD` | password of the Postgres role `finance_api` (compose builds `API_DATABASE_URL` from it) |
 | `API_DATABASE_URL` | set by compose; for non-Docker runs, a URL for role `finance_api` |
 | `TEMPORAL_ADDRESS` | set to `temporal:7233` by compose |
+| `PUSH_VAPID_PUBLIC_KEY` | optional; the Web Push public key served at `GET /api/push/key` (the private key never enters the container) |
 | `FINANCE_API_DEV_USER` | development only, see above |
 
 The API refuses to start if the origin secret is missing, or if the Cognito settings and

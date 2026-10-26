@@ -7,6 +7,10 @@ let registration: ServiceWorkerRegistration | undefined;
 /** Register the service worker (production only; it is not served by the dev server). */
 export function initPwa(): void {
   if (!("serviceWorker" in navigator) || import.meta.env.DEV) return;
+  // A tapped push notification whose window could not be navigated by the worker.
+  navigator.serviceWorker.addEventListener("message", (e: MessageEvent<{ type?: string; url?: string }>) => {
+    if (e.data?.type === "NAVIGATE" && e.data.url) location.assign(e.data.url);
+  });
   applyUpdate = registerSW({
     // registerType "prompt": a new worker waits until the user taps the toast.
     onNeedRefresh: () => setAppStatus({ updateReady: true }),
