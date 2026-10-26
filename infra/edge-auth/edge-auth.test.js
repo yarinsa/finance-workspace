@@ -21,6 +21,7 @@ const CONFIG = {
   hosted_domain: "auth.example.test",
   site_domain: "app.example.test",
   cookie_name: "plangram_session",
+  refresh_max_age: 86400,
 };
 const ISSUER = `https://cognito-idp.${CONFIG.region}.amazonaws.com/${CONFIG.user_pool_id}`;
 
@@ -43,6 +44,10 @@ function makeToken(claims = {}) {
   return `${head}.${body}.${b64u(sig)}`;
 }
 
+/** POSTs to /oauth2/token answer with this (null -> 400); each call's form is recorded. */
+let tokenReply = null;
+const tokenCalls = [];
+
 function loadHandler() {
   const tpl = fs.readFileSync(path.join(__dirname, "index.js.tftpl"), "utf8");
   const src = tpl.replace("${config_json}", () => JSON.stringify(CONFIG)).replace(/\$\$\{/g, "${");
@@ -59,6 +64,21 @@ function loadHandler() {
       });
       return req;
     },
+    request(opts, cb) {
+      const req = new EventEmitter();
+      let body = "";
+      req.write = (b) => (body += b);
+      req.end = () =>
+        setImmediate(() => {
+          tokenCalls.push(Object.fromEntries(new URLSearchParams(body)));
+          const res = new EventEmitter();
+          res.statusCode = tokenReply ? 200 : 400;
+          cb(res);
+          res.emit("data", JSON.stringify(tokenReply ?? { error: "invalid_grant" }));
+          res.emit("end");
+        });
+      return req;
+    },
   };
   const m = { exports: {} };
   const realRequire = (id) => (id === "https" ? fakeHttps : require(id));
@@ -66,10 +86,10 @@ function loadHandler() {
   return m.exports.handler;
 }
 
-function event(uri, { cookie, host = CONFIG.site_domain } = {}) {
+function event(uri, { cookie, host = CONFIG.site_domain, querystring = "" } = {}) {
   const headers = { host: [{ key: "Host", value: host }] };
   if (cookie) headers.cookie = [{ key: "Cookie", value: cookie }];
-  return { Records: [{ cf: { request: { uri, querystring: "", headers } } }] };
+  return { Records: [{ cf: { request: { uri, querystring, headers } } }] };
 }
 const session = () => `${CONFIG.cookie_name}=${makeToken()}`;
 
@@ -129,4 +149,43 @@ test("/_logout and /_passkey keep their own behavior", async () => {
   assert.match(pk.headers.location[0].value, /\/passkeys\/add\?/);
   const pkAnon = await loadHandler()(event("/_passkey"));
   assert.match(pkAnon.headers.location[0].value, /\/login\?/);
+});
+
+const expired = () => `${CONFIG.cookie_name}=${makeToken({ exp: Math.floor(Date.now() / 1000) - 60 })}`;
+const rt = `${CONFIG.cookie_name}_rt=refresh-abc`;
+
+test("expired session + refresh cookie -> 307 back to the same URL with a new session", async () => {
+  tokenReply = { id_token: makeToken() };
+  tokenCalls.length = 0;
+  const res = await loadHandler()(event("/data/cashflow.json", { cookie: `${expired()}; ${rt}`, querystring: "v=1" }));
+  assert.equal(res.status, "307");
+  assert.equal(res.headers.location[0].value, "/data/cashflow.json?v=1");
+  assert.match(res.headers["set-cookie"][0].value, /^plangram_session=ey.*HttpOnly; Secure; SameSite=Lax; Max-Age=\d+$/);
+  assert.deepEqual(tokenCalls[0], { grant_type: "refresh_token", client_id: CONFIG.client_id, refresh_token: "refresh-abc" });
+});
+
+test("/api with an expired session renews too (307 keeps the method)", async () => {
+  tokenReply = { id_token: makeToken() };
+  const res = await loadHandler()(event("/api/sync/events", { cookie: `${expired()}; ${rt}` }));
+  assert.equal(res.status, "307");
+});
+
+test("refresh rejected -> login redirect / 401 as before", async () => {
+  tokenReply = null;
+  const handler = loadHandler();
+  assert.equal((await handler(event("/syncs", { cookie: `${expired()}; ${rt}` }))).status, "302");
+  assert.equal((await handler(event("/api/health", { cookie: rt }))).status, "401");
+});
+
+test("a refreshed token that fails verification is not accepted", async () => {
+  tokenReply = { id_token: makeToken({ aud: "someone-else" }) };
+  const res = await loadHandler()(event("/syncs", { cookie: `${expired()}; ${rt}` }));
+  assert.equal(res.status, "302");
+});
+
+test("/_logout clears both cookies", async () => {
+  const res = await loadHandler()(event("/_logout", { cookie: `${session()}; ${rt}` }));
+  const set = res.headers["set-cookie"].map((c) => c.value);
+  assert.ok(set.some((v) => v.startsWith("plangram_session=;") && v.endsWith("Max-Age=0")));
+  assert.ok(set.some((v) => v.startsWith("plangram_session_rt=;") && v.endsWith("Max-Age=0")));
 });

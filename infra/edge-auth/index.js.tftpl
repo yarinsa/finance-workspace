@@ -231,6 +231,62 @@ function denied(reason) {
   };
 }
 
+/** Cookie holding Cognito's refresh token, next to the ID-token session cookie. */
+const REFRESH_COOKIE = `$${CONFIG.cookie_name}_rt`;
+
+function cookie(name, value, maxAge) {
+  return {
+    key: "Set-Cookie",
+    value: `$${name}=$${value}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=$${maxAge}`,
+  };
+}
+
+/** The ID-token session cookie; its lifetime tracks the token so an expired one cannot linger. */
+function sessionCookie(idToken, claims) {
+  return cookie(CONFIG.cookie_name, idToken, Math.max(60, claims.exp - Math.floor(Date.now() / 1000)));
+}
+
+function basicAuth() {
+  return `Basic $${Buffer.from(`$${CONFIG.client_id}:$${CONFIG.client_secret}`).toString("base64")}`;
+}
+
+/**
+ * Trade the refresh cookie for a new ID token. Returns {token, claims}, or null when the refresh
+ * token is missing, expired or revoked (the caller then falls back to the login redirect).
+ */
+async function refreshSession(refreshToken) {
+  try {
+    const tokens = await httpsPostForm(
+      `https://$${CONFIG.hosted_domain}/oauth2/token`,
+      { grant_type: "refresh_token", client_id: CONFIG.client_id, refresh_token: refreshToken },
+      basicAuth()
+    );
+    const claims = await verify(tokens.id_token);
+    return claims ? { token: tokens.id_token, claims } : null;
+  } catch (err) {
+    console.log("refresh failed:", err.message);
+    return null;
+  }
+}
+
+/**
+ * Send the browser straight back to the same URL with the renewed session cookie. 307 keeps the
+ * method and body, and fetch()/EventSource follow it, so pages, /data, /api and SSE all renew
+ * silently instead of bouncing through the hosted login.
+ */
+function retryWithSession(request, idToken, claims) {
+  const qs = request.querystring ? `?$${request.querystring}` : "";
+  return {
+    status: "307",
+    statusDescription: "Temporary Redirect",
+    headers: {
+      location: [{ key: "Location", value: `$${request.uri}$${qs}` }],
+      "cache-control": [{ key: "Cache-Control", value: "no-store" }],
+      "set-cookie": [sessionCookie(idToken, claims)],
+    },
+  };
+}
+
 /**
  * Exchange the OAuth code for tokens and set the session cookie.
  * The cookie is HttpOnly + Secure + SameSite=Lax so the browser will not expose
@@ -243,10 +299,6 @@ async function handleCallback(request, host) {
   // by this redirect — "/" re-checks the session like any other request.
   if (!code) return redirect("/");
 
-  const basic = Buffer.from(
-    `$${CONFIG.client_id}:$${CONFIG.client_secret}`
-  ).toString("base64");
-
   let tokens;
   try {
     tokens = await httpsPostForm(
@@ -257,7 +309,7 @@ async function handleCallback(request, host) {
         code,
         redirect_uri: `https://$${host}/_callback`,
       },
-      `Basic $${basic}`
+      basicAuth()
     );
   } catch (err) {
     console.log("token exchange failed:", err.message);
@@ -267,9 +319,8 @@ async function handleCallback(request, host) {
   const claims = await verify(tokens.id_token);
   if (!claims) return denied("issued token failed verification");
 
-  // Cookie lifetime tracks the token, so an expired token cannot linger as a
-  // cookie that looks valid to the browser.
-  const maxAge = Math.max(60, claims.exp - Math.floor(Date.now() / 1000));
+  const cookies = [sessionCookie(tokens.id_token, claims)];
+  if (tokens.refresh_token) cookies.push(cookie(REFRESH_COOKIE, tokens.refresh_token, CONFIG.refresh_max_age));
 
   return {
     status: "302",
@@ -277,14 +328,7 @@ async function handleCallback(request, host) {
     headers: {
       location: [{ key: "Location", value: "/" }],
       "cache-control": [{ key: "Cache-Control", value: "no-store" }],
-      "set-cookie": [
-        {
-          key: "Set-Cookie",
-          value:
-            `$${CONFIG.cookie_name}=$${tokens.id_token}; Path=/; HttpOnly; Secure; ` +
-            `SameSite=Lax; Max-Age=$${maxAge}`,
-        },
-      ],
+      "set-cookie": cookies,
     },
   };
 }
@@ -312,12 +356,7 @@ exports.handler = async (event) => {
       statusDescription: "Found",
       headers: {
         location: [{ key: "Location", value: "/" }],
-        "set-cookie": [
-          {
-            key: "Set-Cookie",
-            value: `$${CONFIG.cookie_name}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`,
-          },
-        ],
+        "set-cookie": [cookie(CONFIG.cookie_name, "", 0), cookie(REFRESH_COOKIE, "", 0)],
       },
     };
   }
@@ -327,10 +366,13 @@ exports.handler = async (event) => {
 
   const cookies = parseCookies(headers);
   const token = cookies[CONFIG.cookie_name];
-  if (!token) return reject();
-
-  const claims = await verify(token);
-  if (!claims) return reject();
+  const claims = token ? await verify(token) : null;
+  if (!claims) {
+    // Expired (or missing) session but a refresh token: renew without the hosted login.
+    const refreshToken = cookies[REFRESH_COOKIE];
+    const renewed = refreshToken ? await refreshSession(refreshToken) : null;
+    return renewed ? retryWithSession(request, renewed.token, renewed.claims) : reject();
+  }
 
   // Authenticated API call: straight through to the origin, untouched.
   if (api) return request;

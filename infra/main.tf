@@ -376,6 +376,8 @@ locals {
     hosted_domain = local.auth_domain
     site_domain   = var.domain_name
     cookie_name   = "plangram_session"
+    // Lifetime of the refresh-token cookie; matches the client's refresh_token_validity (days).
+    refresh_max_age = aws_cognito_user_pool_client.web.refresh_token_validity * 86400
   }
 }
 
