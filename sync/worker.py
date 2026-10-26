@@ -5,7 +5,7 @@ import os
 from temporalio.client import Client
 from temporalio.worker import Worker
 
-from activities import ALL_ACTIVITIES
+from activities import ALL_ACTIVITIES, seed_status_db
 from workflows import TASK_QUEUE, AmexSyncWorkflow, FinanceSyncWorkflow, LedgerRebuildWorkflow
 
 
@@ -14,6 +14,7 @@ async def main() -> None:
         os.environ.get("TEMPORAL_ADDRESS", "localhost:7233"),
         namespace=os.environ.get("TEMPORAL_NAMESPACE", "default"),
     )
+    print(f"sync_status seeded with {seed_status_db()} source(s)", flush=True)
     worker = Worker(client, task_queue=TASK_QUEUE, workflows=[FinanceSyncWorkflow, AmexSyncWorkflow, LedgerRebuildWorkflow], activities=ALL_ACTIVITIES)
     print(f"worker up on task queue {TASK_QUEUE}", flush=True)
     await worker.run()

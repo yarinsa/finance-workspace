@@ -185,6 +185,12 @@ was withheld. It writes `data/digested/sync-status.json` and, with
 `last_success_at` (advances only on `done`) and a one-line `error`. Status only: no
 secrets or account data.
 
+Each update is also upserted (merged entry, per source) into the Postgres table
+`sync_status` using the owner `DATABASE_URL` (env or `.env`, 3 s connect timeout); a trigger
+`pg_notify('sync_status', source)` wakes the API, which streams it to the app over SSE at
+`/api/sync/events`. Order: local JSON, then Postgres, then S3. No `DATABASE_URL` skips it
+silently; a DB error only logs a warning.
+
 Publishing is best-effort (one attempt, never raises), so a missing bucket or
 network blip never fails a sync. `deploy.sh --data-only` does not upload or
 delete this file.

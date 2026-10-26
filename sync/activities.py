@@ -552,6 +552,68 @@ def _write_status(source: str, entry: dict) -> dict:
     return doc
 
 
+def _database_url() -> str | None:
+    """Owner DATABASE_URL from the environment, else from the repo .env."""
+    if os.environ.get("DATABASE_URL"):
+        return os.environ["DATABASE_URL"]
+    try:
+        for line in (REPO_ROOT / ".env").read_text().splitlines():
+            if line.startswith("DATABASE_URL="):
+                return line.split("=", 1)[1].strip().strip("'\"") or None
+    except OSError:
+        pass
+    return None
+
+
+def _db_upsert_status(url: str, source: str, entry: dict) -> None:
+    """Upsert one source's merged entry into sync_status; its trigger NOTIFYs the API."""
+    import psycopg
+    from psycopg.types.json import Jsonb
+
+    with psycopg.connect(url, connect_timeout=3) as conn:
+        conn.execute(
+            "INSERT INTO sync_status (source, entry) VALUES (%s, %s) "
+            "ON CONFLICT (source) DO UPDATE SET entry = EXCLUDED.entry, updated_at = now()",
+            (source, Jsonb(entry)),
+        )
+
+
+def seed_status_db() -> int:
+    """Copy sync-status.json into an empty-for-that-source sync_status, so the first SSE
+    snapshot after a deploy isn't blank. Existing rows win. Best-effort; returns rows added."""
+    url = _database_url()
+    if not url or not STATUS_FILE.exists():
+        return 0
+    try:
+        import psycopg
+        from psycopg.types.json import Jsonb
+
+        sources = json.loads(STATUS_FILE.read_text()).get("sources") or {}
+        with psycopg.connect(url, connect_timeout=3) as conn:
+            added = 0
+            for source, entry in sources.items():
+                cur = conn.execute(
+                    "INSERT INTO sync_status (source, entry) VALUES (%s, %s) ON CONFLICT (source) DO NOTHING",
+                    (source, Jsonb(entry)),
+                )
+                added += cur.rowcount
+            return added
+    except Exception as e:  # noqa: BLE001 - status is best-effort by design
+        print(f"sync_status seed skipped: {e}", flush=True)
+        return 0
+
+
+async def _push_status_db(source: str, entry: dict) -> None:
+    """Best-effort DB push: no DATABASE_URL skips silently, any error only warns."""
+    url = _database_url()
+    if not url:
+        return
+    try:
+        await asyncio.to_thread(_db_upsert_status, url, source, entry)
+    except Exception as e:  # noqa: BLE001 - status is best-effort by design
+        activity.logger.warning("sync_status DB upsert failed for %s: %s", source, e)
+
+
 async def _bucket() -> str | None:
     """BUCKET env, else `terraform output -raw bucket` (cached for the worker's life)."""
     global _bucket_cache
@@ -569,7 +631,8 @@ async def _bucket() -> str | None:
 
 @activity.defn
 async def publish_status(source: str, entry: dict) -> str:
-    """Write the live status of one source to data/digested/sync-status.json and,
+    """Write the live status of one source to data/digested/sync-status.json, upsert
+    it into Postgres `sync_status` (NOTIFY -> API SSE) when DATABASE_URL is set and,
     with SYNC_PUBLISH=1, copy it to s3://<bucket>/data/sync-status.json.
 
     Status only: no secrets, cookies or account data. Never raises, so a missing
@@ -577,7 +640,8 @@ async def publish_status(source: str, entry: dict) -> str:
     "local" or "error: ...".
     """
     try:
-        _write_status(source, entry)
+        doc = _write_status(source, entry)
+        await _push_status_db(source, doc["sources"][source])
         if os.environ.get("SYNC_PUBLISH") != "1":
             return "local"
         bucket = await _bucket()

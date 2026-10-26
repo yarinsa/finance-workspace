@@ -79,11 +79,43 @@ Key: a transaction is `(date, abs_amount)` — ISO date and the absolute amount 
 | GET | `/api/overrides/orphaned` | — | `{"overrides":[{date,abs_amount,category,note,excluded}]}` |
 | GET | `/api/audit` | `?limit=50` | `{"entries":[{at,actor,date,abs_amount,field,old,new}]}` |
 | GET | `/api/rebuild` | — | `{"state":"idle\|pending\|running","last_published_at":iso\|null,"last_error":str\|null}` |
+| GET | `/api/sync/events` | — | `text/event-stream`, see "Live sync status" below |
 | POST | `/api/sync/{source}/login` | — | 202 `{"ok":true}`; starts the one-source login sync `finance-sync-login-{source}` (only `harel`; else 404; Temporal down 503) |
 | POST | `/api/sync/{source}/otp` | `{"code":"\\d{4,8}"}` | 202; signals `submit_otp` on that sync (409 `not_waiting` when there is none). The code is never stored or logged |
 
 Errors: `{"error":"<code>","message":"…"}` with 400/401/403/404/413/422/503.
 Any successful write (POST/PUT/PATCH/DELETE) signals a rebuild.
+
+### Live sync status (SSE)
+
+`GET /api/sync/events` pushes the sync status that `/syncs` otherwise polls. Same auth as any read
+(origin secret + session). Source of truth is the Postgres table `sync_status(source, entry jsonb,
+updated_at)`; a trigger runs `pg_notify('sync_status', source)` on every write, and one background
+task in the API (`api/sse.py`, `SyncBroadcaster`) holds a single `LISTEN` connection and fans changes out.
+The `finance_api` role only has SELECT on the table.
+
+Wire format (compact JSON, one `data:` line per event):
+
+```
+retry: 5000
+
+event: snapshot
+data: {"updated_at":"<iso>|null","sources":{"<source>":{...entry...}}}
+
+event: source
+data: {"source":"cal","entry":{...}}
+
+: ping
+```
+
+- `snapshot` first (the `data/sync-status.json` / `SyncStatusDoc` shape), then one `source` per change.
+- `: ping` every 15 s (CloudFront's origin read timeout is 30 s). The stream ends after 10 minutes and
+  `EventSource` reconnects (after `retry`, 5 s) into a fresh snapshot.
+- At most 20 concurrent streams; beyond that 503 `too_many_streams`. A slow client (100 queued events) is
+  dropped and reconnects. If the LISTEN connection is lost, the API reconnects with backoff (1 s to 30 s)
+  and then ends every stream so clients resync.
+- Headers: `Cache-Control: no-cache`, `X-Accel-Buffering: no`. Errors before the stream starts are normal
+  JSON (401/403/503).
 
 ### GraphQL (schema-first, replacing the REST routes)
 

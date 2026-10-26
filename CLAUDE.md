@@ -191,8 +191,11 @@ code is never resubmitted.
 The source registry is `sync/sources.py`.
 Every source's progress (checking_session → waiting_for_login → scraping → validating →
 digesting → publishing → done, or needs_login / failed / rejected) is published as its own
-entry to `data/sync-status.json`, which the app polls for a live status on `/syncs`, the
-header dot and the home list.
+entry to `data/sync-status.json` **and** upserted into Postgres `sync_status`, whose trigger
+`NOTIFY`s the API; the app gets it live over SSE (`GET /api/sync/events`: a `snapshot`, then a
+`source` event per change) for `/syncs`, the header dot and the home list. When the stream fails
+(Mac off) the app falls back to polling the S3 JSON. The worker seeds `sync_status` from the JSON
+on start.
 Install with `sync/install.sh`; UI at http://localhost:8233. `temporalio` is in the
 Poetry `sync` group.
 

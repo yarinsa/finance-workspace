@@ -2,12 +2,19 @@ import { useSyncExternalStore } from "react";
 import type { HomeAction } from "./data";
 
 /**
- * Live state of the automated (Temporal) sync, read from data/sync-status.json.
+ * Live state of the automated (Temporal) sync.
  *
- * The worker on the Mac rewrites that file on every workflow status change
- * (sync/activities.py publish_status). Unlike the other data files it is polled,
- * not loaded once: fast while a run is active, slow when idle, paused while the
- * tab is hidden. A missing file just means "no automated sync" (null).
+ * Transport: Server-Sent Events from the Ledger API (`GET /api/sync/events`). The
+ * stream sends a full `snapshot` on every connect and then one `source` event per
+ * changed source, so while it is healthy nothing is polled.
+ *
+ * Fallback: when the Mac/API is off the stream keeps failing. After 3 errors with no
+ * snapshot in between we close it and poll the published data/sync-status.json on S3
+ * (fast while a run is active, slow when idle; the worker rewrites it on every status
+ * change, sync/activities.py publish_status), fetching once immediately. SSE is retried
+ * every 60 s while in fallback. A missing file just means "no automated sync" (null).
+ *
+ * A hidden tab closes the stream and stops polling; becoming visible starts over.
  */
 
 export type SyncState =
@@ -157,13 +164,23 @@ export function syncActions(doc: SyncStatusDoc | null, now = Date.now()): HomeAc
   return out;
 }
 
-// --- shared poller ------------------------------------------------------------
-// One fetch loop for the whole app (header, /syncs and home all subscribe), so
-// mounting three components never triples the requests.
+// --- shared transport ----------------------------------------------------------
+// One stream / poll loop for the whole app (header, /syncs and home all subscribe),
+// so mounting three components never triples the requests.
+
+const EVENTS_URL = "/api/sync/events";
+/** Stream errors without a snapshot in between before we give up on SSE. */
+export const MAX_SSE_ERRORS = 3;
+export const SSE_RETRY_MS = 60_000;
 
 let doc: SyncStatusDoc | null = null;
 let timer: ReturnType<typeof setTimeout> | undefined;
+let retryTimer: ReturnType<typeof setTimeout> | undefined;
 let inFlight = false;
+let stream: EventSource | null = null;
+let errors = 0;
+/** True while S3 polling is the transport (SSE failed). */
+let polling = false;
 const listeners = new Set<() => void>();
 
 async function fetchStatus(): Promise<SyncStatusDoc | null> {
@@ -178,9 +195,16 @@ async function fetchStatus(): Promise<SyncStatusDoc | null> {
   }
 }
 
+/** Replace the doc and notify listeners only when it actually changed. */
+function setDoc(next: SyncStatusDoc | null) {
+  if (JSON.stringify(next) === JSON.stringify(doc)) return;
+  doc = next;
+  listeners.forEach((l) => l());
+}
+
 function schedule() {
   clearTimeout(timer);
-  if (!listeners.size || document.hidden) return;
+  if (!polling || !listeners.size || document.hidden) return;
   timer = setTimeout(tick, pollInterval(doc));
 }
 
@@ -189,34 +213,129 @@ async function tick() {
   inFlight = true;
   const next = await fetchStatus();
   inFlight = false;
-  if (JSON.stringify(next) !== JSON.stringify(doc)) {
-    doc = next;
-    listeners.forEach((l) => l());
-  }
+  // SSE may have recovered while the fetch was in flight; its data is fresher.
+  if (!polling) return;
+  setDoc(next);
   schedule();
 }
 
+function closeStream() {
+  if (stream) {
+    stream.close();
+    stream = null;
+  }
+}
+
+function stopAll() {
+  closeStream();
+  clearTimeout(timer);
+  clearTimeout(retryTimer);
+}
+
+function onSnapshot(e: MessageEvent) {
+  let body: SyncStatusDoc;
+  try {
+    body = JSON.parse(e.data) as SyncStatusDoc;
+  } catch {
+    return;
+  }
+  if (!body || typeof body.sources !== "object") return;
+  errors = 0;
+  if (polling) {
+    // Back on the stream: stop polling and the retry timer.
+    polling = false;
+    clearTimeout(timer);
+    clearTimeout(retryTimer);
+  }
+  setDoc(body);
+}
+
+function onSource(e: MessageEvent) {
+  let msg: { source: string; entry: SourceStatus };
+  try {
+    msg = JSON.parse(e.data);
+  } catch {
+    return;
+  }
+  if (!msg?.source || !msg.entry) return;
+  setDoc({
+    updated_at: msg.entry.updated_at,
+    sources: { ...(doc?.sources ?? {}), [msg.source]: msg.entry },
+  });
+}
+
+function onStreamError() {
+  errors += 1;
+  if (stream?.readyState === EventSource.CLOSED || errors >= MAX_SSE_ERRORS) fallBack();
+}
+
+/** Give up on SSE for now: poll S3 (once right away) and retry the stream later. */
+function fallBack() {
+  closeStream();
+  clearTimeout(retryTimer);
+  if (!listeners.size || document.hidden) return;
+  retryTimer = setTimeout(() => {
+    if (listeners.size && !document.hidden) openStream();
+  }, SSE_RETRY_MS);
+  if (!polling) {
+    polling = true;
+    void tick();
+  }
+}
+
+function openStream() {
+  closeStream();
+  errors = 0;
+  if (typeof EventSource === "undefined") return fallBack();
+  const es = new EventSource(EVENTS_URL, { withCredentials: true });
+  stream = es;
+  es.addEventListener("snapshot", onSnapshot as EventListener);
+  es.addEventListener("source", onSource as EventListener);
+  es.onerror = onStreamError;
+}
+
 function onVisibility() {
-  if (document.hidden) clearTimeout(timer);
-  else void tick(); // back on the tab: refresh right away
+  if (!listeners.size) return;
+  if (document.hidden) {
+    stopAll();
+    return;
+  }
+  // Back on the tab: start over on SSE; a failing stream falls back to polling again.
+  polling = false;
+  openStream();
 }
 
 function subscribe(listener: () => void) {
   listeners.add(listener);
   if (listeners.size === 1) {
     document.addEventListener("visibilitychange", onVisibility);
-    void tick();
+    polling = false;
+    if (!document.hidden) openStream();
   }
   return () => {
     listeners.delete(listener);
     if (!listeners.size) {
-      clearTimeout(timer);
+      stopAll();
+      polling = false;
       document.removeEventListener("visibilitychange", onVisibility);
     }
   };
 }
 
-/** Live sync-status.json; null until loaded or when there is no automated sync. */
+/** Live sync status; null until loaded or when there is no automated sync. */
 export function useSyncStatus(): SyncStatusDoc | null {
   return useSyncExternalStore(subscribe, () => doc);
+}
+
+/** Test hooks: the store without React, and a reset of all module state. */
+export const __store = { subscribe, get: () => doc };
+
+export function __resetSyncStatusForTests() {
+  stopAll();
+  listeners.clear();
+  document.removeEventListener("visibilitychange", onVisibility);
+  doc = null;
+  inFlight = false;
+  errors = 0;
+  polling = false;
 }

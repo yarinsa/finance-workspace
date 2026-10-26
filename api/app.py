@@ -3,6 +3,7 @@
 Run with `uvicorn --factory api.app:create_app`. The contract is docs/ledger-api.md.
 The API connects as the least-privileged Postgres role `finance_api` and never migrates.
 """
+import asyncio
 import logging
 import re
 import sys
@@ -15,7 +16,8 @@ from typing import Literal
 from fastapi import Depends, FastAPI, Query, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.encoders import jsonable_encoder
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
+from starlette.background import BackgroundTask
 from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
@@ -32,11 +34,17 @@ from .errors import ApiError  # noqa: E402
 from .inputs import GoalEdit, Patch, TagEdit, TagSet  # noqa: E402
 from .gql import endpoint  # noqa: E402
 from .rebuild import OTP_SOURCES, Rebuilder  # noqa: E402
+from .sse import END, SyncBroadcaster, sse  # noqa: E402
 
 log = logging.getLogger("finance_api")
 
 MAX_BODY = 8 * 1024
 MAX_GRAPHQL_BODY = 16 * 1024   # a GraphQL document with variables
+SSE_RETRY_MS = 5000
+SSE_PING_SECONDS = 15      # CloudFront's origin read timeout is 30 s
+SSE_LIFETIME_SECONDS = 600  # then the client reconnects with a fresh snapshot
+SSE_MAX_STREAMS = 20
+SSE_TICK_SECONDS = 1       # how often a quiet stream checks for a disconnected client
 AMOUNT = re.compile(r"^\d{1,10}(\.\d{1,2})?$")
 
 
@@ -92,7 +100,7 @@ class OtpBody(BaseModel):
     code: str = Field(pattern=r"^\d{4,8}$")
 
 
-def create_app(settings=None, pool=None, rebuilder=None, verifier=None):
+def create_app(settings=None, pool=None, rebuilder=None, verifier=None, broadcaster=None):
     """Build the app. Tests pass fakes; production passes nothing and reads the environment."""
     settings = settings or Settings.from_env()
     own_pool = pool is None
@@ -107,6 +115,7 @@ def create_app(settings=None, pool=None, rebuilder=None, verifier=None):
         if own_pool:
             pool.open()
         yield
+        await app.state.broadcaster.stop()
         if own_pool:
             pool.close()
 
@@ -115,6 +124,12 @@ def create_app(settings=None, pool=None, rebuilder=None, verifier=None):
     app.state.settings = settings
     app.state.pool = pool
     app.state.rebuilder = rebuilder or Rebuilder(settings.temporal_address)
+    app.state.broadcaster = broadcaster or SyncBroadcaster(settings.database_url)
+    app.state.sse_streams = 0
+    app.state.sse_ping = SSE_PING_SECONDS          # tests shorten these
+    app.state.sse_lifetime = SSE_LIFETIME_SECONDS
+    app.state.sse_max_streams = SSE_MAX_STREAMS
+    app.state.sse_tick = SSE_TICK_SECONDS
     app.state.verifier = verifier or (None if settings.dev_user else TokenVerifier(settings))
 
     @app.exception_handler(ApiError)
@@ -346,6 +361,62 @@ def create_app(settings=None, pool=None, rebuilder=None, verifier=None):
         if not request.app.state.rebuilder.submit_otp(source, body.code):
             raise ApiError(409, "not_waiting", "no login is waiting for a code")
         return {"ok": True}
+
+    @app.get("/api/sync/events")
+    async def sync_events(request: Request, user=Depends(current_user)):
+        """Live sync status: a `snapshot` event, then a `source` event per change, pings in between."""
+        st = request.app.state
+        if st.sse_streams >= st.sse_max_streams:
+            raise ApiError(503, "too_many_streams", "too many open status streams")
+        st.sse_streams += 1
+        released = False
+
+        def release(sub=None):
+            nonlocal released
+            if released:   # the stream's finally and the response's background task both call this
+                return
+            released = True
+            st.sse_streams -= 1
+            if sub is not None:
+                st.broadcaster.unsubscribe(sub)
+
+        sub = None
+        try:
+            sub = st.broadcaster.subscribe()   # before the snapshot, so no change falls between them
+            snap = await st.broadcaster.snapshot()
+        except Exception:
+            release(sub)
+            log.exception("sync status stream could not start")
+            raise ApiError(503, "db_unavailable", "the sync status is not reachable") from None
+
+        async def stream():
+            loop = asyncio.get_running_loop()
+            try:
+                yield f"retry: {SSE_RETRY_MS}\n\n"
+                yield sse("snapshot", snap)
+                end = loop.time() + st.sse_lifetime
+                next_ping = loop.time() + st.sse_ping
+                while True:
+                    now = loop.time()
+                    if now >= end or await request.is_disconnected():
+                        return
+                    try:
+                        item = await asyncio.wait_for(
+                            sub.get(), timeout=max(0.01, min(st.sse_tick, next_ping - now, end - now)))
+                    except asyncio.TimeoutError:
+                        if loop.time() >= next_ping:
+                            next_ping = loop.time() + st.sse_ping
+                            yield ": ping\n\n"
+                        continue
+                    if item is END:
+                        return
+                    yield sse("source", item)
+            finally:
+                release(sub)
+
+        return StreamingResponse(
+            stream(), media_type="text/event-stream", background=BackgroundTask(release, sub),
+            headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
     @app.get("/api/rebuild")
     def rebuild_status(request: Request, user=Depends(current_user)):

@@ -214,3 +214,16 @@ class TransactionOffset(SQLModel, table=True):
     expense_abs_amount: Decimal | None = Field(default=None, sa_type=Money)
     amount: Decimal | None = Field(default=None, sa_type=Money)
     created_at: dt.datetime | None = Field(default=None, sa_column=_now())
+
+
+class SyncStatus(SQLModel, table=True):
+    """Live sync status of one source (sync/activities.py merge_status), one row per source.
+
+    `entry` is the SourceStatus dict exactly as the worker writes it (state, message, times…).
+    Every insert/update fires `pg_notify('sync_status', source)` (trigger in migration 0008)
+    so the API can stream changes over SSE. Written by the host worker only; `finance_api` can read."""
+    __tablename__ = "sync_status"
+
+    source: str = Field(sa_column=Column(Text, primary_key=True))
+    entry: dict = Field(sa_column=Column(JSONB, nullable=False))
+    updated_at: dt.datetime | None = Field(default=None, sa_column=_now())

@@ -67,6 +67,15 @@ allowed emails are missing without a dev user.
 An edit never fails because Temporal is down: it is saved first, then the rebuild signal is sent,
 and a failed signal is logged. `/api/rebuild` reports `idle` when there is no workflow.
 
+## Live sync status (SSE)
+
+`GET /api/sync/events` streams the `sync_status` table: `retry: 5000`, an `event: snapshot` with
+`{"updated_at","sources":{source: entry}}`, then an `event: source` (`{"source","entry"}`) per change, and a
+`: ping` comment every 15 s. It closes after 10 minutes (clients reconnect and get a new snapshot), allows at
+most 20 concurrent streams (503 beyond), and drops clients that fall 100 events behind. One `LISTEN sync_status`
+connection per API process feeds all streams (`api/sse.py`); it reconnects with 1-30 s backoff. Details:
+docs/ledger-api.md, "Live sync status".
+
 ## Kill switch
 
 ```bash
