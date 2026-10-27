@@ -1,7 +1,5 @@
-import { createContext, useContext, useState, type ReactNode } from "react";
+import { createContext, useContext, type ReactNode } from "react";
 import { Link } from "react-router-dom";
-import { Info } from "lucide-react";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import type { Rank } from "@/lib/data";
 
@@ -248,73 +246,6 @@ export function RankPill({ rank }: { rank: Rank }) {
   return <span className={`pill ${r.cls}`}>{r.text}</span>;
 }
 
-/**
- * A KPI tile: label, big value, optional verdict pill and hint.
- * The hint opens in a Popover so it works on touch (a `title=` never shows on phones);
- * taps on it (and inside the portaled content) don't follow the surrounding Card link.
- * Pass `compactValue` to swap in a short form (₪1.6M) when the tile is too narrow.
- */
-export function Kpi({
-  label,
-  value,
-  compactValue,
-  rank = null,
-  hint,
-}: {
-  label: string;
-  value: ReactNode;
-  compactValue?: ReactNode;
-  rank?: Rank;
-  hint?: string;
-}) {
-  const [hintOpen, setHintOpen] = useState(false);
-  return (
-    <div className="@container flex h-full flex-col items-start gap-1.5">
-      <div className="flex w-full items-start justify-between gap-2 text-[13px] text-muted-foreground">
-        <span>{label}</span>
-        {hint && (
-          <Popover open={hintOpen} onOpenChange={setHintOpen}>
-            <PopoverTrigger
-              aria-label={`הסבר: ${label}`}
-              className="-m-2 shrink-0 p-2 text-muted-foreground/70"
-              onClick={(e) => {
-                // Inside a Card link: don't navigate, toggle ourselves
-                // (Radix skips its own toggle once default is prevented).
-                e.preventDefault();
-                e.stopPropagation();
-                setHintOpen((o) => !o);
-              }}
-            >
-              <Info className="size-4" />
-            </PopoverTrigger>
-            <PopoverContent
-              className="w-72 text-sm leading-relaxed"
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-              }}
-            >
-              {hint}
-            </PopoverContent>
-          </Popover>
-        )}
-      </div>
-      <div className="font-display text-[24px] font-semibold tabular-nums">
-        {compactValue != null ? (
-          <>
-            <span className="@max-[7.5rem]:hidden">{value}</span>
-            <span className="hidden @max-[7.5rem]:inline" aria-hidden>
-              {compactValue}
-            </span>
-          </>
-        ) : (
-          value
-        )}
-      </div>
-      <RankPill rank={rank} />
-    </div>
-  );
-}
 
 /**
  * Responsive grid for KPI cards: 2-up on phones, `cols` from `md`.

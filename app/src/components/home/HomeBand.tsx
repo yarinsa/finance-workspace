@@ -165,9 +165,13 @@ export default function HomeBand({ onQuickActions }: { onQuickActions: () => voi
       </div>
 
       <footer className="mt-3 flex items-center justify-between">
-        <Link to={current.to} className="inline-flex items-center gap-1 text-[15px] font-medium text-[var(--hero-text)] underline underline-offset-4">
-          הרחב <ChevronLeft className="size-4" />
-        </Link>
+        {current.to ? (
+          <Link to={current.to} className="inline-flex items-center gap-1 text-[15px] font-medium text-[var(--hero-text)] underline underline-offset-4">
+            הרחב <ChevronLeft className="size-4" />
+          </Link>
+        ) : (
+          <span className="w-8" aria-hidden />
+        )}
         <div className="flex items-center gap-2" aria-hidden>
           {lenses.map((l) => (
             <span
@@ -189,9 +193,11 @@ export default function HomeBand({ onQuickActions }: { onQuickActions: () => voi
             ) : (
               <DropdownMenuItem onSelect={() => pin(current.key)}>לפתוח תמיד ב{current.label}</DropdownMenuItem>
             )}
-            <DropdownMenuItem asChild>
-              <Link to={current.to}>לפרטים המלאים</Link>
-            </DropdownMenuItem>
+            {current.to && (
+              <DropdownMenuItem asChild>
+                <Link to={current.to}>לפרטים המלאים</Link>
+              </DropdownMenuItem>
+            )}
           </DropdownMenuContent>
         </DropdownMenu>
       </footer>

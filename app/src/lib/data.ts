@@ -327,23 +327,6 @@ export interface Loan {
   [k: string]: unknown;
 }
 
-/** Balance-weighted summary of a loan group (digest.loan_profile). */
-export interface LoanProfile {
-  balance: number;
-  monthly_payment: number;
-  /** Nominal, balance-weighted. Interest refunds the bank pays back are not visible. */
-  avg_rate_pct: number;
-  /** Shares of balance, 0–1. index_linked overlaps fixed/variable. */
-  rate_mix: {
-    fixed: number;
-    variable: number;
-    index_linked: number;
-    zero_rate: number;
-  };
-  tracks: number;
-  final_date: string | null;
-  payments_remaining: number;
-}
 
 /**
  * A long-term savings vehicle (pension / study fund). These are assets, not
@@ -420,11 +403,6 @@ export interface Snapshot {
   bank_accounts: BankAccount[];
   credit_cards: unknown[];
   loans: Loan[];
-  debt_profile?: {
-    mortgage: LoanProfile | null;
-    consumer: LoanProfile | null;
-    all_loans: LoanProfile | null;
-  };
   savings?: Savings[];
   income?: unknown;
   transactions_count?: number;

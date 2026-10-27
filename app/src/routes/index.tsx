@@ -4,7 +4,6 @@ import {
   Gauge,
   House,
   Inbox as InboxIcon,
-  Landmark,
   RefreshCw,
   CalendarCheck,
   Compass,
@@ -13,7 +12,6 @@ import {
 } from "lucide-react";
 import Overview from "./Overview";
 import Inbox from "./Inbox";
-import Networth from "./Networth";
 import Metrics from "./Metrics";
 import Timeline from "./Timeline";
 import Syncs from "./Syncs";
@@ -66,13 +64,6 @@ export const routes: RouteDef[] = [
     icon: InboxIcon,
     group: "overview",
     Component: Inbox,
-  },
-  {
-    path: "/networth",
-    label: "שווי נקי",
-    icon: Landmark,
-    group: "overview",
-    Component: Networth,
   },
 
   {
@@ -128,6 +119,7 @@ export const redirects: { from: string; to: string }[] = [
   { from: "/goals", to: "/plan" },
   { from: "/horizons", to: "/plan" },
   { from: "/portfolio", to: "/overview?lens=savings&holdings=1" },
+  { from: "/networth", to: "/overview?lens=networth" },
 ];
 
 /** The group a pathname belongs to (undefined for unknown paths). */
