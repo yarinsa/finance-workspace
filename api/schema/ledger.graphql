@@ -220,6 +220,9 @@ type Category implements Node {
   kind: ExpenseKind
   """Its amounts follow usage (electricity, fuel, food): never fixed unless set by hand."""
   usageBased: Boolean!
+  """The category it was merged into (`categoryMerge`): its transactions count there. Null
+  when it stands on its own."""
+  mergedInto: Category
   transactions(first: Int, after: String, last: Int, before: String,
                filter: TransactionFilter, orderBy: TransactionOrder = DATE_DESC): TransactionConnection!
   """The merchants in this category; edge totals are each merchant's share."""

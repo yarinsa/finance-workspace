@@ -562,6 +562,7 @@ def build():
     expected = expected_for_month(forecast, (budget_doc or {}).get("budgetDate"))
     budgets_block = budgets.build_budgets(
         budget_doc, transactions, _local_today(), budgets.load_overrides(), ledger=ledger,
+        merges=tx_doc.get("category_merges"),
         expected_income=expected["income"] if expected else None)
     fixed_block = fixed_expenses(ledger, current)
     spending_block = spending.build_spending(transactions, today=_local_today())

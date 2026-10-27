@@ -10,6 +10,7 @@ import {
   StatusPill,
 } from "@/components/common";
 import BudgetPlan from "@/components/BudgetPlan";
+import CategoryMergeSheet from "@/components/CategoryMergeSheet";
 import ExcludedSpendingCard from "@/components/ExcludedSpendingCard";
 import HiddenTransactionsSheet from "@/components/HiddenTransactionsSheet";
 import { TransactionList, TransactionRow } from "@/components/TransactionRow";
@@ -204,15 +205,25 @@ function SpendCardView({
   expanded,
   onToggle,
   onOpen,
+  onMerge,
 }: {
   c: SpendCard;
   expanded: boolean;
   onToggle: () => void;
   onOpen: (l: Line) => void;
+  /** A top-level category: merge it into another one. */
+  onMerge?: () => void;
 }) {
   const plan = c.planned;
   const pct = plan ? (c.actual / plan) * 100 : c.actual > 0 ? 100 : 0;
   const both = c.fixedLines.length > 0 && c.variableLines.length > 0;
+  // A category card that is just its own budget line: the card already is that line.
+  const self =
+    c.fixedLines.length === 0 &&
+    c.variableLines.length === 1 &&
+    c.variableLines[0].category === c.name
+      ? c.variableLines[0]
+      : null;
   const parts = [
     c.fixed + c.fixedPending > 0 &&
       `קבוע ${shekel(c.fixed)}${c.fixedPending > 0.005 ? ` + ${shekel(c.fixedPending)} צפוי` : ""}`,
@@ -268,9 +279,22 @@ function SpendCardView({
       {expanded && c.lever && (
         <div className="mt-2 text-xs text-muted-foreground">{c.lever}</div>
       )}
+      {expanded && self && (
+        <button
+          type="button"
+          onClick={() => onOpen(self)}
+          className="mt-2 flex w-full items-baseline justify-between text-xs text-muted-foreground tabular-nums"
+        >
+          <span>
+            {self.budget?.estimate != null &&
+              `בחודש רגיל ${shekel(self.budget.estimate)}`}
+          </span>
+          <span className="font-semibold text-brand">תנועות ותכנון ›</span>
+        </button>
+      )}
       {expanded && (
         <div className="mt-1">
-          {c.fixedLines.length > 0 && (
+          {!self && c.fixedLines.length > 0 && (
             <>
               {both && <SectionLabel className="mt-2">קבוע</SectionLabel>}
               <div className="divide-y divide-line">
@@ -280,7 +304,7 @@ function SpendCardView({
               </div>
             </>
           )}
-          {c.variableLines.length > 0 && (
+          {!self && c.variableLines.length > 0 && (
             <>
               {both && <SectionLabel className="mt-2">משתנה</SectionLabel>}
               <div className="divide-y divide-line">
@@ -289,6 +313,15 @@ function SpendCardView({
                 ))}
               </div>
             </>
+          )}
+          {onMerge && (
+            <button
+              type="button"
+              onClick={onMerge}
+              className="mt-2 text-xs text-muted-foreground underline"
+            >
+              מיזוג לקטגוריה אחרת
+            </button>
           )}
         </div>
       )}
@@ -351,6 +384,7 @@ export default function MonthList({
   const [sheet, setSheet] = useState<SheetTarget | null>(null);
   const [editing, setEditing] = useState<EditTarget | null>(null);
   const [hiddenOpen, setHiddenOpen] = useState(false);
+  const [merging, setMerging] = useState<string | null>(null);
   const { swipeProps, sheets } = useQuickEdit();
 
   const setParam = (k: string, v: string | null) =>
@@ -494,6 +528,9 @@ export default function MonthList({
                         expanded={isOpen(key, c.alert)}
                         onToggle={() => toggle(key)}
                         onOpen={openLine}
+                        onMerge={
+                          c.category ? () => setMerging(c.name) : undefined
+                        }
                       />
                     );
                   })}
@@ -617,6 +654,13 @@ export default function MonthList({
       </Sheet>
       <TransactionEditSheet tx={editing} onClose={() => setEditing(null)} />
       {sheets}
+      <CategoryMergeSheet
+        category={merging}
+        targets={cards
+          .filter((c) => c.category && c.name !== merging)
+          .map((c) => c.name)}
+        onClose={() => setMerging(null)}
+      />
       <HiddenTransactionsSheet
         open={hiddenOpen}
         onClose={() => setHiddenOpen(false)}

@@ -80,6 +80,15 @@ type Mutation {
   """Set any of the general targets; null or 0 unsets one, an omitted one is untouched."""
   planTargetsUpdate(input: PlanTargetsUpdateInput!): PlanTargetsPayload!
 
+  """
+  Merge a category into another: its transactions count as the target's (its plan adds to
+  the target's) until `categoryUnmerge`. Categories merged into it move along; the target
+  may not itself be merged.
+  """
+  categoryMerge(id: ID!, input: CategoryMergeInput!): CategoryPayload!
+  """Undo a merge: the category stands on its own again."""
+  categoryUnmerge(id: ID!): CategoryPayload!
+
   # assets (assets.graphql)
   assetCreate(input: AssetCreateInput!): AssetPayload!
   assetUpdate(id: ID!, input: AssetUpdateInput!): AssetPayload!
@@ -224,6 +233,16 @@ type GoalPayload {
 }
 
 """Result of a delete; `entityId` is the deleted node's global id."""
+input CategoryMergeInput {
+  """The Category to merge into."""
+  intoId: ID!
+}
+
+type CategoryPayload {
+  success: Boolean!
+  category: Category
+}
+
 type DeletePayload {
   success: Boolean!
   entityId: ID!

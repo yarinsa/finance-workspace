@@ -378,3 +378,30 @@ describe("unassignedTransactions", () => {
     expect(unassignedTransactions(m).map((t) => t.merchant)).toEqual(["BIT", "העברה לחשבון אחר"]);
   });
 });
+
+describe("top-level categories", () => {
+  it("a planned category is its own card; unplanned ones roll into their group", () => {
+    const month: SpendingMonth = {
+      ...OCT,
+      transactions: [
+        ...OCT.transactions,
+        { date: "2026-10-16", merchant: "בירה בזאר", amount: 153.4, category: "אלכוהול", group: "אוכל", kind: "variable", block: "variable" },
+        { date: "2026-10-18", merchant: "ארומה", amount: 30, category: "קפה בחוץ", group: "אוכל", kind: "variable", block: "variable" },
+      ],
+    };
+    const budgets = {
+      ...BUDGETS,
+      categories: [
+        ...BUDGETS.categories,
+        { name: "אלכוהול", scope: "category", group: "אוכל", planned: 255.7, spent: 153.4, left: 102.3, pct: 60, over: false, source: "override", estimate: 245.32 },
+      ],
+    } as unknown as Budgets;
+    const cards = buildCards(buildMonthList({ month, budgets }));
+    const names = cards.map((c) => [c.name, c.category]);
+    expect(names).toContainEqual(["כלכלה", true]);
+    expect(names).toContainEqual(["אלכוהול", true]);
+    // קפה בחוץ has no plan: it sits in the אוכל card; גינה (unplanned) in בית
+    expect(cards.find((c) => c.name === "אוכל")?.variableLines.map((l) => l.name)).toEqual(["קפה בחוץ"]);
+    expect(cards.find((c) => c.name === "בית")?.category).toBe(false);
+  });
+});

@@ -207,6 +207,15 @@ class GoalDeleteInput(MutationInput):
     id: node_id_of("Goal")
 
 
+class CategoryMergeInput(MutationInput):
+    id: node_id_of("Category")
+    into_id: node_id_of("Category")
+
+
+class CategoryUnmergeInput(MutationInput):
+    id: node_id_of("Category")
+
+
 class PlanTargetsUpdateInput(MutationInput):
     """Any of the three targets; null or 0 unsets, negative is rejected, an omitted one is untouched."""
     emergency_fund: Decimal | None = Field(default=None, ge=0, le=1_000_000_000, max_digits=12, decimal_places=2)

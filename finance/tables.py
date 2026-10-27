@@ -109,7 +109,8 @@ class Category(SQLModel, table=True):
 
     `builtin` rows are finance/categories.py `CATEGORIES`, upserted on every import with
     their group, default `kind` and `usage_based` flag. A source label nobody mapped
-    yet is kept as a `riseup` row (no group); a name first typed by hand is `user`."""
+    yet is kept as a `riseup` row (no group); a name first typed by hand is `user`.
+    `merged_into_id` folds it into another category (`transaction_kinds` resolves it)."""
     __tablename__ = "categories"
     __table_args__ = (CheckConstraint("source IN ('builtin', 'riseup', 'user')", name="categories_source_check"),
                       CheckConstraint(KIND_CHECK, name="categories_kind_check"))
@@ -122,6 +123,8 @@ class Category(SQLModel, table=True):
     kind: str | None = Field(default=None, sa_type=Text)   # default kind; null = not an expense category
     usage_based: bool = Field(default=False, sa_column_kwargs={"server_default": text("false")})
     position: int = Field(default=0, sa_column_kwargs={"server_default": text("0")})
+    # Merged by hand into another category (the app's "מיזוג"): its rows count as that one.
+    merged_into_id: int | None = Field(default=None, sa_column=_fk("categories"))
 
     group_ref: CategoryGroup | None = Relationship(back_populates="categories")
     scraped_transactions: list["ScrapedTransaction"] = Relationship(back_populates="category_ref")

@@ -184,6 +184,43 @@ def category_tree(conn):
     return out
 
 
+def merge_category(conn, name, into, actor):
+    """Merge category `name` into `into` (None unmerges): its rows, overrides and merchant
+    rules keep their category, and `transaction_kinds` counts them as `into`. One level:
+    categories already merged into `name` move to `into` with it; `into` may not itself be
+    merged. Audited as "category.merged_into:<name>". Returns the target's name or None."""
+    with conn.transaction():
+        row = conn.execute("SELECT c.id, t.name FROM categories c LEFT JOIN categories t "
+                           "ON t.id = c.merged_into_id WHERE c.name = %s", (name,)).fetchone()
+        if row is None:
+            raise ValueError(f"no such category: {name}")
+        cid, before = row
+        target = None
+        if into is not None:
+            t = conn.execute("SELECT id, merged_into_id FROM categories WHERE name = %s", (into,)).fetchone()
+            if t is None:
+                raise ValueError(f"no such category: {into}")
+            if t[0] == cid:
+                raise ValueError("a category can't be merged into itself")
+            if t[1] is not None:
+                raise ValueError(f"{into} is itself merged into another category")
+            target = t[0]
+        if before == into:
+            return before
+        conn.execute("UPDATE categories SET merged_into_id = %s WHERE id = %s", (target, cid))
+        if target is not None:
+            conn.execute("UPDATE categories SET merged_into_id = %s WHERE merged_into_id = %s", (target, cid))
+        conn.execute("INSERT INTO override_audit (actor, field, old, new) VALUES (%s, %s, %s, %s)",
+                     (actor, f"category.merged_into:{name}", Jsonb(before), Jsonb(into)))
+    return into
+
+
+def category_merges(conn):
+    """{merged category name: the category it counts as}."""
+    return dict(conn.execute("SELECT c.name, t.name FROM categories c "
+                             "JOIN categories t ON t.id = c.merged_into_id").fetchall())
+
+
 RULE_FIELDS = ("category", "kind")
 
 

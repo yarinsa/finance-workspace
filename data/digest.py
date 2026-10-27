@@ -52,6 +52,16 @@ def apply_overrides(ledger):
     return json.loads(res.stdout)
 
 
+def category_merges():
+    """{category: the category it was merged into} from the database (`db/ledger.py merges`);
+    {} without one. budgets.py folds a merged category's plan into its target with it."""
+    if "--no-db" in sys.argv or not database_url():
+        return {}
+    res = subprocess.run([sys.executable, str(ROOT.parent / "db" / "ledger.py"), "merges"],
+                         capture_output=True, text=True)
+    return json.loads(res.stdout) if res.returncode == 0 and res.stdout.strip() else {}
+
+
 def run_normalizers():
     for script in sorted(ROOT.glob("*/normalize.py")):
         print(f"normalizing {script.parent.name}…")
@@ -744,6 +754,7 @@ def main():
                  "conflict and carries the spending category. `sources` lists every scraper "
                  "that saw the transaction.",
          "summary": summary,
+         "category_merges": category_merges(),
          "transactions": ledger},
         ensure_ascii=False, indent=2))
 

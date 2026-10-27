@@ -573,3 +573,34 @@ def test_retry_with_the_worker_down_is_an_error(client, owner, rebuilder):
     rebuilder.up = False
     _, body = gql(client, RETRY, id=to_global_id("SyncSource", "retry-test"))
     assert body["errors"][0]["message"] == "the sync worker is not reachable"
+
+
+# --- category merges -----------------------------------------------------------------------
+
+CATS = "{ categories(first: 100) { edges { node { id name mergedInto { name } } } } }"
+MERGE = """mutation($id: ID!, $input: CategoryMergeInput!) { categoryMerge(id: $id, input: $input) {
+  success category { name mergedInto { name } } } }"""
+UNMERGE = """mutation($id: ID!) { categoryUnmerge(id: $id) { success category { name mergedInto { name } } } }"""
+
+
+def _cat_ids(client):
+    return {e["node"]["name"]: e["node"]["id"] for e in data(client, CATS)["categories"]["edges"]}
+
+
+def test_merging_a_category_moves_its_transactions_and_unmerge_restores(client, rebuilder):
+    # The purchase is קניות; merged into ביגוד והנעלה it counts there until unmerged.
+    ids = _cat_ids(client)
+    out = data(client, MERGE, id=ids["קניות"], input={"intoId": ids["ביגוד והנעלה"]})["categoryMerge"]
+    assert out == {"success": True, "category": {"name": "קניות", "mergedInto": {"name": "ביגוד והנעלה"}}}
+    purchase = data(client, TXNS)["transactions"]["edges"][0]["node"]
+    assert purchase["category"]["name"] == "ביגוד והנעלה"
+    out = data(client, UNMERGE, id=ids["קניות"])["categoryUnmerge"]
+    assert out["category"]["mergedInto"] is None
+    assert data(client, TXNS)["transactions"]["edges"][0]["node"]["category"]["name"] == "קניות"
+    assert rebuilder.signals == 2
+
+
+def test_merging_into_itself_is_an_error(client, rebuilder):
+    ids = _cat_ids(client)
+    status, body = gql(client, MERGE, id=ids["קניות"], input={"intoId": ids["קניות"]})
+    assert "errors" in body and rebuilder.signals == 0

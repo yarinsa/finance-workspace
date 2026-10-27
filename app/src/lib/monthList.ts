@@ -373,6 +373,8 @@ export function buildMonthList({
  */
 export interface SpendCard {
   name: string;
+  /** A top-level category (its own plan), not a group's roll-up: it can be merged into another. */
+  category: boolean;
   fixedLines: Line[];
   variableLines: Line[];
   /** ₪ charged this month, by kind. */
@@ -394,12 +396,32 @@ export interface SpendCard {
 const isPending = (l: Line) =>
   l.charge != null && l.charge.status !== "paid";
 
-/** Merge the fixed and variable sections into one card per group, biggest first. */
+/**
+ * The top-level categories: the household's own budget lines (a category with a plan,
+ * e.g. כלכלה, אלכוהול, עציצים). Everything else rolls up into its group's card.
+ */
+export function topLevelCategories(sections: SectionBlock[]): Set<string> {
+  const top = new Set<string>();
+  for (const s of sections)
+    for (const g of s.groups)
+      for (const l of g.lines)
+        if (l.budget && l.scope === "category" && l.budget.source !== "unplanned")
+          top.add(l.budget.name);
+  return top;
+}
+
+/**
+ * Merge the fixed and variable sections into one card per top-level category (a planned
+ * category, `topLevelCategories`) or, for the rest, per group; biggest first. A group card
+ * and a category card of the same name (פנאי) are one card.
+ */
 export function buildCards(sections: SectionBlock[]): SpendCard[] {
+  const top = topLevelCategories(sections);
   const cards = new Map<string, SpendCard>();
-  const card = (name: string) => {
+  const card = (name: string, category: boolean) => {
     const c = cards.get(name) ?? {
       name,
+      category: false,
       fixedLines: [],
       variableLines: [],
       fixed: 0,
@@ -411,6 +433,7 @@ export function buildCards(sections: SectionBlock[]): SpendCard[] {
       over: false,
       alert: false,
     };
+    c.category ||= category;
     cards.set(name, c);
     return c;
   };
@@ -418,10 +441,17 @@ export function buildCards(sections: SectionBlock[]): SpendCard[] {
   for (const s of sections) {
     if (s.key === "debt_savings") continue;
     for (const g of s.groups) {
-      const c = card(g.name);
-      c.alert ||= g.alert;
-      c.lever ??= g.lever;
       for (const l of g.lines) {
+        const own = l.category != null && top.has(l.category);
+        const c = card(own ? l.category! : g.name, own);
+        if (
+          l.budget?.over ||
+          l.charge?.status === "overdue" ||
+          l.bill?.status === "overdue"
+        )
+          c.alert = true;
+        if (l.charge?.lever_key === "subscriptions" && l.charge.lever)
+          c.lever ??= l.charge.lever;
         if (s.key === "fixed") {
           c.fixedLines.push(l);
           if (isPending(l)) c.fixedPending += l.amount;

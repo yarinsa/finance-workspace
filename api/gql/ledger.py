@@ -26,6 +26,7 @@ class Category:
     group: str | None = None
     kind: str | None = None
     usage_based: bool = False
+    merged_into_id: int | None = None
 
 
 @dataclass(frozen=True)
@@ -209,8 +210,8 @@ class Ledger:
 
     @cached_property
     def categories(self):
-        return {i: Category(i, n, s, g, k, u) for i, n, s, g, k, u in self.conn.execute(
-            "SELECT c.id, c.name, c.source, g.name, c.kind, c.usage_based FROM categories c "
+        return {i: Category(i, n, s, g, k, u, m) for i, n, s, g, k, u, m in self.conn.execute(
+            "SELECT c.id, c.name, c.source, g.name, c.kind, c.usage_based, c.merged_into_id FROM categories c "
             "LEFT JOIN category_groups g ON g.id = c.group_id ORDER BY c.name")}
 
     @cached_property

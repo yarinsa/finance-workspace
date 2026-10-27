@@ -393,3 +393,33 @@ def test_import_json_copies_targets_but_keeps_ones_with_a_row(conn, tmp_path):
     goal_store.import_json(conn, store)
     assert goal_store.get_targets(conn) == {"emergency_fund_target": 60000.0,
                                             "inheritance_target": 750000.0, "retirement_target": None}
+
+
+def test_merged_category_counts_as_its_target_and_unmerges_cleanly(conn):
+    # As the household, I split אלכוהול out of אוכל בחוץ once; merging it back makes its
+    # rows count as אוכל בחוץ, survives a re-import, and an unmerge restores the split.
+    drink = {**CAL_PURCHASE, "description": "בירה בזאר", "category": "אלכוהול"}
+    rows = stamped([drink])
+    ledger.load(conn, rows)
+    assert overrides.merge_category(conn, "אלכוהול", "אוכל בחוץ", "test") == "אוכל בחוץ"
+    assert overrides.category_merges(conn) == {"אלכוהול": "אוכל בחוץ"}
+    out = ledger.sync(conn, rows)
+    assert (out[0]["category"], out[0]["category_group"]) == ("אוכל בחוץ", "אוכל")
+    overrides.merge_category(conn, "אלכוהול", None, "test")
+    assert ledger.materialize(conn)[0]["category"] == "אלכוהול"
+    audit = conn.execute("SELECT field, old, new FROM override_audit ORDER BY id").fetchall()
+    assert audit == [("category.merged_into:אלכוהול", None, "אוכל בחוץ"),
+                     ("category.merged_into:אלכוהול", "אוכל בחוץ", None)]
+
+
+def test_merge_is_one_level(conn):
+    ledger.load(conn, [])
+    overrides.merge_category(conn, "אלכוהול", "אוכל בחוץ", "test")
+    overrides.merge_category(conn, "אוכל בחוץ", "כלכלה", "test")   # אלכוהול follows
+    assert overrides.category_merges(conn) == {"אלכוהול": "כלכלה", "אוכל בחוץ": "כלכלה"}
+    for into in ("אוכל בחוץ", "כלכלה"):
+        try:
+            overrides.merge_category(conn, "אלכוהול" if into == "אוכל בחוץ" else "כלכלה", into, "test")
+        except ValueError:
+            continue
+        raise AssertionError(f"merge into {into} should be refused")

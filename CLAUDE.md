@@ -295,8 +295,10 @@ upcoming card bills, duplicate services, stale syncs) from those blocks, with pe
 **The month screen is one screen: `/monthly`** (there is no `/budgets`, `/spending` or `/fixed`).
 בפועל: free money (`budgets.summary.left`) and income / קבוע / משתנה on top (a figure scrolls to its
 section; past months show their net and `months_view` actuals instead), then the month's spending
-as **one card per category group** across קבוע and משתנה (`buildCards` in `app/src/lib/monthList.ts`;
-תחבורה holds Metro Motor's installments and the fuel): actual of planned (fixed paid + fixed still
+as **one card per top-level category** across קבוע and משתנה (`buildCards` in `app/src/lib/monthList.ts`):
+a category with its own plan line (the household's manual split: כלכלה, אוכל בחוץ, אלכוהול, עציצים…)
+is its own card, every other category rolls up into its group's card (תחבורה holds Metro Motor's
+installments and the fuel). Each card shows actual of planned (fixed paid + fixed still
 expected + the variable plan) on a `StackedBar` split into fixed (dark) and variable (light). Inside:
 the fixed charges (`fixed_expenses` items merged with `bills` by name: status, due day) with one
 quiet saving hint each when there is one (`chargeHint`: duplicate service, not charged in 70+ days,
@@ -434,6 +436,13 @@ fixed − variable. Non-spending rows (income, card bills, own transfers, saving
   ±5% on about the same day, ≥3 months) > one-off (the merchant recurs, this charge
   doesn't: a ₪52k loan payoff) > RiseUp fixed envelope > category default. `kind_source`
   says which one decided.
+- **Top level = budgeting.** A category with a plan is a top-level category (its own card on
+  `/monthly`); the rest roll up into their group. Finer labels are for sorting and analysis.
+  A category can be **merged** into another from the app (a category card → "מיזוג לקטגוריה
+  אחרת"; GraphQL `categoryMerge` / `categoryUnmerge`, `db/overrides.merge_category`,
+  `categories.merged_into_id`, one level): `transaction_kinds` counts its rows as the target,
+  the digest writes the merges to `transactions.json` → `category_merges`, and `budgets.py`
+  adds its plan to the target's. Unmerging restores both.
 - **Edits** (DB, `transaction_kinds` view): transaction override (`db/edit.py kind|category`)
   > merchant rule (`db/edit.py rule MERCHANT category|kind VALUE`, table `merchant_rules`)
   > the defaults. `db/edit.py categories` prints the tree. The digest with and without
