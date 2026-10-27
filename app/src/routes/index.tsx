@@ -7,7 +7,6 @@ import {
   Inbox as InboxIcon,
   Landmark,
   RefreshCw,
-  PieChart,
   Sparkles,
   Target,
   CalendarCheck,
@@ -21,7 +20,6 @@ import Inbox from "./Inbox";
 import Summary from "./Summary";
 import Goals from "./Goals";
 import Networth from "./Networth";
-import Portfolio from "./Portfolio";
 import Metrics from "./Metrics";
 import Timeline from "./Timeline";
 import MyPlan from "./MyPlan";
@@ -145,13 +143,6 @@ export const routes: RouteDef[] = [
     group: "plan",
     Component: MyPlan,
   },
-  {
-    path: "/portfolio",
-    label: "השקעות",
-    icon: PieChart,
-    group: "plan",
-    Component: Portfolio,
-  },
 
   {
     path: "/syncs",
@@ -169,6 +160,7 @@ export const redirects: { from: string; to: string }[] = [
   { from: "/forecast", to: "/monthly?view=forecast" },
   { from: "/runway", to: "/monthly?view=forecast" },
   { from: "/recommendations", to: "/inbox?tab=suggestions" },
+  { from: "/portfolio", to: "/overview?lens=savings&holdings=1" },
 ];
 
 /** The group a pathname belongs to (undefined for unknown paths). */

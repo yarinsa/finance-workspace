@@ -117,7 +117,7 @@ export default function HomeBand({ onQuickActions }: { onQuickActions: () => voi
         </div>
       </header>
 
-      <div role="tablist" aria-label="עדשות" className="mt-5 flex justify-between gap-0.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      <div role="tablist" aria-label="עדשות" className="mt-5 flex gap-0.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {lenses.map((l) => (
           <button
             key={l.key}

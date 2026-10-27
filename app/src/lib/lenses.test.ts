@@ -146,6 +146,6 @@ describe("savings lens", () => {
     const l = savingsLens({ ...HISTORY, positions: POSITIONS })!;
     expect(l.value).toBe(639880.88);
     expect(l.delta).toBeNull();
-    expect(l.to).toBe("/portfolio");
+    expect(l.to).toBe("/overview?lens=savings&holdings=1");   // opens the holdings card
   });
 });
