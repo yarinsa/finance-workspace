@@ -172,9 +172,23 @@ that take one `input` and echo `clientMutationId`.
 - **Horizons and goals** are group entities like merchant, category and tag, so they get
   transactions, root connections with edge totals, and M:M to the others. Assignment
   relations are direct 1:M instead: `Horizon.goals` lists the goals assigned to the
-  horizon, and `Goal.horizon` is an object (no `Goal.horizons`). `createGoal`,
-  `updateGoal` and `deleteGoal` go through `db/goal_store.py`, and `updateTransaction`
-  takes `goalId`. The old `Horizon` enum is now `HorizonKey` for inputs.
+  horizon, and `Goal.horizon` is an object (no `Goal.horizons`). `goalCreate`,
+  `goalUpdate(id, input)` and `goalDelete(id)` go through `db/goal_store.py`, and
+  `updateTransaction` takes `goalId`. The old `Horizon` enum is now `HorizonKey` for inputs.
+- **Plan targets** (the Goals screen's emergency-fund, inheritance and retirement targets) live
+  in Postgres `plan_targets` (unset = a row of 0; no row = not decided yet), not in the
+  gitignored `data/goals/goals.json`, which `db/goal_store.py import` seeds rows from.
+  `data/goals.py` takes the targets that have a row from the table when the DB is reachable
+  and keeps the JSON value for the rest. Query
+  `planTargets { emergencyFund inheritance retirement }` (`Money`, null = unset); mutation
+  `planTargetsUpdate(input: {emergencyFund, inheritance, retirement}) { success planTargets { ... } }`:
+  any subset, null or 0 unsets, a negative amount or an empty input is a GraphQL error, and a
+  success signals one rebuild.
+- **Mutation styles.** New mutations are Linear style: `entityVerb` names, the target's `id` as
+  its own argument, no `clientMutationId`, payload `{success, <entity>}` (`goalCreate(input)` and
+  `goalUpdate(id, input)` return `GoalPayload`, `goalDelete(id)` a `DeletePayload {success,
+  entityId}`, `planTargetsUpdate(input)` a `PlanTargetsPayload`). Failures are still GraphQL
+  errors. The older mutations (transactions, tags, offsets, inbox) stay Relay style until migrated.
 - **Not served yet:** `snapshot` (the API container has no `data/` mount).
 
 **Client** (`app/`): Relay 21.

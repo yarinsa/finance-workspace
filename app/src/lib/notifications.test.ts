@@ -52,6 +52,9 @@ describe("global id", () => {
   });
   it("rejects other types and garbage", () => {
     expect(fromGlobalId(btoa("Transaction:1"))).toBeNull();
+    expect(toGlobalId(12, "Goal")).toBe("R29hbDoxMg");
+    expect(fromGlobalId(toGlobalId(12, "Goal"), "Goal")).toBe("12");
+    expect(fromGlobalId(toGlobalId(12, "Goal"))).toBeNull();
     expect(fromGlobalId("%%%")).toBeNull();
   });
 });

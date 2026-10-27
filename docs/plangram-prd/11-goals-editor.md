@@ -90,7 +90,7 @@ Options, cheapest first:
 | **B. Tiny dev write-server** | A small Node/Express (or Vite middleware) `POST /api/goals` that writes the store + runs `goals.py` | one process; local-only, fine for a single-household tool |
 | **C. Tauri / file API** | Native file write | heavier than warranted |
 
-**Recommended: B.** A `vite` dev-server plugin exposing `GET/POST /api/goals`
+**Recommended: B** (superseded: built on the ledger API, see §6). A `vite` dev-server plugin exposing `GET/POST /api/goals`
 (read store, write store + re-digest) keeps everything in one `pnpm dev`. The
 `/goals` screen gains an **edit mode**: inline target fields + an "add goal" form +
 per-card edit/delete. On save → `POST` → re-digest → re-fetch `goals.json`.
@@ -122,19 +122,21 @@ collapsible "מתקדם" for `interval`/`repetitions`/`rise`.
    (`TestStoreMutations`): add / edit amount / remove / reject bad amount / bad
    date / duplicate + unknown id.
 
-**Phase 2 — In-app editor (approach B)**
-4. Add a Vite dev plugin (or tiny server) with `GET /api/goals` (return store) and
-   `POST /api/goals` (validate → atomic write → run `goals.py` → return fresh
-   digest).
+**Phase 2 — In-app editor** — implemented on the ledger API (not the Vite dev server)
+4. The three general targets moved into Postgres `plan_targets` (`db/goal_store.py`
+   `get_targets` / `set_targets`; `goal_store.py import` copies the JSON values once) and are
+   exposed over GraphQL: query `planTargets`, mutation `planTargetsUpdate`. Personal goals
+   were already in the `goals` table (`goalCreate` / `goalUpdate` / `goalDelete`, REST
+   `/api/goals`). Every mutation signals a ledger rebuild, whose digest reads both from the DB
+   (`data/goals.py`), so `goals.json` stays current. See `docs/ledger-api.md`.
 5. `/goals` edit mode: target inputs + add/edit/delete form; optimistic save then
    re-fetch. Reuse the existing cards for display.
-6. Guard: editor only mounts in dev (`import.meta.env.DEV`) since the write-server
-   is dev-only; production build stays read-only.
+6. Guard: with the Mac off the API is unreachable and the UI falls back to the static JSON,
+   read-only (the ledger API's usual kill switch); no dev-only gating needed.
 
 ## 7. Open questions
 
-- **Write-server scope** — accept approach B (dev-only `/api/goals`), or keep the
-  app strictly read-only and make the CLI the only writer?
+- **Write path** — resolved: the ledger API (approach B's job, without the dev-only server).
 - **Recurring goals in the digest** — `interval`/`repetitions`/`rise` are stored but
   `goals.py` doesn't yet expand them into multiple dated occurrences. Expand on
   read, or defer until the per-goal probability model lands?

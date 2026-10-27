@@ -18,6 +18,8 @@ export interface LedgerApi {
   overlay: Overlay;
   /** Record a PATCH/DELETE response: updates the overlay and starts watching the rebuild. */
   recordEdit: (row: Row) => void;
+  /** A write that has no transaction row (goals, plan targets) succeeded: watch the rebuild and reload data when it publishes. */
+  markDirty: () => void;
   /** Mark the API unreachable (a call failed with ApiOffline) without waiting for the next poll. */
   markOffline: () => void;
 }
@@ -105,11 +107,17 @@ export function LedgerApiProvider({ children }: { children: ReactNode }) {
     setRebuild((r) => (r.state === "idle" ? { ...r, state: "pending", last_error: null } : r));
   }, []);
 
+  const markDirty = useCallback(() => {
+    dirty.current = true;
+    setOnline(true);
+    setRebuild((r) => (r.state === "idle" ? { ...r, state: "pending", last_error: null } : r));
+  }, []);
+
   const markOffline = useCallback(() => setOnline(false), []);
 
   const value = useMemo<LedgerApi>(
-    () => ({ online, dev, rebuild, updating: busy, overlay, recordEdit, markOffline }),
-    [online, dev, rebuild, busy, overlay, recordEdit, markOffline],
+    () => ({ online, dev, rebuild, updating: busy, overlay, recordEdit, markDirty, markOffline }),
+    [online, dev, rebuild, busy, overlay, recordEdit, markDirty, markOffline],
   );
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

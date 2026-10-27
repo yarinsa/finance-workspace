@@ -1,12 +1,17 @@
-"""Horizons and goals, through the ORM entities in finance/tables.py (`Horizon`, `Goal`).
+"""Horizons, goals and plan targets, through the ORM entities in finance/tables.py
+(`Horizon`, `Goal`, `PlanTarget`).
 
 Shared by data/goals.py, data/horizons.py and the ledger API: every function takes an
 open psycopg connection, works on it through `ledger.orm_session`, and commits writes.
 Horizons are a fixed list (seeded by migration 0006) addressed by `key`; goals are
-user rows, each optionally assigned to a horizon.
+user rows, each optionally assigned to a horizon. The three general targets
+(emergency_fund_target, inheritance_target, retirement_target) live in `plan_targets`,
+one row per target that was ever decided; unset (None or 0) is a row of 0, while no row
+means not decided yet (the JSON store still applies).
 
     .venv/bin/python db/goal_store.py list
     .venv/bin/python db/goal_store.py import [data/goals/goals.json]   # one-time move from the JSON store
+    .venv/bin/python db/goal_store.py targets                          # the three general targets
     .venv/bin/python db/goal_store.py horizon SLUG current|near|future|none
 """
 import datetime as dt
@@ -18,10 +23,11 @@ from pathlib import Path
 
 from sqlmodel import col, delete, func, select
 
-from finance.tables import Goal, Horizon, TransactionOverride
+from finance.tables import Goal, Horizon, PlanTarget, TransactionOverride
 from ledger import orm_session
 
 STORE = Path(__file__).resolve().parent.parent / "data" / "goals" / "goals.json"
+TARGET_KEYS = ("emergency_fund_target", "inheritance_target", "retirement_target")
 EDITABLE = ("description", "amount", "start_date", "end_date", "interval", "repetitions", "rise",
             "from_asset_id", "horizon")
 
@@ -132,11 +138,52 @@ def delete_goal(conn, goal_id):
         return True
 
 
+def stored_targets(conn):
+    """Only the targets that have a row: {"emergency_fund_target": float, ...}, 0 included.
+
+    A missing row means "never decided" (the JSON store may still hold a value); a row with
+    amount 0 means "deliberately unset"."""
+    with orm_session(conn) as s:
+        have = {t.key: float(t.amount) for t in s.exec(select(PlanTarget)).all()}
+    return {k: have[k.removesuffix("_target")] for k in TARGET_KEYS if k.removesuffix("_target") in have}
+
+
+def get_targets(conn):
+    """The general targets: {"emergency_fund_target": float|None, ...}; None = unset
+    (a 0 row and a missing row both read as unset)."""
+    have = stored_targets(conn)
+    return {k: have.get(k) or None for k in TARGET_KEYS}
+
+
+def set_targets(conn, **fields):
+    """Set any subset of the targets; None or 0 unsets (upserts a row of 0). Returns `get_targets`.
+
+    Raises ValueError for an unknown key or a negative amount, before writing anything."""
+    for k, v in fields.items():
+        if k not in TARGET_KEYS:
+            raise ValueError(f"unknown target {k!r}")
+        if v is not None and Decimal(str(v)) < 0:
+            raise ValueError(f"{k} cannot be negative")
+    with orm_session(conn) as s:
+        for k, v in fields.items():
+            key, amount = k.removesuffix("_target"), Decimal(str(v or 0))
+            row = s.get(PlanTarget, key)
+            if row:
+                row.amount, row.updated_at = amount, dt.datetime.now(dt.timezone.utc)
+            else:
+                s.add(PlanTarget(key=key, amount=amount))
+        s.commit()
+    return get_targets(conn)
+
+
 def import_json(conn, path=STORE):
-    """Copy the `goals` list of the JSON store into the table; existing slugs are left alone.
+    """Copy the `goals` list and the three targets of the JSON store into the database;
+    existing slugs and targets that already have a row (even a 0 one) are left alone.
 
     Returns the number of goals added."""
     store = json.loads(Path(path).read_text(encoding="utf-8"))
+    have = stored_targets(conn)
+    set_targets(conn, **{k: store[k] for k in TARGET_KEYS if k not in have and store.get(k) is not None})
     added = 0
     with orm_session(conn) as s:
         have = set(s.exec(select(Goal.slug)).all())
@@ -164,6 +211,9 @@ def main(argv):
                       f"{g['horizon'] or '-':<8} {g['transactions']} tx  {g['description']}")
         elif cmd == "import":
             print(f"imported {import_json(conn, rest[0] if rest else STORE)} goal(s)")
+        elif cmd == "targets":
+            for k, v in get_targets(conn).items():
+                print(f"{k:<22} {'-' if v is None else f'₪{v:,.0f}'}")
         elif cmd == "horizon" and len(rest) == 2:
             gid = conn.execute("SELECT id FROM goals WHERE slug = %s", (rest[0],)).fetchone()
             if not gid:

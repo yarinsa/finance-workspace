@@ -29,6 +29,9 @@ type Query {
 
   snapshot: Snapshot!
 
+  """The Goals screen's three general targets; a null amount is unset."""
+  planTargets: PlanTargets!
+
   # inbox (inbox.graphql)
   """Most severe first, then most recently updated."""
   notifications(first: Int, after: String, last: Int, before: String,
@@ -37,9 +40,12 @@ type Query {
   notificationsUnreadCount(category: [NotificationCategory!]): Int!
 }
 
-# Relay mutation convention: one `input`, one payload, `clientMutationId` echoed back.
-# Every mutation needs the CSRF headers and signals a ledger rebuild on success, except the
-# inbox's (inbox.graphql), which change no ledger data.
+# Mutation conventions. New mutations follow the Linear style: `entityVerb` names, the target's
+# `id` as its own argument, one `input`, and a `{success, entity}` payload (`DeletePayload` for
+# deletes). The older mutations are Relay-style (one `input` carrying the id, `clientMutationId`
+# echoed back) and are pending migration. Either way a failure is a GraphQL error, every mutation
+# needs the CSRF headers and signals a ledger rebuild on success, except the inbox's
+# (inbox.graphql), which change no ledger data.
 
 type Mutation {
   """Set any of the override fields; a null field clears that override."""
@@ -59,10 +65,14 @@ type Mutation {
   resetOffsets(input: ResetOffsetsInput!): ResetOffsetsPayload!
   updateTag(input: UpdateTagInput!): UpdateTagPayload!
   deleteTag(input: DeleteTagInput!): DeleteTagPayload!
-  createGoal(input: CreateGoalInput!): CreateGoalPayload!
-  updateGoal(input: UpdateGoalInput!): UpdateGoalPayload!
+
+  # Linear style
+  goalCreate(input: GoalCreateInput!): GoalPayload!
+  goalUpdate(id: ID!, input: GoalUpdateInput!): GoalPayload!
   """Delete a goal; transactions assigned to it are unassigned."""
-  deleteGoal(input: DeleteGoalInput!): DeleteGoalPayload!
+  goalDelete(id: ID!): DeletePayload!
+  """Set any of the general targets; null or 0 unsets one, an omitted one is untouched."""
+  planTargetsUpdate(input: PlanTargetsUpdateInput!): PlanTargetsPayload!
 
   # inbox (inbox.graphql): no ledger rebuild
   """Mark read or unread, and/or snooze (or clear the snooze with a null). Snoozing marks it unread."""
@@ -168,8 +178,7 @@ type DeleteTagPayload {
   deletedTagId: ID!
 }
 
-input CreateGoalInput {
-  clientMutationId: String
+input GoalCreateInput {
   description: String!
   amount: Money!
   startDate: Date
@@ -180,15 +189,8 @@ input CreateGoalInput {
   horizon: HorizonKey
 }
 
-type CreateGoalPayload {
-  clientMutationId: String
-  goal: Goal!
-}
-
 """Any of the goal's fields; a null clears it (description and amount cannot be cleared)."""
-input UpdateGoalInput {
-  clientMutationId: String
-  id: ID!
+input GoalUpdateInput {
   description: String
   amount: Money
   startDate: Date
@@ -199,17 +201,32 @@ input UpdateGoalInput {
   horizon: HorizonKey
 }
 
-type UpdateGoalPayload {
-  clientMutationId: String
-  goal: Goal!
+type GoalPayload {
+  success: Boolean!
+  goal: Goal
 }
 
-input DeleteGoalInput {
-  clientMutationId: String
-  id: ID!
+"""Result of a delete; `entityId` is the deleted node's global id."""
+type DeletePayload {
+  success: Boolean!
+  entityId: ID!
 }
 
-type DeleteGoalPayload {
-  clientMutationId: String
-  deletedGoalId: ID!
+"""The emergency-fund, inheritance and retirement targets (data/goals.py); null = not set."""
+type PlanTargets {
+  emergencyFund: Money
+  inheritance: Money
+  retirement: Money
+}
+
+"""At least one field; a negative amount is an error, null or 0 unsets."""
+input PlanTargetsUpdateInput {
+  emergencyFund: Money
+  inheritance: Money
+  retirement: Money
+}
+
+type PlanTargetsPayload {
+  success: Boolean!
+  planTargets: PlanTargets!
 }

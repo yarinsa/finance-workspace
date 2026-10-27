@@ -180,7 +180,7 @@ class DeleteTagInput(MutationInput):
     id: node_id_of("Tag")
 
 
-class CreateGoalInput(MutationInput, GoalEdit):
+class GoalCreateInput(MutationInput, GoalEdit):
     description: str = Field(min_length=1, max_length=80)
     amount: float = Field(ge=0, le=100_000_000)
 
@@ -190,7 +190,7 @@ class CreateGoalInput(MutationInput, GoalEdit):
                 if f not in ("description", "amount")}
 
 
-class UpdateGoalInput(MutationInput, GoalEdit):
+class GoalUpdateInput(MutationInput, GoalEdit):
     id: node_id_of("Goal")
 
     @model_validator(mode="after")
@@ -203,8 +203,20 @@ class UpdateGoalInput(MutationInput, GoalEdit):
         return {f: getattr(self, f) for f in self.model_fields_set & set(GoalEdit.model_fields)}
 
 
-class DeleteGoalInput(MutationInput):
+class GoalDeleteInput(MutationInput):
     id: node_id_of("Goal")
+
+
+class PlanTargetsUpdateInput(MutationInput):
+    """Any of the three targets; null or 0 unsets, negative is rejected, an omitted one is untouched."""
+    emergency_fund: Decimal | None = Field(default=None, ge=0, le=1_000_000_000, max_digits=12, decimal_places=2)
+    inheritance: Decimal | None = Field(default=None, ge=0, le=1_000_000_000, max_digits=12, decimal_places=2)
+    retirement: Decimal | None = Field(default=None, ge=0, le=1_000_000_000, max_digits=12, decimal_places=2)
+
+    def changes(self):
+        """goal_store.set_targets keyword arguments for the targets that were sent."""
+        return {f"{f}_target": getattr(self, f) for f in ("emergency_fund", "inheritance", "retirement")
+                if f in self.model_fields_set}
 
 
 class UpdateNotificationInput(MutationInput):

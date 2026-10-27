@@ -52,21 +52,21 @@ export function categoryOf(a: Pick<HomeAction, "severity" | "category">): Catego
   return "WARNING";
 }
 
-/** Global node id the API uses: base64url("Notification:<id>") without padding (api/relay to_global_id). */
-export function toGlobalId(id: string): string {
-  const bytes = new TextEncoder().encode(`Notification:${id}`);
+/** Global node id the API uses: base64url("<Type>:<id>") without padding (api/relay to_global_id). */
+export function toGlobalId(id: string | number, type = "Notification"): string {
+  const bytes = new TextEncoder().encode(`${type}:${id}`);
   let bin = "";
   for (const b of bytes) bin += String.fromCharCode(b);
   return btoa(bin).replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/, "");
 }
 
-/** Inverse of `toGlobalId` for ids of type Notification; null for anything else. */
-export function fromGlobalId(globalId: string): string | null {
+/** Inverse of `toGlobalId` for ids of the given type; null for anything else. */
+export function fromGlobalId(globalId: string, type = "Notification"): string | null {
   try {
     const b64 = globalId.replaceAll("-", "+").replaceAll("_", "/");
     const bin = atob(b64 + "=".repeat((4 - (b64.length % 4)) % 4));
     const text = new TextDecoder().decode(Uint8Array.from(bin, (c) => c.charCodeAt(0)));
-    return text.startsWith("Notification:") ? text.slice("Notification:".length) : null;
+    return text.startsWith(`${type}:`) ? text.slice(type.length + 1) : null;
   } catch {
     return null;
   }

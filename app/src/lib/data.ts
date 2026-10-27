@@ -524,6 +524,9 @@ export async function reloadData(): Promise<void> {
   dataListeners.forEach((l) => l());
 }
 
+/** The current reload counter, for code outside React (stamps optimistic overlays). */
+export const getDataVersion = (): number => dataVersion;
+
 /** Subscribe a component to `reloadData()`; returns a counter that bumps on every reload. */
 export function useDataVersion(): number {
   return useSyncExternalStore(

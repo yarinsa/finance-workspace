@@ -260,3 +260,71 @@ class TestEmergencyFundOverdrawn:
         assert card["value"] == 100.0
         assert card["shortfall"] == 0
         assert card["meets_target"] is True
+
+
+class TestMainTargetsFromDb:
+    def test_db_targets_override_the_json_store_and_unset_becomes_zero(self, tmp_path, monkeypatch):
+        # JSON still says emergency 60k / inheritance 1M; the DB has only a 2.5M retirement target.
+        root = tmp_path / "data"
+        root.mkdir()
+        monkeypatch.setattr(goals, "ROOT", root)
+        tmp_path = root
+        store = tmp_path / "goals.json"
+        store.write_text('{"emergency_fund_target": 60000, "inheritance_target": 1000000, "goals": []}')
+        monkeypatch.setattr(goals, "STORE", store)
+        for name in ("SNAPSHOT", "CASHFLOW"):
+            (tmp_path / name).write_text("{}")
+            monkeypatch.setattr(goals, name, tmp_path / name)
+        monkeypatch.setattr(goals, "OUT_JSON", tmp_path / "out.json")
+        monkeypatch.setattr(goals, "OUT_MD", tmp_path / "out.md")
+        monkeypatch.setattr(goals, "goals_from_db", lambda: [])
+        monkeypatch.setattr(goals, "targets_from_db", lambda: {
+            "retirement_target": 2500000.0, "inheritance_target": 0.0})
+        seen = {}
+        real_build = goals.build
+        monkeypatch.setattr(goals, "build", lambda s, *a: seen.update(s) or real_build(s, *a))
+        goals.main()
+        # no emergency row keeps the JSON 60000; the 0 inheritance row unsets despite the JSON 1M
+        assert (seen["emergency_fund_target"], seen["inheritance_target"], seen["retirement_target"]) == (
+            60000, 0, 2500000.0)
+
+    def test_an_empty_table_keeps_the_json_targets(self, tmp_path, monkeypatch):
+        # Before anything is imported: JSON {emergency 60000, inheritance 1M}, no rows in plan_targets.
+        root = tmp_path / "data"
+        root.mkdir()
+        monkeypatch.setattr(goals, "ROOT", root)
+        (root / "goals.json").write_text('{"emergency_fund_target": 60000, "inheritance_target": 1000000, "goals": []}')
+        for name in ("SNAPSHOT", "CASHFLOW"):
+            (root / name).write_text("{}")
+            monkeypatch.setattr(goals, name, root / name)
+        monkeypatch.setattr(goals, "STORE", root / "goals.json")
+        monkeypatch.setattr(goals, "OUT_JSON", root / "out.json")
+        monkeypatch.setattr(goals, "OUT_MD", root / "out.md")
+        monkeypatch.setattr(goals, "goals_from_db", lambda: [])
+        monkeypatch.setattr(goals, "targets_from_db", lambda: {})
+        seen = {}
+        real_build = goals.build
+        monkeypatch.setattr(goals, "build", lambda s, *a: seen.update(s) or real_build(s, *a))
+        goals.main()
+        assert (seen["emergency_fund_target"], seen["inheritance_target"]) == (60000, 1000000)
+
+    def test_without_a_database_the_json_targets_stand(self, tmp_path, monkeypatch):
+        root = tmp_path / "data"
+        root.mkdir()
+        monkeypatch.setattr(goals, "ROOT", root)
+        tmp_path = root
+        store = tmp_path / "goals.json"
+        store.write_text('{"emergency_fund_target": 60000, "goals": []}')
+        monkeypatch.setattr(goals, "STORE", store)
+        for name in ("SNAPSHOT", "CASHFLOW"):
+            (tmp_path / name).write_text("{}")
+            monkeypatch.setattr(goals, name, tmp_path / name)
+        monkeypatch.setattr(goals, "OUT_JSON", tmp_path / "out.json")
+        monkeypatch.setattr(goals, "OUT_MD", tmp_path / "out.md")
+        monkeypatch.setattr(goals, "goals_from_db", lambda: None)
+        monkeypatch.setattr(goals, "targets_from_db", lambda: None)
+        seen = {}
+        real_build = goals.build
+        monkeypatch.setattr(goals, "build", lambda s, *a: seen.update(s) or real_build(s, *a))
+        goals.main()
+        assert seen["emergency_fund_target"] == 60000

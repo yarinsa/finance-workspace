@@ -296,13 +296,13 @@ def test_mutations_need_the_csrf_headers(client, rebuilder):
 
 # --- horizons and goals ------------------------------------------------------------------
 
-CREATE_GOAL = """mutation($input: CreateGoalInput!) { createGoal(input: $input) {
-  clientMutationId goal { id slug description amount endDate interval repetitions rise horizon { key } } } }"""
+CREATE_GOAL = """mutation($input: GoalCreateInput!) { goalCreate(input: $input) {
+  success goal { id slug description amount endDate interval repetitions rise horizon { key } } } }"""
 
 
 def _goal(client, **over):
     inp = {"description": "קרן חירום", "amount": "30000", "endDate": "2027-06-30", "horizon": "NEAR", **over}
-    return data(client, CREATE_GOAL, input=inp)["createGoal"]["goal"]
+    return data(client, CREATE_GOAL, input=inp)["goalCreate"]["goal"]
 
 
 def test_horizons_root_lists_the_fixed_three_in_position_order(client):
@@ -332,6 +332,16 @@ def test_assigning_a_transaction_to_a_goal_shows_on_goal_and_horizon(client):
     assert data(client, q)["transactions"]["totalCount"] == 1
 
 
+def test_goal_update_and_delete_of_a_missing_goal_are_errors_and_signal_nothing(client, rebuilder):
+    ghost = to_global_id("Goal", "999")
+    status, body = gql(client, "mutation($id: ID!) { goalDelete(id: $id) { success } }", id=ghost)
+    assert body["errors"][0]["message"] == "no such goal"
+    status, body = gql(client, "mutation($id: ID!) { goalUpdate(id: $id, input: {amount: \"1\"}) { success } }", id=ghost)
+    assert body["errors"][0]["message"] == "no such goal"
+    status, body = gql(client, "mutation($id: ID!) { goalDelete(id: $id) { success } }", id=PURCHASE_ID)
+    assert "not a Goal" in body["errors"][0]["message"] and rebuilder.signals == 0
+
+
 def test_assigning_an_unknown_goal_is_an_error(client):
     status, body = gql(client, UPDATE, input={"id": PURCHASE_ID, "goalId": to_global_id("Goal", "999")})
     assert body["errors"][0]["message"] == "no such goal"
@@ -339,18 +349,20 @@ def test_assigning_an_unknown_goal_is_an_error(client):
 
 def test_update_goal_and_refuse_clearing_required_fields(client):
     g = _goal(client)
-    q = """mutation($input: UpdateGoalInput!) { updateGoal(input: $input) { goal { amount interval horizon { key } } } }"""
-    out = data(client, q, input={"id": g["id"], "amount": "35000.50", "interval": "YEARLY", "horizon": None})
-    assert out["updateGoal"]["goal"] == {"amount": "35000.50", "interval": "YEARLY", "horizon": None}
-    status, body = gql(client, q, input={"id": g["id"], "description": None})
+    q = """mutation($id: ID!, $input: GoalUpdateInput!) { goalUpdate(id: $id, input: $input) {
+           success goal { amount interval horizon { key } } } }"""
+    out = data(client, q, id=g["id"], input={"amount": "35000.50", "interval": "YEARLY", "horizon": None})
+    assert out["goalUpdate"] == {"success": True,
+                                 "goal": {"amount": "35000.50", "interval": "YEARLY", "horizon": None}}
+    status, body = gql(client, q, id=g["id"], input={"description": None})
     assert "cannot be cleared" in body["errors"][0]["message"]
 
 
 def test_delete_goal_unassigns_its_transactions(client):
     g = _goal(client)
     data(client, UPDATE, input={"id": PURCHASE_ID, "goalId": g["id"]})
-    q = "mutation($id: ID!) { deleteGoal(input: {id: $id}) { deletedGoalId } }"
-    assert data(client, q, id=g["id"])["deleteGoal"]["deletedGoalId"] == g["id"]
+    q = "mutation($id: ID!) { goalDelete(id: $id) { success entityId } }"
+    assert data(client, q, id=g["id"])["goalDelete"] == {"success": True, "entityId": g["id"]}
     t = data(client, "query($id: ID!) { node(id: $id) { ... on Transaction { goal { id } overridden } } }",
              id=PURCHASE_ID)["node"]
     assert t == {"goal": None, "overridden": False}   # the override held only the goal, so it is pruned
@@ -426,3 +438,31 @@ def test_link_amounts_are_checked_against_what_is_left(client, with_paybacks):
     data(client, LINK, p=FRIEND_ID, e=PURCHASE_ID, amount="20.00")
     d = data(client, LINK, p=FRIEND_ID, e=PURCHASE_ID, amount="30.00")["linkOffset"]   # replaces, not adds
     assert d["payback"]["netAmount"] == "20.00"
+
+
+# --- plan targets ------------------------------------------------------------------------
+
+TARGETS = "{ planTargets { emergencyFund inheritance retirement } }"
+UPDATE_TARGETS = """mutation($input: PlanTargetsUpdateInput!) { planTargetsUpdate(input: $input) {
+  success planTargets { emergencyFund inheritance retirement } } }"""
+NO_TARGETS = {"emergencyFund": None, "inheritance": None, "retirement": None}
+
+
+def test_plan_targets_start_unset_then_set_and_unset_with_one_rebuild_each(client, rebuilder):
+    assert data(client, TARGETS)["planTargets"] == NO_TARGETS
+    out = data(client, UPDATE_TARGETS, input={"emergencyFund": "60000",
+                                              "retirement": "2500000.50"})["planTargetsUpdate"]
+    assert out["success"] is True
+    assert out["planTargets"] == {"emergencyFund": "60000.00", "inheritance": None, "retirement": "2500000.50"}
+    assert data(client, TARGETS)["planTargets"] == out["planTargets"]
+    # null and 0 both unset; the omitted inheritance is untouched
+    out = data(client, UPDATE_TARGETS, input={"emergencyFund": None, "retirement": "0"})["planTargetsUpdate"]
+    assert out["planTargets"] == NO_TARGETS
+    assert rebuilder.signals == 2
+
+
+@pytest.mark.parametrize("inp", [{}, {"retirement": "-1"}, {"color": 1}])
+def test_invalid_plan_targets_input_is_an_error_and_signals_nothing(client, rebuilder, inp):
+    status, body = gql(client, UPDATE_TARGETS, input=inp)
+    assert body.get("errors") and rebuilder.signals == 0
+    assert data(client, TARGETS)["planTargets"] == NO_TARGETS

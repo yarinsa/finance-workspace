@@ -257,3 +257,41 @@ def test_offset_whose_expense_vanished_is_reported_orphaned(conn):
     [(missing_payback, missing_expense)] = conn.execute(
         "SELECT payback_missing, expense_missing FROM orphaned_offsets").fetchall()
     assert (missing_payback, missing_expense) == (False, True)
+
+
+# --- plan targets --------------------------------------------------------------------
+
+def test_targets_start_unset_and_unset_is_a_zero_row(conn):
+    assert goal_store.get_targets(conn) == {"emergency_fund_target": None, "inheritance_target": None,
+                                            "retirement_target": None}
+    out = goal_store.set_targets(conn, emergency_fund_target=60000, retirement_target=2500000.5)
+    assert out == {"emergency_fund_target": 60000.0, "inheritance_target": None,
+                   "retirement_target": 2500000.5}
+    goal_store.set_targets(conn, emergency_fund_target=65000)   # update in place
+    assert goal_store.get_targets(conn)["emergency_fund_target"] == 65000.0
+    goal_store.set_targets(conn, emergency_fund_target=None, retirement_target=0)   # None and 0 both unset
+    assert goal_store.get_targets(conn) == {"emergency_fund_target": None, "inheritance_target": None,
+                                            "retirement_target": None}
+    # unsetting keeps the row (amount 0) so it differs from "never decided"
+    assert goal_store.stored_targets(conn) == {"emergency_fund_target": 0.0, "retirement_target": 0.0}
+
+
+def test_set_targets_rejects_bad_input_without_writing(conn):
+    for bad in ({"emergency_fund_target": 1, "retirement_target": -5}, {"nope_target": 1}):
+        try:
+            goal_store.set_targets(conn, **bad)
+        except ValueError:
+            pass
+        else:
+            raise AssertionError(bad)
+    assert goal_store.get_targets(conn)["emergency_fund_target"] is None
+
+
+def test_import_json_copies_targets_but_keeps_ones_with_a_row(conn, tmp_path):
+    store = tmp_path / "goals.json"
+    store.write_text('{"emergency_fund_target": 60000, "inheritance_target": 1000000, '
+                     '"retirement_target": 0, "goals": []}')
+    goal_store.set_targets(conn, inheritance_target=750000, retirement_target=None)
+    goal_store.import_json(conn, store)
+    assert goal_store.get_targets(conn) == {"emergency_fund_target": 60000.0,
+                                            "inheritance_target": 750000.0, "retirement_target": None}

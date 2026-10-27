@@ -91,7 +91,7 @@ STRUCTURAL = frozenset({
     "TransactionConnection", "TransactionEdge", "MerchantConnection", "MerchantEdge",
     "CategoryConnection", "CategoryEdge", "TagConnection", "TagEdge", "TransactionTotals",
     "HorizonConnection", "HorizonEdge", "GoalConnection", "GoalEdge",
-    "CreateGoalPayload", "UpdateGoalPayload", "DeleteGoalPayload",
+    "GoalPayload", "DeletePayload", "PlanTargets", "PlanTargetsPayload",
     "AuditEntryConnection", "AuditEntryEdge",
     "UpdateTransactionPayload", "ClearTransactionOverridePayload", "SetTransactionTagsPayload",
     "UpdateTagPayload", "DeleteTagPayload",

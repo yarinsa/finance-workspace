@@ -85,11 +85,28 @@ def test_connections_follow_the_relay_spec():
             assert {"node", "cursor"} <= set(edge.fields), edge.name
 
 
-def test_mutations_take_one_input_and_echo_client_mutation_id():
+# Linear style (`entityVerb`, optional `id` argument, `{success, entity}` payload); every other
+# mutation is Relay style and pending migration.
+LINEAR = {"goalCreate", "goalUpdate", "goalDelete", "planTargetsUpdate"}
+
+
+def test_relay_mutations_take_one_input_and_echo_client_mutation_id():
     for name, m in SCHEMA.mutation_type.fields.items():
+        if name in LINEAR:
+            continue
         assert list(m.args) == ["input"], name
         assert "clientMutationId" in m.args["input"].type.of_type.fields, name
         assert "clientMutationId" in m.type.of_type.fields, name
+
+
+def test_linear_mutations_take_an_optional_id_and_input_and_return_success():
+    for name in LINEAR:
+        m = SCHEMA.mutation_type.fields[name]
+        assert set(m.args) in ({"input"}, {"id"}, {"id", "input"}), name
+        assert all(isinstance(a.type, GraphQLNonNull) for a in m.args.values()), name
+        assert "success" in m.type.of_type.fields, name
+        assert not any("clientMutationId" in a.type.of_type.fields for a in m.args.values()
+                       if hasattr(a.type.of_type, "fields")), name
 
 
 def _unwrap(t):

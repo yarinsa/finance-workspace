@@ -29,10 +29,10 @@ from pydantic import BaseModel
 
 from api.schema_bindings import load_schema, snake
 
-from .inputs import (BulkNotificationInput, ClearTransactionOverrideInput, CreateGoalInput, DeleteGoalInput, DeleteTagInput, GroupArgs,
+from .inputs import (BulkNotificationInput, ClearTransactionOverrideInput, GoalCreateInput, GoalDeleteInput, DeleteTagInput, GroupArgs,
                      GroupOrder, LinkOffsetInput, NotificationArgs, NotificationIdInput, ResetOffsetsInput,
                      SetTransactionTagsInput, SnoozeAllNotificationsInput, TransactionArgs, TransactionOrder,
-                     UnlinkOffsetInput, UnreadCountArgs, UpdateGoalInput, UpdateNotificationInput, UpdateTagInput,
+                     UnlinkOffsetInput, UnreadCountArgs, GoalUpdateInput, UpdateNotificationInput, PlanTargetsUpdateInput, UpdateTagInput,
                      UpdateTransactionInput)
 from .inbox import TYPENAMES, Notification
 from .ledger import CENT, Ledger, Merchant, Txn, offset_candidates, totals
@@ -111,13 +111,16 @@ class NodeResolver(Generic[T]):
         return {}
 
     def _mutation(self, model, method):
-        def resolve(_, info, input):
-            inp = validated(model, input, keep_null=True)
+        """The resolver of a mutation field. Linear-style fields take `id` as its own argument
+        (merged into the input), Relay-style ones carry it in `input`."""
+        def resolve(_, info, input=None, id=None):
+            args = {**(input or {}), **({} if id is None else {"id": id})}
+            inp = validated(model, args, keep_null=True)
             payload = method(inp, info)
             if self.rebuilds:
                 info.context["writes"] += 1
                 ledger(info).invalidate()
-            return {"client_mutation_id": inp.client_mutation_id, **payload()}
+            return {"client_mutation_id": inp.client_mutation_id, "success": True, **payload()}
         return resolve
 
     def bind(self, schema):
@@ -323,8 +326,8 @@ class GoalResolver(GroupResolver):
         return g.description
 
     def mutations(self):
-        return {"createGoal": (CreateGoalInput, self.create), "updateGoal": (UpdateGoalInput, self.update),
-                "deleteGoal": (DeleteGoalInput, self.delete)}
+        return {"goalCreate": (GoalCreateInput, self.create), "goalUpdate": (GoalUpdateInput, self.update),
+                "goalDelete": (GoalDeleteInput, self.delete)}
 
     def _refetched(self, info, goal_id):
         return lambda: {"goal": self.fetch(ledger(info), str(goal_id))}
@@ -344,7 +347,7 @@ class GoalResolver(GroupResolver):
     def delete(self, inp, info):
         g = self.require(info, inp.id)
         goal_store.delete_goal(ledger(info).conn, g.id)
-        return lambda: {"deleted_goal_id": to_global_id(self.type_name, str(g.id))}
+        return lambda: {"entity_id": to_global_id(self.type_name, str(g.id))}
 
 
 class TransactionResolver(NodeResolver[Txn]):
@@ -569,10 +572,40 @@ class NotificationResolver(NodeResolver[Notification]):
         schema.type_map["TransactionNotification"].fields["transaction"].resolve = self.resolve_transaction
 
 
+class PlanTargetsResolver(NodeResolver):
+    """`Query.planTargets` and `planTargetsUpdate`: three amounts, not a Node (no id, no refetch)."""
+    type_name = "PlanTargets"
+
+    @staticmethod
+    def read(conn):
+        t = goal_store.get_targets(conn)
+        return {"emergency_fund": t["emergency_fund_target"], "inheritance": t["inheritance_target"],
+                "retirement": t["retirement_target"]}
+
+    def resolve_query(self, _, info):
+        return self.read(ledger(info).conn)
+
+    def mutations(self):
+        return {"planTargetsUpdate": (PlanTargetsUpdateInput, self.update)}
+
+    def update(self, inp, info):
+        changes = inp.changes()
+        if not changes:
+            raise GraphQLError("send at least one target")
+        goal_store.set_targets(ledger(info).conn, **changes)
+        return lambda: {"plan_targets": self.read(ledger(info).conn)}
+
+    def bind(self, schema):
+        schema.query_type.fields["planTargets"].resolve = self.resolve_query
+        for field, (model, method) in self.mutations().items():
+            schema.mutation_type.fields[field].resolve = self._mutation(model, method)
+
+
 GOALS = GoalResolver()
 ENTITIES: list[GroupResolver] = [MerchantResolver(), CategoryResolver(), TagResolver(), HorizonResolver(GOALS), GOALS]
 TRANSACTIONS = TransactionResolver(GOALS)
 NOTIFICATIONS = NotificationResolver()
+PLAN_TARGETS = PlanTargetsResolver()
 NODES: dict[str, NodeResolver] = {r.type_name: r for r in [TRANSACTIONS, *ENTITIES, NOTIFICATIONS]}
 
 
@@ -643,6 +676,7 @@ def build():
     schema.query_type.fields["snapshot"].resolve = resolve_snapshot
     TRANSACTIONS.bind(schema)
     NOTIFICATIONS.bind(schema)
+    PLAN_TARGETS.bind(schema)
     for entity in ENTITIES:
         entity.bind(schema, ENTITIES)
     return schema

@@ -71,6 +71,21 @@ class Goal(SQLModel, table=True):
     overrides: list["TransactionOverride"] = Relationship(back_populates="goal_ref")
 
 
+class PlanTarget(SQLModel, table=True):
+    """One of the Goals screen's three general targets (data/goals.py): emergency fund,
+    inheritance, retirement. Was data/goals/goals.json's `*_target` keys.
+
+    No row = not decided yet (data/goals.py falls back to the JSON store); amount 0 = unset
+    (db/goal_store.py)."""
+    __tablename__ = "plan_targets"
+    __table_args__ = (CheckConstraint("key IN ('emergency_fund', 'inheritance', 'retirement')",
+                                      name="plan_targets_key_check"),)
+
+    key: str = Field(sa_column=Column(Text, primary_key=True))
+    amount: Decimal = Field(sa_type=Money)
+    updated_at: dt.datetime | None = Field(default=None, sa_column=_now())
+
+
 class Category(SQLModel, table=True):
     """The fixed list of spending categories a transaction can be assigned to.
 
