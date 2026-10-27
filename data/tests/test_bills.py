@@ -1,126 +1,122 @@
-"""Real-case tests for the bills block (PRD 12, Phase 1).
-
-- Rent `הו"ק לעיין ניהול נכסי` has an actual on 10-11 -> paid.
-- Electricity `חב החשמל-דן` has no actual and its day (16th) has passed -> overdue.
-- `מענק בנק לאומי` is an income envelope -> not a bill.
-- `הו"ק לששון ירין` goes to our own business account -> not a bill.
-- Category and kind come from the taxonomy, not RiseUp's label: rent (RiseUp "דיור")
-  is שכר דירה, a bill; the loan a loan; Spotify (group מנויים) a subscription.
-- `פרטנר` was charged on CAL on 10-25 but RiseUp had not matched it -> paid from the ledger.
-"""
+"""Bills built from the ledger: real October-2026 series (rent, loans, subscriptions
+RiseUp never had, bi-monthly water, electricity)."""
 from datetime import date
 
 import bills
 
-
-def env(name, amount, category, tx_date, actual=None):
-    return {"type": "fixed", "originalAmount": amount,
-            "details": {"businessName": name, "expense": category, "transactionDate": tx_date},
-            "actuals": [{"transactionDate": actual}] if actual else []}
-
-
-BUDGET = {"budgetDate": "2026-10", "cashflowStartDay": 1, "envelopes": [
-    env('הו"ק לעיין ניהול נכסי,לסניף 20-406', 6800, "דיור", "2026-10-06T00:00:00.000Z", "2026-10-11"),
-    env("חב החשמל-דן תש אינט'", 536.61, "חשמל", "2026-10-16T00:00:00.000Z"),
-    env("פרטנר תקשורת בע\"מ", 135.14, "תקשורת", "2026-10-25T00:00:00.000Z"),
-    env("מענק בנק לאומי", -323.24, "העברות", "2026-10-02T00:00:00.000Z", "2026-10-02"),
-    env('הו"ק לששון ירין,לסניף 11-034', 452, "תשלומים", "2026-10-10T00:00:00.000Z", "2026-10-11"),
-    env("SpotifyIL", 43.9, "דיגיטל", "2026-10-09T00:00:00.000Z", "2026-10-10"),
-    env("רשת ללא היסטוריה", 20, "ספר", "2026-09-05T00:00:00.000Z"),
-    {"type": "trackingCategory", "originalAmount": 900, "details": {"businessName": "food"}, "actuals": []},
-]}
 AS_OF = date(2026, 10, 20)
+BUDGET = {"budgetDate": "2026-10", "cashflowStartDay": 1}
+
+
+def tx(day, description, amount, category, kind="fixed", kind_source="recurring", **kw):
+    return {"date": day, "description": description, "amount": amount, "category": category,
+            "kind": kind, "kind_source": kind_source, **kw}
+
+
+def monthly(description, amount, category, months, day=2, **kw):
+    return [tx(f"2026-{m:02d}-{day:02d}", description, amount, category, **kw) for m in months]
+
+
+RENT = 'הו"ק לעיין ניהול נכסי,לסניף 20-406'
+
+
+def build(ledger, as_of=AS_OF, budget=BUDGET):
+    return bills.build_bills(budget, ledger, as_of)
 
 
 def by_name(block, frag):
     return next(i for i in block["items"] if frag in i["name"])
 
 
-def test_rent_paid():
-    r = by_name(bills.build_bills(BUDGET, [], AS_OF), "ניהול נכסי")
-    assert r["status"] == "paid" and r["paid_on"] == "2026-10-11" and r["due_day"] == 11
-    assert r["name"] == 'הו"ק לעיין ניהול נכסי'
-
-
-def test_electricity_overdue():
-    b = bills.build_bills(BUDGET, [], AS_OF)
-    e = by_name(b, "החשמל")
-    assert e["status"] == "overdue" and e["due_day"] == 16
-    assert b["overdue_total"] == 536.61
-
-
-def test_income_and_own_transfer_excluded():
-    names = [i["name"] for i in bills.build_bills(BUDGET, [], AS_OF)["items"]]
-    assert not any("מענק" in n or "ששון" in n for n in names)
-
-
-def test_upcoming_and_totals_and_order():
-    b = bills.build_bills(BUDGET, [], AS_OF)
-    assert by_name(b, "פרטנר")["status"] == "upcoming"
-    assert b["paid_total"] == round(6800 + 43.9, 2)
-    assert b["upcoming_total"] == round(135.14 + 20, 2)
-    assert b["items"][-1]["due_day"] is None  # no day known -> last
-    days = [i["due_day"] for i in b["items"] if i["due_day"]]
-    assert days == sorted(days)
-
-
-def test_due_day_from_ledger_recurrence():
-    tx = [{"date": "2026-09-14", "description": "חב החשמל-דן תש אינט'", "amount": -500}]
-    budget = {"budgetDate": "2026-10", "envelopes": [env("חב החשמל-דן תש אינט'", 536.61, "חשמל", "2026-09-01T00:00:00.000Z")]}
-    assert bills.build_bills(budget, tx, date(2026, 10, 1))["items"][0]["due_day"] == 14
-
-
-def test_no_budget():
-    assert bills.build_bills(None, [], AS_OF) is None
-
-
-def test_category_and_kind_come_from_the_taxonomy():
-    budget = {"budgetDate": "2026-10", "envelopes": [
-        env("פרעון הלוואה", 1844.42, "הלוואה", "2026-10-02T00:00:00.000Z", "2026-10-02"),
-        env("גורביץ מרק", 120, "ספר", "2026-10-07T00:00:00.000Z")]}
-    b = bills.build_bills({**budget, "envelopes": BUDGET["envelopes"] + budget["envelopes"]}, [], AS_OF)
+def test_rent_paid_this_cycle():
+    b = build(monthly(RENT, -6800.0, "שכר דירה", range(7, 11), day=11, kind_source="merchant"))
     rent = by_name(b, "ניהול נכסי")
-    assert (rent["category"], rent["group"], rent["kind"]) == ("שכר דירה", "דיור", "bill")
-    assert by_name(b, "פרעון הלוואה")["kind"] == "loan"
-    assert by_name(b, "Spotify")["kind"] == "subscription"
-    assert (by_name(b, "גורביץ")["category"], by_name(b, "גורביץ")["kind"]) == ("ספר", "bill")
+    assert (rent["status"], rent["paid_on"], rent["amount"], rent["kind"]) == ("paid", "2026-10-11", 6800.0, "bill")
+    assert rent["name"] == 'הו"ק לעיין ניהול נכסי'
 
 
-def test_category_follows_the_ledger_for_the_same_payee():
-    # the household re-filed the Partner line as a business expense
-    tx = [{"date": "2026-09-25", "description": 'פרטנר תקשורת בע"מ', "amount": -135.14,
-           "category": "הוצאות עסק", "merchant": 'פרטנר תקשורת בע"מ'}]
-    assert by_name(bills.build_bills(BUDGET, tx, AS_OF), "פרטנר")["category"] == "הוצאות עסק"
+def test_subscription_riseup_never_had_is_a_bill():
+    """SUPERHUMAN MAIL ₪95.51 on amex every month, not in any RiseUp envelope."""
+    b = build(monthly("SUPERHUMAN MAIL", -95.51, "דיגיטל", range(7, 10), day=27))
+    s = by_name(b, "SUPERHUMAN")
+    assert (s["kind"], s["status"], s["due_date"]) == ("subscription", "upcoming", "2026-10-27")
 
 
-def test_ledger_charge_riseup_has_not_matched_pays_the_bill():
-    tx = [{"date": "2026-10-25", "description": 'פרטנר תקשורת בע"מ', "amount": -135.14},
-          # the card fee went up from ₪98.40 to ₪102.38: still the same bill
-          {"date": "2026-10-23", "description": "דמי כרטיס /הנפקה", "amount": -102.38}]
-    budget = {**BUDGET, "envelopes": BUDGET["envelopes"] + [
-        env("דמי כרטיס /הנפקה", 98.4, "עמלות", "2026-10-25T00:00:00.000Z")]}
-    b = bills.build_bills(budget, tx, date(2026, 10, 27))
-    assert by_name(b, "פרטנר")["status"] == "paid" and by_name(b, "פרטנר")["paid_on"] == "2026-10-25"
-    assert by_name(b, "דמי כרטיס")["status"] == "paid"
+def test_missing_monthly_charge_is_overdue():
+    """SpotifyIL ₪43.90 lands on the 11th; by the 20th with no charge it is overdue."""
+    b = build(monthly("SpotifyIL", -43.9, "דיגיטל", range(6, 10), day=11))
+    assert by_name(b, "Spotify")["status"] == "overdue"
 
 
-def test_a_different_amount_from_the_same_payee_does_not_pay_it():
-    # the barber: ₪120 standing visit expected, a ₪240 visit on 10-18 is something else
-    tx = [{"date": "2026-10-18", "description": "גורביץ מרק", "amount": -240.0}]
-    budget = {"budgetDate": "2026-10", "envelopes": [env("גורביץ מרק", 120, "ספר", "2026-10-07T00:00:00.000Z")]}
-    assert bills.build_bills(budget, tx, AS_OF)["items"][0]["status"] == "overdue"
+def test_two_apple_subscriptions_are_two_bills():
+    ledger = (monthly("APPLE.COM/BILL         CORK          IRL", -39.9, "דיגיטל", range(7, 11), day=13)
+              + monthly("APPLE.COM/BILL         CORK          IRL", -59.5, "דיגיטל", range(7, 11), day=14))
+    assert sorted(i["amount"] for i in build(ledger)["items"]) == [39.9, 59.5]
 
 
-def test_electricity_is_paid_by_any_amount():
-    tx = [{"date": "2026-10-16", "description": "חב החשמל-דן תש אינט'", "amount": -611.37, "category": "חשמל"}]
-    assert by_name(bills.build_bills(BUDGET, tx, AS_OF), "החשמל")["status"] == "paid"
+def test_mortgage_step_up_keeps_only_the_current_series():
+    """דסק-משכנתא went ₪1,707.54 -> ₪5,817.25: the old amount is no longer a bill."""
+    ledger = (monthly("דסק-משכנתא,חיוב", -1707.54, "משכנתא", (4, 5, 6), day=10)
+              + monthly("דסק-משכנתא,חיוב", -5817.25, "משכנתא", (7, 8, 9, 10), day=11))
+    items = build(ledger)["items"]
+    assert [(i["amount"], i["kind"]) for i in items] == [(5817.25, "loan")]
 
 
-def test_one_charge_pays_one_bill():
-    # two Apple envelopes; RiseUp matched the ₪59.50 one, the ledger has only that charge
-    budget = {"budgetDate": "2026-10", "envelopes": [
-        env("APPLE.COM/BILL         CORK          IRL", 59.5, "דיגיטל", "2026-10-15T00:00:00.000Z", "2026-10-15"),
-        env("APPLE.COM/BILL         CORK          IRL", 55.0, "דיגיטל", "2026-10-15T00:00:00.000Z")]}
-    tx = [{"date": "2026-10-15", "description": "APPLE.COM/BILL", "amount": -59.5}]
-    statuses = sorted(i["status"] for i in bills.build_bills(budget, tx, AS_OF)["items"])
-    assert statuses == ["overdue", "paid"]
+def test_arrears_payoff_fixed_only_by_category_is_not_a_bill():
+    """סילוק פיגור ₪1,507 twice: הלוואה defaults to fixed, but it is no bill."""
+    ledger = monthly("סילוק פיגור", -1507.22, "הלוואה", (8, 9), day=11, kind_source="category")
+    assert build(ledger)["items"] == []
+
+
+def test_one_off_and_variable_rows_are_not_bills():
+    ledger = monthly("WOLT", -85.0, "אוכל בחוץ", range(7, 11), kind="variable", kind_source="category")
+    ledger.append(tx("2026-10-12", "פירעון הלוואה 15500316168", -52312.43, "הלוואה",
+                     kind="variable", kind_source="one_off"))
+    assert build(ledger)["items"] == []
+
+
+def test_stale_series_is_dropped():
+    """A subscription last charged in June is cancelled, not overdue."""
+    assert build(monthly("help.hbomax.com", -49.9, "דיגיטל", (3, 4, 5, 6), day=3))["items"] == []
+
+
+def test_bimonthly_water_is_estimated_in_its_month():
+    """מי אביבים bills every two months: due in October after August, estimated from
+    the median of the last three."""
+    water = "מי אביבים 2010 בע\"מ חיוב תקופתי"
+    ledger = [tx(f"2026-{m:02d}-12", water, a, "מים", kind="variable", kind_source="category")
+              for m, a in ((4, -115.0), (6, -191.0), (8, -162.32))]
+    w = by_name(build(ledger), "מי אביבים")
+    assert (w["estimated"], w["cadence_months"], w["amount"], w["status"]) == (True, 2, 162.32, "overdue")
+
+
+def test_bimonthly_water_not_due_in_the_off_month():
+    water = "מי אביבים 2010 בע\"מ חיוב תקופתי"
+    ledger = [tx(f"2026-{m:02d}-12", water, -150.0, "מים", kind="variable") for m in (5, 7, 9)]
+    assert build(ledger)["items"] == []
+
+
+def test_electricity_paid_by_any_amount():
+    ledger = [tx(f"2026-{m:02d}-18", "חב החשמל-דן תש אינט'", a, "חשמל", kind="variable")
+              for m, a in ((7, -556.0), (8, -691.0), (9, -611.37), (10, -499.06))]
+    e = by_name(build(ledger), "החשמל")
+    assert (e["status"], e["amount"], e["estimated"]) == ("paid", 499.06, False)
+
+
+def test_order_and_totals():
+    ledger = (monthly(RENT, -6800.0, "שכר דירה", range(7, 11), day=11)
+              + monthly("SUPERHUMAN MAIL", -95.51, "דיגיטל", range(7, 10), day=27)
+              + monthly("SpotifyIL", -43.9, "דיגיטל", range(6, 10), day=11))
+    b = build(ledger)
+    assert [i["due_date"] for i in b["items"]] == sorted(i["due_date"] for i in b["items"])
+    assert (b["paid_total"], b["upcoming_total"], b["overdue_total"]) == (6800.0, 95.51, 43.9)
+
+
+def test_without_a_budget_doc_the_cycle_is_the_calendar_month():
+    b = build(monthly(RENT, -6800.0, "שכר דירה", range(7, 11), day=11), budget=None)
+    assert (b["month"], b["cycle_start"], b["cycle_end"]) == ("2026-10", "2026-10-01", "2026-10-31")
+
+
+def test_clean_name():
+    assert bills.clean_name(RENT) == 'הו"ק לעיין ניהול נכסי'
+    assert bills.clean_name("דסק-משכנתא,חיוב") == "דסק-משכנתא"

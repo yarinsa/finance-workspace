@@ -267,19 +267,22 @@ estimated from last month's bill. The app shows it in the month screen's תחז�
 Mint-style monthly views (`docs/plangram-prd/12-mint-cashflow.md`) are written to
 `cashflow.json`. They read the ledger's `category` / `kind` (see "Categories and kind");
 RiseUp's budget still supplies the *plan*:
-`bills.py` (`/monthly`) — one row per RiseUp `fixed` envelope (the list, the expected
-amount and day: it predicts usage-priced and bi-monthly bills the ledger's recurrence
-rules don't call fixed) as paid/upcoming/overdue; category = the ledger's for the payee,
-kind (loan/subscription/bill) = `categories.bill_kind`, and a ledger charge from the same
-merchant (±15%, any amount for electricity/water/gas) marks it paid when RiseUp has not
-matched it yet. `budgets.py` (`/budgets`) — one line per **our category** (or group, e.g.
+`bills.py` (`/monthly`) — built from the **ledger**, not RiseUp: a bill is a series
+(merchant + amount ±15%) of kind=fixed rows active in 2 of the last 3 cycles (3 when only
+the category's default made it fixed), plus utilities (electricity/water/gas/ארנונה) on
+their own cadence (bi-monthly water is due every other month, amount = median of the
+last three, `estimated`); paid/upcoming/overdue, kind = `categories.bill_kind`. RiseUp
+gives only the cycle's start day. `budgets.py` (`/budgets`) — one line per **our category** (or group, e.g.
 תחבורה), planned = RiseUp's tracking envelope through `tracking_category` or the override,
 spent = the cycle's `kind == "variable"` ledger rows of that category (refunds subtract,
 floored at 0), `estimate` = median of the last 3–6 cycles, plus `summary`: the cycle in
 **three blocks** — fixed (kind=fixed actual, expected adds the monthly charges of the last
 two cycles not seen yet), variable (actual vs Σ per-category median), debt_savings (loans,
-mortgage, savings) and `left` = income − fixed − variable − debt_savings (each at
-max(actual, expected); income expected = the forecast's). `spending.py`
+mortgage, savings), **`left` = free money**: income − fixed − debt_savings − the
+variable *plan* (the budget lines' total) — what is not assigned to anything, aimed at
+~0 — and `projected_end`: the same with variable at `projected` = actual + the estimate ×
+the share of the cycle still ahead (a daily run-rate, so a trip-heavy median doesn't
+swamp the last days). Fixed/debt at expected; income at max(actual, the forecast's). `spending.py`
 (per-month category/merchant/transaction breakdown with excluded buckets, `/spending`).
 `cashflow.fixed_expenses` (the "what can I cut?" card) is the month's kind=fixed ledger
 rows plus the still-expected monthly ones (`budgets.fixed_items`), grouped by
@@ -400,8 +403,7 @@ fixed − variable. Non-spending rows (income, card bills, own transfers, saving
   `label_category`; a tracking envelope via `tracking_category`. The per-taxonomy rules
   live in `finance/categories.py`, nowhere else: `DEBT_CATEGORIES`, `LEVERS` /
   `GROUP_LEVER` / `CATEGORY_LEVER` (how a fixed expense can be cut), `bill_kind`.
-  **RiseUp still supplies plans, not categories**: `bills.py`'s list of expected bills,
-  `budgets.py`'s planned amounts, and `forecast.py`'s envelopes (see
+  **RiseUp still supplies plans, not categories**: `budgets.py`'s planned amounts, and `forecast.py`'s envelopes (see
   docs/forecast-architecture.md — its fixed items carry our `category` +
   `category_group`, the raw label as `source_category`). `plugin/scripts/` keeps its own
   older copies.
@@ -410,7 +412,10 @@ fixed − variable. Non-spending rows (income, card bills, own transfers, saving
 
 ### Dedup rules (important)
 
-- Two records are the **same purchase** when `date` and `abs(amount)` match.
+- Two records are the **same purchase** when `date` and `abs(amount)` match. One
+  exception (`digest.merge_shifted_copies`): a RiseUp-only row and a direct row one day
+  apart with the same origin, amount and merchant merge (RiseUp dated APPLE ₪59.50 a day
+  after Max); the direct source's date is kept.
 - **RiseUp is the higher-priority copy** — it carries the spending label and budget
   envelope the raw bank/card dumps lack (inputs to the category, see above), so on a
   conflict RiseUp's fields win; the direct source is

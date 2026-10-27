@@ -10,6 +10,10 @@ export interface BillItem {
   due_date: string | null;
   status: "paid" | "upcoming" | "overdue";
   paid_on: string | null;
+  /** A utility not charged yet this cycle: the amount is the median of its last bills. */
+  estimated?: boolean;
+  /** A utility's billing cadence in months (water and gas: 2). */
+  cadence_months?: number;
 }
 
 export interface Bills {
