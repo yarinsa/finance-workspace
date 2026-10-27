@@ -61,7 +61,7 @@ function rememberCategory(name: string) {
 function Header({ tx, current }: { tx: EditTarget; current?: string }) {
   return (
     <SheetHeader>
-      <SheetTitle className="text-lg font-bold">
+      <SheetTitle className="font-display text-xl font-medium">
         {tx.merchant} <span className="tabular-nums">{shekel(-Math.abs(tx.amount), { decimals: 2 })}</span>
       </SheetTitle>
       <SheetDescription>{current != null ? (current ? `קטגוריה: ${current}` : "ללא קטגוריה") : " "}</SheetDescription>

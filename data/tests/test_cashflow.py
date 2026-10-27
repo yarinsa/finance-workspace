@@ -8,15 +8,29 @@ class TestBucketing:
     def test_loan_categories_map_to_loans_bucket(self):
         assert cashflow._expense_bucket("הלוואה") == "loans"
         assert cashflow._expense_bucket("משכנתא") == "loans"
-        assert cashflow._expense_bucket("תשלומים") == "loans"
+
+    def test_an_installment_is_running_spend_not_a_loan(self):
+        # Metro Motor's ₪500 installment is the motorcycle (רכב); "תשלומים" was only
+        # RiseUp saying how it was paid, and is no category any more.
+        assert cashflow._expense_bucket("רכב") == "running"
+        assert cashflow._expense_bucket("תשלומים") == "running"
+
+    def test_taxes_and_fees(self):
+        assert cashflow._expense_bucket("מס הכנסה") == "taxes"
+        assert cashflow._expense_bucket("עמלות") == "taxes"
 
     def test_unmapped_expense_falls_through_to_running(self):
         assert cashflow._expense_bucket("uncategorized") == "running"
         assert cashflow._expense_bucket(None) == "running"
 
-    def test_benefits_income_is_classified(self):
+    def test_only_pay_is_work_income(self):
+        assert cashflow._income_bucket("משכורת") == "work"        # העברת משכורת ₪26,144
+        assert cashflow._income_bucket("מילואים") == "work"       # מענק מילוא ₪5,808
         assert cashflow._income_bucket("ביטוח לאומי") == "benefits"
-        assert cashflow._income_bucket(None) == "work"     # default income bucket
+        # the ₪4,000 אקסלנס withdrawal and the ₪3,400 rent share are not pay
+        assert cashflow._income_bucket("השקעה וחיסכון") == "other"
+        assert cashflow._income_bucket("העברות") == "other"
+        assert cashflow._income_bucket(None) == "other"
 
 
 class TestAggregateByMonth:
@@ -296,30 +310,44 @@ class TestTrailingAverage:
         assert pace["average"] is None
 
 
-class TestFixedExpenses:
-    """Cashflow page's "הוצאות קבועות" review — real October 2026 fixed items."""
+def fx_row(day, description, amount, category, merchant=None, **kw):
+    """A stamped fixed ledger row (finance/categories.stamp output)."""
+    return {"date": day, "description": description, "amount": amount, "category": category,
+            "merchant": merchant or description, "kind": "fixed", **kw}
 
-    FORECAST = {"current_month": {"forecast_month": "2026-10", "expenses": {"fixed_items": [
-        {"name": 'הו"ק לעיין ניהול נכסי,לסניף 20-406', "category": "דיור", "amount": 6800},
-        {"name": "משכנתא — full next installment (due 2026-10-10)", "category": "משכנתא", "amount": 5817.26},
-        {"name": "פרעון הלוואה", "category": "הלוואה", "amount": 1844.42},
-        {"name": "פרטנר תקשורת בע\"מ", "category": "תקשורת", "amount": 135.14},
-        {"name": "APPLE.COM/BILL         CORK          IRL", "category": "דיגיטל", "amount": 117},
-        {"name": "APPLE.COM/BILL         CORK          IRL", "category": "דיגיטל", "amount": 60},
-        {"name": "SpotifyIL", "category": "דיגיטל", "amount": 43.9},
-        {"name": 'אקספון 018 בע"מ', "category": "תקשורת", "amount": 34.9},
-        {"name": "טלזר 019 שירותי תקשורת בינלאומים", "category": "תקשורת", "amount": 10},
-        {"name": "דמי כרטיס /הנפקה", "category": "עמלות", "amount": 98.4},
-        {"name": "ח.י אלקטרוניקה -טרקלין חש", "category": "מוצרי חשמל לבית", "amount": 231},
-    ]}}}
+
+class TestFixedExpenses:
+    """Cashflow page's "הוצאות קבועות" review — real October 2026 fixed ledger rows."""
+
     LEDGER = [
-        {"date": "2026-10-11", "amount": -10, "description": "טלזר 019 שירותי תקשורת בינלאומים"},
-        {"date": "2026-09-11", "amount": -10, "description": "טלזר 019 שירותי תקשורת בינלאומים"},
-        {"date": "2026-09-09", "amount": -43.9, "description": "SpotifyIL"},
+        fx_row("2026-10-11", 'הו"ק לעיין ניהול נכסי,לסניף 20-406', -6800, "שכר דירה",
+               merchant='הו"ק לעיין ניהול נכסי'),
+        fx_row("2026-10-11", "דסק-משכנתא,חיוב", -5817.25, "משכנתא", merchant="דסק-משכנתא"),
+        fx_row("2026-10-02", "פרעון הלוואה", -1844.42, "הלוואה"),
+        fx_row("2026-10-04", "פרעון הלוואה", -867.8, "הלוואה"),
+        fx_row("2026-10-25", 'פרטנר תקשורת בע"מ', -135.14, "תקשורת"),
+        fx_row("2026-10-13", "APPLE.COM/BILL         CORK    ", -59.5, "דיגיטל", merchant="APPLE.COM/BILL"),
+        fx_row("2026-10-13", "APPLE.COM/BILL         CORK    ", -39.9, "דיגיטל", merchant="APPLE.COM/BILL"),
+        fx_row("2026-10-10", "SPOTIFY P47D8D0286 684488", -43.9, "דיגיטל", merchant="SPOTIFY P47D8D"),
+        fx_row("2026-10-13", 'אקספון 018 בע"מ', -34.9, "תקשורת"),
+        fx_row("2026-10-11", "טלזר 019 שירותי תקשורת בינלאומ", -10, "תקשורת",
+               merchant="טלזר 019 שירותי תקשורת בינלאומים"),
+        fx_row("2026-10-23", "דמי כרטיס /הנפקה", -102.38, "עמלות"),
+        fx_row("2026-10-02", "מטרו מוטור שווק (1981)בעמ", -500, "רכב", source_category="תשלומים"),
+        fx_row("2026-10-07", "ליברה עסקאות ביטוח", -30, "ביטוח", source_category="תשלומים"),
+        # September's Clal health premium: monthly, not charged yet in October
+        fx_row("2026-08-28", "כלל ב.בריאות ה.ק", -128.77, "בריאות", recurring=True),
+        fx_row("2026-09-28", "כלל ב.בריאות ה.ק", -129.14, "בריאות", recurring=True),
+        # not fixed: the review leaves it out
+        {"date": "2026-10-05", "description": "פז אפליקצית-YELLOW", "amount": -36.88, "category": "דלק",
+         "merchant": "פז אפליקצית-YELLOW", "kind": "variable"},
     ]
 
     def fx(self):
-        return cashflow.fixed_expenses(self.FORECAST, self.LEDGER, "2026-10")
+        return cashflow.fixed_expenses(self.LEDGER, "2026-10")
+
+    def items(self):
+        return {i["name"]: i for g in self.fx()["groups"] for i in g["items"]}
 
     def test_groups_in_review_order_cheapest_win_first(self):
         keys = [g["key"] for g in self.fx()["groups"]]
@@ -327,35 +355,40 @@ class TestFixedExpenses:
 
     def test_rent_and_loans_are_committed_not_cuts(self):
         committed = next(g for g in self.fx()["groups"] if g["key"] == "committed")
-        assert committed["total"] == 14461.68
+        assert committed["total"] == round(6800 + 5817.25 + 1844.42 + 867.8, 2)
         assert committed["ease"] == "committed"
 
+    def test_metro_installment_waits_but_an_insurance_premium_is_a_bill(self):
+        groups = {g["key"]: [i["name"] for i in g["items"]] for g in self.fx()["groups"]}
+        assert groups["installments"] == ["מטרו מוטור שווק (1981)בעמ"]
+        assert "ליברה עסקאות ביטוח" in groups["bills"]
+
     def test_cuttable_is_fees_plus_subscriptions(self):
-        assert self.fx()["cuttable_total"] == round(98.4 + 117 + 60 + 43.9, 2)
+        assert self.fx()["cuttable_total"] == round(102.38 + 59.5 + 39.9 + 43.9, 2)
+
+    def test_still_expected_monthly_charge_is_listed(self):
+        clal = self.items()["כלל ב.בריאות ה.ק"]
+        assert clal["expected"] and clal["amount"] == 129.14 and clal["category"] == "בריאות"
+        assert not self.items()['פרטנר תקשורת בע"מ']["expected"]
 
     def test_repeated_apple_billing_and_two_call_plans_are_duplicates(self):
-        items = {i["name"]: i for g in self.fx()["groups"] for i in g["items"]}
-        assert items["APPLE.COM/BILL CORK IRL"]["duplicate"]
+        items = self.items()
+        assert items["APPLE.COM/BILL CORK"]["duplicate"]
         assert items['אקספון 018 בע"מ']["duplicate_reason"] == "שיחות לחו״ל"
-        assert items["טלזר 019 שירותי תקשורת בינלאומים"]["duplicate"]
-        assert not items["SpotifyIL"]["duplicate"]
+        assert items["טלזר 019 שירותי תקשורת בינלאומ"]["duplicate"]
+        assert not items["SPOTIFY P47D8D0286 684488"]["duplicate"]
 
     def test_loans_sharing_a_prefix_are_not_duplicates(self):
-        fx = cashflow.fixed_expenses({"current_month": {"forecast_month": "2026-10", "expenses": {"fixed_items": [
-            {"name": "פרעון הלוואה", "category": "הלוואה", "amount": 1844.42},
-            {"name": "פרעון הלוואה", "category": "הלוואה", "amount": 867.8},
-        ]}}}, [], "2026-10")
-        assert not any(i["duplicate"] for i in fx["groups"][0]["items"])
+        committed = next(g for g in self.fx()["groups"] if g["key"] == "committed")
+        assert not any(i["duplicate"] for i in committed["items"])
 
     def test_last_charged_comes_from_the_ledger(self):
-        items = {i["name"]: i for g in self.fx()["groups"] for i in g["items"]}
-        # 019 was cancelled 2026-10-10 — a charge on 10-11 is worth seeing
-        assert items["טלזר 019 שירותי תקשורת בינלאומים"]["last_charged"] == "2026-10-11"
-        assert items["SpotifyIL"]["last_charged"] == "2026-09-09"
-        assert items["פרטנר תקשורת בע\"מ"]["last_charged"] is None
+        items = self.items()
+        assert items["טלזר 019 שירותי תקשורת בינלאומ"]["last_charged"] == "2026-10-11"
+        assert items["כלל ב.בריאות ה.ק"]["last_charged"] == "2026-09-28"
 
-    def test_stale_forecast_gives_nothing(self):
-        assert cashflow.fixed_expenses(self.FORECAST, [], "2026-11") is None
+    def test_month_without_fixed_rows_gives_nothing(self):
+        assert cashflow.fixed_expenses(self.LEDGER, "2027-01") is None
 
 
 def test_inbox_sync_never_stops_the_digest(monkeypatch, capsys):

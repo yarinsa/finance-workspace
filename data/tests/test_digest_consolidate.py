@@ -207,3 +207,36 @@ class TestSpendingSummary:
         ])
         s = digest.spending_summary(ledger)
         assert s["by_category"] == {"מזון": 140.0, "תחבורה": 250.0}
+
+
+
+# --- RiseUp a day after the card ----------------------------------------------------
+
+def _apple(date, source, origin="max", **kw):
+    return {"_source": source, "date": date, "amount": -59.5, "description": kw.pop("description", "APPLE.COM/BILL"),
+            "origin": "leumicard" if source == "riseup" else None, **kw}
+
+
+def test_riseup_copy_a_day_after_the_card_merges():
+    """As the household, APPLE.COM/BILL ₪59.50 on Max 2026-10-14 and RiseUp's copy on
+    2026-10-15 are one charge, not two subscriptions."""
+    out = digest.consolidate_transactions([
+        _apple("2026-10-14", "max", description="APPLE.COM/BILL         CORK          IRL", card_last4="3819"),
+        _apple("2026-10-15", "riseup", category="דיגיטל", budget_type="fixed")])
+    assert len(out) == 1
+    t = out[0]
+    assert (t["date"], t["sources"], t["category"], t["card_last4"]) == ("2026-10-14", ["max", "riseup"], "דיגיטל", "3819")
+
+
+def test_same_price_at_another_merchant_a_day_apart_stays_two():
+    """rivareno ₪70 (RiseUp, 2026-05-16) is not the Max ₪70 at כלל טכני the day before."""
+    out = digest.consolidate_transactions([
+        {"_source": "max", "date": "2026-05-15", "amount": -70.0, "description": "כלל טכני"},
+        {"_source": "riseup", "date": "2026-05-16", "amount": -70.0, "description": "rivareno nahalat binyamin",
+         "origin": "leumicard"}])
+    assert len(out) == 2
+
+
+def test_two_days_apart_stays_two():
+    out = digest.consolidate_transactions([_apple("2026-10-13", "max"), _apple("2026-10-15", "riseup")])
+    assert len(out) == 2

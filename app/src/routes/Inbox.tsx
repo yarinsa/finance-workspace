@@ -38,7 +38,7 @@ export default function Inbox() {
               onClick={() => setParams(t.key === "all" ? {} : { tab: t.key }, { replace: true })}
               className={cn(
                 "shrink-0 rounded-full border px-3.5 py-1.5 text-sm",
-                selected ? "border-brand bg-brand/15 font-bold" : "border-line text-muted-foreground",
+                selected ? "border-brand bg-brand/15 font-semibold" : "border-line text-muted-foreground",
               )}
             >
               {t.label}
@@ -64,7 +64,7 @@ export default function Inbox() {
               <span className="grid size-8 shrink-0 place-items-center rounded-full bg-good/15 text-good">
                 <Check className="size-4" />
               </span>
-              <span className="flex-1 font-bold">{showArchived ? "הארכיון ריק" : "אין כרגע משהו לטפל בו"}</span>
+              <span className="flex-1 font-semibold">{showArchived ? "הארכיון ריק" : "אין כרגע משהו לטפל בו"}</span>
             </div>
           </Card>
         ) : (

@@ -1,8 +1,8 @@
 import { useState } from "react";
 import BudgetEditorSheet from "@/components/BudgetEditorSheet";
-import { BigNumber, Card, CardLabel, Page, Section } from "@/components/common";
+import { BigNumber, Card, CardLabel, Page, Section, StatRow } from "@/components/common";
 import { cashflow, shekel } from "@/lib/data";
-import type { BudgetCategory, Budgets as BudgetsData } from "@/lib/budgets";
+import type { BudgetCategory, BudgetSummary, Budgets as BudgetsData } from "@/lib/budgets";
 
 /** Thin progress bar; overspend fills it fully in red. */
 function Bar({ pct, over }: { pct: number; over?: boolean }) {
@@ -40,6 +40,45 @@ function Hero({ b }: { b: BudgetsData }) {
   );
 }
 
+/** "₪X מתוך ₪Y" when the expectation is above what happened so far. */
+function soFar(actual: number, expected?: number | null) {
+  return expected != null && expected > actual ? `${shekel(actual)} מתוך ${shekel(expected)}` : shekel(actual);
+}
+
+/**
+ * The month in three blocks: fixed (קבוע), variable (משתנה, planned vs. on track
+ * for) and free money — income not assigned to anything, ideally about zero.
+ */
+function ThreeBlocks({ s }: { s: BudgetSummary }) {
+  const v = s.variable;
+  const plan = v.planned ?? v.estimate;
+  return (
+    <Card>
+      <CardLabel>כסף פנוי (לא מתוכנן)</CardLabel>
+      <BigNumber tone={s.left < 0 ? "bad" : undefined}>
+        {s.left < 0 ? `חסרים ${shekel(-s.left)}` : shekel(s.left)}
+      </BigNumber>
+      {s.projected_end != null && (
+        <div className={`text-xs ${s.projected_end < 0 ? "text-bad" : "text-muted-foreground"}`}>
+          {s.projected_end < 0
+            ? `בקצב הנוכחי: חסרים ${shekel(-s.projected_end)} בסוף החודש`
+            : `בקצב הנוכחי: ${shekel(s.projected_end)} בסוף החודש`}
+        </div>
+      )}
+      <div className="mt-2">
+        <StatRow label="הכנסות" value={soFar(s.income.actual, s.income.expected)} />
+        <StatRow label="קבוע" value={soFar(s.fixed.actual, s.fixed.expected)} />
+        <StatRow
+          label={plan != null ? `משתנה · מתוכנן ${shekel(plan)}` : "משתנה"}
+          value={v.projected != null ? `${shekel(v.actual)} · צפוי ${shekel(v.projected)}` : shekel(v.actual)}
+          tone={plan != null && (v.projected ?? v.actual) > plan ? "bad" : undefined}
+        />
+        <StatRow label="הלוואות וחיסכון" value={soFar(s.debt_savings.actual, s.debt_savings.expected)} />
+      </div>
+    </Card>
+  );
+}
+
 function Row({ c, onOpen }: { c: BudgetCategory; onOpen: () => void }) {
   const pct = c.planned > 0 ? (c.spent / c.planned) * 100 : c.spent > 0 ? 100 : 0;
   return (
@@ -47,15 +86,16 @@ function Row({ c, onOpen }: { c: BudgetCategory; onOpen: () => void }) {
       <div className="mb-1.5 flex items-baseline justify-between gap-3">
         <span className="font-semibold">
           {c.name}
-          {c.source === "override" && <span className="ms-1.5 text-xs font-normal text-muted-foreground">מותאם אישית</span>}
+          {c.source === "unplanned" && <span className="ms-1.5 text-xs font-normal text-muted-foreground">לא מתוכנן</span>}
         </span>
-        <span className={`text-sm font-bold tabular-nums ${c.over ? "text-bad" : ""}`}>
-          {c.over ? `${shekel(-c.left)} מעל` : `${shekel(c.left)} נותרו`}
+        <span className={`text-sm font-semibold tabular-nums ${c.over ? "text-bad" : ""}`}>
+          {c.source === "unplanned" ? shekel(c.spent) : c.over ? `${shekel(-c.left)} מעל` : `${shekel(c.left)} נותרו`}
         </span>
       </div>
       <Bar pct={pct} over={c.over} />
       <div className="mt-1.5 text-xs text-muted-foreground tabular-nums">
         {shekel(c.spent)} מתוך {shekel(c.planned)}
+        {c.estimate != null && ` · בחודש רגיל ${shekel(c.estimate)}`}
       </div>
     </button>
   );
@@ -72,6 +112,7 @@ export default function Budgets() {
         </Card>
       ) : (
         <>
+          {b.summary && <ThreeBlocks s={b.summary} />}
           <Hero b={b} />
           <Section title="לפי קטגוריה">
             <Card>

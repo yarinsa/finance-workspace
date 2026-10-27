@@ -31,7 +31,7 @@ export default function NotificationRow({
     >
       <span className={cn("mt-2 size-2.5 shrink-0 rounded-full", DOT[n.severity], !unread && "opacity-40")} aria-hidden />
       <div className="min-w-0 flex-1">
-        <div className={cn("leading-snug", unread ? "font-bold" : "font-medium text-muted-foreground")}>
+        <div className={cn("leading-snug", unread ? "font-semibold" : "font-medium text-muted-foreground")}>
           {n.title}
           {n.amount != null && <span className="ms-2 tabular-nums">{shekel(Math.abs(n.amount))}</span>}
         </div>
@@ -42,7 +42,7 @@ export default function NotificationRow({
             <Link
               to={n.cta.to}
               onClick={() => onRead(n)}
-              className="inline-block rounded-full bg-brand/15 px-3 py-1 text-sm font-bold text-brand no-underline"
+              className="inline-block rounded-full bg-brand/15 px-3 py-1 text-sm font-semibold text-brand no-underline"
             >
               {n.cta.label}
             </Link>

@@ -293,7 +293,7 @@ function Body({ tx, onClose, txn, categories = [], tagNames = [], goals = [], lo
   return (
     <>
       <SheetHeader>
-        <SheetTitle className="text-lg font-bold">{base?.description || tx.merchant}</SheetTitle>
+        <SheetTitle className="font-display text-xl font-medium">{base?.description || tx.merchant}</SheetTitle>
         <SheetDescription className="tabular-nums">
           {key.date.split("-").reverse().join("/")} · {shekel(-Math.abs(tx.amount), { decimals: 2 })}
           {base?.sources?.length ? ` · ${base.sources.join(", ")}` : ""}

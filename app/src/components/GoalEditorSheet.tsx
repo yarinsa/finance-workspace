@@ -112,7 +112,7 @@ function Loader({ goalId, onClose }: { goalId: number | null; onClose: () => voi
   return (
     <>
       <SheetHeader>
-        <SheetTitle className="text-lg font-bold">עריכת יעד</SheetTitle>
+        <SheetTitle className="font-display text-xl font-medium">עריכת יעד</SheetTitle>
         <SheetDescription>{loaded.state === "loading" ? "טוען…" : loaded.message}</SheetDescription>
       </SheetHeader>
       <div className="px-4 pb-6">
@@ -223,7 +223,7 @@ function Form({ goalId, initial, onClose }: { goalId: number | null; initial: Go
   return (
     <>
       <SheetHeader>
-        <SheetTitle className="text-lg font-bold">{isEdit ? "עריכת יעד" : "יעד חדש"}</SheetTitle>
+        <SheetTitle className="font-display text-xl font-medium">{isEdit ? "עריכת יעד" : "יעד חדש"}</SheetTitle>
         {isEdit && <SheetDescription>{initial.description}</SheetDescription>}
       </SheetHeader>
 

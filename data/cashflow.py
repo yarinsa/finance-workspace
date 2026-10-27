@@ -20,7 +20,8 @@ import sys
 from collections import defaultdict
 from datetime import datetime, timezone, timedelta
 
-from finance import offsets
+from finance import categories, offsets
+from finance.merchants import merchant_name
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 DIGESTED = os.path.join(HERE, "digested")
@@ -35,10 +36,9 @@ OUT_HTML = os.path.join(DIGESTED, "cashflow.html")
 CURRENCY = "₪"
 
 # --- Category bucketing -----------------------------------------------------
-# Raw Hebrew categories (from RiseUp / banks) folded into the canonical cashflow
-# buckets the dashboard charts and KPIs agree on. Anything unmapped falls through
-# to "other" (income) or "running" (expense) — the dominant 'uncategorized' bulk
-# is everyday spend, so it reads as running expense.
+# The ledger's category (finance/categories.py) folded into the cashflow buckets
+# the dashboard charts and KPIs agree on. Everyday spend is "running"; income is
+# "work" only when it is pay (salary, reserve duty).
 
 INCOME_BUCKETS = {
     "work": "הכנסות מעבודה",
@@ -54,34 +54,29 @@ EXPENSE_BUCKETS = {
     "other": "אחר",
 }
 
-# raw category -> expense bucket (only the non-"running" overrides need listing)
-EXPENSE_CATEGORY_MAP = {
-    "הלוואה": "loans",
-    "משכנתא": "loans",
-    "תשלומים": "loans",
-    "השקעה וחיסכון": "investments",
-    "ביטוח ופיננסים": "investments",
-    "מוסדות": "taxes",
-    "עמלות": "taxes",
-    "דמי כרטיס": "taxes",
-    "עמלת דמי כרטיס - בנקים": "taxes",
-}
-# raw category -> income bucket (default income -> "work" unless benefit-like)
-INCOME_CATEGORY_MAP = {
-    "קצבה": "benefits",
-    "קצבאות": "benefits",
-    "ביטוח לאומי": "benefits",
-    "העברות": "other",
-    "P2P BIT": "other",
-}
+TAX_CATEGORIES = {"מס הכנסה", "ביטוח לאומי", "עמלות"}
+WORK_INCOME = {"משכורת", "מילואים"}
+BENEFIT_INCOME = {"ביטוח לאומי"}
 
 
 def _expense_bucket(category):
-    return EXPENSE_CATEGORY_MAP.get((category or "").strip(), "running")
+    category = (category or "").strip()
+    if category in categories.DEBT_CATEGORIES:
+        return "loans"
+    if category in TAX_CATEGORIES:
+        return "taxes"
+    if categories.CATEGORY_GROUP.get(category) == "income_savings":
+        return "investments"     # a deposit to a savings product, e.g. הראל פנסיה
+    return "running"
 
 
 def _income_bucket(category):
-    return INCOME_CATEGORY_MAP.get((category or "").strip(), "work")
+    category = (category or "").strip()
+    if category in WORK_INCOME:
+        return "work"
+    if category in BENEFIT_INCOME:
+        return "benefits"
+    return "other"
 
 
 # --- Monthly aggregation ----------------------------------------------------
@@ -438,87 +433,74 @@ def build_charts(months, current_key):
 # --- Orchestration ----------------------------------------------------------
 
 # --- Fixed expenses review ---------------------------------------------------
-# The month's recurring bills (forecast.py's fixed envelopes) grouped by how
-# realistically they can be cut — the "easy recurring cuts" lever in CLAUDE.md.
-# Order = review order: cheapest wins first, committed debt last.
-
-FIXED_GROUPS = [
-    # key, label, ease, what to do about it, categories
-    ("fees", "עמלות", "trivial", "לבקש ויתור מהבנק / חברת האשראי",
-     {"עמלות", "דמי כרטיס", "עמלת דמי כרטיס - בנקים"}),
-    ("subscriptions", "מנויים", "easy", "לבטל מה שלא בשימוש ומה שכפול",
-     {"דיגיטל", "ספר"}),
-    ("bills", "חשבונות ושירותים", "moderate", "להשוות ספקים ולמקח מחדש",
-     {"תקשורת", "חשמל", "מים", "גז", "תמי 4", "ביטוח", "בריאות", "רכב"}),
-    ("installments", "תשלומים ורכישות", "wait", "מסתיימים מעצמם — לא לפתוח חדשים",
-     {"מוצרי חשמל לבית"}),
-    ("committed", "דיור והלוואות", "committed", "פירעון מוקדם / מחזור — לא קיצוץ",
-     {"דיור", "משכנתא", "הלוואה", "תשלומים"}),
-]
+# The month's fixed expenses (ledger rows of kind "fixed", budgets.fixed_items)
+# grouped by how realistically they can be cut — the "easy recurring cuts" lever in
+# CLAUDE.md. Groups and their order are categories.LEVERS: cheapest wins first,
+# committed debt last.
 
 # International-call plans are the same service from different carriers.
 _SAME_SERVICE = [("שיחות לחו״ל", ("018", "019", "טלזר", "אקספון"))]
 
 
-def _merchant_key(name):
-    """'APPLE.COM/BILL   CORK  IRL' → 'APPLE.COM/BILL' — enough to spot repeats."""
-    return " ".join(str(name).split()[:1]).upper()
-
-
-def _last_charged(name, transactions):
-    """Latest ledger date whose description starts like this bill's name."""
-    probe = " ".join(str(name).split())[:10].lower()
+def _last_charged(merchant, transactions):
+    """Latest ledger date this merchant charged."""
     dates = [t["date"][:10] for t in transactions
              if t.get("date") and float(t.get("amount") or 0) < 0
-             and " ".join((t.get("description") or "").split()).lower().startswith(probe)]
+             and (t.get("merchant") or merchant_name(t.get("description"))) == merchant]
     return max(dates) if dates else None
 
 
-def fixed_expenses(forecast, transactions, month_key):
-    """Group this month's fixed bills for a "what can I cut?" review.
+def fixed_expenses(transactions, month_key, start_day=1):
+    """Group this month's fixed expenses for a "what can I cut?" review.
 
-    Each group carries an ``ease`` (trivial → committed) and a one-line lever.
-    Reviewable items (not loans/installments) flag ``duplicate`` when the same
-    merchant bills more than once or two items are the same service (e.g. two international-call plans), and carry
-    ``last_charged`` from the ledger so a cancelled service shows as stale.
-    ``cuttable_total`` sums the fees + subscriptions groups — the low-effort
-    ceiling, not a promise. Returns None without a current-month forecast.
+    Items are the month's kind=fixed ledger rows plus the recurring ones still
+    expected (``budgets.fixed_items``), named by their cleaned description and
+    grouped by ``categories.lever``. Each group carries an ``ease`` (trivial →
+    committed) and a one-line lever. Reviewable items (not loans/installments)
+    flag ``duplicate`` when the same merchant bills more than once or two items
+    are the same service (e.g. two international-call plans), and carry
+    ``last_charged`` so a cancelled service shows as stale. ``cuttable_total``
+    sums the fees + subscriptions groups — the low-effort ceiling, not a promise.
+    Returns None when the month has no fixed expense.
     """
-    cur = (forecast or {}).get("current_month")
-    if not cur or cur.get("forecast_month") != month_key:
+    import bills, budgets
+    rows = budgets.fixed_items(transactions, month_key, start_day)
+    if not rows:
         return None
-    items = cur["expenses"]["fixed_items"]
+    items = []
+    for t in rows:
+        name = bills.clean_name(t.get("description"))
+        merchant = t.get("merchant") or merchant_name(t.get("description"))
+        items.append((t, name, merchant))
 
     counts = defaultdict(int)
-    for it in items:
-        counts[_merchant_key(it["name"])] += 1
+    for _, _, merchant in items:
+        counts[merchant] += 1
     same_service = {}
     for label, needles in _SAME_SERVICE:
-        hits = [it["name"] for it in items if any(n in it["name"] for n in needles)]
+        hits = [name for _, name, _ in items if any(n in name for n in needles)]
         if len(hits) > 1:
             same_service.update({h: label for h in hits})
 
-    by_cat = {c: g for g in FIXED_GROUPS for c in g[4]}
-    other = ("other", "אחר", "moderate", "לבדוק אם עדיין נחוץ", set())
     grouped = defaultdict(list)
-    for it in items:
-        g = by_cat.get((it.get("category") or "").strip(), other)
-        name = " ".join(str(it["name"]).split())
+    for t, name, merchant in items:
+        key = categories.lever(t.get("category"), t.get("source_category"))[0]
         # Repeats only mean something for reviewable bills — several loans or
         # standing orders sharing a "פרעון"/"הו\"ק" prefix are not duplicates.
-        reviewable = g[0] not in ("committed", "installments")
-        dup = reviewable and (counts[_merchant_key(it["name"])] > 1 or it["name"] in same_service)
-        grouped[g[0]].append({
+        reviewable = key not in ("committed", "installments")
+        dup = reviewable and (counts[merchant] > 1 or name in same_service)
+        grouped[key].append({
             "name": name,
-            "category": it.get("category"),
-            "amount": round(float(it["amount"]), 2),
+            "category": t.get("category"),
+            "amount": round(abs(float(t["amount"])), 2),
+            "expected": t["expected"],
             "duplicate": dup,
-            "duplicate_reason": same_service.get(it["name"]) or ("אותו ספק כמה פעמים" if dup else None),
-            "last_charged": _last_charged(it["name"], transactions),
+            "duplicate_reason": same_service.get(name) or ("אותו ספק כמה פעמים" if dup else None),
+            "last_charged": _last_charged(merchant, transactions),
         })
 
     groups = []
-    for key, label, ease, lever, _ in [*FIXED_GROUPS, other]:
+    for key, label, ease, lever in categories.LEVERS:
         rows = sorted(grouped.get(key, []), key=lambda r: -r["amount"])
         if rows:
             groups.append({"key": key, "label": label, "ease": ease, "lever": lever,
@@ -575,7 +557,11 @@ def build():
     import actions, bills, budgets, goals, history, horizons, spending, validate
     budget_doc = bills.load_budget()
     bills_block = bills.build_bills(budget_doc, ledger, _local_today())
-    budgets_block = budgets.build_budgets(budget_doc, _local_today(), budgets.load_overrides())
+    expected = expected_for_month(forecast, (budget_doc or {}).get("budgetDate"))
+    budgets_block = budgets.build_budgets(
+        budget_doc, transactions, _local_today(), budgets.load_overrides(), ledger=ledger,
+        expected_income=expected["income"] if expected else None)
+    fixed_block = fixed_expenses(ledger, current)
     spending_block = spending.build_spending(transactions, today=_local_today())
     import months_view
     months_view_block = months_view.build_months_view(
@@ -595,7 +581,7 @@ def build():
         "today": charts["today"],
         "pace": {**build_pace(transactions, current, today=_local_today()),
                  "expected": expected_for_month(forecast, current)},
-        "fixed_expenses": fixed_expenses(forecast, ledger, current),
+        "fixed_expenses": fixed_block,
         "charts": {
             **{k: v for k, v in charts.items() if k != "today"},
             "net_worth": proj["chart"],
@@ -620,7 +606,7 @@ def build():
         "months_view": months_view_block,
         "actions": actions.build_actions(
             runway_block, bills_block, budgets_block,
-            fixed_expenses(forecast, ledger, current),
+            fixed_block,
             snapshot.get("syncs", []), _local_today(),
             validate.validation_actions(_load_optional(VALIDATION) or {})),
         "months": [

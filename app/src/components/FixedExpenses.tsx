@@ -22,7 +22,7 @@ function lastCharged(iso?: string | null): { text: string; stale: boolean } | nu
 }
 
 /**
- * Every fixed monthly bill, grouped by how realistically it can be cut —
+ * Every fixed expense of the month (and the monthly ones still to come), grouped by how realistically it can be cut —
  * fees and subscriptions first (open), loans and rent last (collapsed).
  */
 export default function FixedExpenses() {
@@ -68,6 +68,7 @@ export default function FixedExpenses() {
                         <span className="truncate">{it.name}</span>
                         <span className="flex flex-wrap gap-x-2 text-xs text-muted-foreground">
                           {it.category && <span>{it.category}</span>}
+                          {it.expected && <span>צפוי החודש</span>}
                           {lc && <span className={cn(lc.stale && "text-warn")}>{lc.text}</span>}
                           {it.duplicate && (
                             <span className="font-semibold text-warn">כפול · {it.duplicate_reason}</span>

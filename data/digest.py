@@ -323,8 +323,45 @@ def consolidate_transactions(txns):
         t.pop("_legs", None)
         t["horizon"] = horizons.default_horizon(t)   # a manual override replaces it in the view
         out.append({k: v for k, v in t.items() if v is not None})
+    out = merge_shifted_copies(out)
     out.sort(key=lambda r: r["date"], reverse=True)
     return out
+
+
+def merge_shifted_copies(ledger):
+    """Merge a RiseUp-only row into the direct source's copy dated one day apart.
+
+    RiseUp occasionally dates a card charge a day after the card does (APPLE.COM/BILL
+    ₪59.50: Max 2026-10-14, RiseUp 2026-10-15), so the (date, amount) key misses it.
+    Only an unmatched RiseUp row and an unmatched direct row with the same origin,
+    sign, amount and merchant, exactly one day apart, merge — two same-price charges
+    at different institutions or merchants stay apart. Each row merges at most once.
+    The direct source's date is kept (the institution's own record); RiseUp's
+    descriptive fields win as in `consolidate_transactions`."""
+    from finance.merchants import merchant_name
+    direct = {}
+    for t in ledger:
+        if "riseup" not in t["sources"]:
+            k = (t.get("origin"), round(t["amount"], 2), merchant_name(t.get("description")))
+            direct.setdefault(k, []).append(t)
+    used, dropped = set(), set()
+    for r in ledger:
+        if r["sources"] != ["riseup"]:
+            continue
+        k = (r.get("origin"), round(r["amount"], 2), merchant_name(r.get("description")))
+        rd = datetime.date.fromisoformat(r["date"][:10])
+        for o in direct.get(k, []):
+            if id(o) in used or abs((datetime.date.fromisoformat(o["date"][:10]) - rd).days) != 1:
+                continue
+            for f, v in r.items():
+                if f not in ("date", "sources") and v is not None and (f != "description" or v):
+                    o[f] = v
+            o["sources"] = sorted(set(o["sources"]) | {"riseup"})
+            o["horizon"] = horizons.default_horizon(o)
+            used.add(id(o))
+            dropped.add(id(r))
+            break
+    return [t for t in ledger if id(t) not in dropped]
 
 
 # --- PayBox round trips -------------------------------------------------------

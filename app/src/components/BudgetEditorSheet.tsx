@@ -62,11 +62,11 @@ function Body({ c }: { c: BudgetCategory }) {
   return (
     <>
       <SheetHeader>
-        <SheetTitle className="text-lg font-bold">{c.name}</SheetTitle>
+        <SheetTitle className="font-display text-xl font-medium">{c.name}</SheetTitle>
         <SheetDescription className="tabular-nums">
-          מתוכנן {shekel(c.planned)}
-          {c.source === "override" && (
-            <span className="ms-2 rounded-full bg-brand/15 px-2 py-0.5 text-xs font-semibold">מותאם אישית</span>
+          {c.source === "unplanned" ? "לא מתוכנן עדיין" : `מתוכנן ${shekel(c.planned)}`}
+          {c.source === "riseup" && (
+            <span className="ms-2 rounded-full bg-brand/15 px-2 py-0.5 text-xs font-semibold">מ-RiseUp</span>
           )}
         </SheetDescription>
       </SheetHeader>
@@ -96,11 +96,11 @@ function Body({ c }: { c: BudgetCategory }) {
         <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
           <div>
             <div className="text-xs text-muted-foreground">ממוצע {history.length} חודשים</div>
-            <div className="font-bold tabular-nums">{avg != null ? shekel(avg) : "—"}</div>
+            <div className="font-semibold tabular-nums">{avg != null ? shekel(avg) : "—"}</div>
           </div>
           <div>
             <div className="text-xs text-muted-foreground">תקציב מומלץ</div>
-            <div className="font-bold tabular-nums">{suggested != null ? shekel(suggested) : "—"}</div>
+            <div className="font-semibold tabular-nums">{suggested != null ? shekel(suggested) : "—"}</div>
             {suggested != null && suggested !== amount && (
               <button type="button" className="text-xs text-brand underline" onClick={() => setAmount(suggested)}>
                 השתמש בסכום

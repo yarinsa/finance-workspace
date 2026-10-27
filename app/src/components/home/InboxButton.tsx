@@ -13,7 +13,7 @@ export default function InboxButton() {
     >
       <Inbox className="size-5" />
       {count > 0 && (
-        <span className="absolute -top-1 -start-1 grid min-w-5 place-items-center rounded-full bg-bad px-1 text-[11px] font-bold leading-5 text-[var(--lg-on-accent)] tabular-nums">
+        <span className="absolute -top-1 -start-1 grid min-w-5 place-items-center rounded-full bg-bad px-1 text-[11px] font-semibold leading-5 text-[var(--lg-on-accent)] tabular-nums">
           {count}
         </span>
       )}

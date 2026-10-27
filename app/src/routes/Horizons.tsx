@@ -128,7 +128,7 @@ export default function Horizons() {
                   </div>
                 </div>
                 <div className="text-end tabular-nums">
-                  <div className="text-sm font-bold">{pct.toFixed(1)}%</div>
+                  <div className="text-sm font-semibold">{pct.toFixed(1)}%</div>
                   {b && (
                     <div className={`text-xs ${Math.abs(b.gap_pts) <= ON_TRACK ? "text-good" : "text-warn"}`}>
                       {b.gap_pts > 0 ? "+" : ""}
