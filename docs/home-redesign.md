@@ -231,8 +231,15 @@ move to `/metrics`, debt % also as a footer on the חובות lens), `home/Hero`
 
 ### Phase 3 — remaining lenses
 - [x] חובות lens (`history.debt`, `debtLens`). (Property card + `PropertyEditorSheet` shipped in 2b.)
-- [ ] חיסכון and שווי נקי lenses on `history.json`, projection placeholder until ≥14
-      points. Default-lens rule from decision 4.
+- [x] חיסכון and שווי נקי lenses (`savingsLens`, `networthLens`) on `history.positions`,
+      shown from two recorded days, past only (the chart ends at היום; no projection). Days
+      recorded before the apartment was typed in carry its latest valuation, so entering it
+      is not a ₪2.2M jump. Change = since the first recorded day.
+- [x] Backfill: the site bucket keeps every published `snapshot.json` version, so
+      `data/history.py backfill FILE...` seeds `position_snapshots` from them, keeping only
+      days whose coverage (bank accounts, loans, savings accounts) matches today's: before
+      10-24 the Leumi loan 66730014 was unread and a liquid deposit still counted, which
+      would draw moves that never happened. Seeded 10-25 and 10-26.
 
 ### Phase 4 — polish
 - [ ] Scrub readout, view transitions into detail pages, desktop layout.

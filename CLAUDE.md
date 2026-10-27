@@ -336,7 +336,10 @@ Scraped sources only know today, so `data/history.py` (called from `cashflow.py`
 bank's running-balance chain are measured, earlier days are walked back through its ledger;
 `measured_from` marks the line), `debt` (month-start loan balances, 12 months back by reverse
 amortization, 36 ahead on `projection.amortize_loans`) and `positions` (one row a day in Postgres
-`position_snapshots`, recorded by every digest; best-effort, a dead DB gives `[]`).
+`position_snapshots`, recorded by every digest; best-effort, a dead DB gives `[]`), which feed
+the שווי נקי and חיסכון lenses. Older days can be seeded from the S3 object versions of
+`data/snapshot.json` with `poetry run python data/history.py backfill FILE...`; it keeps only
+snapshots whose accounts, loans and savings match today's (`history.coverage`).
 
 The apartment is an **asset** typed in by hand (`assets` table, `db/asset_store.py`,
 GraphQL `assetCreate` / `assetUpdate`; `valuation_source` is `manual` until an estimate exists).

@@ -20,8 +20,9 @@ import json
 import os
 import sys
 from collections import defaultdict
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 HERE = Path(__file__).resolve().parent
 CASH_DAYS = 90
@@ -206,6 +207,68 @@ def positions(snapshot, as_of):
         sys.path.remove(db)
 
 
+LOCAL_TZ = ZoneInfo("Asia/Jerusalem")
+
+
+def coverage(snapshot):
+    """What a snapshot's totals are made of: its bank accounts, loans and savings accounts.
+
+    Two positions are comparable only when their coverage matches; otherwise a source joining
+    or a loan being read for the first time would show as money moving."""
+    from digest import RISEUP_ORIGIN
+
+    def account(a):   # RiseUp's copy of an account and the direct scrape are the same account
+        inst = a.get("institution") or a.get("source")
+        return RISEUP_ORIGIN.get(inst, inst), "".join(c for c in str(a.get("account_id") or a.get("label")) if c.isalnum())
+
+    return (
+        frozenset(account(a) for a in snapshot.get("bank_accounts", [])),
+        frozenset((l.get("lender") or l.get("source"), l.get("loan_id") or l.get("id")) for l in snapshot.get("loans", [])),
+        frozenset((s.get("institution"), s.get("topic_id"), s.get("label")) for s in snapshot.get("savings", [])),
+    )
+
+
+def snapshot_day(snapshot):
+    """The local date a snapshot was generated on (``generated_at`` carries its offset)."""
+    return datetime.fromisoformat(snapshot["generated_at"]).astimezone(LOCAL_TZ).date()
+
+
+def backfill_days(snapshots, reference):
+    """``{date: position}`` for the published snapshots whose coverage matches ``reference``.
+
+    The last snapshot of a day wins. Used once to seed position_snapshots from the site
+    bucket's object versions, which predate the daily recording."""
+    want = coverage(reference)
+    out = {}
+    for snap in sorted(snapshots, key=lambda s: s["generated_at"]):
+        if coverage(snap) == want:
+            out[snapshot_day(snap)] = position_of(snap)
+    return out
+
+
+def backfill(paths, reference_path=None):
+    """Record the comparable days among ``paths`` that position_snapshots does not have yet."""
+    import goals
+    url = goals.database_url()
+    if not url:
+        sys.exit("history backfill: DATABASE_URL is not set")
+    ref = Path(reference_path) if reference_path else data_dir() / "digested" / "snapshot.json"
+    snaps = [json.loads(Path(p).read_text(encoding="utf-8")) for p in paths]
+    days = backfill_days(snaps, json.loads(ref.read_text(encoding="utf-8")))
+    sys.path.insert(0, str(HERE.parent / "db"))
+    import position_store
+    from ledger import connect
+    with connect(url) as conn:
+        have = {p["date"] for p in position_store.series(conn)}
+        for day, pos in sorted(days.items()):
+            if day.isoformat() in have:
+                print(f"  {day}  kept (already recorded)")
+                continue
+            position_store.record(conn, day, **pos)
+            print(f"  {day}  net worth {pos['net_worth']:>14,.2f}  savings {pos['savings']:>12,.2f}")
+    print(f"{len(days)} of {len(snaps)} snapshots comparable with {ref.name}")
+
+
 def build(snapshot, as_of, root=None, record=True):
     """The ``cashflow.json`` -> ``history`` block."""
     return {
@@ -216,6 +279,10 @@ def build(snapshot, as_of, root=None, record=True):
 
 
 if __name__ == "__main__":
+    if sys.argv[1:2] == ["backfill"]:
+        # poetry run python data/history.py backfill SNAPSHOT.json ...  (see the docstring of backfill)
+        backfill(sys.argv[2:])
+        sys.exit(0)
     snap = json.loads((data_dir() / "digested" / "snapshot.json").read_text(encoding="utf-8"))
     h = build(snap, date.today(), record=False)
     c = h["cash"]
