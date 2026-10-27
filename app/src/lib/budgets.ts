@@ -51,11 +51,18 @@ export interface BudgetSummary {
   variable: BudgetBlock & {
     /** Σ per-category median of the last 3–6 cycles; null with too little history. */
     estimate: number | null;
+    /** The budget lines' total: what is planned for variable spending this cycle. */
+    planned?: number | null;
+    /** actual + estimate × the share of the cycle still ahead. */
+    projected?: number | null;
+    days_left?: number;
     categories: { name: string; actual: number; estimate: number | null }[];
   };
   /** Loans, the mortgage and savings deposits. */
   debt_savings: BudgetBlock;
-  /** income − fixed − variable − debt_savings, each at its `value`. */
+  /** Free money: income − fixed − debt_savings − the variable plan. Aim for ~0. */
   left: number;
+  /** Where the cycle is heading: the same with variable at `projected`. */
+  projected_end?: number | null;
   estimate_cycles: number;
 }

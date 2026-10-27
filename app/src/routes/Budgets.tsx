@@ -46,23 +46,32 @@ function soFar(actual: number, expected?: number | null) {
 }
 
 /**
- * The month in three blocks: fixed (קבוע), variable (משתנה, against the usual
- * month) and what is left — income minus both, minus loans and savings.
+ * The month in three blocks: fixed (קבוע), variable (משתנה, planned vs. on track
+ * for) and free money — income not assigned to anything, ideally about zero.
  */
 function ThreeBlocks({ s }: { s: BudgetSummary }) {
+  const v = s.variable;
+  const plan = v.planned ?? v.estimate;
   return (
     <Card>
-      <CardLabel>החודש בשלושה חלקים</CardLabel>
+      <CardLabel>כסף פנוי (לא מתוכנן)</CardLabel>
       <BigNumber tone={s.left < 0 ? "bad" : undefined}>
-        {s.left < 0 ? `חסרים ${shekel(-s.left)}` : `${shekel(s.left)} נשארים`}
+        {s.left < 0 ? `חסרים ${shekel(-s.left)}` : shekel(s.left)}
       </BigNumber>
+      {s.projected_end != null && (
+        <div className={`text-xs ${s.projected_end < 0 ? "text-bad" : "text-muted-foreground"}`}>
+          {s.projected_end < 0
+            ? `בקצב הנוכחי: חסרים ${shekel(-s.projected_end)} בסוף החודש`
+            : `בקצב הנוכחי: ${shekel(s.projected_end)} בסוף החודש`}
+        </div>
+      )}
       <div className="mt-2">
         <StatRow label="הכנסות" value={soFar(s.income.actual, s.income.expected)} />
         <StatRow label="קבוע" value={soFar(s.fixed.actual, s.fixed.expected)} />
         <StatRow
-          label={s.variable.estimate != null ? `משתנה · בחודש רגיל ${shekel(s.variable.estimate)}` : "משתנה"}
-          value={shekel(s.variable.actual)}
-          tone={s.variable.estimate != null && s.variable.actual > s.variable.estimate ? "bad" : undefined}
+          label={plan != null ? `משתנה · מתוכנן ${shekel(plan)}` : "משתנה"}
+          value={v.projected != null ? `${shekel(v.actual)} · צפוי ${shekel(v.projected)}` : shekel(v.actual)}
+          tone={plan != null && (v.projected ?? v.actual) > plan ? "bad" : undefined}
         />
         <StatRow label="הלוואות וחיסכון" value={soFar(s.debt_savings.actual, s.debt_savings.expected)} />
       </div>

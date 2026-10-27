@@ -29,11 +29,18 @@ months_view splits a month (`months_view.classify_expense`):
                   expected = actual + the recurring fixed charges of the previous
                   two cycles that have not hit yet (`fixed_items`)
     variable      kind=variable rows, actual so far; estimate = Σ over variable
-                  categories of the median spend of the last 3-6 cycles
+                  categories of the median spend of the last 3-6 cycles; planned =
+                  the budget lines' total; projected = actual + estimate × the share
+                  of the cycle still ahead (a daily run-rate, so a trip-heavy
+                  median does not swamp the last days of the cycle)
     debt_savings  loans, the mortgage and savings deposits; expected like fixed
     income        actual so far; expected = the forecast's income for this month
-    left          income - fixed - variable - debt_savings, each block at
-                  max(actual, expected/estimate)
+    left          free money: income - fixed - debt_savings - the variable PLAN.
+                  Not planned for anything; the household aims for ~0 (every
+                  shekel assigned). Fixed / debt at expected, income at
+                  max(actual, expected).
+    projected_end where the cycle is heading: the same, with variable at
+                  `projected` instead of the plan
 
 Pure `build_budgets` is called from cashflow.build(); the module is also
 importable on its own. Read-only over scraped data.
@@ -218,7 +225,7 @@ def _median_estimates(rows, month, start_day):
     return {n: median(p.get(n, 0.0) for p in per) for n in names}
 
 
-def build_summary(rows, ledger, month, start_day, expected_income=None):
+def build_summary(rows, ledger, month, start_day, expected_income=None, planned_variable=None, as_of=None):
     """The `summary` block (see the module docstring). `rows` is the offset-netted
     ledger (`offsets.cashflow_view`), `ledger` the real money (fixed matching)."""
     import months_view
@@ -254,10 +261,17 @@ def build_summary(rows, ledger, month, start_day, expected_income=None):
     by_cat = [{"name": n, "actual": r(var_actual.get(n, 0.0)), "estimate": r(estimates.get(n))}
               for n in set(var_actual) | set(estimates)]
     by_cat.sort(key=lambda c: -max(c["actual"], c["estimate"] or 0))
-    blocks[VARIABLE] = {"actual": r(actual[VARIABLE]), "estimate": r(est),
-                        "value": r(max(actual[VARIABLE], est or 0.0)), "categories": by_cat}
-    blocks["left"] = r(blocks["income"]["value"] - blocks[FIXED]["value"]
-                       - blocks[VARIABLE]["value"] - blocks["debt_savings"]["value"])
+    start, end = cycle_bounds(month, start_day)
+    cycle_days = (end - start).days + 1
+    days_left = cycle_days if as_of is None else min(max((end - as_of).days + 1, 0), cycle_days)
+    projected = actual[VARIABLE] + (est or 0.0) * days_left / cycle_days
+    blocks[VARIABLE] = {"actual": r(actual[VARIABLE]), "estimate": r(est), "planned": r(planned_variable),
+                        "projected": r(projected), "value": r(projected), "days_left": days_left,
+                        "categories": by_cat}
+    committed = blocks["income"]["value"] - blocks[FIXED]["value"] - blocks["debt_savings"]["value"]
+    plan = planned_variable if planned_variable is not None else (est or 0.0)
+    blocks["left"] = r(committed - plan)
+    blocks["projected_end"] = r(committed - projected)
     blocks["estimate_cycles"] = len(_covered_months(rows, month, ESTIMATE_CYCLES))
     return blocks
 
@@ -319,7 +333,8 @@ def build_budgets(budget, transactions, as_of, overrides=None, ledger=None, expe
         "left": left,
         "per_day": round(left / days_left, 2) if left > 0 and days_left else None,
         "categories": rows,
-        "summary": build_summary(transactions, ledger, month, start_day, expected_income),
+        "summary": build_summary(transactions, ledger, month, start_day, expected_income,
+                                 planned_variable=planned, as_of=as_of),
     }
 
 

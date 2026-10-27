@@ -224,7 +224,20 @@ class TestSummary:
         assert s["fixed"] == {"actual": 6800.0, "expected": 6929.14, "value": 6929.14}
         assert s["debt_savings"]["value"] == 1844.42
         assert s["variable"]["actual"] == 43.68 and s["variable"]["estimate"] is None
-        assert s["left"] == round(27163.8 - 6929.14 - 43.68 - 1844.42, 2)
+        assert s["variable"]["planned"] == 200
+        # free money: what is not planned for anything (the ₪200 transport line is planned)
+        assert s["left"] == round(27163.8 - 6929.14 - 1844.42 - 200, 2)
+        assert s["projected_end"] == round(27163.8 - 6929.14 - 1844.42 - 43.68, 2)
+
+    def test_variable_projection_scales_the_estimate_by_days_left(self):
+        """With a ₪3,000 usual month and 4 of 31 days left, the rest of the cycle adds
+        about ₪387, not the whole ₪3,000 a trip-heavy median would."""
+        past = [row(f"2026-{m:02d}-10", "WOLT", -3000.0, "אוכל בחוץ") for m in (5, 6, 7, 8, 9)]
+        cur = [row("2026-10-10", "WOLT", -1000.0, "אוכל בחוץ")]
+        s = build([env("אוכל בחוץ", 2500)], past + cur, as_of=date(2026, 10, 28))["summary"]
+        v = s["variable"]
+        assert (v["estimate"], v["days_left"]) == (3000.0, 4)
+        assert v["projected"] == round(1000 + 3000 * 4 / 31, 2)
 
     def test_actual_income_counts_when_above_the_forecast(self):
         assert self.summary(expected_income=20000)["income"]["value"] == 26144.0
