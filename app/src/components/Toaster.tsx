@@ -11,7 +11,7 @@ export function Toaster() {
     <div
       aria-live="polite"
       className="pointer-events-none fixed inset-x-0 z-50 flex justify-center px-4"
-      style={{ bottom: "calc(env(safe-area-inset-bottom) + 96px)" }}
+      style={{ bottom: "calc(var(--tabbar-total) + 12px)" }}
     >
       {t && (
         <div

@@ -99,7 +99,7 @@ export default function HomeBand({ onQuickActions }: { onQuickActions: () => voi
   return (
     <section
       aria-label="תמונת מצב"
-      className="relative -mx-4 -mt-4 overflow-hidden px-4 pt-[calc(env(safe-area-inset-top)+12px)] pb-14 text-[var(--hero-text)] md:mx-0 md:mt-0 md:rounded-[var(--lg-radius)] md:pt-6"
+      className="relative -mx-4 -mt-4 overflow-hidden px-4 pt-[calc(env(safe-area-inset-top)+4px)] pb-14 text-[var(--hero-text)] md:mx-0 md:mt-0 md:rounded-[var(--lg-radius)] md:pt-6"
       style={{ background: "var(--hero-bg)" }}
     >
       <header className="flex items-start justify-between gap-3">

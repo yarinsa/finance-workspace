@@ -3,7 +3,7 @@ import { groupOf, groups, routes } from "@/routes";
 import { useSidebar } from "@/components/ui/sidebar";
 import { cn } from "@/lib/utils";
 
-const TAB = "flex min-w-0 flex-1 flex-col items-center justify-center gap-1 py-2 text-[11px] font-medium transition-colors duration-200 active:scale-95";
+const TAB = "flex min-w-0 flex-1 flex-col items-center justify-center gap-0.5 pt-1.5 text-[11px] font-medium transition-colors duration-200 active:scale-95";
 
 /**
  * Bottom navigation for phones (Empathy-style): a cream bar of labelled tabs, the active one
@@ -23,9 +23,9 @@ export function MobileTabBar() {
     <nav
       aria-label="ניווט ראשי"
       className="tab-bar fixed inset-x-0 bottom-0 z-40 border-t border-line bg-[color-mix(in_srgb,var(--lg-bg)_92%,transparent)] backdrop-blur-xl md:hidden"
-      style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
+      style={{ paddingBottom: "var(--tabbar-inset)" }}
     >
-      <div className="mx-auto flex h-16 max-w-md items-stretch px-2">
+      <div className="mx-auto flex h-[var(--tabbar-h)] max-w-md items-stretch px-2">
         {tabs.map(({ key, path, label, icon: Icon }) => {
           const on = active === key && !openMobile;
           return (
