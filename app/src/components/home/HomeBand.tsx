@@ -11,7 +11,7 @@ import {
 import { cn } from "@/lib/utils";
 import { cashflow, daysSince, shekel, snapshot } from "@/lib/data";
 import { useInboxCount } from "@/lib/inbox";
-import { cashLens, defaultLens, LENS_KEY, spendLens, type Lens, type LensKey } from "@/lib/lenses";
+import { cashLens, debtLens, defaultLens, LENS_KEY, spendLens, type Lens, type LensKey } from "@/lib/lenses";
 import LensChart from "./LensChart";
 import Signal from "./Signal";
 
@@ -23,9 +23,9 @@ function storage(): Storage | undefined {
   }
 }
 
-/** The lenses this build has data for, in tab order. Net worth, savings and debt join in Phase 3. */
+/** The lenses this build has data for, in tab order. Net worth and savings join once positions are recorded. */
 function buildLenses(): Lens[] {
-  return [spendLens(cashflow.pace), cashLens(cashflow.history, cashflow.runway)].filter((l): l is Lens => l != null);
+  return [spendLens(cashflow.pace), cashLens(cashflow.history, cashflow.runway), debtLens(cashflow.history)].filter((l): l is Lens => l != null);
 }
 
 function freshness(): string {
@@ -99,7 +99,7 @@ export default function HomeBand({ onQuickActions }: { onQuickActions: () => voi
   return (
     <section
       aria-label="תמונת מצב"
-      className="relative -mx-4 -mt-4 overflow-hidden px-4 pt-[calc(env(safe-area-inset-top)+12px)] pb-14 text-[var(--hero-text)] md:mx-0 md:mt-0 md:rounded-[var(--lg-radius)] md:pt-6"
+      className="relative -mx-4 -mt-4 overflow-hidden px-4 pt-[calc(env(safe-area-inset-top)+4px)] pb-14 text-[var(--hero-text)] md:mx-0 md:mt-0 md:rounded-[var(--lg-radius)] md:pt-6"
       style={{ background: "var(--hero-bg)" }}
     >
       <header className="flex items-start justify-between gap-3">

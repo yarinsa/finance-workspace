@@ -81,7 +81,7 @@ export function PwaStatus() {
       {updateReady && (
         <div
           className="fixed inset-x-4 z-50 flex items-center justify-between gap-3 rounded-2xl border bg-background px-4 py-3 text-sm shadow-lg md:inset-x-auto md:start-4 md:w-80"
-          style={{ bottom: "calc(env(safe-area-inset-bottom) + 96px)" }}
+          style={{ bottom: "calc(var(--tabbar-total) + 12px)" }}
           role="status"
         >
           <span className="font-semibold">גרסה חדשה זמינה</span>

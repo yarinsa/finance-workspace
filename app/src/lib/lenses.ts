@@ -143,6 +143,32 @@ export function spendLens(pace: Pace | undefined): Lens | null {
   };
 }
 
+/**
+ * חובות: loan + mortgage principal at each month start, 12 months back (reverse-amortized, so
+ * estimated) to 36 ahead on the schedules. No delta: the past is never measured here.
+ */
+export function debtLens(history: History | undefined): Lens | null {
+  const pts = history?.debt ?? [];
+  const i = pts.findIndex((p) => p.kind === "actual");
+  if (i < 0) return null;
+  const series: LensPoint[] = pts.map((p, k) => ({
+    x: p.month,
+    actual: k <= i ? p.total : undefined,
+    projected: k >= i ? p.total : undefined,
+    estimated: p.kind === "estimated",
+  }));
+  return {
+    key: "debt",
+    label: "חובות",
+    value: pts[i].total,
+    delta: null,
+    series,
+    todayIndex: i,
+    to: "/networth",
+    note: "קרן ההלוואות והמשכנתא · לפני היום משוער, אחרי לפי לוח הסילוקין",
+  };
+}
+
 // ---- the corner signal --------------------------------------------------------------
 
 export type SignalMode = "ratio" | "safe";

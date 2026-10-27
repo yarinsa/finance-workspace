@@ -106,6 +106,19 @@ The palette has no red or amber, so `bad` is a muted terracotta and `warn` an oc
 - Planned (Phase 2b, `docs/home-redesign.md`): `WeekStrip` (filled circle on today, dots on
   debit days), the home band with lenses (`lib/lenses.ts`), `AccountCards`, search pill + chips.
 
+## iPhone (installed PWA) layout
+
+- `black-translucent` + `viewport-fit=cover`: the status bar is transparent with white text and
+  **`theme-color` is ignored** in standalone, so the colour behind the status bar is whatever the page
+  paints there. Pad with `env(safe-area-inset-top)` (never a fixed 44/59px); the home band uses
+  `inset + 4px`. Pages with a cream top get white status-bar text on cream: give them a dark
+  `env(safe-area-inset-top)` strip if that ever matters.
+- Bottom tab bar: `--tabbar-h` 52px + `--tabbar-inset: max(env(safe-area-inset-bottom) - 12px, 8px)`
+  (≈22px on Face ID phones). Never remove the inset entirely (labels on the home indicator), and reserve
+  the space once: page padding, the toast and the update banner use `--tabbar-total`.
+- No `backdrop-filter` header over the home band (it tints the status-bar strip); the sticky mobile
+  header is hidden on `/overview`.
+
 ## How you work
 
 1. Read the screen and the primitives first; reuse before you add. A new primitive goes in
@@ -129,6 +142,7 @@ The palette has no red or amber, so `bad` is a muted terracotta and `warn` an oc
 - 2026-10-27: Tailwind default palette/fonts/shadows reset; `shadow-sm/md/lg` are our calm ones.
 - 2026-10-27: Calm copy: no emoji, no "חריגה"; colour on numbers not bars.
 - 2026-10-27: Bottom bar keeps its structure but gets labels; "עוד" stops being a bright FAB.
+- 2026-10-27: iPhone: tab bar 52px + partial inset (was 64 + 34); band starts 4px below the status bar.
 - 2026-10-27: Home = a teal band with lenses (הוצאות · מזומן · שווי נקי · חיסכון · חובות),
   default מזומן until a property value exists, then שווי נקי; corner signal = spent/income %
   ⇄ safe-to-spend, persisted per device (`localStorage`).

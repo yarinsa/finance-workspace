@@ -29,6 +29,7 @@ function useBandColors(): BandColors {
 
 function tickLabel(x: string): string {
   if (/^\d{4}-\d{2}-\d{2}$/.test(x)) return `${Number(x.slice(8, 10))}.${Number(x.slice(5, 7))}`;
+  if (/^\d{4}-\d{2}$/.test(x)) return `${x.slice(5, 7)}/${x.slice(2, 4)}`;
   return x;
 }
 
