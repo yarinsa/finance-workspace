@@ -3,9 +3,9 @@ import { Link, useSearchParams } from "react-router-dom";
 import { ChevronDown, ChevronLeft, Plus } from "lucide-react";
 import { Money } from "@/components/common";
 import { cn } from "@/lib/utils";
-import { getDataVersion, shekel, snapshot, useDataVersion, type Loan } from "@/lib/data";
+import { getDataVersion, shekel, snapshot, useDataVersion } from "@/lib/data";
 import { shownProperty, usePropertyOverlay } from "@/lib/propertyOverlay";
-import { MortgageDetails } from "@/components/MortgageCard";
+import LoanDetails from "@/components/LoanDetails";
 
 const ROW = "flex w-full items-center gap-3 px-5 py-4 text-inherit no-underline transition duration-200 active:bg-panel-2";
 const CARD = `surface ${ROW} active:scale-[.99]`;
@@ -183,72 +183,18 @@ function CashCard({ value }: { value: number }) {
   );
 }
 
-const LENDER: Record<string, string> = { "Bank Discount": "דיסקונט", "Bank Leumi": "לאומי" };
-
-/** "08/2053" from Discount's '20530810' or Leumi's '2028-12-02'. */
-function untilMonth(final?: string): string | null {
-  const d = (final ?? "").replace(/\D/g, "");
-  return d.length >= 6 ? `עד ${d.slice(4, 6)}/${d.slice(0, 4)}` : null;
-}
-
-/** Bank names carry RTL/LTR marks and stray spaces ("\u200fללא ריבית הצטרפות \u200f \u200e2529-1/3\u200e"). */
-function cleanName(name?: string): string {
-  return (name ?? "").replace(/[\u200e\u200f]/g, "").replace(/\s+/g, " ").trim();
-}
-
 /**
- * A loan's title. Discount's names are the product's full description ("הלואה לא צמודה
- * ר.קבועה - דיור מתווה"), too long for a phone, so they are rebuilt from the loan's terms;
- * a name the household would recognise (Leumi's "ללא ריבית הצטרפות 2529-1/3") is kept.
- */
-function loanTitle(l: Loan): string {
-  const name = cleanName(l.name);
-  if (!/^הלו?ואה/.test(name)) return name;
-  const rate = (l.rate_pct ?? 0) < 0.01 ? "ללא ריבית" : l.rate_type === "fixed" ? "ריבית קבועה" : "ריבית משתנה";
-  return [l.index_linked ? "צמודת מדד" : "לא צמודה", rate, name.includes("מתווה") && "מתווה"].filter(Boolean).join(" · ");
-}
-
-/**
- * הלוואות / משכנתא. Loans: one line per loan, largest first, with what it costs a month and
- * when it ends. The mortgage opens to the same details as /networth's mortgage card (rates,
- * mix, tracks). Leumi's unread remainder (its summary total minus the loans it
- * lists) has no schedule, so it says so. No rates: a refunded-interest loan would look costly.
+ * הלוואות / משכנתא: the same breakdown for both (LoanDetails) under the card's total —
+ * rate, payment and payoff, the rate mix, and each loan or track with how much is paid off.
  */
 function DebtCard({ label, category, total }: { label: string; category: "consumer" | "mortgage"; total: number }) {
-  const loans = snapshot.loans.filter((l) => l.category === category).sort((a, b) => (b.balance ?? 0) - (a.balance ?? 0));
+  const loans = snapshot.loans.filter((l) => l.category === category);
   const monthly = loans.reduce((n, l) => n + (l.monthly_payment ?? 0), 0);
   return (
     <CollapsibleCard label={label} sub={monthly ? `${shekel(monthly)} בחודש` : undefined} value={-total}>
-      {category === "mortgage" ? (
-        <div className="pt-4">
-          <MortgageDetails />
-        </div>
-      ) : (
-        <Group title={null}>
-          {loans.map((l) => {
-            const lender = LENDER[l.lender ?? ""] ?? l.lender;
-            return (
-              <Line
-                key={`${l.lender}-${String(l.loan_id)}`}
-                title={loanTitle(l) || label}
-                sub={
-                  l.monthly_payment
-                    ? [lender, `${shekel(l.monthly_payment)} בחודש`, untilMonth(l.final_date)]
-                    : [lender, "הבנק מדווח רק את היתרה"]
-                }
-                value={-(l.balance ?? 0)}
-              />
-            );
-          })}
-        </Group>
-      )}
-      <Link
-        to="/networth"
-        className="mt-1 flex items-center justify-between border-t border-line py-3 text-sm font-medium text-[var(--lg-primary)]"
-      >
-        {category === "mortgage" ? "המשכנתא לאורך זמן" : "החובות לאורך זמן"}
-        <ChevronLeft className="size-4" />
-      </Link>
+      <div className="pt-4">
+        <LoanDetails loans={loans} />
+      </div>
     </CollapsibleCard>
   );
 }

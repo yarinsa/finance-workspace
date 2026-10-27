@@ -319,6 +319,9 @@ export interface Loan {
   index_linked?: boolean;
   monthly_payment?: number;
   payments_remaining?: number;
+  payments_total?: number;
+  original_amount?: number | null;
+  loan_id?: string;
   /** '20530810' (Discount) or '2028-12-02' (Leumi). */
   final_date?: string;
   [k: string]: unknown;
