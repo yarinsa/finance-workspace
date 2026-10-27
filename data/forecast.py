@@ -35,6 +35,8 @@ from collections import defaultdict
 from datetime import date
 from pathlib import Path
 
+from finance import categories
+
 ROOT = Path(__file__).resolve().parent
 BUDGET = ROOT / "riseup" / "raw" / "budget_current.json"
 LEDGER = ROOT / "digested" / "transactions.json"
@@ -46,8 +48,9 @@ FREEZE = ROOT / "freeze.json"
 # gitignored like freeze.json since it holds real payment figures.
 SCHEDULE = ROOT / "mortgage_schedule.json"
 
-# RiseUp tags the mortgage envelope with this expense category. We suppress it
-# and substitute the authoritative next-installment sum from the mortgage data
+# The mortgage envelope's category (finance/categories.py: RiseUp's "משכנתא" label
+# or the ledger's category for its payee, דסק-משכנתא). We suppress it and
+# substitute the authoritative next-installment sum from the mortgage data
 # (see authoritative_mortgage_payment).
 MORTGAGE_EXPENSE = "משכנתא"
 OUT_JSON = ROOT / "digested" / "forecast.json"
@@ -271,8 +274,21 @@ def is_internal_fixed(row):
     return digest.is_internal_transfer({"description": row.get("name") or ""})
 
 
-def build(b, fmonth):
-    """Project a single target month `fmonth` (YYYY-MM) from the envelopes."""
+def envelope_category(details, known=None):
+    """Our category for a fixed envelope: the ledger's for the same payee (the
+    household's edits apply), else the payee's merchant default or RiseUp's label
+    through the taxonomy's SOURCE_ALIASES."""
+    from finance.merchants import merchant_name
+    name = details.get("businessName") or ""
+    return ((known or {}).get(merchant_name(name)) if name else None) \
+        or categories.label_category(name, details.get("expense"))
+
+
+def build(b, fmonth, known=None):
+    """Project a single target month `fmonth` (YYYY-MM) from the envelopes.
+
+    `known` is ``categories.ledger_categories(ledger)``: each payee's category in
+    the ledger, so fixed items carry the same category as their charges."""
     envs = b["envelopes"]
     base_month = b["budgetDate"]
     names = category_names(b)
@@ -285,12 +301,15 @@ def build(b, fmonth):
         if e["type"] != "fixed":
             continue
         d = e.get("details", {})
+        category = envelope_category(d, known)
         # Drop RiseUp's mortgage envelope — substituted below from mortgage data.
-        if d.get("expense") == MORTGAGE_EXPENSE:
+        if category == MORTGAGE_EXPENSE:
             continue
         amt = e.get("originalAmount") or 0
         name = d.get("businessName") or d.get("expense") or e["id"]
-        row = {"name": str(name), "category": d.get("expense"), "amount": abs(amt)}
+        row = {"name": str(name), "category": category,
+               "category_group": categories.group_of(category),
+               "source_category": d.get("expense"), "amount": abs(amt)}
         if is_internal_fixed(row):
             continue
         if d.get("isIncome"):
@@ -302,11 +321,12 @@ def build(b, fmonth):
         fixed_expense.append({
             "name": f"משכנתא — full next installment (due {mort_due})",
             "category": MORTGAGE_EXPENSE,
+            "category_group": categories.group_of(MORTGAGE_EXPENSE),
             "amount": mort_amt,
             "source": "discount-mortgage",
         })
 
-    discretionary = []
+    discretionary = defaultdict(float)
     for e in envs:
         if e["type"] != "trackingCategory":
             continue
@@ -314,10 +334,13 @@ def build(b, fmonth):
         if amt <= 0:
             continue
         cid = e["id"].split("#")[-1]
-        nm = names.get(cid) or names.get(e["id"]) or cid
-        if nm == "__saving-hidden-category__":
-            nm = "השקעה וחיסכון"
-        discretionary.append({"name": nm, "amount": round(amt, 2)})
+        # weekly envelopes (כלכלה#0..#4) carry their name in details, not in the id
+        nm = (((e.get("details") or {}).get("trackingCategory") or {}).get("name")
+              or names.get(cid) or names.get(e["id"]) or cid)
+        # A tracking envelope is a budget line: name it by our category (חופשה ✈️ -> תיירות)
+        nm = "השקעה וחיסכון" if nm == "__saving-hidden-category__" else categories.tracking_category(nm) or nm
+        discretionary[nm] += amt
+    discretionary = [{"name": n, "amount": round(a, 2)} for n, a in discretionary.items()]
 
     income_total = sum(r["amount"] for r in fixed_income)
     fixed_exp_total = sum(r["amount"] for r in fixed_expense)
@@ -351,16 +374,17 @@ def build_all(b, tx):
     """Project HORIZON months forward, sharing one ledger sanity band."""
     base_month = b["budgetDate"]
     band = ledger_band(tx)
+    known = categories.ledger_categories(tx["transactions"])
     months = []
     for off in range(1, HORIZON + 1):
         fmonth = add_months(base_month, off)
-        m = build(b, fmonth)
+        m = build(b, fmonth, known)
         m["horizon_offset"] = off
         m["confidence"] = "high" if off == 1 else "carry-forward"
         months.append(m)
     # The budget month itself: what RiseUp expects for the month in progress.
     # The dashboard sets month-to-date actuals against it ("₪X of ₪Y expected").
-    current = build(b, base_month)
+    current = build(b, base_month, known)
     current["horizon_offset"] = 0
     current["confidence"] = "budget"
     return {

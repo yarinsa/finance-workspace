@@ -207,6 +207,35 @@ USAGE_BASED = {"חשמל", "מים", "גז", "דלק", "כלכלה", "אוכל �
 CATEGORY_KIND = {name: kind for name, _, kind in CATEGORIES}
 CATEGORY_GROUP = {name: group for name, group, _ in CATEGORIES}
 GROUP_NAME = dict(GROUPS)
+GROUP_KEY = {name: key for key, name in GROUPS}
+
+# Debt service: loans and the mortgage. Fixed, but repaid, not cut — the budget's
+# "הלוואות וחיסכון" block, a bill of kind "loan", the "committed" lever.
+DEBT_CATEGORIES = {"הלוואה", "משכנתא"}
+
+# A source label that says the charge is one installment of a purchase (CAL/Max's
+# "עסקאות בתשלומים", RiseUp's "תשלומים"): it ends by itself, whatever was bought.
+INSTALLMENT_LABELS = {"תשלומים", "עסקאות בתשלומים"}
+
+# How a fixed expense can be cut — the "what can I cut?" review (cashflow.fixed_expenses).
+# key, label, ease, what to do about it — in review order: cheapest wins first,
+# committed debt last.
+LEVERS = [
+    ("fees", "עמלות", "trivial", "לבקש ויתור מהבנק / חברת האשראי"),
+    ("subscriptions", "מנויים", "easy", "לבטל מה שלא בשימוש ומה שכפול"),
+    ("bills", "חשבונות ושירותים", "moderate", "להשוות ספקים ולמקח מחדש"),
+    ("installments", "תשלומים ורכישות", "wait", "מסתיימים מעצמם — לא לפתוח חדשים"),
+    ("committed", "דיור והלוואות", "committed", "פירעון מוקדם / מחזור — לא קיצוץ"),
+    ("other", "אחר", "moderate", "לבדוק אם עדיין נחוץ"),
+]
+# group key -> lever key; a category in CATEGORY_LEVER overrides its group. A group
+# not listed (food, home, shopping, leisure, work, misc) is "other".
+GROUP_LEVER = {
+    "housing": "committed", "bills": "bills", "subscriptions": "subscriptions",
+    "transport": "bills", "health": "bills", "insurance": "bills", "finance": "committed",
+}
+CATEGORY_LEVER = {"עמלות": "fees", "ארנונה": "bills", "מס הכנסה": "other"}
+_LEVER = {key: (key, label, ease, text) for key, label, ease, text in LEVERS}
 
 RECURRING_WINDOW = 3      # months either side of the row
 RECURRING_MIN_MONTHS = 3  # distinct months with the same merchant and amount
@@ -248,6 +277,60 @@ def default_category(rec):
         return tracking
     category, _ = merchant_default(rec.get("description"))
     return category or _alias(SOURCE_ALIASES, rec.get("source_category"))
+
+
+def label_category(description=None, source_label=None):
+    """Category of something outside the ledger — a RiseUp fixed envelope's payee
+    and ``expense`` label, a forecast line: merchant default > source label."""
+    category, _ = merchant_default(description)
+    return category or _alias(SOURCE_ALIASES, source_label)
+
+
+def tracking_category(name):
+    """A RiseUp tracking envelope's name as a category, or as a group name when the
+    envelope is a whole group (תחבורה); None for a hidden/empty envelope."""
+    name = (name or "").strip()
+    if not name or name.startswith("__"):
+        return None
+    return _alias(TRACKING_ALIASES, name) or (name if name in GROUP_KEY else None)
+
+
+def ledger_categories(ledger):
+    """{merchant: category} from each merchant's latest categorised ledger row — the
+    category after the household's edits, for labels that are not ledger rows."""
+    out, seen = {}, {}
+    for t in ledger:
+        m, c, d = t.get("merchant") or merchant_name(t.get("description")), t.get("category"), t.get("date") or ""
+        if c and d >= seen.get(m, ""):
+            out[m], seen[m] = c, d
+    return out
+
+
+def group_of(category):
+    """The group name of a category (רכב -> תחבורה), or None."""
+    group = CATEGORY_GROUP.get(category)
+    return GROUP_NAME[group] if group else None
+
+
+def lever(category, source_category=None):
+    """(key, label, ease, lever) of the LEVERS entry for a fixed expense: an
+    installment of a purchase (by its source label, in a category that is not a
+    standing bill — Metro Motor, an appliance; not the ליברה premium) waits it out,
+    else category > group > other."""
+    if source_category in INSTALLMENT_LABELS and CATEGORY_KIND.get(category, VARIABLE) == VARIABLE:
+        return _LEVER["installments"]
+    key = CATEGORY_LEVER.get(category) or GROUP_LEVER.get(CATEGORY_GROUP.get(category), "other")
+    return _LEVER[key]
+
+
+def bill_kind(category):
+    """The bills screen's pill: ``loan`` (debt service), ``subscription`` (group
+    מנויים) or a plain ``bill``."""
+    if category in DEBT_CATEGORIES:
+        return "loan"
+    if CATEGORY_GROUP.get(category) == "subscriptions":
+        return "subscription"
+    return "bill"
 
 
 def default_kind(rec, category):

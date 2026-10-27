@@ -264,19 +264,34 @@ Fri/Sat → Sunday. It reports the low point before payday, overdraft breaches a
 estimated from last month's bill. The app shows it in the month screen's תחזית view
 (`/monthly?view=forecast`; `/runway` redirects there) and as a chart on the home page.
 
-Mint-style monthly views (`docs/plangram-prd/12-mint-cashflow.md`) are generated
-from RiseUp's current budget the same way and written to `cashflow.json`:
-`bills.py` (fixed envelopes as paid/upcoming/overdue, shown on `/monthly`),
-`budgets.py` (tracking-category plan vs. actual per RiseUp cycle, `/budgets`;
-optional overrides in gitignored `data/budgets/budgets.json`), and `spending.py`
+Mint-style monthly views (`docs/plangram-prd/12-mint-cashflow.md`) are written to
+`cashflow.json`. They read the ledger's `category` / `kind` (see "Categories and kind");
+RiseUp's budget still supplies the *plan*:
+`bills.py` (`/monthly`) — one row per RiseUp `fixed` envelope (the list, the expected
+amount and day: it predicts usage-priced and bi-monthly bills the ledger's recurrence
+rules don't call fixed) as paid/upcoming/overdue; category = the ledger's for the payee,
+kind (loan/subscription/bill) = `categories.bill_kind`, and a ledger charge from the same
+merchant (±15%, any amount for electricity/water/gas) marks it paid when RiseUp has not
+matched it yet. `budgets.py` (`/budgets`) — one line per **our category** (or group, e.g.
+תחבורה), planned = RiseUp's tracking envelope through `tracking_category` or the override,
+spent = the cycle's `kind == "variable"` ledger rows of that category (refunds subtract,
+floored at 0), `estimate` = median of the last 3–6 cycles, plus `summary`: the cycle in
+**three blocks** — fixed (kind=fixed actual, expected adds the monthly charges of the last
+two cycles not seen yet), variable (actual vs Σ per-category median), debt_savings (loans,
+mortgage, savings) and `left` = income − fixed − variable − debt_savings (each at
+max(actual, expected); income expected = the forecast's). `spending.py`
 (per-month category/merchant/transaction breakdown with excluded buckets, `/spending`).
+`cashflow.fixed_expenses` (the "what can I cut?" card) is the month's kind=fixed ledger
+rows plus the still-expected monthly ones (`budgets.fixed_items`), grouped by
+`categories.lever` (fees → subscriptions → bills → installments → committed → other).
 `actions.py` derives the home page's "לטיפול" list (limit breach, over-budget, overdue bills,
 upcoming card bills, duplicate services, stale syncs) from those blocks, with period-stable ids.
 
-**Budget overrides.** Each budget category carries `history` (spend of the last 4
-RiseUp cycles, from `data/riseup/raw/budget_YYYY-MM_6.json`). To change a planned
+**Budget overrides.** Each budget line carries `history` (its ledger spend in the last 4
+cycles). To change a planned
 amount: `poetry run python data/budgets.py set "<category>" <amount>`, `unset "<category>"`, or
-`list`; it edits gitignored `data/budgets/budgets.json`, reruns `cashflow.py` and
+`list`; it edits gitignored `data/budgets/budgets.json` (a RiseUp envelope name is stored as
+our category; a category RiseUp has no envelope for adds a line), reruns `cashflow.py` and
 prints the new line. The app's budget editor sheet is read-only and only shows this
 command; push the result with `sync-data`.
 
@@ -378,9 +393,18 @@ fixed − variable. Non-spending rows (income, card bills, own transfers, saving
   > merchant rule (`db/edit.py rule MERCHANT category|kind VALUE`, table `merchant_rules`)
   > the defaults. `db/edit.py categories` prints the tree. The digest with and without
   the DB must agree (`test_digest_stamped_rows_round_trip_unchanged`).
-- **Read `kind`, never re-derive it.** `months_view.py` already does. Still to switch
-  (they read RiseUp envelopes or hardcoded sets): `bills.py`, `budgets.py`,
-  `cashflow.FIXED_GROUPS` / `EXPENSE_CATEGORY_MAP`, `forecast.py`.
+- **Read `kind`, never re-derive it.** `months_view.py`, `budgets.py` (lines and the
+  three-block summary) and `cashflow.fixed_expenses` read the ledger's `kind`/`category`.
+  Labels that are not ledger rows go through the taxonomy too: a RiseUp envelope's payee
+  via `ledger_categories` (the ledger's category for that merchant, edits included) then
+  `label_category`; a tracking envelope via `tracking_category`. The per-taxonomy rules
+  live in `finance/categories.py`, nowhere else: `DEBT_CATEGORIES`, `LEVERS` /
+  `GROUP_LEVER` / `CATEGORY_LEVER` (how a fixed expense can be cut), `bill_kind`.
+  **RiseUp still supplies plans, not categories**: `bills.py`'s list of expected bills,
+  `budgets.py`'s planned amounts, and `forecast.py`'s envelopes (see
+  docs/forecast-architecture.md — its fixed items carry our `category` +
+  `category_group`, the raw label as `source_category`). `plugin/scripts/` keeps its own
+  older copies.
 - A source label nobody mapped is kept (category without a group) and the digest prints
   it: add it to `SOURCE_ALIASES`.
 

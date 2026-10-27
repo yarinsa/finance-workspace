@@ -17,6 +17,8 @@ from collections import defaultdict
 from datetime import date, timedelta
 import calendar
 
+from finance import categories
+
 POOL_INSTITUTIONS = ("discount", "leumi")
 POOL_ORIGINS = POOL_INSTITUTIONS
 FLOOR = 0
@@ -64,7 +66,7 @@ def item_kind(amount, category, description, card_bill=False):
     description = description or ""
     if amount > 0:
         return "income"
-    if category in ("הלוואה", "משכנתא") or "משכנתא" in description or "הלוואה" in description:
+    if category in categories.DEBT_CATEGORIES or "משכנתא" in description or "הלוואה" in description:
         return "loan"
     if card_bill or "מאסטרקארד" in description:
         return "card"

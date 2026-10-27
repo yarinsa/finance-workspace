@@ -1,17 +1,18 @@
-"""Real-case tests for budgets.py (PRD 12 Phase 2), mirroring the 2026-10 RiseUp budget."""
+"""Real-case tests for budgets.py (PRD 12 Phase 2), mirroring the 2026-10 RiseUp
+budget (planned amounts) and the October 2026 ledger (spend, kind)."""
 import json
 from datetime import date
 
 import budgets
 
 
-def env(name, amount, actuals=(), idx=""):
+def env(name, amount, idx=""):
     return {
         "id": f"2026-10#trackingCategory#{name}{idx}",
         "type": "trackingCategory",
         "originalAmount": amount,
         "details": {"trackingCategory": {"name": name}},
-        "actuals": [{"billingAmount": a, "isIncome": False} for a in actuals],
+        "actuals": [],
     }
 
 
@@ -19,100 +20,215 @@ def doc(envs, start_day=1, month="2026-10"):
     return {"budgetDate": month, "cashflowStartDay": start_day, "envelopes": envs}
 
 
+def row(day, description, amount, category, kind="variable", group=None, merchant=None, **kw):
+    """A stamped ledger row (finance/categories.stamp output)."""
+    groups = {"דלק": "תחבורה", "רכב": "תחבורה", "תיירות": "פנאי", "עציצים": "בית",
+              "כלכלה": "אוכל", "בריאות": "בריאות וטיפוח", "דיגיטל": "מנויים", "משכורת": "הכנסות וחיסכון",
+              "הלוואה": "פיננסים", "שכר דירה": "דיור"}
+    t = {"date": day, "description": description, "amount": amount, "category": category,
+         "category_group": group or groups.get(category), "merchant": merchant or description, **kw}
+    if amount < 0 and kind:
+        t["kind"] = kind
+    return t
+
+
 def cat(block, name):
     return next(c for c in block["categories"] if c["name"] == name)
 
 
+def build(envs, ledger=(), as_of=date(2026, 10, 16), **kw):
+    return budgets.build_budgets(doc(envs, **{k: kw.pop(k) for k in ("start_day",) if k in kw}),
+                                 list(ledger), as_of, **kw)
+
+
+# October 2026, group תחבורה: one פז fill-up and a Gett ride are the budget; Metro
+# Motor's installment is fixed, so it is the fixed block's, not this line's.
+TRANSPORT = [
+    row("2026-10-05", "פז אפליקצית-YELLOW", -36.88, "דלק", budget_category="תחבורה"),
+    row("2026-10-16", "Gett", -6.8, "רכב"),
+    row("2026-10-02", "מטרו מוטור שווק (1981)בעמ", -500.0, "רכב", kind="fixed", recurring=True),
+]
+# October 2026 trip, in RiseUp's "חופשה ✈️" envelope: RiseUp counted ₪1,110.06 too.
+TRIP = [
+    row("2026-10-06", 'קינג אקספרס בע"מ', -558.06, "תיירות", budget_category="חופשה ✈️"),
+    row("2026-10-13", "MIGDALOR CAFE", -156.0, "תיירות", budget_category="חופשה ✈️"),
+    row("2026-10-13", "CONCIERGE", -298.0, "תיירות", budget_category="חופשה ✈️"),
+    row("2026-10-14", "קפה מלון נורדוי", -98.0, "תיירות", budget_category="חופשה ✈️"),
+]
+
+
 class TestCategoryMath:
-    def test_transport_200_with_one_actual(self):
-        # תחבורה: ₪200 planned, one פז charge of ₪36.88 on 2026-10-05
-        b = budgets.build_budgets(doc([env("תחבורה", 200, [36.88])]), date(2026, 10, 16))
-        c = cat(b, "תחבורה")
-        assert c["spent"] == 36.88 and c["left"] == 163.12
-        assert c["pct"] == 18.4 and not c["over"] and c["source"] == "riseup"
+    def test_group_line_counts_variable_rows_only(self):
+        c = cat(build([env("תחבורה", 200)], TRANSPORT), "תחבורה")
+        assert c["scope"] == "group"
+        assert c["spent"] == 43.68 and c["left"] == 156.32
+        assert c["pct"] == 21.8 and not c["over"] and c["source"] == "riseup"
+
+    def test_vacation_envelope_is_the_tourism_category(self):
+        b = build([env("חופשה ✈️", 1000)], TRIP)
+        c = cat(b, "תיירות")
+        assert c["scope"] == "category" and c["spent"] == 1110.06 and c["over"]
 
     def test_over_plan_category(self):
-        # עציצים: ₪700 planned, ₪1000 + ₪129 charged on 2026-10-13
-        b = budgets.build_budgets(doc([env("עציצים", 700, [1000, 129])]), date(2026, 10, 16))
-        c = cat(b, "עציצים")
-        assert c["over"] and c["left"] == -429
+        # עציצים: ₪700 planned; a ₪1,000 cash withdrawal and ₪129 on 10-13, ₪14 on 10-21
+        ledger = [row("2026-10-13", "משיכת מזומן ללא כרטיס", -1000.0, "עציצים"),
+                  row("2026-10-13", "קיוסק לב הנמל", -129.0, "עציצים"),
+                  row("2026-10-21", 'קיוסק אלנבי 58 ת"א', -14.0, "עציצים")]
+        c = cat(build([env("עציצים", 700)], ledger), "עציצים")
+        assert c["over"] and c["left"] == -443
+
+    def test_refund_subtracts_but_never_below_zero(self):
+        # Sept 2026: the ₪1,096 הפול ביטוח חובה refund, with no transport spend that cycle
+        refund = row("2026-10-02", "הפול ביטוח חובה", 1096.0, "רכב", kind=None, is_income=True)
+        assert cat(build([env("תחבורה", 200)], [refund]), "תחבורה")["spent"] == 0
+        c = cat(build([env("תחבורה", 200)], [*TRANSPORT, {**refund, "amount": 20.0}]), "תחבורה")
+        assert c["spent"] == 23.68
 
     def test_weekly_envelopes_merge_by_name(self):
-        envs = [env("כלכלה", 200, [49.2], "#1"), env("כלכלה", 400, [177.02], "#2")]
-        c = cat(budgets.build_budgets(doc(envs), date(2026, 10, 16)), "כלכלה")
+        envs = [env("כלכלה", 200, "#1"), env("כלכלה", 400, "#2")]
+        ledger = [row("2026-10-04", "PM:AM אלנבי 56", -49.2, "כלכלה"),
+                  row("2026-10-12", 'ויקטורי אלנבי ת"א', -177.02, "כלכלה")]
+        c = cat(build(envs, ledger), "כלכלה")
         assert c["planned"] == 600 and c["spent"] == 226.22
 
+    def test_card_bill_and_other_cycles_do_not_count(self):
+        ledger = [row("2026-10-11", "דיינרס קלו,חיוב", -7393.89, "כלכלה", kind=None, card_bill_payment=True),
+                  row("2026-09-30", "PM:AM אלנבי 56", -49.2, "כלכלה")]
+        assert cat(build([env("כלכלה", 600)], ledger), "כלכלה")["spent"] == 0
+
     def test_hidden_saving_category_skipped(self):
-        b = budgets.build_budgets(doc([env("__saving-hidden-category__", 0, [0.03])]), date(2026, 10, 16))
-        assert b["categories"] == []
+        assert build([env("__saving-hidden-category__", 0)])["categories"] == []
 
     def test_sorted_by_planned_desc_and_totals(self):
-        b = budgets.build_budgets(doc([env("a", 100, [40]), env("b", 300, [10])]), date(2026, 10, 16))
-        assert [c["name"] for c in b["categories"]] == ["b", "a"]
-        assert (b["total_planned"], b["total_spent"], b["left"]) == (400, 50, 350)
+        b = build([env("עציצים", 100), env("תחבורה", 300)], TRANSPORT)
+        assert [c["name"] for c in b["categories"]] == ["תחבורה", "עציצים"]
+        assert (b["total_planned"], b["total_spent"], b["left"]) == (400, 43.68, 356.32)
 
 
 class TestOverrides:
     def test_override_replaces_planned_and_marks_source(self):
-        b = budgets.build_budgets(doc([env("אוכל בחוץ", 1000, [300])]), date(2026, 10, 16),
-                                  overrides={"אוכל בחוץ": 250})
-        c = cat(b, "אוכל בחוץ")
-        assert c["planned"] == 250 and c["source"] == "override" and c["over"]
+        b = build([env("תחבורה", 200)], TRANSPORT, overrides={"תחבורה": 40})
+        c = cat(b, "תחבורה")
+        assert c["planned"] == 40 and c["source"] == "override" and c["over"]
+
+    def test_override_under_the_old_riseup_name_still_applies(self):
+        c = cat(build([env("חופשה ✈️", 1000)], TRIP, overrides={"חופשה ✈️": 1500}), "תיירות")
+        assert c["planned"] == 1500 and not c["over"]
+
+    def test_override_adds_a_line_riseup_does_not_have(self):
+        c = cat(build([env("תחבורה", 200)], TRIP, overrides={"תיירות": 2000}), "תיירות")
+        assert c["source"] == "override" and c["spent"] == 1110.06
 
 
 class TestCycle:
     def test_calendar_month_when_start_day_1(self):
-        b = budgets.build_budgets(doc([env("a", 100)]), date(2026, 10, 16))
+        b = build([env("פנאי", 100)])
         assert (b["cycle_start"], b["cycle_end"]) == ("2026-10-01", "2026-10-31")
         assert b["days_left"] == 16
 
     def test_start_day_10_crosses_months(self):
-        b = budgets.build_budgets(doc([env("a", 100)], start_day=10), date(2026, 10, 16))
+        b = build([env("פנאי", 100)], start_day=10)
         assert (b["cycle_start"], b["cycle_end"]) == ("2026-10-10", "2026-11-09")
         assert b["days_left"] == 25
 
     def test_per_day_only_when_money_left(self):
-        ok = budgets.build_budgets(doc([env("a", 1600)]), date(2026, 10, 16))
-        assert ok["per_day"] == 100
-        over = budgets.build_budgets(doc([env("a", 100, [500])]), date(2026, 10, 16))
-        assert over["per_day"] is None
+        assert build([env("פנאי", 1600)])["per_day"] == 100
+        assert build([env("עציצים", 100)], [row("2026-10-13", "קיוסק לב הנמל", -129.0, "עציצים")])["per_day"] is None
 
     def test_no_budget_returns_none(self):
-        assert budgets.build_budgets(None, date(2026, 10, 16)) is None
-
-
-def hdoc(month, name, actuals):
-    return doc([env(name, 500, actuals)], month=month)
+        assert budgets.build_budgets(None, [], date(2026, 10, 16)) is None
 
 
 class TestHistory:
-    def test_last_four_cycles_oldest_first_excluding_current(self):
-        docs = [hdoc("2026-04", "כלכלה", [100]), hdoc("2026-05", "כלכלה", [200]),
-                hdoc("2026-06", "כלכלה", [300]), hdoc("2026-07", "כלכלה", [400]),
-                hdoc("2026-08", "כלכלה", [500]), hdoc("2026-10", "כלכלה", [999])]
-        b = budgets.build_budgets(doc([env("כלכלה", 600, [50])]), date(2026, 10, 16), history_docs=docs)
-        assert cat(b, "כלכלה")["history"] == [
-            {"cycle": "2026-05", "spent": 200}, {"cycle": "2026-06", "spent": 300},
-            {"cycle": "2026-07", "spent": 400}, {"cycle": "2026-08", "spent": 500}]
+    # July 2026: the הפול ביטוח חובה policy bought (₪1,512 + ₪1,673 + 2 × ₪207) and
+    # partly refunded (₪1,512 + ₪207) — the line's July spend is the ₪1,880 net.
+    JULY = [row("2026-07-09", "הפול בטוח חובה", -207.0, "רכב"),
+            row("2026-07-19", "הפול בטוח חובה", -207.0, "רכב"),
+            row("2026-07-26", "הפול בטוח חובה", -1512.0, "רכב"),
+            row("2026-07-26", "הפול בטוח חובה", -1673.0, "רכב"),
+            row("2026-07-27", "הפול ביטוח חובה", 1512.0, "רכב", kind=None, is_income=True),
+            row("2026-07-28", "הפול ביטוח חובה", 207.0, "רכב", kind=None, is_income=True)]
 
-    def test_missing_category_in_a_cycle_is_zero_and_refunds_subtract(self):
-        refund = env("תחבורה", 200, [])
-        refund["actuals"] = [{"billingAmount": 80, "isIncome": False}, {"billingAmount": 30, "isIncome": True}]
-        docs = [hdoc("2026-08", "כלכלה", [10]), doc([refund], month="2026-09")]
-        b = budgets.build_budgets(doc([env("תחבורה", 200)]), date(2026, 10, 16), history_docs=docs)
-        assert cat(b, "תחבורה")["history"] == [{"cycle": "2026-08", "spent": 0}, {"cycle": "2026-09", "spent": 50}]
+    def test_last_four_covered_cycles_oldest_first(self):
+        ledger = [row(f"2026-{m:02d}-05", "פז אפליקצית-YELLOW", -100.0 * m, "דלק") for m in range(3, 10)]
+        c = cat(build([env("תחבורה", 200)], ledger + self.JULY), "תחבורה")
+        assert c["history"] == [{"cycle": "2026-06", "spent": 600}, {"cycle": "2026-07", "spent": 2580},
+                                {"cycle": "2026-08", "spent": 800}, {"cycle": "2026-09", "spent": 900}]
 
-    def test_no_history_docs_gives_empty_list(self):
-        b = budgets.build_budgets(doc([env("a", 100)]), date(2026, 10, 16), history_docs=[])
-        assert cat(b, "a")["history"] == []
+    def test_estimate_is_the_median_of_six_cycles(self):
+        ledger = [row(f"2026-{m:02d}-05", "פז אפליקצית-YELLOW", -100.0 * m, "דלק") for m in range(3, 10)]
+        # cycles 04..09 spend 400..900 -> median 650
+        assert cat(build([env("תחבורה", 200)], ledger), "תחבורה")["estimate"] == 650
+
+    def test_too_little_history_gives_no_estimate(self):
+        ledger = [row("2026-09-05", "פז אפליקצית-YELLOW", -100.0, "דלק")]
+        c = cat(build([env("תחבורה", 200)], ledger), "תחבורה")
+        assert c["estimate"] is None and c["history"] == [{"cycle": "2026-09", "spent": 100}]
 
     def test_load_history_dedupes_overlapping_dumps(self, tmp_path):
-        a = hdoc("2026-08", "x", [1]); a["lastUpdatedAt"] = "2026-09-01"
-        b = hdoc("2026-08", "x", [2]); b["lastUpdatedAt"] = "2026-10-01"
+        a = doc([env("x", 500)], month="2026-08"); a["lastUpdatedAt"] = "2026-09-01"
+        b = doc([env("x", 500)], month="2026-08"); b["lastUpdatedAt"] = "2026-10-01"
         (tmp_path / "budget_2026-09_6.json").write_text(json.dumps([a]))
         (tmp_path / "budget_2026-10_6.json").write_text(json.dumps([b]))
         docs = budgets.load_history(tmp_path)
         assert len(docs) == 1 and docs[0]["lastUpdatedAt"] == "2026-10-01"
+
+
+class TestFixedItems:
+    """The month's fixed expenses: what hit, plus the monthly ones still to come."""
+
+    HEALTH = [row("2026-08-28", "כלל ב.בריאות ה.ק", -128.77, "בריאות", kind="fixed", recurring=True),
+              row("2026-09-28", "כלל ב.בריאות ה.ק", -129.14, "בריאות", kind="fixed", recurring=True)]
+    # Spotify moved from CAL (SpotifyIL) to AMEX (SPOTIFY P47D8D…) in October.
+    SPOTIFY = [row("2026-08-09", "SpotifyIL", -43.9, "דיגיטל", kind="fixed", recurring=True),
+               row("2026-09-09", "SpotifyIL", -43.9, "דיגיטל", kind="fixed", recurring=True),
+               row("2026-10-10", "SPOTIFY P47D8D0286 684488", -43.9, "דיגיטל", kind="fixed",
+                   merchant="SPOTIFY P47D8D")]
+
+    def test_monthly_charge_not_seen_yet_is_expected(self):
+        items = budgets.fixed_items(self.HEALTH, "2026-10")
+        assert [(i["description"], i["amount"], i["expected"]) for i in items] == \
+            [("כלל ב.בריאות ה.ק", -129.14, True)]
+
+    def test_charge_that_already_hit_is_not_expected_again(self):
+        ledger = self.HEALTH + [row("2026-10-28", "כלל ב.בריאות ה.ק", -129.14, "בריאות", kind="fixed")]
+        assert [i["expected"] for i in budgets.fixed_items(ledger, "2026-10")] == [False]
+
+    def test_a_service_that_moved_card_is_not_expected_twice(self):
+        items = budgets.fixed_items(self.SPOTIFY, "2026-10")
+        assert [(i["merchant"], i["expected"]) for i in items] == [("SPOTIFY P47D8D", False)]
+
+    def test_needs_both_previous_cycles(self):
+        # only September: could be a bi-monthly bill in its off month
+        assert budgets.fixed_items(self.HEALTH[1:], "2026-10") == []
+
+    def test_variable_rows_are_not_fixed_items(self):
+        assert budgets.fixed_items(TRANSPORT[:2], "2026-10") == []
+
+
+class TestSummary:
+    LEDGER = [
+        row("2026-10-08", "העברת משכורת", 26144.0, "משכורת", kind=None, is_income=True),
+        row("2026-10-11", 'הו"ק לעיין ניהול נכסי,לסניף 20-406', -6800.0, "שכר דירה", kind="fixed"),
+        row("2026-10-02", "פרעון הלוואה", -1844.42, "הלוואה", kind="fixed", recurring=True),
+        *TestFixedItems.HEALTH,
+        *TRANSPORT[:2],
+    ]
+
+    def summary(self, **kw):
+        return build([env("תחבורה", 200)], self.LEDGER, **kw)["summary"]
+
+    def test_three_blocks_and_left(self):
+        s = self.summary(expected_income=27163.8)
+        assert s["income"] == {"actual": 26144.0, "expected": 27163.8, "value": 27163.8}
+        assert s["fixed"] == {"actual": 6800.0, "expected": 6929.14, "value": 6929.14}
+        assert s["debt_savings"]["value"] == 1844.42
+        assert s["variable"]["actual"] == 43.68 and s["variable"]["estimate"] is None
+        assert s["left"] == round(27163.8 - 6929.14 - 43.68 - 1844.42, 2)
+
+    def test_actual_income_counts_when_above_the_forecast(self):
+        assert self.summary(expected_income=20000)["income"]["value"] == 26144.0
+        assert self.summary()["income"]["expected"] is None
 
 
 class TestCli:
@@ -140,3 +256,10 @@ class TestCli:
         store = tmp_path / "b.json"
         budgets.save_overrides({"a": 1.0}, store)
         assert self.run(store, "list") == (0, [])
+
+    def test_riseup_envelope_name_is_stored_as_our_category(self, tmp_path):
+        store = tmp_path / "b.json"
+        budgets.save_overrides({"חופשה ✈️": 900.0}, store)
+        rc, calls = self.run(store, "set", "חופשה ✈️", "1500")
+        assert rc == 0 and calls == [1, "תיירות"]
+        assert budgets.load_overrides(store) == {"תיירות": 1500}

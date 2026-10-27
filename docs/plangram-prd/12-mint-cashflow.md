@@ -28,8 +28,8 @@ sessions: each one adds a separate block in `cashflow.py` and a separate compone
   current RiseUp cycle, one row per `fixed` envelope: `name` (cleaned businessName),
   `category`, `amount` (expense positive), `due_day` (from the runway recurrence day
   or the envelope's actual date), `status`: `paid` | `upcoming` | `overdue` (past due
-  day with no actual), `paid_on`, `kind` (bill / subscription / loan / income), using
-  the `FIXED_GROUPS` mapping from `cashflow.fixed_expenses`. Totals: `paid_total`,
+  day with no actual), `paid_on`, `kind` (bill / subscription / loan), from the
+  taxonomy (`categories.bill_kind`; was the `FIXED_GROUPS` mapping). Totals: `paid_total`,
   `upcoming_total`. Exclude income envelopes and internal transfers (reuse
   `digest.is_internal_transfer` on businessName).
 - **UI**: a Copilot/Mint-style card. A "₪X left to pay / ₪Y paid" ring, then rows

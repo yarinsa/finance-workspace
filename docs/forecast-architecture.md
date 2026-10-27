@@ -80,8 +80,9 @@ disagreement:
   `MortgageDetailsBlock.LoanEntry` (₪8,504), all sharing
   `NextPaymentDate: 20260710`. That is what actually debits next month.
 
-So `forecast.py` **drops the RiseUp mortgage envelope** (the one tagged
-`details.expense == "משכנתא"`, `MORTGAGE_EXPENSE`) and substitutes the
+So `forecast.py` **drops the RiseUp mortgage envelope** (the one whose category is
+`MORTGAGE_EXPENSE` — RiseUp's `details.expense == "משכנתא"` read through the taxonomy,
+or the ledger's category for its payee דסק-משכנתא) and substitutes the
 `sum(NextPayment)` from the mortgage dump. Suppressing the envelope is what
 prevents double-counting the ₪1,700. This single substitution moves the July
 projection from a ~₪2.7k surplus to a ~₪4.1k shortfall — it is the dominant line

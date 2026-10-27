@@ -2,9 +2,22 @@
 
 One row per ``fixed`` budget envelope: what it is, what it costs, the day it
 lands, and whether it is already ``paid`` this cycle, still ``upcoming``, or
-``overdue`` (its day has passed with no matching actual). Income envelopes
+``overdue`` (its day has passed with no matching charge). Income envelopes
 (negative amounts, e.g. salary or the Leumi loan-interest refund) and transfers
 between our own accounts are not bills and are dropped.
+
+What comes from where:
+
+- **The list and the expected amount**: RiseUp's ``fixed`` envelopes. They hold a
+  predicted amount for usage-priced bills (electricity) and the bi-monthly ones
+  (water, gas) that the ledger's recurrence rules do not call fixed.
+- **Category and kind**: the taxonomy (finance/categories.py). The category is the
+  ledger's for the same merchant (so the household's edits apply), else the
+  payee's merchant default or RiseUp's label through ``SOURCE_ALIASES``; ``kind``
+  is ``categories.bill_kind`` (loan / subscription / bill).
+- **Paid**: an envelope actual, or a ledger charge in the cycle from the same
+  merchant (amount within ±15%, any amount for a usage-priced category) — RiseUp
+  misses card charges it has not matched yet (the 10-25 פרטנר on CAL).
 
 Read-only over ``riseup/raw/budget_current.json`` and the ledger.
 """
@@ -15,14 +28,14 @@ import re
 from datetime import date, timedelta
 
 import digest
+from finance import categories
+from finance.merchants import merchant_name
 from runway import posting_date
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 BUDGET = os.path.join(HERE, "riseup", "raw", "budget_current.json")
 
-# RiseUp expense category -> UI kind. Anything else is a plain "bill".
-LOAN_CATEGORIES = {"הלוואה", "משכנתא"}
-SUBSCRIPTION_CATEGORIES = {"דיגיטל", "ספר"}
+PAID_TOLERANCE = 0.15
 
 
 def load_budget(path=BUDGET):
@@ -41,14 +54,6 @@ def _norm(s):
 def clean_name(business_name):
     """'הו"ק לעיין ניהול נכסי,לסניף 20-406' -> 'הו"ק לעיין ניהול נכסי'."""
     return _norm(re.split(r",\s*(?:ל|מ)?סניף|,\s*חיוב", business_name or "")[0])
-
-
-def kind_of(category):
-    if category in LOAN_CATEGORIES:
-        return "loan"
-    if category in SUBSCRIPTION_CATEGORIES:
-        return "subscription"
-    return "bill"
 
 
 def cycle_bounds(budget_date, start_day=1):
@@ -70,6 +75,29 @@ def _ledger_day(name, transactions, cycle_start):
     return date.fromisoformat(max(days)).day if days else None
 
 
+def _ledger_payment(merchant, category, amount, transactions, start, end, used):
+    """Date of a ledger charge in [start, end] that pays this bill, or None.
+
+    Same merchant, the closest amount within PAID_TOLERANCE (any amount for a
+    usage-priced category); each charge pays one bill (``used`` holds their ids)."""
+    lo, hi = start.isoformat(), end.isoformat()
+    best = None
+    for t in transactions:
+        d = (t.get("date") or "")[:10]
+        a = -float(t.get("amount") or 0)
+        if (not lo <= d <= hi or a <= 0 or id(t) in used
+                or (t.get("merchant") or merchant_name(t.get("description"))) != merchant):
+            continue
+        gap = abs(a - amount)
+        if (gap <= amount * PAID_TOLERANCE or category in categories.USAGE_BASED) \
+                and (best is None or gap < best[0]):
+            best = (gap, t)
+    if best is None:
+        return None
+    used.add(id(best[1]))
+    return best[1]["date"][:10]
+
+
 def _in_cycle(day_clamped, start, end):
     """Place day-of-month inside [start, end]; None when it cannot be."""
     for y, m in {(start.year, start.month), (end.year, end.month)}:
@@ -84,7 +112,8 @@ def build_bills(budget, transactions, as_of):
     if not budget or not budget.get("budgetDate"):
         return None
     start, end = cycle_bounds(budget["budgetDate"], budget.get("cashflowStartDay") or 1)
-    items = []
+    known = categories.ledger_categories(transactions)
+    bills = []
     for e in budget.get("envelopes", []):
         if e.get("type") != "fixed":
             continue
@@ -93,13 +122,23 @@ def build_bills(budget, transactions, as_of):
         raw_name = d.get("businessName") or ""
         if amount <= 0 or digest.is_internal_transfer({"description": raw_name}):
             continue
-        name = clean_name(raw_name)
-        category = d.get("expense")
-
+        merchant = merchant_name(raw_name)
+        category = known.get(merchant) or categories.label_category(raw_name, d.get("expense"))
         actual_dates = [(a.get("transactionDate") or a.get("billingDate") or "")[:10]
                         for a in e.get("actuals") or []]
-        actual_dates = [x for x in actual_dates if x]
-        paid_on = max(actual_dates) if actual_dates else None
+        bills.append((amount, d, raw_name, merchant, category, [x for x in actual_dates if x]))
+
+    # A charge RiseUp already matched to an envelope cannot pay another one too.
+    used = set()
+    for amount, _, _, merchant, category, actual_dates in bills:
+        if actual_dates:
+            _ledger_payment(merchant, category, amount, transactions, start, end, used)
+
+    items = []
+    for amount, d, raw_name, merchant, category, actual_dates in bills:
+        name = clean_name(raw_name)
+        paid_on = max(actual_dates) if actual_dates else \
+            _ledger_payment(merchant, category, amount, transactions, start, end, used)
 
         if paid_on:
             due = date.fromisoformat(paid_on)
@@ -120,7 +159,8 @@ def build_bills(budget, transactions, as_of):
         else:
             status = "upcoming"
         items.append({
-            "name": name, "category": category, "kind": kind_of(category),
+            "name": name, "category": category, "group": categories.group_of(category),
+            "kind": categories.bill_kind(category),
             "amount": round(amount, 2),
             "due_day": due.day if due else None,
             "due_date": due.isoformat() if due else None,

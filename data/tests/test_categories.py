@@ -187,3 +187,38 @@ def test_the_accountant_is_a_fixed_business_expense():
     cat.stamp(ledger)
     assert (ledger[0]["category_group"], ledger[0]["category"], ledger[0]["kind"]) == (
         "עבודה ולימודים", "הוצאות עסק", "fixed")
+
+
+def test_levers_follow_the_taxonomy():
+    """The "what can I cut?" grouping is the category's, not a RiseUp label set."""
+    assert cat.lever("עמלות")[0] == "fees"              # דמי כרטיס /הנפקה ₪102.38
+    assert cat.lever("דיגיטל")[0] == "subscriptions"    # SPOTIFY ₪43.90
+    assert cat.lever("תקשורת")[0] == "bills"            # פרטנר ₪135.14
+    assert cat.lever("שכר דירה")[0] == "committed"      # rent ₪6,800
+    assert cat.lever("הלוואה", "תשלומים")[0] == "committed"
+    assert cat.lever("רכב", "תשלומים")[0] == "installments"   # Metro Motor ₪500
+    assert cat.lever("ביטוח", "תשלומים")[0] == "bills"        # ליברה premium ₪30
+    assert cat.lever("הוצאות עסק")[0] == "other"        # the accountant ₪354
+    assert [key for key, *_ in cat.LEVERS][-1] == "other"
+
+
+def test_bill_kind_and_tracking_names():
+    assert cat.bill_kind("משכנתא") == "loan" and cat.bill_kind("דיגיטל") == "subscription"
+    assert cat.bill_kind("ספר") == "bill"
+    assert cat.tracking_category("חופשה ✈️") == "תיירות"
+    assert cat.tracking_category("תחבורה") == "תחבורה"        # a whole group
+    assert cat.tracking_category("wellness ") == "wellness"
+    assert cat.tracking_category("__saving-hidden-category__") is None
+
+
+def test_envelope_label_and_ledger_category():
+    """A RiseUp envelope payee: merchant default > RiseUp label; the ledger's latest
+    category for the payee (with the household's edits) wins over both."""
+    assert cat.label_category('הו"ק לעיין ניהול נכסי,לסניף 20-406', "דיור") == "שכר דירה"
+    assert cat.label_category("פרטנר תקשורת בע\"מ", "תקשורת") == "תקשורת"
+    assert cat.label_category("הו\"ק לששון ירין", "תשלומים") is None
+    known = cat.ledger_categories([
+        row("2026-10-14", -59.5, "APPLE.COM/BILL         CORK    ", category="פנאי"),
+        row("2026-10-15", -59.5, "APPLE.COM/BILL", category="דיגיטל"),
+    ])
+    assert known == {"APPLE.COM/BILL": "דיגיטל"}

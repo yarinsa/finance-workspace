@@ -74,3 +74,45 @@ class TestProjectionUsesSchedule:
         assert cash[1] == 5817.26                          # Dec 2026: current band
         assert cash[2] == round(5817.26 + 8190 - 5717, 2)  # Jan 2027 step-up
         assert cash[3] == round(5817.26 + 8154 - 5717, 2)  # Feb 2027
+
+
+class TestEnvelopeCategories:
+    """Fixed items and budget lines carry our taxonomy, not RiseUp's labels; the
+    mortgage envelope is still the one replaced by the mortgage dump."""
+
+    @staticmethod
+    def budget():
+        def fixed(name, expense, amount):
+            return {"id": name, "type": "fixed", "originalAmount": amount,
+                    "details": {"businessName": name, "expense": expense}}
+        return {"budgetDate": "2026-10", "trackingCategoryMetadata": [], "envelopes": [
+            fixed('הו"ק לעיין ניהול נכסי,לסניף 20-406', "דיור", 6800),
+            fixed("דסק-משכנתא,חיוב", "משכנתא", 5817),
+            fixed("פרעון הלוואה", "הלוואה", 1844.42),
+            {"id": "2026-10#trackingCategory#v2-default-il-expense-category-15", "type": "trackingCategory",
+             "originalAmount": 1000, "details": {"trackingCategory": {"name": "חופשה ✈️"}}},
+            *({"id": f"2026-10#trackingCategory#v2-default-il-expense-category-2#{i}", "type": "trackingCategory",
+               "originalAmount": a, "details": {"trackingCategory": {"name": "כלכלה"}}}
+              for i, a in enumerate((233.98, 200, 400, 300, 400))),
+        ]}
+
+    def month(self, monkeypatch, known=None):
+        monkeypatch.setattr(forecast, "authoritative_mortgage_payment", lambda m=None: (5813.27, "2026-10-10"))
+        return forecast.build(self.budget(), "2026-10", known)
+
+    def test_rent_is_rent_and_the_mortgage_envelope_is_replaced(self, monkeypatch):
+        items = self.month(monkeypatch)["expenses"]["fixed_items"]
+        assert [(i["category"], i["category_group"], i["amount"]) for i in items] == [
+            ("שכר דירה", "דיור", 6800), ("משכנתא", "דיור", 5813.27), ("הלוואה", "פיננסים", 1844.42)]
+        assert items[0]["source_category"] == "דיור"
+
+    def test_mortgage_found_through_the_ledger_category_too(self, monkeypatch):
+        b = self.budget()
+        b["envelopes"][1]["details"]["expense"] = "תשלומים"
+        monkeypatch.setattr(forecast, "authoritative_mortgage_payment", lambda m=None: (5813.27, "2026-10-10"))
+        items = forecast.build(b, "2026-10", {"דסק-משכנתא": "משכנתא"})["expenses"]["fixed_items"]
+        assert sum(i["category"] == "משכנתא" for i in items) == 1
+
+    def test_budget_lines_are_named_by_category_and_weekly_envelopes_merge(self, monkeypatch):
+        disc = self.month(monkeypatch)["expenses"]["discretionary_items"]
+        assert disc == [{"name": "כלכלה", "amount": 1533.98}, {"name": "תיירות", "amount": 1000}]

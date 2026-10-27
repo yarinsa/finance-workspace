@@ -40,7 +40,7 @@ from datetime import date
 import cashflow
 from finance import categories
 
-DEBT_CATEGORIES = {"הלוואה", "משכנתא"}
+DEBT_CATEGORIES = categories.DEBT_CATEGORIES
 TOP_CATEGORIES = 12
 
 GROUPS = [
@@ -119,7 +119,7 @@ def _expected_from_budget(doc):
                 continue
             if d.get("isIncome"):
                 out["income"] += amt
-            elif (d.get("expense") or "").strip() in DEBT_CATEGORIES:
+            elif categories.label_category(d.get("businessName"), d.get("expense")) in DEBT_CATEGORIES:
                 out["debt_savings"] += amt
             else:
                 out["fixed"] += amt
