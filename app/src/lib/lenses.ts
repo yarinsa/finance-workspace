@@ -169,6 +169,77 @@ export function debtLens(history: History | undefined): Lens | null {
   };
 }
 
+/** The recorded days (history.positions), with the apartment held at its latest valuation on
+ *  days recorded before it was typed in: the property is one manual value, so a jump on the
+ *  day it was entered would be bookkeeping, not money. */
+function positionDays(history: History | undefined) {
+  const pts = history?.positions ?? [];
+  const latest = [...pts].reverse().find((p) => p.property != null)?.property ?? null;
+  return {
+    latest,
+    days: pts.map((p) => ({
+      ...p,
+      net_worth: p.property == null && latest != null ? p.net_worth + latest : p.net_worth,
+    })),
+  };
+}
+
+/** A lens over the recorded days, ending at today. The change is measured against the first
+ *  recorded day: both ends are the digest's own totals. */
+function recordedLens(
+  key: "networth" | "savings",
+  label: string,
+  days: { date: string; value: number }[],
+  note: string,
+): Lens | null {
+  if (days.length < 2) return null;
+  const first = days[0];
+  const last = days.at(-1)!;
+  const change = last.value - first.value;
+  return {
+    key,
+    label,
+    value: last.value,
+    delta:
+      Math.round(change) === 0
+        ? null
+        : { amount: change, text: `מאז ${dayMonth(first.date)}`, good: change > 0 },
+    series: days.map((d) => ({ x: d.date, actual: d.value })),
+    todayIndex: days.length - 1,
+    to: key === "savings" ? "/portfolio" : "/networth",
+    note,
+  };
+}
+
+/**
+ * שווי נקי: cash + savings + the apartment − cards, loans and mortgage, one point per recorded
+ * day. Without a property value it is the liquid-and-savings position (−₪900k), which is why
+ * it only opens by default once the apartment is typed in (defaultLens).
+ */
+export function networthLens(history: History | undefined): Lens | null {
+  const { latest, days } = positionDays(history);
+  return recordedLens(
+    "networth",
+    "שווי נקי",
+    days.map((d) => ({ date: d.date, value: d.net_worth })),
+    latest == null
+      ? "בלי שווי הדירה · יום אחד לכל עדכון נתונים"
+      : "כולל הדירה לפי ההערכה האחרונה · יום אחד לכל עדכון נתונים",
+  );
+}
+
+/** חיסכון: pension, study funds and provident funds, one point per recorded day. The funds
+ *  report monthly, so the line moves in steps. */
+export function savingsLens(history: History | undefined): Lens | null {
+  const { days } = positionDays(history);
+  return recordedLens(
+    "savings",
+    "חיסכון",
+    days.map((d) => ({ date: d.date, value: d.savings })),
+    "פנסיה, השתלמות וגמל · הקופות מדווחות פעם בחודש",
+  );
+}
+
 // ---- the corner signal --------------------------------------------------------------
 
 export type SignalMode = "ratio" | "safe";

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { History, Pace, Runway } from "./data";
-import { cashLens, debtLens, defaultLens, readSignalMode, signalValue, spendLens } from "./lenses";
+import { cashLens, debtLens, defaultLens, networthLens, readSignalMode, savingsLens, signalValue, spendLens } from "./lenses";
 
 // The 2026-10-27 digest: Discount + Leumi checking, Discount's chain measured from 10-05.
 const HISTORY: History = {
@@ -114,5 +114,38 @@ describe("debt lens", () => {
     expect(l.series[1]).toMatchObject({ actual: 1533093.63, projected: 1533093.63 });
     expect(l.series[0].estimated).toBe(true);
     expect(debtLens(undefined)).toBeNull();
+  });
+});
+
+// position_snapshots as recorded: 10-25 and 10-26 backfilled from the published snapshots
+// (before the apartment was typed in), 10-27 by the digest with it.
+const POSITIONS: History["positions"] = [
+  { date: "2026-10-25", cash: -1265.28, card_debt: 4092.23, consumer_loans: 127555.0, mortgage: 1418443.0, savings: 639880.88, property: null, net_worth: -911473.96 },
+  { date: "2026-10-26", cash: 3985.0, card_debt: 4092.23, consumer_loans: 127558.0, mortgage: 1418580.0, savings: 639880.88, property: null, net_worth: -906364.74 },
+  { date: "2026-10-27", cash: 3584.68, card_debt: 4092.23, consumer_loans: 127566.17, mortgage: 1418853.49, savings: 639880.88, property: 2200000.0, net_worth: 1292953.67 },
+];
+
+describe("net worth lens", () => {
+  it("holds the apartment at its valuation on days recorded before it was typed in", () => {
+    const l = networthLens({ ...HISTORY, positions: POSITIONS })!;
+    expect(l.value).toBe(1292953.67);
+    expect(l.series.map((p) => p.actual)).toEqual([2200000 - 911473.96, 2200000 - 906364.74, 1292953.67]);
+    expect(l.todayIndex).toBe(2);
+    expect(l.delta).toMatchObject({ text: "מאז 25.10", good: true });
+    expect(Math.round(l.delta!.amount)).toBe(4428);   // no ₪2.2M jump on the day it was entered
+  });
+
+  it("needs two recorded days", () => {
+    expect(networthLens({ ...HISTORY, positions: POSITIONS.slice(-1) })).toBeNull();
+    expect(networthLens(undefined)).toBeNull();
+  });
+});
+
+describe("savings lens", () => {
+  it("shows no change while the funds have not reported a new month", () => {
+    const l = savingsLens({ ...HISTORY, positions: POSITIONS })!;
+    expect(l.value).toBe(639880.88);
+    expect(l.delta).toBeNull();
+    expect(l.to).toBe("/portfolio");
   });
 });

@@ -11,7 +11,7 @@ import {
 import { cn } from "@/lib/utils";
 import { cashflow, daysSince, shekel, snapshot } from "@/lib/data";
 import { useInboxCount } from "@/lib/inbox";
-import { cashLens, debtLens, defaultLens, LENS_KEY, spendLens, type Lens, type LensKey } from "@/lib/lenses";
+import { cashLens, debtLens, defaultLens, LENS_KEY, LENS_ORDER, networthLens, savingsLens, spendLens, type Lens, type LensKey } from "@/lib/lenses";
 import LensChart from "./LensChart";
 import Signal from "./Signal";
 
@@ -23,9 +23,11 @@ function storage(): Storage | undefined {
   }
 }
 
-/** The lenses this build has data for, in tab order. Net worth and savings join once positions are recorded. */
+/** The lenses the data has (net worth and savings need two recorded days), in tab order. */
 function buildLenses(): Lens[] {
-  return [spendLens(cashflow.pace), cashLens(cashflow.history, cashflow.runway), debtLens(cashflow.history)].filter((l): l is Lens => l != null);
+  const h = cashflow.history;
+  const built = [spendLens(cashflow.pace), cashLens(h, cashflow.runway), networthLens(h), savingsLens(h), debtLens(h)];
+  return LENS_ORDER.map(({ key }) => built.find((l) => l?.key === key)).filter((l): l is Lens => l != null);
 }
 
 function freshness(): string {
@@ -115,7 +117,7 @@ export default function HomeBand({ onQuickActions }: { onQuickActions: () => voi
         </div>
       </header>
 
-      <div role="tablist" aria-label="עדשות" className="mt-5 flex gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      <div role="tablist" aria-label="עדשות" className="mt-5 flex justify-between gap-0.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {lenses.map((l) => (
           <button
             key={l.key}
@@ -124,7 +126,7 @@ export default function HomeBand({ onQuickActions }: { onQuickActions: () => voi
             aria-selected={l.key === active}
             onClick={() => select(l.key)}
             className={cn(
-              "shrink-0 rounded-full px-4 py-1.5 text-[15px] transition-colors duration-200",
+              "shrink-0 rounded-full px-2.5 py-1.5 text-[15px] transition-colors duration-200",
               l.key === active
                 ? "bg-[color-mix(in_srgb,var(--hero-text)_16%,transparent)] font-semibold"
                 : "text-[var(--hero-muted)]",

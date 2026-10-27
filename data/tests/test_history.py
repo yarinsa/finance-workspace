@@ -98,3 +98,35 @@ def test_position_of_reads_the_snapshot_totals():
     assert p["net_worth"] == -894368.51          # no property yet: net worth incl. savings
     totals.update(property_value=2400000.0, net_worth_with_property=1505631.49)
     assert history.position_of({"totals": totals})["net_worth"] == 1505631.49
+
+
+def _published(generated_at, consumer, loans, savings):
+    return {"generated_at": generated_at,
+            "bank_accounts": [{"institution": "discount", "account_id": "0034"},
+                              {"institution": "leumi", "account_id": "806-6719/63"}],
+            "loans": loans, "savings": savings,
+            "totals": {"bank_balances_sum": -1913.0, "credit_card_debt": 4092.23, "consumer_loan_balance": consumer,
+                       "mortgage_balance": 1418443.0, "long_term_savings": 639880.88,
+                       "net_position_with_savings": -912122.0}}
+
+
+def test_backfill_skips_published_days_whose_totals_cover_different_accounts():
+    # Before 10-24 the Leumi loan 66730014 was not read, so consumer debt was ₪13.6k lower:
+    # recording 10-17 would draw a ₪13.6k drop in net worth that never happened.
+    loans = [{"lender": "Discount", "loan_id": "9001"}, {"lender": "Bank Leumi", "loan_id": "66730014"}]
+    savings = [{"institution": "harel", "topic_id": "70", "label": "קרנות פנסיה"}]
+    oct17 = _published("2026-10-17T08:26:00+03:00", 113930.0, loans[:1], savings)
+    oct24_night = _published("2026-10-25T01:49:00+03:00", 127555.0, loans, savings)   # local 10-25
+    oct24 = _published("2026-10-24T20:10:00+03:00", 127555.0, loans, savings)
+    # RiseUp's copy of the same Leumi account, as published until direct scrapes won (10-27).
+    oct24["bank_accounts"][1] = {"institution": "leumiBank", "account_id": "806-671963"}
+    today = _published("2026-10-27T21:51:00+03:00", 127566.17, loans, savings)
+
+    days = history.backfill_days([oct24_night, oct17, oct24], today)
+
+    assert sorted(days) == [date(2026, 10, 24), date(2026, 10, 25)]
+    assert days[date(2026, 10, 24)]["consumer_loans"] == 127555.0
+
+
+def test_snapshot_day_is_the_local_date():
+    assert history.snapshot_day({"generated_at": "2026-10-24T22:49:00+00:00"}) == date(2026, 10, 25)
