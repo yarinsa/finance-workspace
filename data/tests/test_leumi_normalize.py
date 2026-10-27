@@ -172,3 +172,53 @@ def test_monthly_loan_service_picks_up_per_loan_payments():
     }
     snap = digest.build_snapshot(entities)
     assert snap["totals"]["monthly_loan_service"] == 3212.22
+
+
+# As the household, when the 2026-10-27 Leumi scrape saved loan 2529-1/3 twice
+# (index 3 and index 4 both rendered 25290013, balance 43,894.94) while Leumi's
+# summary says the loans total 74,463.85, the snapshot must show 74,463.85 of
+# Leumi debt — not 87,789.88 (the same loan counted twice, the מילואים loan lost).
+DUPLICATED_2529 = {
+    "source": "hb2.bankleumi.co.il - LoanAndMortgages",
+    "capturedAt": "2026-10-27T04:20:53.358Z",
+    "loans": [
+        {**REAL_LOANS["loans"][0], "index": i,
+         "generalInfo": {**REAL_LOANS["loans"][0]["generalInfo"], "נכון לתאריך": "26/10/26"},
+         "balances": {"תשלומים שנותרו": "26", "סכום הלוואה מקורי": "50,000.00",
+                      "יתרת קרן": "43,894.94", "סכום הלוואה משוערך בש\"ח": "44,129.05",
+                      "סכום התשלום הבא": "1,844.42"},
+         "installmentCount": 0}
+        for i in (3, 4)
+    ],
+}
+SUMMARY_2026_10_26 = {"TotalPerTypeItems": [
+    {"accountType": "CHECKING", "totalPerAccountType": 2413.94},
+    {"accountType": "CREDITCARD", "totalPerAccountType": -599.06},
+    {"accountType": "LOAN", "totalPerAccountType": -74463.85},
+]}
+
+
+def test_duplicated_loan_page_counts_once_and_the_rest_comes_from_the_summary(tmp_path):
+    (tmp_path / "raw").mkdir()
+    (tmp_path / "raw" / "summary.json").write_text(json.dumps(SUMMARY_2026_10_26), encoding="utf-8")
+    out = _load_leumi_loans_with_raw(tmp_path, DUPLICATED_2529)
+    ids = [r["loan_id"] for r in out["records"]]
+    assert ids.count("25290013") == 1
+    assert round(sum(r["balance"] for r in out["records"]), 2) == 74463.85
+    rest = next(r for r in out["records"] if r["loan_id"] != "25290013")
+    assert rest["balance"] == 30568.91
+    assert rest["monthly_payment"] == 0          # unknown until the page is scraped again
+
+
+def _load_leumi_loans_with_raw(tmp_path, loans_payload):
+    """Like _load_leumi_loans, but keeps whatever else is already in tmp_path/raw."""
+    src = Path(digest.__file__).resolve().parent / "leumi" / "normalize.py"
+    raw = tmp_path / "raw"
+    raw.mkdir(exist_ok=True)
+    (raw / "loans.json").write_text(json.dumps(loans_payload, ensure_ascii=False), encoding="utf-8")
+    mod = importlib.util.module_from_spec(importlib.util.spec_from_loader("leumi_normalize", loader=None))
+    code = src.read_text(encoding="utf-8").replace(
+        'HERE = Path(__file__).resolve().parent', f'HERE = Path(r"{tmp_path}")')
+    mod.__dict__["__file__"] = str(src)
+    exec(compile(code, str(src), "exec"), mod.__dict__)
+    return json.loads((tmp_path / "normalized" / "loans.json").read_text())

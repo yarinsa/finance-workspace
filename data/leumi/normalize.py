@@ -155,6 +155,30 @@ if loans_raw_path.exists():
             "currency": "ILS",
         })
 
+# The loan pages share server-side state, so a scrape can render the same loan for
+# two indexes (2026-10-27: 2529-1/3 twice, the מילואים loan lost). Count each loan
+# once, and carry whatever the summary's LOAN total says is left as one record with
+# no schedule, so the debt total stays the bank's own figure.
+loans = list({ln["loan_id"] or id(ln): ln for ln in loans}.values())
+missing = round(abs(totals.get("LOAN") or 0) - sum(ln["balance"] or 0 for ln in loans), 2)
+if loans and missing > 1:
+    loans.append({
+        "lender": "Bank Leumi",
+        "loan_id": "leumi-loans-unread",
+        "name": "הלוואות לאומי שלא נקראו",
+        "category": "consumer",
+        "original_amount": None,
+        "balance": missing,
+        "rate_pct": None,
+        "rate_type": "variable",
+        "index_linked": False,
+        "payments_remaining": 0,
+        "payments_total": 0,
+        "monthly_payment": 0,
+        "final_date": None,
+        "currency": "ILS",
+    })
+
 if not loans and totals.get("LOAN"):
     # No per-loan detail on disk yet (e.g. before the first loans.json scrape)
     # -- keep the old aggregate as a fallback so totals aren't silently zero.

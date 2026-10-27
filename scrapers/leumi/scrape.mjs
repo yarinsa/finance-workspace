@@ -209,6 +209,12 @@ async function scrapeLoans(page) {
     console.log(`  loan ${String(amort.loan || '').trim()}  index=${idx}  ${installments.length} installments`);
   }
   // Stub guard: a lapsed session renders no loan pages, so every loan comes back without a number.
+  // The pages share server-side state: two indexes can render the same loan (2026-10-27).
+  const numbers = loans.map((l) => l.generalInfo['מספר הלוואה']);
+  if (new Set(numbers).size !== numbers.length) {
+    console.log(`  --  loans.json  <-- SAME LOAN ON TWO PAGES (${numbers.join(', ')}), NOT WRITTEN (previous file kept)`);
+    return;
+  }
   if (loans.some((l) => !l.generalInfo['מספר הלוואה'])) {
     console.log('  --  loans.json  <-- NO LOAN DETAIL (session or loan set changed), NOT WRITTEN (previous file kept)');
     state.failed = true;
