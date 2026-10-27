@@ -276,3 +276,25 @@ class TestCli:
         rc, calls = self.run(store, "set", "חופשה ✈️", "1500")
         assert rc == 0 and calls == [1, "תיירות"]
         assert budgets.load_overrides(store) == {"תיירות": 1500}
+
+
+class TestPlanBaseline:
+    def test_seed_copies_riseup_plans_and_keeps_set_lines(self, tmp_path, monkeypatch):
+        store = tmp_path / "budgets.json"
+        budgets.save_overrides({"אוכל בחוץ": 1500}, store)
+        monkeypatch.setattr(budgets, "load_budget", lambda: doc([env("אוכל בחוץ", 1000), env("עציצים", 700),
+                                                                   env("חופשה ✈️", 1000)]))
+        assert budgets.main(["seed"], store=store, rebuild=lambda: None, show=lambda c: None) == 0
+        assert budgets.load_overrides(store) == {"אוכל בחוץ": 1500, "עציצים": 700, "תיירות": 1000}
+
+    def test_variable_category_without_a_plan_shows_at_zero_with_its_average(self):
+        """דייטים has spending every cycle but no budget line: shown unplanned, not 'over'."""
+        ledger = [row(f"2026-{m:02d}-12", "גילי קופי האוס", -150.0, "דייטים", group="פנאי") for m in range(5, 11)]
+        c = next(c for c in build([env("אוכל בחוץ", 1000)], ledger)["categories"] if c["name"] == "דייטים")
+        assert (c["source"], c["planned"], c["over"], c["estimate"]) == ("unplanned", 0, False, 150.0)
+
+    def test_a_group_line_covers_its_categories(self):
+        """The תחבורה line covers דלק, so דלק is not listed again as unplanned."""
+        ledger = [row(f"2026-{m:02d}-05", "פז אפליקצית-YELLOW", -36.0, "דלק") for m in range(5, 11)]
+        names = [c["name"] for c in build([env("תחבורה", 200)], ledger)["categories"]]
+        assert names == ["תחבורה"]

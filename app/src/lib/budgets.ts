@@ -9,7 +9,9 @@ export interface BudgetCategory {
   /** spent / planned, in percent; null when nothing is planned. */
   pct: number | null;
   over: boolean;
-  source: "riseup" | "override";
+  /** override = the household's own plan (seeded from RiseUp by `budgets.py seed`);
+   * unplanned = a variable category with spending but no plan yet (planned 0). */
+  source: "riseup" | "override" | "unplanned";
   /** Median variable spend of the last 3–6 cycles; null with too little history. */
   estimate?: number | null;
   /** Spend of the last cycles before the current one, oldest first. */

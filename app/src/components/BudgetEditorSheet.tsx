@@ -64,9 +64,9 @@ function Body({ c }: { c: BudgetCategory }) {
       <SheetHeader>
         <SheetTitle className="text-lg font-bold">{c.name}</SheetTitle>
         <SheetDescription className="tabular-nums">
-          מתוכנן {shekel(c.planned)}
-          {c.source === "override" && (
-            <span className="ms-2 rounded-full bg-brand/15 px-2 py-0.5 text-xs font-semibold">מותאם אישית</span>
+          {c.source === "unplanned" ? "לא מתוכנן עדיין" : `מתוכנן ${shekel(c.planned)}`}
+          {c.source === "riseup" && (
+            <span className="ms-2 rounded-full bg-brand/15 px-2 py-0.5 text-xs font-semibold">מ-RiseUp</span>
           )}
         </SheetDescription>
       </SheetHeader>

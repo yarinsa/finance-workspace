@@ -86,10 +86,10 @@ function Row({ c, onOpen }: { c: BudgetCategory; onOpen: () => void }) {
       <div className="mb-1.5 flex items-baseline justify-between gap-3">
         <span className="font-semibold">
           {c.name}
-          {c.source === "override" && <span className="ms-1.5 text-xs font-normal text-muted-foreground">מותאם אישית</span>}
+          {c.source === "unplanned" && <span className="ms-1.5 text-xs font-normal text-muted-foreground">לא מתוכנן</span>}
         </span>
         <span className={`text-sm font-bold tabular-nums ${c.over ? "text-bad" : ""}`}>
-          {c.over ? `חריגה ${shekel(-c.left)}` : `${shekel(c.left)} נותרו`}
+          {c.source === "unplanned" ? shekel(c.spent) : c.over ? `חריגה ${shekel(-c.left)}` : `${shekel(c.left)} נותרו`}
         </span>
       </div>
       <Bar pct={pct} over={c.over} />

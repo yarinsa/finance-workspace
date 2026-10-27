@@ -403,7 +403,9 @@ fixed − variable. Non-spending rows (income, card bills, own transfers, saving
   `label_category`; a tracking envelope via `tracking_category`. The per-taxonomy rules
   live in `finance/categories.py`, nowhere else: `DEBT_CATEGORIES`, `LEVERS` /
   `GROUP_LEVER` / `CATEGORY_LEVER` (how a fixed expense can be cut), `bill_kind`.
-  **RiseUp still supplies plans, not categories**: `budgets.py`'s planned amounts, and `forecast.py`'s envelopes (see
+  **RiseUp still supplies plans, not categories**: `budgets.py`'s planned amounts until
+  `budgets.py seed` copies them into the household's own store (`data/budgets/budgets.json`;
+  a variable category with spending but no line shows at ₪0 as `unplanned`, with its average), and `forecast.py`'s envelopes (see
   docs/forecast-architecture.md — its fixed items carry our `category` +
   `category_group`, the raw label as `source_category`). `plugin/scripts/` keeps its own
   older copies.

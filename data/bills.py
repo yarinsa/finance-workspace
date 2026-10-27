@@ -6,7 +6,8 @@ mortgage step-up starts a new series. Two kinds of series are bills:
 
 - **Fixed**: rows whose ``kind`` is ``fixed`` (finance/categories.py, household
   edits included), seen in at least 2 of the 3 cycles before this one, or before
-  and in this one. A series fixed only by its category's default (no recurrence,
+  and in this one. A merchant fixed by a decision (merchant default, rule, manual —
+  the barber's ₪120–240) is one series whatever the amount. A series fixed only by its category's default (no recurrence,
   merchant, RiseUp or manual signal) needs all 3 — the mortgage-arrears payoffs
   (סילוק פיגור) are הלוואה but not a bill. Expected amount = the latest charge; day = its day of month.
   This is what brings in AWS, SUPERHUMAN or ANTHROPIC, which RiseUp never had.
@@ -121,7 +122,9 @@ def _fixed_series(transactions, start, end, start_day):
             by_merchant[t.get("merchant") or merchant_name(t.get("description"))].append(t)
     out = []
     for rows in by_merchant.values():
-        for s in _series(rows):
+        # fixed by a decision (merchant default, rule, manual): one bill whatever the amount
+        decided = all(t.get("kind_source") in ("merchant", "rule", "manual") for t in rows)
+        for s in ([sorted(rows, key=lambda t: t["date"])] if decided else _series(rows)):
             cycles = {_cycle_index(date.fromisoformat(t["date"][:10]), start_day) for t in s}
             before = {c for c in cycles if cur - LOOKBACK_CYCLES <= c < cur}
             now = [t for t in s if start.isoformat() <= t["date"][:10] <= end.isoformat()]

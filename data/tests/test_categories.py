@@ -222,3 +222,10 @@ def test_envelope_label_and_ledger_category():
         row("2026-10-15", -59.5, "APPLE.COM/BILL", category="דיגיטל"),
     ])
     assert known == {"APPLE.COM/BILL": "דיגיטל"}
+
+
+def test_the_barber_is_fixed():
+    """גורביץ מרק (₪120–240 a month) is the monthly barber: קבוע, so it is a bill."""
+    ledger = [row("2026-09-20", -200.0, "גורביץ מרק", category="ספר")]
+    cat.stamp(ledger)
+    assert (ledger[0]["category"], ledger[0]["kind"], ledger[0]["kind_source"]) == ("ספר", "fixed", "merchant")

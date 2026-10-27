@@ -120,3 +120,11 @@ def test_without_a_budget_doc_the_cycle_is_the_calendar_month():
 def test_clean_name():
     assert bills.clean_name(RENT) == 'הו"ק לעיין ניהול נכסי'
     assert bills.clean_name("דסק-משכנתא,חיוב") == "דסק-משכנתא"
+
+
+def test_merchant_fixed_by_decision_is_one_bill_whatever_the_amount():
+    """The barber (גורביץ מרק) is fixed by a merchant default; ₪120–240 is one bill."""
+    ledger = [tx(f"2026-{m:02d}-20", "גורביץ מרק", a, "ספר", kind_source="merchant")
+              for m, a in ((7, -160.0), (8, -240.0), (9, -200.0))]
+    b = build(ledger)
+    assert [(i["name"], i["amount"], i["status"]) for i in b["items"]] == [("גורביץ מרק", 200.0, "upcoming")]

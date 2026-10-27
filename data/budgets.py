@@ -298,11 +298,21 @@ def build_budgets(budget, transactions, as_of, overrides=None, ledger=None, expe
     estimate_months = _covered_months(transactions, month, ESTIMATE_CYCLES)
     by_month = {m: _cycle_rows(transactions, m, start_day) for m in set(history_months) | set(estimate_months)}
 
+    names = {**planned_by, **overrides}
+    covered = set(names) | {c for n in names if n in categories.GROUP_KEY and n not in categories.CATEGORY_GROUP
+                            for c, g in categories.CATEGORY_GROUP.items() if categories.GROUP_NAME[g] == n}
+    # A variable category the household spends on but has no line for shows at ₪0
+    # with its usual month, so the editor can decide what to plan.
+    unplanned = {t.get("category") for m in estimate_months for t in by_month[m]
+                 if t.get("kind") == VARIABLE and _cashflow(t)
+                 and categories.CATEGORY_KIND.get(t.get("category")) == VARIABLE} - covered
     rows = []
-    for name in {**planned_by, **overrides}:
+    for name in [*names, *sorted(unplanned)]:
+        if name in unplanned and not any(line_spent(by_month[m], name) for m in estimate_months):
+            continue
         scope = "group" if name in categories.GROUP_KEY and name not in categories.CATEGORY_GROUP else "category"
-        source = "override" if name in overrides else "riseup"
-        planned = overrides[name] if source == "override" else planned_by[name]
+        source = "override" if name in overrides else "riseup" if name in planned_by else "unplanned"
+        planned = overrides[name] if source == "override" else planned_by.get(name, 0.0)
         spent = line_spent(cur, name, scope)
         past = [line_spent(by_month[m], name, scope) for m in estimate_months]
         rows.append({
@@ -312,7 +322,7 @@ def build_budgets(budget, transactions, as_of, overrides=None, ledger=None, expe
             "spent": round(spent, 2),
             "left": round(planned - spent, 2),
             "pct": round(spent / planned * 100, 1) if planned > 0 else None,
-            "over": spent > planned,
+            "over": spent > planned and source != "unplanned",
             "source": source,
             "estimate": round(median(past), 2) if len(past) >= MIN_ESTIMATE_CYCLES else None,
             "history": [{"cycle": m, "spent": round(line_spent(by_month[m], name, scope), 2)}
@@ -379,15 +389,25 @@ def _print_line(category):
 
 
 def main(argv, store=OVERRIDES, rebuild=_rebuild, show=_print_line):
-    """CLI: `set <category> <amount>` | `unset <category>` | `list`. A RiseUp
-    envelope name is stored as our category (`חופשה ✈️` -> `תיירות`)."""
-    usage = "usage: budgets.py set <category> <amount> | unset <category> | list"
+    """CLI: `set <category> <amount>` | `unset <category>` | `list` | `seed`. A RiseUp
+    envelope name is stored as our category (`חופשה ✈️` -> `תיירות`). `seed` copies
+    RiseUp's planned amounts into the store as the household's own baseline (lines
+    already set are kept), so the plan no longer depends on RiseUp."""
+    usage = "usage: budgets.py set <category> <amount> | unset <category> | list | seed"
     cmd = argv[0] if argv else ""
     ov = load_overrides(store)
     name = (categories.tracking_category(argv[1]) or argv[1]) if len(argv) > 1 else None
     if cmd == "list" and len(argv) == 1:
         for k, v in sorted(ov.items()):
             print(f"{k}: {v:g}")
+        return 0
+    if cmd == "seed" and len(argv) == 1:
+        added = {k: round(v, 2) for k, v in planned_lines(load_budget() or {}).items() if k not in ov}
+        save_overrides({**ov, **added}, store)
+        for k, v in sorted(added.items()):
+            print(f"{k}: {v:g}")
+        print(f"seeded {len(added)} line(s) from RiseUp")
+        rebuild()
         return 0
     if cmd == "set" and len(argv) == 3:
         try:
