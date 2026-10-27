@@ -55,7 +55,7 @@ function rows(): Row[] {
 
 /**
  * The lifetime net-worth curve, by age. `showLoans` overlays the loan balance
- * paying down. Shared by Overview, Cashflow, Net worth and Summary screens.
+ * paying down. Shared by Overview, Cashflow, Net worth and Plan screens.
  *
  * On phones a readout above the chart shows the point under your finger instead
  * of a floating tooltip, and the height follows the width.

@@ -56,11 +56,9 @@ Code and data ship separately:
 | `/networth` | 06 | ✅ real (assets/liabilities + lifetime curve) |
 | `/metrics` | 08 | ✅ real (full metric catalog) |
 | `/timeline` | 09 | ⚠️ partial (focal points; monthly waterfall is Phase 2) |
-| `/summary` | 03 | ⚠️ status map (journey curve + section completeness) |
 | `/recommendations` | 05 | ⚠️ heuristic nudges (no rules engine yet) |
 | `/goals` | 04 | ✅ real (4 general cards + personal goals, from `data/goals/`) |
 | `/portfolio` | 07 | ⚠️ real (Harel pension + study funds; no fees/yield, no real-estate) |
-| `/my-plan` | 10 | ⛔ Plus-gated, not captured |
 
 The ⛔/⚠️ screens render honest "needs input / not captured" notices rather than
 fake data — matching each PRD's "what we're missing" section.
