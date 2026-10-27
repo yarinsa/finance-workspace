@@ -90,6 +90,8 @@ digest). Each carries a `category` (PROBLEM, WARNING, REMINDER, SUGGESTION, INFO
   snoozed past now; **unread** = visible with no `read_at`. Snoozing also marks the item unread.
 - The digest never touches `read_at`, `snoozed_until_at` or `archived_at`; `finance_api` may update only those
   three columns.
+- `pushed_at` (Web Push sent it; written by the Mac's `finance/push.py` only) is not exposed over GraphQL and
+  `finance_api` cannot update it.
 - Queries: `notifications(filter)` (most severe first, then newest), `notificationsUnreadCount(category)`.
   Mutations: `updateNotification` (read, snooze), `archiveNotification` / `unarchiveNotification`, and the bulk
   `markAllNotificationsRead` / `archiveAllNotifications` / `snoozeAllNotifications` (visible items only).

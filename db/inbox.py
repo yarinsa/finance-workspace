@@ -13,6 +13,9 @@ upserts the current actions and stamps `resolved_at` on rows that dropped out of
 The household owns `read_at`, `snoozed_until_at` and `archived_at`: `sync` never touches
 them.
 
+`pushed_at` belongs to neither: only finance/push.py (owner role) stamps it, once the Web Push
+announced the item, so this table is the one record of what was pushed.
+
 Visible = not archived, not resolved, and not snoozed past `now`. Unread = visible and
 `read_at` is null. Snoozing clears `read_at`, so the item comes back unread.
 """
@@ -107,6 +110,27 @@ def unread_count(conn, category=None, now=None):
         f"SELECT count(*) FROM notifications WHERE {VISIBLE} AND read_at IS NULL "
         "AND (%(category)s::text[] IS NULL OR category = ANY(%(category)s))",
         {"now": _now(now), "category": category}).fetchone()[0]
+
+
+# --- Web Push ------------------------------------------------------------------------------
+
+def unpushed(conn, categories, now=None):
+    """Visible notifications in `categories` that were never pushed, most severe first, then most
+    recently updated."""
+    with conn.cursor(row_factory=dict_row) as cur:
+        return cur.execute(
+            f"SELECT {', '.join(COLUMNS)} FROM notifications "
+            f"WHERE {VISIBLE} AND pushed_at IS NULL AND category = ANY(%(categories)s) "
+            f"ORDER BY {SEVERITY_RANK}, updated_at DESC, id",
+            {"now": _now(now), "categories": list(categories)}).fetchall()
+
+
+def mark_pushed(conn, ids, now=None):
+    """Stamp `pushed_at` on these ids (unknown ids and already-pushed rows are left alone);
+    returns the number marked."""
+    return conn.execute(
+        "UPDATE notifications SET pushed_at = %s WHERE pushed_at IS NULL AND id = ANY(%s)",
+        (_now(now), list(ids))).rowcount
 
 
 # --- the household's state -----------------------------------------------------------------

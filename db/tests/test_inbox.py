@@ -186,6 +186,33 @@ def test_finance_api_changes_only_the_households_columns(conn):
     conn.rollback()
 
 
+def test_unpushed_lists_visible_rows_of_the_categories_until_marked_pushed(conn):
+    inbox.sync(conn, [LIMIT, BUDGET, WATER, STALE], now=T0)
+    inbox.update(conn, WATER["id"], {"archived_at": T0}, now=T0)
+    assert ids(inbox.unpushed(conn, ("PROBLEM", "WARNING"), now=T0)) == [LIMIT["id"], BUDGET["id"]]
+    assert ids(inbox.unpushed(conn, ("REMINDER",), now=T0)) == [STALE["id"]]
+    assert inbox.mark_pushed(conn, [LIMIT["id"], "unknown"], now=LATER) == 1
+    assert ids(inbox.unpushed(conn, ("PROBLEM", "WARNING"), now=T0)) == [BUDGET["id"]]
+    assert inbox.mark_pushed(conn, [LIMIT["id"]], now=LATER + dt.timedelta(hours=1)) == 0   # keeps the first stamp
+    assert conn.execute("SELECT pushed_at FROM notifications WHERE id = %s", (LIMIT["id"],)).fetchone()[0] == LATER
+
+
+def test_a_pushed_item_stays_pushed_when_the_digest_refreshes_it(conn):
+    inbox.sync(conn, [BUDGET], now=T0)
+    inbox.mark_pushed(conn, [BUDGET["id"]], now=T0)
+    inbox.sync(conn, [{**BUDGET, "detail": "₪1,900 מתוך ₪1,200 (+₪700)"}], now=LATER)
+    assert inbox.unpushed(conn, ("WARNING",), now=LATER) == []
+
+
+def test_finance_api_cannot_write_pushed_at(conn):
+    inbox.sync(conn, [LIMIT], now=T0)
+    conn.commit()
+    conn.execute("SET ROLE finance_api")
+    with pytest.raises(psycopg.errors.InsufficientPrivilege):
+        conn.execute("UPDATE notifications SET pushed_at = now()")
+    conn.rollback()
+
+
 def test_the_category_and_severity_are_checked(conn):
     with pytest.raises(psycopg.errors.CheckViolation):
         inbox.sync(conn, [{**LIMIT, "category": "URGENT"}], now=T0)

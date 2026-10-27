@@ -217,9 +217,11 @@ still dead on the re-check, the status is `needs_login` and nothing is scraped f
 ## Push notifications (Web Push)
 
 The installed PWA gets pushes for: a login is needed (one per login group), a source failed or
-its dump was rejected, new "לטיפול" items (ids already pushed are remembered in the gitignored
-`data/push/sent.json`; more than 3 new become one grouped push), and a daily summary after the
-22:00 run (balance, spent today, safe-to-spend). Sending is `finance/push.py` (pywebpush, owner
+its dump was rejected, new PROBLEM/WARNING inbox items (each stamped `notifications.pushed_at` once a device got it, so
+it is never repeated; more than 3 new become one grouped push to `/inbox`; the old
+`data/push/sent.json` is migrated into `pushed_at` once and renamed `sent.json.migrated`), and a
+daily summary after the 22:00 run (balance, spent today, safe-to-spend, plus a line for new
+REMINDER/SUGGESTION items, which are never pushed one by one; INFO is never pushed). Sending is `finance/push.py` (pywebpush, owner
 `DATABASE_URL`), called from the `notify`, `push_event`, `push_new_actions` and
 `push_daily_summary` activities. A push failure is swallowed and never fails a sync.
 

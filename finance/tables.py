@@ -279,4 +279,5 @@ class Notification(SQLModel, table=True):
     snoozed_until_at: dt.datetime | None = Field(default=None, sa_column=_when())
     archived_at: dt.datetime | None = Field(default=None, sa_column=_when())
     resolved_at: dt.datetime | None = Field(default=None, sa_column=_when())
+    pushed_at: dt.datetime | None = Field(default=None, sa_column=_when())   # Web Push sent it (finance/push.py only)
 

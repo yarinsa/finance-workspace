@@ -154,7 +154,7 @@ The "לטיפול" actions (`data/actions.py` + `validation_actions`) are also m
 digest). Every action carries `category` (PROBLEM | WARNING | REMINDER | SUGGESTION | INFO), `type`
 (camelCase event) and `subject` (`{kind, ...}`), and its period-stable `id` is the row key. The digest owns
 the content and `resolved_at`; the household owns `read_at` / `snoozed_until_at` / `archived_at` (the only
-columns `finance_api` can update). Visible = not archived, not resolved, not
+columns `finance_api` can update); `pushed_at` is stamped only by `finance/push.py`. Visible = not archived, not resolved, not
 snoozed; snoozing marks unread. GraphQL: `api/schema/inbox.graphql`; inbox mutations do **not** signal a
 ledger rebuild. Live changes arrive as `event: notification` on `/api/sync/events`. Details: `api/README.md`.
 
@@ -215,8 +215,9 @@ stores subscriptions (`push_subscriptions`, role `finance_api` gets select/inser
 /api/push/subscribe|unsubscribe`, `GET /api/push/key`) and holds just `PUSH_VAPID_PUBLIC_KEY`. The
 VAPID private key (`PUSH_VAPID_PRIVATE_KEY`, `PUSH_VAPID_SUBJECT`) lives only in the Mac's `.env`;
 `finance/push.py` (owner `DATABASE_URL`) sends from the sync activities: login needed, failed/rejected
-source, new לטיפול ids (state in gitignored `data/push/sent.json`), and the 22:00 daily summary. It never
-raises. Keys: `poetry run python sync/push_keys.py <email>`; steps in `sync/README.md`.
+source, new PROBLEM/WARNING inbox items (one push each, deep link `/inbox?tab=…`; `notifications.pushed_at`
+is the record of what was pushed, written only by the Mac), and the 22:00 daily summary, which also
+counts new REMINDER/SUGGESTION items (INFO is never pushed). It never raises. Keys: `poetry run python sync/push_keys.py <email>`; steps in `sync/README.md`.
 
 ### Freshness targets
 

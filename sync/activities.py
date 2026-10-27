@@ -547,7 +547,7 @@ async def push_event(payload: dict) -> str:
 
 @activity.defn
 async def push_new_actions() -> str:
-    """Push the לטיפול items in cashflow.json that were not pushed before. Never raises."""
+    """Push the PROBLEM / WARNING inbox items not pushed before (notifications.pushed_at). Never raises."""
     try:
         return await asyncio.wait_for(asyncio.to_thread(_push_module().push_new_actions), timeout=PUSH_TIMEOUT)
     except Exception as e:

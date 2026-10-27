@@ -1,7 +1,5 @@
 """Web Push sender and payload builders (finance/push.py): no network, no Postgres."""
 import json
-from datetime import datetime, timezone
-
 import pytest
 
 from finance import push
@@ -76,41 +74,91 @@ def test_missing_keys_or_broken_db_do_not_raise():
     assert push.send(PAYLOAD, conn=Broken(), env=ENV)["error"] == "db down"
 
 
-def action(id_, title="חריגה מהמסגרת", cta=("x", "/monthly?view=forecast")):
-    return {"id": id_, "title": title, "detail": "d", "cta": {"label": cta[0], "to": cta[1]} if cta else None}
+def note(id_, title="חריגה מהמסגרת", category="PROBLEM"):
+    return {"id": id_, "title": title, "detail": "d", "category": category}
 
 
-def test_one_push_per_item_with_link_or_overview():
-    out = push.action_payloads([action("limit-breach:2026-11-03"), action("stale:cal", cta=None)])
-    assert [(p["url"], p["tag"]) for p in out] == [
-        ("/monthly?view=forecast", "action-limit-breach:2026-11-03"), ("/overview", "action-stale:cal")]
+class FakeInbox:
+    """Stands in for db/inbox.py: `rows` are the notifications, `pushed` the ids marked."""
+    def __init__(self, rows):
+        self.rows, self.pushed = rows, []
+
+    def unpushed(self, conn, categories, now=None):
+        return [r for r in self.rows if r["category"] in categories and r["id"] not in self.pushed]
+
+    def mark_pushed(self, conn, ids, now=None):
+        self.pushed += [i for i in ids if any(r["id"] == i for r in self.rows)]
+        return len(ids)
 
 
-def test_more_than_three_items_are_grouped():
-    out = push.action_payloads([action(f"a{i}") for i in range(4)])
-    assert len(out) == 1 and out[0]["title"] == "4 פריטים חדשים לטיפול" and out[0]["url"] == "/overview"
-
-
-def test_only_ids_not_pushed_before_are_announced(tmp_path):
-    cf, sent = tmp_path / "cashflow.json", tmp_path / "push" / "sent.json"
-    cf.write_text(json.dumps({"actions": [action("a"), action("b")]}))
-    now = datetime(2026, 10, 26, tzinfo=timezone.utc)
+def flow(monkeypatch, rows, subscribers=1):
+    fake = FakeInbox(rows)
+    monkeypatch.setattr(push, "_inbox", lambda: fake)
     got = []
-    sender = lambda sub, data, key, claims: got.append(json.loads(data)["tag"])  # noqa: E731
-    kw = dict(cashflow=cf, sent_path=sent, now=now, conn=FakeConn([(1, "https://p/1", "pk", "au")]), sender=sender, env=ENV)
-    push.push_new_actions(**kw)
-    assert got == ["action-a", "action-b"]
-    cf.write_text(json.dumps({"actions": [action("a"), action("b"), action("c")]}))
+    kw = dict(conn=FakeConn([(i, f"https://p/{i}", "pk", "au") for i in range(subscribers)]), env=ENV,
+              sender=lambda sub, data, key, claims: got.append(json.loads(data)))
+    return fake, got, kw
+
+
+def test_one_push_per_item_opening_its_inbox_tab():
+    out = push.action_payloads([note("limit-breach:2026-11-03"), note("bill-overdue:מי אביבים:2026-10", category="WARNING")])
+    assert [(p["url"], p["tag"]) for p in out] == [
+        ("/inbox?tab=problems", "notification-limit-breach:2026-11-03"),
+        ("/inbox?tab=warnings", "notification-bill-overdue:מי אביבים:2026-10")]
+
+
+def test_more_than_three_items_are_grouped_into_the_inbox():
+    out = push.action_payloads([note(f"a{i}") for i in range(4)])
+    assert len(out) == 1 and out[0]["title"] == "4 פריטים חדשים לטיפול" and out[0]["url"] == "/inbox"
+
+
+def test_only_unpushed_problems_and_warnings_are_announced(monkeypatch):
+    rows = [note("a"), note("b", category="WARNING"), note("stale:cal", "נתונים לא עדכניים", "REMINDER"),
+            note("tip", category="SUGGESTION"), note("fyi", category="INFO")]
+    fake, got, kw = flow(monkeypatch, rows)
+    assert push.push_new_actions(sent_file=None, **kw) == "2 new, 2 delivered"
+    assert [g["tag"] for g in got] == ["notification-a", "notification-b"]
+    assert fake.pushed == ["a", "b"]
     got.clear()
-    push.push_new_actions(**{**kw, "conn": FakeConn([(1, "https://p/1", "pk", "au")])})
-    assert got == ["action-c"]
+    assert push.push_new_actions(sent_file=None, **{**kw, "conn": FakeConn([(1, "https://p/1", "pk", "au")])}) == "no new items"
+    assert got == []
 
 
-def test_items_stay_unsent_when_nobody_is_subscribed(tmp_path):
-    cf, sent = tmp_path / "cashflow.json", tmp_path / "sent.json"
-    cf.write_text(json.dumps({"actions": [action("a")]}))
-    push.push_new_actions(cashflow=cf, sent_path=sent, conn=FakeConn([]), env=ENV)
-    assert push.load_sent(sent) == {}
+def test_items_stay_unpushed_when_nobody_is_subscribed(monkeypatch):
+    fake, got, kw = flow(monkeypatch, [note("a")], subscribers=0)
+    push.push_new_actions(sent_file=None, **kw)
+    assert fake.pushed == []
+
+
+def test_legacy_sent_file_marks_existing_ids_then_is_renamed(monkeypatch, tmp_path):
+    sent = tmp_path / "sent.json"
+    sent.write_text(json.dumps({"ids": {"a": "2026-10-20T00:00:00+00:00", "gone": "2026-10-20T00:00:00+00:00"}}))
+    fake, got, kw = flow(monkeypatch, [note("a"), note("b")])
+    push.push_new_actions(sent_file=sent, **kw)
+    assert [g["tag"] for g in got] == ["notification-b"]     # "a" was announced before the deploy
+    assert fake.pushed == ["a", "b"]
+    assert not sent.exists() and (tmp_path / "sent.json.migrated").exists()
+
+
+def test_missing_database_returns_an_error_status(monkeypatch):
+    monkeypatch.setattr(push, "_inbox", lambda: FakeInbox([]))
+    assert push.push_new_actions(sent_file=None, env={}.get).startswith("error:")
+
+
+def test_summary_mentions_and_marks_reminders_and_suggestions(monkeypatch, tmp_path):
+    cf, tx = tmp_path / "cashflow.json", tmp_path / "transactions.json"
+    cf.write_text(json.dumps({"runway": {"start_balance": 4200.4, "safe_to_spend": 300}}))
+    tx.write_text(json.dumps({"transactions": []}))
+    fake, got, kw = flow(monkeypatch, [note("stale:cal", "נתונים לא עדכניים", "REMINDER"),
+                                       note("tip", category="SUGGESTION"), note("a")])
+    push.push_daily_summary(cashflow=cf, transactions=tx, today="2026-10-26", **kw)
+    assert got[0]["body"].endswith("· 2 הצעות ותזכורות חדשות באינבוקס")
+    assert fake.pushed == ["stale:cal", "tip"]      # the PROBLEM waits for push_new_actions
+
+
+def test_summary_without_inbox_items_is_unchanged():
+    assert "אינבוקס" not in push.summary_payload({"start_balance": 100}, 5)["body"]
+    assert push.summary_payload(None, 5, 1)["body"] == "הוצאות היום ₪5 · הצעה או תזכורת חדשה באינבוקס"
 
 
 def test_summary_counts_only_real_spending_today():

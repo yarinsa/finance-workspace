@@ -37,7 +37,7 @@ class Binding:
 
 def _notification(*extra):
     """Every notification subtype reads the one `notifications` row; `extra` are its subject's fields."""
-    return Binding(tables.Notification, resolved=frozenset({"id", *extra}), hidden=frozenset({"subject"}),
+    return Binding(tables.Notification, resolved=frozenset({"id", *extra}), hidden=frozenset({"subject", "pushed_at"}),
                    never_null=frozenset({"created_at", "updated_at"}))   # filled by the database default
 
 
