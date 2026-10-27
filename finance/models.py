@@ -58,6 +58,8 @@ class Transaction(Record):
     is_abroad: bool | None = None
     is_income: bool | None = None
     excluded: bool | None = None
+    budget_type: str | None = None       # riseup: envelope type (fixed / trackingCategory / variable)
+    budget_category: str | None = None   # riseup: tracking envelope name, the household's budget line
 
 
 class Account(Record):
@@ -163,8 +165,17 @@ class LedgerTransaction(Record):
     description: str = ""
     sources: list[str] = []
     origin: str | None = None
-    category: str | None = None
+    category: str | None = None      # finance/categories.py default; overridable
     category_id: int | None = None   # set by the transactions view: id in the `categories` table
+    category_group: str | None = None   # the category's group name (דיור, תחבורה, ...)
+    source_category: str | None = None  # RiseUp's raw `expense` label, as scraped
+    budget_type: str | None = None      # RiseUp envelope type it was reconciled into
+    budget_category: str | None = None  # RiseUp tracking envelope name
+    merchant: str | None = None         # finance/merchants.py key; merchant rules match on it
+    kind: Literal["fixed", "variable"] | None = None   # expenses only: קבוע / משתנה
+    kind_source: Literal["manual", "rule", "merchant", "recurring", "one_off", "riseup", "category"] | None = None
+    recurring: bool | None = None       # same merchant + amount in >=3 months (categories.stamp_recurring)
+    one_off: bool | None = None         # the merchant recurs but this charge is not the recurring one
     tags: list[str] | None = None    # set by the transactions view: names from `transaction_tags`, sorted
     is_income: bool | None = None
     account_id: str | None = None

@@ -172,7 +172,8 @@ def test_get_transaction_shape(client):
         "date": "2026-01-15", "abs_amount": "123.45", "amount": -123.45, "description": "חנות לדוגמה",
         "category": "קניות", "scraped_category": "קניות", "note": None, "excluded": False,
         "overridden": False, "origin": "cal", "sources": ["cal", "riseup"],
-        "horizon": None, "scraped_horizon": None, "goal_id": None, "goal": None, "tags": []}
+        "horizon": None, "scraped_horizon": None, "goal_id": None, "goal": None, "tags": [],
+        "category_group": "קניות", "kind": "variable", "kind_source": "category", "merchant": None}
 
 
 def test_unknown_key_is_404_on_every_verb(client, rebuilder):
@@ -286,11 +287,13 @@ def test_key_ignores_sign_and_trailing_zeros(client):
     assert r.status_code == 200 and r.json()["abs_amount"] == "1000.00"
 
 
-def test_categories_are_the_riseup_ones_plus_user_added_sorted(client):
+def test_categories_are_the_taxonomy_plus_user_added_sorted(client):
+    from finance import categories as taxonomy
     client.patch(PURCHASE_URL, json={"category": "אלקטרוניקה"}, headers=WRITE)
     cats = client.get("/api/categories").json()["categories"]
     assert cats == sorted(set(cats))
-    assert {"אלקטרוניקה", "קניות"} == set(cats)   # only the purchase has a RiseUp category
+    # the taxonomy, the hand-typed one, and the fixture's unmapped card-bill label
+    assert set(cats) == set(taxonomy.CATEGORY_GROUP) | {"אלקטרוניקה", "חיובי כרטיס"}
 
 
 def test_orphaned_overrides_listed(client, owner):

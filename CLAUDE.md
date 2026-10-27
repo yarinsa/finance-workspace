@@ -354,11 +354,42 @@ income. Logic: `finance/offsets.py` (shared by the digest and the API).
 - **UI:** the expense's edit sheet → "קזז מול החזר" (GraphQL `linkOffset` / `unlinkOffset` /
   `resetOffsets`); a closed month shows a warning, since the offset changes its totals.
 
+### Categories and kind — one system (important)
+
+`finance/categories.py` is the **only** category list. Every ledger row gets a
+`category` under a group (`category_group`: דיור, תחבורה, אוכל, …) and every expense a
+`kind`: **`fixed` (קבוע)** — the same or almost the same amount on a schedule (rent,
+loans, Metro Motor, subscriptions) — or **`variable` (משתנה)** — needed but usage-driven,
+so estimated (fuel, groceries, electricity). "What's left" is not a kind: it is income −
+fixed − variable. Non-spending rows (income, card bills, own transfers, savings) have none.
+
+- **Sources' labels are inputs, not the taxonomy.** RiseUp's `expense` label, CAL/Max's
+  sector and RiseUp's tracking envelope (the household's own budget lines, e.g. עציצים —
+  now real categories) map in through `SOURCE_ALIASES` / `TRACKING_ALIASES`; the raw
+  label stays on the row as `source_category`. "תשלומים" says *how* it was paid, not
+  what it is, so it maps to nothing and the merchant decides.
+- **Defaults** (`categories.stamp`, run by the digest): category = tracking envelope >
+  `MERCHANTS` default > source label > the merchant's usual category. Kind = merchant
+  default > usage-based category (always variable) > recurring (same merchant + amount
+  ±5% on about the same day, ≥3 months) > one-off (the merchant recurs, this charge
+  doesn't: a ₪52k loan payoff) > RiseUp fixed envelope > category default. `kind_source`
+  says which one decided.
+- **Edits** (DB, `transaction_kinds` view): transaction override (`db/edit.py kind|category`)
+  > merchant rule (`db/edit.py rule MERCHANT category|kind VALUE`, table `merchant_rules`)
+  > the defaults. `db/edit.py categories` prints the tree. The digest with and without
+  the DB must agree (`test_digest_stamped_rows_round_trip_unchanged`).
+- **Read `kind`, never re-derive it.** `months_view.py` already does. Still to switch
+  (they read RiseUp envelopes or hardcoded sets): `bills.py`, `budgets.py`,
+  `cashflow.FIXED_GROUPS` / `EXPENSE_CATEGORY_MAP`, `forecast.py`.
+- A source label nobody mapped is kept (category without a group) and the digest prints
+  it: add it to `SOURCE_ALIASES`.
+
 ### Dedup rules (important)
 
 - Two records are the **same purchase** when `date` and `abs(amount)` match.
-- **RiseUp is the higher-priority copy** — it carries a spending `category` the raw
-  bank/card dumps lack, so on a conflict RiseUp's fields win; the direct source is
+- **RiseUp is the higher-priority copy** — it carries the spending label and budget
+  envelope the raw bank/card dumps lack (inputs to the category, see above), so on a
+  conflict RiseUp's fields win; the direct source is
   still recorded in `sources` and backfills anything RiseUp is missing.
 - RiseUp's origin names are mapped to our source ids (`RISEUP_ORIGIN` in
   `digest.py`): `cal` → `cal`, `leumicard` → `max` (Max, ex-Leumi Card), `americanexpress`/`isracard` → `amex`,

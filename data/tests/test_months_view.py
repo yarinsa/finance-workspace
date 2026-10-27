@@ -113,3 +113,16 @@ def test_past_month_expected_from_budget_doc():
     assert (g["income"]["expected"], g["fixed"]["expected"], g["debt_savings"]["expected"],
             g["variable"]["expected"]) == (26000, 6800, 1800, 300)
     assert month(v, "2026-08")["groups"][0]["expected"] is None
+
+
+def test_a_hand_edited_kind_is_kept():
+    # As the household, I marked the 2026-10-05 WOLT ₪85 as fixed (a meal plan): the
+    # months view must follow the ledger's kind, not re-derive its own.
+    from finance import categories
+    rows = [dict(t) for t in LEDGER]
+    categories.stamp(rows)
+    wolt = next(t for t in rows if t["date"] == "2026-10-05")
+    wolt.update(kind="fixed", kind_source="manual")
+    m = month(mv.build_months_view(rows, FORECAST, [], AS_OF), "2026-10")
+    assert actual(m, "fixed") == 6800 + 85
+    assert actual(m, "variable") == 0

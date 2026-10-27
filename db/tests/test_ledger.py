@@ -7,6 +7,7 @@ import json
 
 import edit
 import goal_store
+from finance import categories as taxonomy
 import ledger
 import offset_store
 import overrides
@@ -26,9 +27,13 @@ def k(t):
     return ledger.key(t["date"], t["amount"])
 
 
+VIEW_ADDED = ("category_id", "horizon_id", "category_group", "kind", "kind_source")
+
+
 def plain(rows):
-    """Ledger rows without the `category_id` / `horizon_id` the view adds."""
-    return [{f: v for f, v in r.items() if f not in ("category_id", "horizon_id")} for r in rows]
+    """Ledger rows without the ids, group and kind the view adds (these rows were not
+    stamped by the digest; see test_digest_stamped_rows_round_trip_unchanged)."""
+    return [{f: v for f, v in r.items() if f not in VIEW_ADDED} for r in rows]
 
 
 def test_round_trip_without_overrides_is_identity(conn):
@@ -84,21 +89,114 @@ def test_override_whose_transaction_vanished_is_reported_orphaned(conn):
     assert [(str(d), str(a)) for d, a, *_ in orphans] == [("2026-01-15", "123.45")]
 
 
-def test_riseup_categories_seed_the_table_and_are_assigned_by_id(conn):
-    # RiseUp's labels become rows in `categories`; each row points at one by id.
+def test_taxonomy_seeds_the_table_and_rows_are_assigned_by_id(conn):
+    # finance/categories.py is the list; each row points at one of its categories by id.
     out = ledger.sync(conn, LEDGER)
-    ids = dict(conn.execute("SELECT name, id FROM categories WHERE source = 'riseup'").fetchall())
-    assert set(ids) == {"קניות", "משכורת"}
+    ids = dict(conn.execute("SELECT name, id FROM categories WHERE source = 'builtin'").fetchall())
+    assert set(ids) == set(taxonomy.CATEGORY_GROUP)
     assert [r.get("category_id") for r in out] == [ids["קניות"], ids["משכורת"], None]
+    assert conn.execute("SELECT g.name FROM categories c JOIN category_groups g ON g.id = c.group_id "
+                        "WHERE c.name = 'דלק'").fetchone()[0] == "תחבורה"
 
 
-def test_a_category_only_the_bank_gave_is_not_assigned(conn):
-    # As the household, a CAL row RiseUp never saw keeps no category: only RiseUp's are copied.
+def test_a_card_sector_label_is_mapped_for_a_row_riseup_never_saw(conn):
+    # As the household, a CAL row RiseUp never saw ("תיירות יוצאת קניות") is still
+    # categorised: the card's sector maps into the one taxonomy (it used to be dropped).
     bank_only = {"date": "2026-01-20", "amount": -80.0, "description": "חנות בחו\"ל",
                  "category": "תיירות יוצאת קניות", "origin": "cal", "sources": ["cal"]}
+    taxonomy.stamp([bank_only])
     row = ledger.sync(conn, [bank_only])[0]
-    assert "category" not in row and "category_id" not in row
+    assert (row["category_group"], row["category"], row["kind"]) == ("פנאי", "תיירות", "variable")
     assert conn.execute("SELECT count(*) FROM categories WHERE name = 'תיירות יוצאת קניות'").fetchone()[0] == 0
+
+
+def test_an_unmapped_source_label_is_kept_without_a_group(conn):
+    row = ledger.sync(conn, [{"date": "2026-01-20", "amount": -40.0, "description": "חנות חיות",
+                              "category": "חיות מחמד", "sources": ["riseup"]}])[0]
+    assert row["category"] == "חיות מחמד" and "category_group" not in row
+    assert conn.execute("SELECT source FROM categories WHERE name = 'חיות מחמד'").fetchone()[0] == "riseup"
+
+
+# --- kind: fixed (קבוע) / variable (משתנה) ---------------------------------------------
+
+METRO = {"date": "2026-10-02", "amount": -500.0, "description": "מטרו מוטור שווק (1981)בעמ",
+         "category": "תשלומים", "origin": "cal", "is_income": False, "sources": ["cal", "riseup"],
+         "budget_type": "fixed"}   # RiseUp's fixed envelope "מטרו מוטור"
+FUEL = {"date": "2026-10-05", "amount": -36.88, "description": "פז אפליקצית-YELLOW",
+        "category": "רכב", "origin": "amex", "is_income": False, "sources": ["amex", "riseup"]}
+SPOTIFY = [{"date": f"2026-{m:02d}-09", "amount": -43.9, "description": "SpotifyIL", "category": "דיגיטל",
+            "origin": "cal", "is_income": False, "sources": ["riseup"]} for m in (7, 8, 9)]
+
+
+def stamped(rows):
+    rows = [dict(r) for r in rows]
+    taxonomy.stamp(rows)
+    return rows
+
+
+def test_digest_stamped_rows_round_trip_unchanged(conn):
+    # The digest (no DB) and the view (DB) must give the same category, group and kind.
+    rows = stamped([METRO, FUEL, *SPOTIFY, CAL_PURCHASE, SALARY, CARD_BILL])
+    out = ledger.sync(conn, rows)
+    assert [{f: v for f, v in r.items() if f not in ("category_id", "horizon_id")} for r in out] == rows
+    assert [(r["category"], r.get("kind"), r.get("kind_source")) for r in out[:3]] == [
+        ("רכב", "fixed", "riseup"), ("דלק", "variable", "category"), ("דיגיטל", "fixed", "recurring")]
+
+
+def test_kind_override_beats_the_default_and_survives_reimport(conn):
+    rows = stamped([FUEL])
+    ledger.load(conn, rows)
+    edit.set_field(conn, k(FUEL), "kind", "fixed")
+    row = ledger.sync(conn, rows)[0]
+    assert (row["kind"], row["kind_source"], row["overridden"]) == ("fixed", "manual", True)
+    edit.set_field(conn, k(FUEL), "kind", None)
+    assert conn.execute("SELECT count(*) FROM transaction_overrides").fetchone()[0] == 0
+
+
+def test_merchant_rule_applies_to_every_row_of_the_merchant(conn):
+    # As the household, "every פז אפליקצית-YELLOW is fuel I fill monthly at a fixed ₪37"
+    # is one rule, not an edit per transaction; a single override still wins.
+    second = {**FUEL, "date": "2026-09-05", "amount": -34.27}
+    rows = stamped([FUEL, second])
+    ledger.load(conn, rows)
+    overrides.set_merchant_rule(conn, rows[0]["merchant"], {"kind": "fixed", "category": "רכב"}, "test")
+    edit.set_field(conn, k(second), "kind", "variable")
+    out = ledger.materialize(conn)
+    assert [(r["category"], r["kind"], r["kind_source"]) for r in out] == [
+        ("רכב", "fixed", "rule"), ("רכב", "variable", "manual")]
+    audit = conn.execute("SELECT field, new FROM override_audit WHERE txn_date IS NULL ORDER BY id").fetchall()
+    assert audit == [(f"merchant_rule.category:{rows[0]['merchant']}", "רכב"),
+                     (f"merchant_rule.kind:{rows[0]['merchant']}", "fixed")]
+
+
+def test_empty_merchant_rule_is_deleted(conn):
+    overrides.set_merchant_rule(conn, "WOLT", {"kind": "fixed"}, "test")
+    assert overrides.set_merchant_rule(conn, "WOLT", {"kind": None}, "test") is None
+    assert conn.execute("SELECT count(*) FROM merchant_rules").fetchone()[0] == 0
+
+
+def test_recategorising_to_a_usage_based_category_makes_it_variable(conn):
+    # Spotify recurs (fixed); moved by hand into groceries (usage-based) it follows usage.
+    rows = stamped(SPOTIFY)
+    ledger.load(conn, rows)
+    edit.set_field(conn, k(rows[0]), "category", "כלכלה")
+    row = ledger.materialize(conn)[0]
+    assert (row["category_group"], row["kind"], row["kind_source"]) == ("אוכל", "variable", "category")
+
+
+def test_non_expenses_have_no_kind(conn):
+    out = ledger.sync(conn, stamped([SALARY, CARD_BILL]))
+    assert [r.get("kind") for r in out] == [None, None]
+
+
+def test_legacy_alias_category_moves_its_overrides(conn):
+    # An override that pointed at RiseUp's "עמלת דמי כרטיס - בנקים" ends up on עמלות.
+    conn.execute("INSERT INTO categories (name, source) VALUES ('עמלת דמי כרטיס - בנקים', 'riseup')")
+    ledger.load(conn, [CAL_PURCHASE])
+    edit.set_field(conn, k(CAL_PURCHASE), "category", "עמלת דמי כרטיס - בנקים")
+    ledger.load(conn, [CAL_PURCHASE])
+    assert ledger.materialize(conn)[0]["category"] == "עמלות"
+    assert conn.execute("SELECT count(*) FROM categories WHERE name = 'עמלת דמי כרטיס - בנקים'").fetchone()[0] == 0
 
 
 def test_manual_category_is_added_as_a_user_category(conn):

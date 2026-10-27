@@ -21,6 +21,7 @@ import psycopg
 from psycopg import sql
 from psycopg.types.json import Jsonb
 
+from finance import categories as taxonomy
 from finance.models import LedgerTransaction
 
 REPO = Path(__file__).resolve().parent.parent
@@ -124,22 +125,51 @@ def load(conn, ledger):
                     sources, position, record, horizon_id)
                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
             [(*key(t["date"], t["amount"]), t["amount"], t.get("description") or "",
-              t.get("category"), ids.get(riseup_category(t)), t.get("origin"), t.get("sources") or [], i,
+              t.get("source_category"), ids.get(t.get("category")), t.get("origin"), t.get("sources") or [], i,
               Jsonb(t), horizon_ids.get(t.get("horizon")))
              for i, t in enumerate(ledger)])
 
 
-def riseup_category(t):
-    """The row's category when RiseUp assigned it (RiseUp wins the merge), else None."""
-    return t.get("category") or None if "riseup" in (t.get("sources") or []) else None
-
-
 def seed_categories(cur, ledger):
-    """Add every RiseUp category in the ledger to `categories`; returns {name: id} for all."""
-    names = sorted({c for t in ledger if (c := riseup_category(t))})
+    """Sync the taxonomy, add any other category the digest assigned (a source label
+    nobody mapped yet, kept as "riseup"); returns {name: id} for all."""
+    sync_taxonomy(cur)
+    names = sorted({c for t in ledger if (c := t.get("category"))} - set(taxonomy.CATEGORY_GROUP))
     cur.executemany("INSERT INTO categories (name, source) VALUES (%s, 'riseup') "
                     "ON CONFLICT (name) DO NOTHING", [(n,) for n in names])
     return dict(cur.execute("SELECT name, id FROM categories").fetchall())
+
+
+def sync_taxonomy(cur):
+    """Make `category_groups` and the builtin `categories` match finance/categories.py.
+
+    Upserts groups by key and categories by name (group, default kind, usage_based,
+    position; source becomes "builtin", so a same-named "user" or "riseup" row is
+    adopted). A legacy row whose name is now an alias (e.g. "עמלת דמי כרטיס - בנקים"
+    -> עמלות) has its overrides and merchant rules moved to the target, then goes;
+    an alias to nothing ("תשלומים") goes only when nothing human points at it."""
+    cur.executemany(
+        "INSERT INTO category_groups (key, name, position) VALUES (%s, %s, %s) "
+        "ON CONFLICT (key) DO UPDATE SET name = EXCLUDED.name, position = EXCLUDED.position",
+        [(k, n, i) for i, (k, n) in enumerate(taxonomy.GROUPS)])
+    groups = dict(cur.execute("SELECT key, id FROM category_groups").fetchall())
+    cur.executemany(
+        "INSERT INTO categories (name, source, group_id, kind, usage_based, position) "
+        "VALUES (%s, 'builtin', %s, %s, %s, %s) ON CONFLICT (name) DO UPDATE SET source = 'builtin', "
+        "group_id = EXCLUDED.group_id, kind = EXCLUDED.kind, usage_based = EXCLUDED.usage_based, "
+        "position = EXCLUDED.position",
+        [(n, groups[g], k, n in taxonomy.USAGE_BASED, i) for i, (n, g, k) in enumerate(taxonomy.CATEGORIES)])
+    aliases = {**taxonomy.SOURCE_ALIASES, **taxonomy.TRACKING_ALIASES}
+    for old, new in aliases.items():
+        if old in taxonomy.CATEGORY_GROUP:
+            continue
+        if new is not None:
+            for table in ("transaction_overrides", "merchant_rules"):
+                cur.execute(f"UPDATE {table} SET category_id = (SELECT id FROM categories WHERE name = %s) "
+                            "WHERE category_id = (SELECT id FROM categories WHERE name = %s)", (new, old))
+        cur.execute("DELETE FROM categories c WHERE name = %s AND source <> 'builtin' "
+                    "AND NOT EXISTS (SELECT 1 FROM transaction_overrides o WHERE o.category_id = c.id) "
+                    "AND NOT EXISTS (SELECT 1 FROM merchant_rules r WHERE r.category_id = c.id)", (old,))
 
 
 def materialize(conn):

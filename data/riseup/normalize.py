@@ -73,7 +73,7 @@ emit("income", income)
 # spending `expense` category, which the raw per-source dumps don't have. These are
 # the higher-priority copies used for cross-source dedup in digest.py.
 # (Envelopes WITHOUT actuals are forecast/planned amounts, not real txns — skipped.)
-def _tx(t, excluded):
+def _tx(t, excluded, env=None):
     inc = t.get("incomeAmount")
     if inc is not None:                          # income -> positive
         amount = round(inc, 2)
@@ -93,7 +93,19 @@ def _tx(t, excluded):
         "category": (t.get("expense") or "").strip() or None,
         "is_income": bool(t.get("isIncome")),
         "excluded": excluded,
+        # the envelope RiseUp reconciled it into: its type and, for a tracking
+        # envelope, the household's budget line (finance/categories.py reads both)
+        "budget_type": (env or {}).get("type"),
+        "budget_category": envelope_category(env),
     }
+
+
+def envelope_category(env):
+    """A trackingCategory envelope's name (e.g. "עציצים"), else None."""
+    if not env or env.get("type") != "trackingCategory":
+        return None
+    name = (((env.get("details") or {}).get("trackingCategory") or {}).get("name") or "").strip()
+    return name or None
 
 def collect_txns(budgets):
     """Flatten every budget month's actuals + excluded into id -> record.
@@ -107,7 +119,7 @@ def collect_txns(budgets):
     for budget in budgets:
         for env in budget.get("envelopes", []):
             for a in env.get("actuals", []):
-                r = _tx(a, excluded=False)
+                r = _tx(a, excluded=False, env=env)
                 if r["id"]:
                     txns[r["id"]] = r
         for x in budget.get("excluded", []):

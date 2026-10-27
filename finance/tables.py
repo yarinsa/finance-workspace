@@ -5,7 +5,7 @@ This is the schema's source of truth: Alembic (db/migrations) autogenerates from
 and these classes disagree. Columns pulled out of a ledger row are typed from
 `finance.models.LedgerTransaction`; the full row is kept in `record`.
 
-The `transactions`, `orphaned_overrides`, `orphaned_tags` and `orphaned_offsets` views are plain SQL in the migrations.
+The `transactions`, `transaction_kinds`, `orphaned_overrides`, `orphaned_tags` and `orphaned_offsets` views are plain SQL in the migrations.
 """
 import datetime as dt
 from decimal import Decimal
@@ -86,21 +86,64 @@ class PlanTarget(SQLModel, table=True):
     updated_at: dt.datetime | None = Field(default=None, sa_column=_now())
 
 
-class Category(SQLModel, table=True):
-    """The fixed list of spending categories a transaction can be assigned to.
+KIND_CHECK = "kind IN ('fixed', 'variable')"
 
-    Seeded from RiseUp's categories on every import (`source` "riseup"); a category
-    first assigned by hand is added with `source` "user"."""
+
+class CategoryGroup(SQLModel, table=True):
+    """A group of categories (דיור, תחבורה, ...), from finance/categories.py `GROUPS`.
+
+    Upserted by `key` on every import (db/ledger.py `sync_taxonomy`)."""
+    __tablename__ = "category_groups"
+
+    id: int | None = Field(default=None, primary_key=True)
+    key: str = Field(sa_column=Column(Text, nullable=False, unique=True))
+    name: str = Field(sa_type=Text)
+    position: int = Field(default=0)
+    created_at: dt.datetime | None = Field(default=None, sa_column=_now())
+
+    categories: list["Category"] = Relationship(back_populates="group_ref")
+
+
+class Category(SQLModel, table=True):
+    """The one list of categories a transaction can be assigned to.
+
+    `builtin` rows are finance/categories.py `CATEGORIES`, upserted on every import with
+    their group, default `kind` and `usage_based` flag. A source label nobody mapped
+    yet is kept as a `riseup` row (no group); a name first typed by hand is `user`."""
     __tablename__ = "categories"
-    __table_args__ = (CheckConstraint("source IN ('riseup', 'user')", name="categories_source_check"),)
+    __table_args__ = (CheckConstraint("source IN ('builtin', 'riseup', 'user')", name="categories_source_check"),
+                      CheckConstraint(KIND_CHECK, name="categories_kind_check"))
 
     id: int | None = Field(default=None, primary_key=True)
     name: str = Field(sa_column=Column(Text, nullable=False, unique=True))
     source: str = Field(sa_column=Column(Text, nullable=False, server_default="user"))
     created_at: dt.datetime | None = Field(default=None, sa_column=_now())
+    group_id: int | None = Field(default=None, sa_column=_fk("category_groups"))
+    kind: str | None = Field(default=None, sa_type=Text)   # default kind; null = not an expense category
+    usage_based: bool = Field(default=False, sa_column_kwargs={"server_default": text("false")})
+    position: int = Field(default=0, sa_column_kwargs={"server_default": text("0")})
 
+    group_ref: CategoryGroup | None = Relationship(back_populates="categories")
     scraped_transactions: list["ScrapedTransaction"] = Relationship(back_populates="category_ref")
     overrides: list["TransactionOverride"] = Relationship(back_populates="category_ref")
+    merchant_rules: list["MerchantRule"] = Relationship(back_populates="category_ref")
+
+
+class MerchantRule(SQLModel, table=True):
+    """Human layer, per merchant: every transaction of `merchant` (finance/merchants.py
+    key, the ledger row's `merchant`) gets this category and/or kind, unless that
+    transaction has its own override. Kept forever, like transaction_overrides."""
+    __tablename__ = "merchant_rules"
+    __table_args__ = (CheckConstraint(KIND_CHECK, name="merchant_rules_kind_check"),)
+
+    id: int | None = Field(default=None, primary_key=True)
+    merchant: str = Field(sa_column=Column(Text, nullable=False, unique=True))
+    category_id: int | None = Field(default=None, sa_column=_category_fk())
+    kind: str | None = Field(default=None, sa_type=Text)
+    created_at: dt.datetime | None = Field(default=None, sa_column=_now())
+    updated_at: dt.datetime | None = Field(default=None, sa_column=_now())
+
+    category_ref: Category | None = Relationship(back_populates="merchant_rules")
 
 
 class ScrapedTransaction(SQLModel, table=True):
@@ -112,7 +155,7 @@ class ScrapedTransaction(SQLModel, table=True):
     amount: Decimal = Field(sa_type=Money)
     description: str = Field(sa_column=Column(Text, nullable=False, server_default=""))
     category: str | None = Field(default=None, sa_type=Text)   # the source's raw label, as scraped
-    category_id: int | None = Field(default=None, sa_column=_category_fk())   # RiseUp's assignment
+    category_id: int | None = Field(default=None, sa_column=_category_fk())   # finance/categories.py default
     origin: str | None = Field(default=None, sa_type=Text)
     sources: list[str] = Field(sa_column=Column(ARRAY(Text), nullable=False, server_default="{}"))
     position: int                                    # index in the digested ledger (keeps its order)
@@ -134,6 +177,7 @@ class TransactionOverride(SQLModel, table=True):
     __tablename__ = "transaction_overrides"
     __table_args__ = (
         CheckConstraint("abs_amount >= 0", name="transaction_overrides_abs_amount_check"),
+        CheckConstraint(KIND_CHECK, name="transaction_overrides_kind_check"),
     )
 
     txn_date: dt.date = Field(primary_key=True)
@@ -145,6 +189,7 @@ class TransactionOverride(SQLModel, table=True):
     updated_at: dt.datetime | None = Field(default=None, sa_column=_now())
     horizon_id: int | None = Field(default=None, sa_column=_fk("horizons"))
     goal_id: int | None = Field(default=None, sa_column=_fk("goals"))   # money that went to this goal
+    kind: str | None = Field(default=None, sa_type=Text)   # fixed / variable, beats every default
 
     category_ref: Category | None = Relationship(back_populates="overrides")
     horizon_ref: Horizon | None = Relationship(back_populates="overrides")

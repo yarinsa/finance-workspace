@@ -23,6 +23,9 @@ class Category:
     id: int
     name: str
     source: str
+    group: str | None = None
+    kind: str | None = None
+    usage_based: bool = False
 
 
 @dataclass(frozen=True)
@@ -93,6 +96,8 @@ class Txn:
     is_internal_transfer: bool
     is_savings: bool
     is_round_trip: bool = False
+    kind: str | None = None                # fixed / variable (transaction_kinds view)
+    kind_source: str | None = None
     auto_offsets: list | None = None       # the digest's suggestion (scraped record), on a payback
     manual_offsets: list | None = None     # transaction_offsets, on a payback ([] = offsets nothing)
     tag_links: list[tuple[Tag, dt.datetime]] = field(default_factory=list)
@@ -141,18 +146,19 @@ class Txn:
 
 ROWS = """
 SELECT s.txn_date, s.abs_amount, s.amount, s.description, s.origin, s.sources,
-       c.id, c.name, c.source, sc.id, sc.name, sc.source,
+       tk.category_id, sc.id,
        o.note, COALESCE(o.excluded, false), o.txn_date IS NOT NULL,
        COALESCE(o.horizon_id, s.horizon_id), s.horizon_id, o.goal_id,
        s.record->>'account_id', s.record->>'card_last4',
        COALESCE((s.record->>'card_bill_payment')::boolean, false),
        COALESCE((s.record->>'internal_transfer')::boolean, false),
        COALESCE((s.record->>'savings')::boolean, false),
-       COALESCE((s.record->>'round_trip')::boolean, false), s.record->'auto_offsets'
+       COALESCE((s.record->>'round_trip')::boolean, false), tk.kind, tk.kind_source,
+       s.record->'auto_offsets'
 FROM scraped_transactions s
+JOIN transaction_kinds tk USING (txn_date, abs_amount)
 LEFT JOIN transaction_overrides o USING (txn_date, abs_amount)
 LEFT JOIN categories sc ON sc.id = s.category_id
-LEFT JOIN categories c  ON c.id = COALESCE(o.category_id, s.category_id)
 ORDER BY s.position
 """
 
@@ -167,10 +173,6 @@ FROM transaction_offsets ORDER BY id
 """
 
 
-def _cat(i, name, source):
-    return Category(i, name, source) if i is not None else None
-
-
 class Ledger:
     """Per-request, read-only view of the ledger. Loads lazily, at most once."""
 
@@ -180,13 +182,14 @@ class Ledger:
     @cached_property
     def rows(self):
         out = []
-        for (d, a, amount, desc, origin, sources, cid, cname, csrc, rid, rname, rsrc, note, excluded,
+        cats = self.categories
+        for (d, a, amount, desc, origin, sources, cid, rid, note, excluded,
              overridden, hid, raw_hid, goal_id, account_id, last4, bill, transfer, savings, round_trip,
-             auto) in self.conn.execute(ROWS):
+             kind, kind_source, auto) in self.conn.execute(ROWS):
             out.append(Txn(d, Decimal(a).quantize(CENT), Decimal(amount).quantize(CENT), desc or "", origin,
-                           list(sources or []), _cat(cid, cname, csrc), _cat(rid, rname, rsrc), note, excluded,
+                           list(sources or []), cats.get(cid), cats.get(rid), note, excluded,
                            overridden, self.horizons.get(hid), self.horizons.get(raw_hid), self.goals.get(goal_id),
-                           account_id, last4, bill, transfer, savings, round_trip, auto))
+                           account_id, last4, bill, transfer, savings, round_trip, kind, kind_source, auto))
         by_key = {t.key: t for t in out}
         for d, a, tid, name, color, at in self.conn.execute(TAG_LINKS):
             if (t := by_key.get((d, Decimal(a).quantize(CENT)))):
@@ -206,8 +209,9 @@ class Ledger:
 
     @cached_property
     def categories(self):
-        return {i: Category(i, n, s) for i, n, s in
-                self.conn.execute("SELECT id, name, source FROM categories ORDER BY name")}
+        return {i: Category(i, n, s, g, k, u) for i, n, s, g, k, u in self.conn.execute(
+            "SELECT c.id, c.name, c.source, g.name, c.kind, c.usage_based FROM categories c "
+            "LEFT JOIN category_groups g ON g.id = c.group_id ORDER BY c.name")}
 
     @cached_property
     def tags(self):

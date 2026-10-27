@@ -14,7 +14,7 @@ from pathlib import Path
 
 import freshness
 import horizons
-from finance import offsets
+from finance import categories, offsets
 
 ROOT = Path(__file__).resolve().parent          # .../Finance/data
 OUT = ROOT / "digested"
@@ -247,6 +247,8 @@ def _canon_tx(r):
         "sources": [src],                         # which of our scrapers saw it
         "card_last4": r.get("card_last4"),
         "account_id": r.get("account_id"),
+        "budget_type": r.get("budget_type"),
+        "budget_category": r.get("budget_category"),
         "_riseup": src == "riseup",
     }
     if is_internal_transfer(t):
@@ -295,7 +297,7 @@ def consolidate_transactions(txns):
         winner["sources"] = merged_sources
         winner["_legs"] = cur["_legs"] | t["_legs"]
         # backfill anything the winner is missing from the other copy
-        for f in ("category", "card_last4", "account_id", "origin"):
+        for f in ("category", "card_last4", "account_id", "origin", "budget_type", "budget_category"):
             if not winner.get(f) and other.get(f):
                 winner[f] = other[f]
         # Re-evaluate the exclusion flags on the MERGED row rather than OR-ing the
@@ -654,6 +656,9 @@ def main():
     # one deduped, queryable transaction ledger across every source
     ledger = consolidate_transactions(entities.get("transactions", []))
     mark_round_trips(ledger)
+    unmapped = categories.stamp(ledger)           # category + kind defaults; the DB layers edits on top
+    if unmapped:
+        print(f"categories: source labels not in finance/categories.py: {sorted(unmapped)}", file=sys.stderr)
     offsets.suggest(ledger, load_offset_rules())  # auto קיזוז, stored with the scraped row
     ledger = apply_overrides(ledger)              # human edits from Postgres, if configured
     offsets.resolve(ledger)                       # manual links (from the DB) win over auto

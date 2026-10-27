@@ -65,7 +65,7 @@ def test_horizon_enum_matches_the_ledger_model():
 def test_category_source_enum_matches_the_table_check():
     from finance.tables import Category
     check = next(c for c in Category.__table_args__ if c.name == "categories_source_check")
-    assert set(SCHEMA.type_map["CategorySource"].values) == {"RISEUP", "USER"}
+    assert set(SCHEMA.type_map["CategorySource"].values) == {"BUILTIN", "RISEUP", "USER"}
     assert all(f"'{v.lower()}'" in str(check.sqltext) for v in SCHEMA.type_map["CategorySource"].values)
 
 

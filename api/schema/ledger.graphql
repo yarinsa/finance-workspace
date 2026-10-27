@@ -16,6 +16,32 @@ enum HorizonKey {
   FUTURE
 }
 
+"""How an expense behaves (finance/categories.py)."""
+enum ExpenseKind {
+  """קבוע: the same or almost the same amount on a schedule (rent, loans, subscriptions)."""
+  FIXED
+  """משתנה: needed but usage-driven, so estimated (fuel, groceries, electricity)."""
+  VARIABLE
+}
+
+"""What decided an expense's kind, strongest first."""
+enum KindSource {
+  """Set on this transaction by hand."""
+  MANUAL
+  """A merchant rule set by hand."""
+  RULE
+  """A merchant default in finance/categories.py."""
+  MERCHANT
+  """The same merchant and amount on about the same day in 3+ months."""
+  RECURRING
+  """The merchant recurs but this charge is not the recurring one: variable."""
+  ONE_OFF
+  """RiseUp keeps it in a fixed budget envelope."""
+  RISEUP
+  """The category's default kind."""
+  CATEGORY
+}
+
 enum TransactionOrder {
   DATE_DESC
   DATE_ASC
@@ -38,6 +64,9 @@ type Transaction implements Node {
   """Derived from the description (data/spending.py `merchant_name`)."""
   merchant: Merchant!
   category: Category
+  """Fixed or variable; null for anything that is not spending (income, transfers, card bills, savings)."""
+  kind: ExpenseKind
+  kindSource: KindSource
   tags(first: Int, after: String): TagConnection!
   note: String
   excluded: Boolean!
@@ -182,8 +211,15 @@ type MerchantConnection {
 type Category implements Node {
   id: ID!
   name: String!
-  """Where the category came from: RISEUP (seeded on import) or USER (first assigned by hand)."""
+  """Where the category came from: BUILTIN (finance/categories.py), RISEUP (a source label not
+  mapped yet) or USER (first assigned by hand)."""
   source: CategorySource!
+  """The group it sits under (דיור, תחבורה, ...); null when not in the taxonomy."""
+  group: String
+  """The default kind of its expenses; null for a non-spending category (salary, savings)."""
+  kind: ExpenseKind
+  """Its amounts follow usage (electricity, fuel, food): never fixed unless set by hand."""
+  usageBased: Boolean!
   transactions(first: Int, after: String, last: Int, before: String,
                filter: TransactionFilter, orderBy: TransactionOrder = DATE_DESC): TransactionConnection!
   """The merchants in this category; edge totals are each merchant's share."""
@@ -201,6 +237,7 @@ type Category implements Node {
 }
 
 enum CategorySource {
+  BUILTIN
   RISEUP
   USER
 }

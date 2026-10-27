@@ -15,11 +15,10 @@ includes them under ``debt_savings``), and rows dated after ``as_of`` are droppe
 
 Every expense row lands in exactly one group:
 
-* ``debt_savings`` - category ``הלוואה``/``משכנתא`` or a savings-flagged row.
-* ``fixed`` - recurring (same normalized description seen in >= 2 of the 3 months
-  before that month, the runway recurrence rule) or a category from the fixed
-  groups of ``cashflow.FIXED_GROUPS`` (rent, bills, subscriptions, fees, ...).
-* ``variable`` - everything else.
+* ``debt_savings`` - category ``הלוואה``/``משכנתא``, a savings-flagged row, or an
+  outflow in a non-spending category (no ``kind``, e.g. a pension deposit).
+* ``fixed`` / ``variable`` - the row's ``kind`` (finance/categories.py: recurring,
+  merchant defaults, the category's default, and the household's edits on top).
 
 ``expected`` per group:
 
@@ -39,12 +38,9 @@ from collections import defaultdict
 from datetime import date
 
 import cashflow
-import runway
+from finance import categories
 
 DEBT_CATEGORIES = {"הלוואה", "משכנתא"}
-FIXED_CATEGORIES = {c for g in cashflow.FIXED_GROUPS for c in g[4]} - DEBT_CATEGORIES
-LOOKBACK = 3
-MIN_SEEN = 2
 TOP_CATEGORIES = 12
 
 GROUPS = [
@@ -64,35 +60,23 @@ def _r(x):
     return None if x is None else round(float(x), 2)
 
 
-def _recurrence_index(rows):
-    """{description: {months seen}} over expense rows."""
-    seen = defaultdict(set)
-    for t in rows:
-        if float(t.get("amount") or 0) < 0 and not t.get("savings"):
-            seen[runway._norm(t.get("description"))].add(t["date"][:7])
-    return seen
-
-
-def classify_expense(t, seen):
+def classify_expense(t):
     """Group key for one expense row (see module docstring)."""
     if t.get("savings") or (t.get("category") or "").strip() in DEBT_CATEGORIES:
         return "debt_savings"
-    ym = t["date"][:7]
-    prior = {_shift(ym, -i) for i in range(1, LOOKBACK + 1)}
-    if len(seen.get(runway._norm(t.get("description")), set()) & prior) >= MIN_SEEN:
-        return "fixed"
-    if (t.get("category") or "").strip() in FIXED_CATEGORIES:
-        return "fixed"
-    return "variable"
+    return t.get("kind") or "debt_savings"
 
 
 def _actuals(transactions, as_of):
     """{month: {"groups": {key: total}, "cats": {name: [amount, count]}}}"""
     cutoff = as_of.isoformat()
+    if transactions and not any("merchant" in t for t in transactions):
+        # a ledger digested before kinds existed; a stamped one keeps its (edited) kinds
+        transactions = [dict(t) for t in transactions]
+        categories.stamp(transactions)
     rows = [t for t in transactions
             if not cashflow.is_non_cashflow(t) and len(t.get("date") or "") >= 10
             and t["date"][:10] <= cutoff]
-    seen = _recurrence_index(rows)
     out = defaultdict(lambda: {"groups": defaultdict(float), "cats": defaultdict(lambda: [0.0, 0])})
     for t in rows:
         amount = float(t.get("amount") or 0)
@@ -102,7 +86,7 @@ def _actuals(transactions, as_of):
         elif t.get("is_income") or amount > 0:
             m["groups"]["income"] += amount
         else:
-            m["groups"][classify_expense(t, seen)] += -amount
+            m["groups"][classify_expense(t)] += -amount
             c = m["cats"][(t.get("category") or "").strip() or "אחר"]
             c[0] += -amount
             c[1] += 1

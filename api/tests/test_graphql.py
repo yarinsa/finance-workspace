@@ -40,9 +40,31 @@ def test_transactions_newest_first_with_typed_money(client):
     purchase = conn["edges"][0]["node"]
     assert purchase["amount"] == "-123.45" and purchase["absAmount"] == "123.45"
     assert purchase["direction"] == "EXPENSE"
-    assert purchase["category"] == {"name": "קניות", "source": "RISEUP"}
+    assert purchase["category"] == {"name": "קניות", "source": "BUILTIN"}
     assert purchase["merchant"] == {"name": "חנות לדוגמה"}
     assert purchase["sources"] == ["cal", "riseup"]
+
+
+KINDS = """{ transactions(first: 10) { edges { node { date kind kindSource
+                                                category { name group kind usageBased } } } } }"""
+
+
+def test_expense_kind_and_category_group(client):
+    # The purchase is a variable קניות expense; the salary is not spending, so it has no kind.
+    nodes = [e["node"] for e in data(client, KINDS)["transactions"]["edges"]]
+    assert [(n["date"], n["kind"], n["kindSource"]) for n in nodes[:2]] == [
+        ("2026-01-15", "VARIABLE", "CATEGORY"), ("2026-01-10", None, None)]
+    assert nodes[0]["category"] == {"name": "קניות", "group": "קניות", "kind": "VARIABLE", "usageBased": False}
+
+
+def test_merchant_rule_shows_as_rule_kind(client, owner):
+    import overrides
+    overrides.set_merchant_rule(owner, "חנות לדוגמה", {"kind": "fixed"}, "test")
+    owner.execute("UPDATE scraped_transactions SET record = record || '{\"merchant\": \"חנות לדוגמה\"}' "
+                 "WHERE amount < 0 AND description = 'חנות לדוגמה'")
+    owner.commit()
+    node = data(client, KINDS)["transactions"]["edges"][0]["node"]
+    assert (node["kind"], node["kindSource"]) == ("FIXED", "RULE")
 
 
 def test_cursor_pages_through_without_overlap(client):
@@ -140,7 +162,7 @@ def test_override_shows_effective_and_raw_category_and_audit(client):
     q = """{ transactions(first: 1) { edges { node { overridden category { name source }
              raw { category { name } } auditLog { totalCount edges { node { field new actor } } } } } } }"""
     node = data(client, q)["transactions"]["edges"][0]["node"]
-    assert node["overridden"] and node["category"] == {"name": "מתנות", "source": "USER"}
+    assert node["overridden"] and node["category"] == {"name": "מתנות", "source": "BUILTIN"}
     assert node["raw"]["category"] == {"name": "קניות"}
     assert node["auditLog"]["edges"][0]["node"] == {"field": "category", "new": "מתנות", "actor": "me@example.com"}
 
@@ -211,7 +233,7 @@ def test_update_transaction_sets_fields_audits_and_signals_one_rebuild(client, o
                                       "category": "מתנות", "note": "יום הולדת", "horizon": "NEAR"})
     p = out["updateTransaction"]
     assert p["clientMutationId"] == "m1"
-    assert p["transaction"] == {"id": PURCHASE_ID, "category": {"name": "מתנות", "source": "USER"},
+    assert p["transaction"] == {"id": PURCHASE_ID, "category": {"name": "מתנות", "source": "BUILTIN"},
                                 "note": "יום הולדת", "excluded": False, "horizon": {"key": "NEAR"},
                                 "overridden": True}
     fields = {r[0] for r in owner.execute("SELECT field FROM override_audit")}

@@ -701,7 +701,7 @@ def build():
     t["DateTime"].parse_value = _parse_datetime
     t["JSON"].serialize = lambda v: v
     t["Money"].parse_value = _parse_money
-    for enum in ("HorizonKey", "CategorySource", "GoalInterval", "OffsetKind"):
+    for enum in ("HorizonKey", "CategorySource", "GoalInterval", "OffsetKind", "ExpenseKind", "KindSource"):
         for name, value in t[enum].values.items():
             value.value = name.lower()
     for name in t["NotificationCategory"].values:

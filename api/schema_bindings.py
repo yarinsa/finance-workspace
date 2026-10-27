@@ -48,16 +48,19 @@ BINDINGS: dict[str, Binding] = {
                  "isSavings": "savings", "isRoundTrip": "round_trip"},
         resolved=frozenset({"id", "absAmount", "direction", "merchant", "category", "tags", "excluded",
                             "raw", "auditLog", "horizon", "goal", "offsets", "netAmount", "offsetsManual",
-                            "offsetCandidates"}),
+                            "offsetCandidates", "kind", "kindSource"}),
         # exposed as the `category`, `direction`, `horizon` and `goal` objects; the stored
-        # offset layers (auto/manual) are exposed resolved, as `offsets` + `offsetsManual`
-        hidden=frozenset({"category_id", "is_income", "horizon_id", "goal_id", "auto_offsets", "manual_offsets"}),
+        # offset layers (auto/manual) are exposed resolved, as `offsets` + `offsetsManual`;
+        # the category signals (source label, RiseUp envelope, recurring) only feed `category`/`kind`
+        hidden=frozenset({"category_id", "is_income", "horizon_id", "goal_id", "auto_offsets", "manual_offsets",
+                          "category_group", "source_category", "budget_type", "budget_category", "recurring",
+                          "one_off"}),
         never_null=frozenset({"card_bill_payment", "internal_transfer", "savings", "overridden", "round_trip",
                               "offset_amount"}),
     ),
     "Category": Binding(tables.Category, resolved=frozenset({"id", "source", "transactions", "merchants", "tags", "horizons",
-                                                             "goals"}),
-                        hidden=frozenset({"created_at"})),
+                                                             "goals", "group", "kind"}),
+                        hidden=frozenset({"created_at", "group_id", "position"})),
     "Tag": Binding(tables.Tag, resolved=frozenset({"id", "transactions", "merchants", "categories", "horizons",
                                                    "goals"}), hidden=frozenset({"created_at"})),
     "AuditEntry": Binding(tables.OverrideAudit, hidden=frozenset({"id", "txn_date", "abs_amount"}),
