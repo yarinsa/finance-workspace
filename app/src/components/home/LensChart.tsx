@@ -33,10 +33,33 @@ function tickLabel(x: string): string {
   return x;
 }
 
+const DOT = 7;
+/** The band's horizontal padding (px-4): the end labels line up with the text above. */
+const INSET = 16;
+
+interface TickProps {
+  x: number;
+  y: number;
+  payload: { value: string };
+}
+
+/** An axis label; the first and last are anchored inward so they stay inside the band. */
+function EdgeTick({ x, y, payload, fill, first, last }: TickProps & { fill: string; first?: string; last?: string }) {
+  const v = payload.value;
+  const anchor = v === first ? "start" : v === last ? "end" : "middle";
+  const dx = anchor === "start" ? INSET : anchor === "end" ? -INSET : 0;
+  return (
+    <text x={x + dx} y={y} dy={12} textAnchor={anchor} fill={fill} fontSize={12}>
+      {tickLabel(v)}
+    </text>
+  );
+}
+
 /**
  * A lens's line on the teal band: the measured part as a soft area, the forecast dashed after
  * the היום dot, last month's line dotted underneath. No value axis: the big number above is the
- * reading, the chart is the shape. Time runs left → right, today toward the right.
+ * reading, the chart is the shape. Time runs left → right, today toward the right. It runs
+ * edge to edge of the band; the end labels sit inside the band's text padding instead.
  */
 export default function LensChart({ lens, height = 150 }: { lens: Lens; height?: number }) {
   const C = useBandColors();
@@ -47,11 +70,13 @@ export default function LensChart({ lens, height = 150 }: { lens: Lens; height?:
   const min = Math.min(...values);
   const max = Math.max(...values);
   const pad = (max - min) * 0.12 || 1;
+  // Room for the היום dot when it is the last point, so it is not cut in half by the edge.
+  const right = lens.todayIndex === n - 1 ? DOT + 3 : 0;
 
   return (
     <div dir="ltr" aria-hidden>
       <ResponsiveContainer width="100%" height={height}>
-        <ComposedChart data={lens.series} margin={{ top: 12, right: 14, bottom: 0, left: 14 }}>
+        <ComposedChart data={lens.series} margin={{ top: 12, right, bottom: 0, left: 0 }}>
           <defs>
             <linearGradient id={`band-fill-${lens.key}`} x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%" stopColor={C.line} stopOpacity={0.45} />
@@ -61,11 +86,10 @@ export default function LensChart({ lens, height = 150 }: { lens: Lens; height?:
           <XAxis
             dataKey="x"
             ticks={ticks}
-            tickFormatter={tickLabel}
-            tick={{ fill: C.muted, fontSize: 12 }}
+            tick={(p: TickProps) => <EdgeTick {...p} fill={C.muted} first={ticks[0]} last={ticks.at(-1)} />}
             axisLine={false}
             tickLine={false}
-            interval="preserveStartEnd"
+            interval={0}
           />
           <YAxis hide domain={[min - pad, max + pad]} />
           {lens.key === "cash" && min < 0 && (
@@ -74,7 +98,7 @@ export default function LensChart({ lens, height = 150 }: { lens: Lens; height?:
               stroke={C.muted}
               strokeOpacity={0.5}
               strokeDasharray="1 4"
-              label={{ value: "₪0", position: "insideTopLeft", fill: C.muted, fontSize: 11 }}
+              label={{ value: "₪0", position: "insideTopLeft", offset: INSET, fill: C.muted, fontSize: 11 }}
             />
           )}
           <Line dataKey="compare" stroke={C.muted} strokeOpacity={0.6} strokeWidth={1.5} strokeDasharray="2 4" dot={false} {...noAnim} />
@@ -84,7 +108,7 @@ export default function LensChart({ lens, height = 150 }: { lens: Lens; height?:
             <ReferenceDot
               x={today.x}
               y={today.actual ?? today.projected}
-              r={7}
+              r={DOT}
               fill={C.line}
               stroke={C.text}
               strokeWidth={3}

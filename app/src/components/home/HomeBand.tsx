@@ -156,7 +156,7 @@ export default function HomeBand({ onQuickActions }: { onQuickActions: () => voi
               )}
               <span className="text-[var(--hero-muted)]">{freshness()}</span>
             </div>
-            <div className="mt-3">
+            <div className="-mx-4 mt-3">
               <LensChart lens={l} />
             </div>
             {l.note && <div className="mt-1 text-xs text-[var(--hero-muted)]">{l.note}</div>}
