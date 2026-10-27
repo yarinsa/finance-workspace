@@ -1,7 +1,9 @@
 /** The `bills` block of cashflow.json (data/bills.py). */
 export interface BillItem {
   name: string;
+  /** Our category (finance/categories.py) and its group. */
   category: string | null;
+  group?: string | null;
   kind: "bill" | "subscription" | "loan";
   amount: number;
   due_day: number | null;

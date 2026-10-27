@@ -1,8 +1,8 @@
 import { useState } from "react";
 import BudgetEditorSheet from "@/components/BudgetEditorSheet";
-import { BigNumber, Card, CardLabel, Page, Section } from "@/components/common";
+import { BigNumber, Card, CardLabel, Page, Section, StatRow } from "@/components/common";
 import { cashflow, shekel } from "@/lib/data";
-import type { BudgetCategory, Budgets as BudgetsData } from "@/lib/budgets";
+import type { BudgetCategory, BudgetSummary, Budgets as BudgetsData } from "@/lib/budgets";
 
 /** Thin progress bar; overspend fills it fully in red. */
 function Bar({ pct, over }: { pct: number; over?: boolean }) {
@@ -40,6 +40,36 @@ function Hero({ b }: { b: BudgetsData }) {
   );
 }
 
+/** "₪X מתוך ₪Y" when the expectation is above what happened so far. */
+function soFar(actual: number, expected?: number | null) {
+  return expected != null && expected > actual ? `${shekel(actual)} מתוך ${shekel(expected)}` : shekel(actual);
+}
+
+/**
+ * The month in three blocks: fixed (קבוע), variable (משתנה, against the usual
+ * month) and what is left — income minus both, minus loans and savings.
+ */
+function ThreeBlocks({ s }: { s: BudgetSummary }) {
+  return (
+    <Card>
+      <CardLabel>החודש בשלושה חלקים</CardLabel>
+      <BigNumber tone={s.left < 0 ? "bad" : undefined}>
+        {s.left < 0 ? `חסרים ${shekel(-s.left)}` : `${shekel(s.left)} נשארים`}
+      </BigNumber>
+      <div className="mt-2">
+        <StatRow label="הכנסות" value={soFar(s.income.actual, s.income.expected)} />
+        <StatRow label="קבוע" value={soFar(s.fixed.actual, s.fixed.expected)} />
+        <StatRow
+          label={s.variable.estimate != null ? `משתנה · בחודש רגיל ${shekel(s.variable.estimate)}` : "משתנה"}
+          value={shekel(s.variable.actual)}
+          tone={s.variable.estimate != null && s.variable.actual > s.variable.estimate ? "bad" : undefined}
+        />
+        <StatRow label="הלוואות וחיסכון" value={soFar(s.debt_savings.actual, s.debt_savings.expected)} />
+      </div>
+    </Card>
+  );
+}
+
 function Row({ c, onOpen }: { c: BudgetCategory; onOpen: () => void }) {
   const pct = c.planned > 0 ? (c.spent / c.planned) * 100 : c.spent > 0 ? 100 : 0;
   return (
@@ -56,6 +86,7 @@ function Row({ c, onOpen }: { c: BudgetCategory; onOpen: () => void }) {
       <Bar pct={pct} over={c.over} />
       <div className="mt-1.5 text-xs text-muted-foreground tabular-nums">
         {shekel(c.spent)} מתוך {shekel(c.planned)}
+        {c.estimate != null && ` · בחודש רגיל ${shekel(c.estimate)}`}
       </div>
     </button>
   );
@@ -72,6 +103,7 @@ export default function Budgets() {
         </Card>
       ) : (
         <>
+          {b.summary && <ThreeBlocks s={b.summary} />}
           <Hero b={b} />
           <Section title="לפי קטגוריה">
             <Card>

@@ -83,13 +83,15 @@ export interface FixedItem {
   name: string;
   category?: string | null;
   amount: number;
+  /** A monthly charge that has not hit yet this month (seen the two months before). */
+  expected?: boolean;
   duplicate: boolean;
   duplicate_reason?: string | null;
   /** Latest matching ledger charge (YYYY-MM-DD), null when none was found. */
   last_charged?: string | null;
 }
 
-/** This month's fixed bills grouped for a "what can I cut?" review (cashflow.fixed_expenses). */
+/** This month's fixed expenses (ledger kind "fixed") grouped for a "what can I cut?" review (cashflow.fixed_expenses). */
 export interface FixedExpenses {
   month: string;
   total: number;
