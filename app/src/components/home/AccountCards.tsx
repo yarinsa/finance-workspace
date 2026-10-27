@@ -2,7 +2,8 @@ import { Link } from "react-router-dom";
 import { ChevronLeft, Plus } from "lucide-react";
 import { Money } from "@/components/common";
 import { cn } from "@/lib/utils";
-import { shekel, snapshot } from "@/lib/data";
+import { getDataVersion, shekel, snapshot, useDataVersion } from "@/lib/data";
+import { shownProperty, usePropertyOverlay } from "@/lib/propertyOverlay";
 
 const CARD =
   "surface flex w-full items-center gap-3 px-5 py-4 text-inherit no-underline transition duration-200 active:scale-[.99] active:bg-panel-2";
@@ -38,7 +39,12 @@ function dmy(iso: string): string {
  */
 export default function AccountCards({ onEditProperty }: { onEditProperty: () => void }) {
   const t = snapshot.totals;
-  const property = (snapshot.assets ?? []).find((a) => a.kind === "property") ?? null;
+  useDataVersion();
+  const property = shownProperty(
+    (snapshot.assets ?? []).find((a) => a.kind === "property") ?? null,
+    usePropertyOverlay(),
+    getDataVersion(),
+  );
   return (
     <div className="flex flex-col gap-2.5">
       <AccountCard to="/monthly?view=forecast" label="מזומן ופיקדון נזיל" value={t.bank_balances_sum + (t.liquid_savings ?? 0)} />
@@ -50,7 +56,7 @@ export default function AccountCards({ onEditProperty }: { onEditProperty: () =>
         <span className="flex min-w-0 flex-1 flex-col">
           <span className="truncate text-[17px] font-medium">{property?.label ?? "נכס (דירה)"}</span>
           <span className="truncate text-xs text-muted-foreground">
-            {property ? `עודכן ידנית ${dmy(property.valued_at)}` : "הערכה ידנית לשווי הנקי"}
+            {property ? (property.pending ? "נשמר · השווי הנקי מתעדכן…" : `עודכן ידנית ${dmy(property.valued_at)}`) : "הערכה ידנית לשווי הנקי"}
           </span>
         </span>
         {property ? (
