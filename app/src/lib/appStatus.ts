@@ -3,7 +3,7 @@
 import { useSyncExternalStore } from "react";
 
 export interface AppStatus {
-  /** The auth cookie lapsed: data fetches get a redirect/HTML instead of JSON. */
+  /** The auth cookie lapsed: data fetches get a redirect/HTML instead of JSON, or the API a 401. */
   sessionExpired: boolean;
   /** A new service worker is installed and waiting for the user to accept it. */
   updateReady: boolean;
