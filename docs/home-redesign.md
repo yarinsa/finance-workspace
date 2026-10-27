@@ -243,6 +243,10 @@ move to `/metrics`, debt % also as a footer on the חובות lens), `home/Hero`
 
 - [x] חיסכון ארוך טווח card is collapsible and holds the החזקות list (fund type,
       institution · עצמאי/שכיר · policies); the `/portfolio` page and its disclaimer are gone.
+- [x] Same `CollapsibleCard` for מזומן ופיקדון נזיל (bank accounts with their overdraft line,
+      liquid deposits, a link to the balance forecast), הלוואות and משכנתא (one line per loan
+      or track: ₪/month and end month; Discount's long product names rebuilt from the terms;
+      no rates, since a refunded-interest loan would look costly; links to /networth).
 
 ### Phase 4 — polish
 - [ ] Scrub readout, view transitions into detail pages, desktop layout.

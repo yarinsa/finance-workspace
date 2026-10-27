@@ -348,6 +348,19 @@ export interface LoanProfile {
  * `management_fee` / `yield_ytd` are null until the per-policy detail is
  * captured (see the harel-refresh skill's "known gap").
  */
+/** A checking account in the snapshot (direct scrape wins over RiseUp's copy). */
+export interface BankAccount {
+  institution: string;
+  /** Usually the account number; the business account carries its holder's name. */
+  account_id: string;
+  kind: string;
+  label?: string;
+  balance: number;
+  currency: string;
+  available_balance?: number | null;
+  overdraft_limit?: number | null;
+}
+
 export interface Savings {
   institution: string;
   kind:
@@ -401,7 +414,7 @@ export interface Snapshot {
   note?: string;
   /** Hand-typed assets (the apartment); null/absent without the database. */
   assets?: SnapshotAsset[] | null;
-  bank_accounts: unknown[];
+  bank_accounts: BankAccount[];
   credit_cards: unknown[];
   loans: Loan[];
   debt_profile?: {
