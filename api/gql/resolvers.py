@@ -29,7 +29,7 @@ from pydantic import BaseModel
 
 from api.schema_bindings import load_schema, snake
 
-from .inputs import (AssetCreateInput, AssetUpdateInput, BulkNotificationInput, ClearTransactionOverrideInput, GoalCreateInput, GoalDeleteInput, DeleteTagInput, GroupArgs,
+from .inputs import (CategoryMergeInput, CategoryUnmergeInput, AssetCreateInput, AssetUpdateInput, BulkNotificationInput, ClearTransactionOverrideInput, GoalCreateInput, GoalDeleteInput, DeleteTagInput, GroupArgs,
                      GroupOrder, LinkOffsetInput, NotificationArgs, NotificationIdInput, ResetOffsetsInput,
                      SetTransactionTagsInput, SnoozeAllNotificationsInput, SyncSourceRetryInput, TransactionArgs, TransactionOrder,
                      UnlinkOffsetInput, UnreadCountArgs, GoalUpdateInput, UpdateNotificationInput, PlanTargetsUpdateInput, UpdateTagInput,
@@ -242,6 +242,29 @@ class CategoryResolver(GroupResolver):
 
     def all(self, lg):
         return list(lg.categories.values())
+
+    def mutations(self):
+        return {"categoryMerge": (CategoryMergeInput, self.merge),
+                "categoryUnmerge": (CategoryUnmergeInput, self.unmerge)}
+
+    def _set(self, info, cat, into):
+        lg = ledger(info)
+        try:
+            overrides.merge_category(lg.conn, cat.name, into.name if into else None, info.context["user"])
+        except ValueError as e:
+            raise GraphQLError(str(e)) from None
+        return lambda: {"category": self.fetch(ledger(info), str(cat.id))}
+
+    def merge(self, inp, info):
+        return self._set(info, self.require(info, inp.id), self.require(info, inp.into_id))
+
+    def unmerge(self, inp, info):
+        return self._set(info, self.require(info, inp.id), None)
+
+    def bind(self, schema, others=()):
+        super().bind(schema, others)
+        schema.type_map[self.type_name].fields["mergedInto"].resolve = (
+            lambda c, info: ledger(info).categories.get(c.merged_into_id) if c.merged_into_id else None)
 
 
 class TagResolver(GroupResolver):

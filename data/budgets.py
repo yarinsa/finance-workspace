@@ -75,6 +75,15 @@ def load_budget(path=BUDGET):
         return None
 
 
+def fold_merges(plan, merges):
+    """`plan` ({category: amount}) with each merged category's amount added to its target."""
+    out = {}
+    for name, amount in plan.items():
+        into = (merges or {}).get(name, name)
+        out[into] = round(out.get(into, 0.0) + amount, 2)
+    return out
+
+
 def load_overrides(path=OVERRIDES):
     """User `{category: amount}` planned-amount overrides; {} when absent."""
     try:
@@ -276,7 +285,8 @@ def build_summary(rows, ledger, month, start_day, expected_income=None, planned_
     return blocks
 
 
-def build_budgets(budget, transactions, as_of, overrides=None, ledger=None, expected_income=None):
+def build_budgets(budget, transactions, as_of, overrides=None, ledger=None, expected_income=None,
+                  merges=None):
     """Budget block for the app, or None when there is no budget doc.
 
     `transactions` is the offset-netted ledger (`offsets.cashflow_view`); `ledger`
@@ -284,17 +294,20 @@ def build_budgets(budget, transactions, as_of, overrides=None, ledger=None, expe
     is a date. Lines are sorted by planned desc; each carries its spend in the
     last HISTORY_CYCLES cycles (`history`) and the median of the last
     ESTIMATE_CYCLES (`estimate`). `expected_income` (the forecast's) feeds `summary`.
+    `merges` ({category: into}, from the database) adds a merged category's plan to its
+    target's: the ledger already counts its rows there.
     """
     if not budget:
         return None
-    overrides = {categories.tracking_category(k) or k: v for k, v in (overrides or {}).items()}
+    overrides = fold_merges({categories.tracking_category(k) or k: v for k, v in (overrides or {}).items()},
+                            merges)
     ledger = transactions if ledger is None else ledger
     month = budget.get("budgetDate") or as_of.strftime("%Y-%m")
     start_day = int(budget.get("cashflowStartDay") or 1)
     start, end = cycle_bounds(month, start_day)
     # Once seeded (`budgets.py seed`), the household's store is the whole plan: a line
     # removed from it is gone, not back to RiseUp's (e.g. its ₪1 placeholders).
-    planned_by = {} if overrides else planned_lines(budget)
+    planned_by = {} if overrides else fold_merges(planned_lines(budget), merges)
     cur = _cycle_rows(transactions, month, start_day)
     history_months = _covered_months(transactions, month, HISTORY_CYCLES)
     estimate_months = _covered_months(transactions, month, ESTIMATE_CYCLES)

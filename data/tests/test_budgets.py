@@ -22,7 +22,7 @@ def doc(envs, start_day=1, month="2026-10"):
 
 def row(day, description, amount, category, kind="variable", group=None, merchant=None, **kw):
     """A stamped ledger row (finance/categories.stamp output)."""
-    groups = {"דלק": "תחבורה", "רכב": "תחבורה", "תיירות": "פנאי", "עציצים": "בית",
+    groups = {"דלק": "תחבורה", "רכב": "תחבורה", "תיירות": "פנאי", "עציצים": "עציצים",
               "כלכלה": "אוכל", "בריאות": "בריאות וטיפוח", "דיגיטל": "מנויים", "משכורת": "הכנסות וחיסכון",
               "הלוואה": "פיננסים", "שכר דירה": "דיור"}
     t = {"date": day, "description": description, "amount": amount, "category": category,
@@ -308,3 +308,16 @@ class TestPlanBaseline:
         b = build([env("דייטים", 1), env("אוכל בחוץ", 1000)], ledger, overrides={"אוכל בחוץ": 1000})
         c = next(c for c in b["categories"] if c["name"] == "דייטים")
         assert (c["source"], c["planned"], c["over"]) == ("unplanned", 0, False)
+
+
+class TestMergedCategories:
+    def test_a_merged_category_plan_adds_to_its_target(self):
+        """אלכוהול (₪255.70) merged into אוכל בחוץ (₪1,000): one ₪1,255.70 line; the ledger
+        already says אוכל בחוץ for the beer."""
+        ledger = [row("2026-10-12", "בירה בזאר", -153.4, "אוכל בחוץ", group="אוכל")]
+        b = budgets.build_budgets(doc([env("אוכל בחוץ", 1)]), ledger, date(2026, 10, 16),
+                                  overrides={"אוכל בחוץ": 1000, "אלכוהול": 255.7},
+                                  merges={"אלכוהול": "אוכל בחוץ"})
+        names = [c["name"] for c in b["categories"]]
+        assert "אלכוהול" not in names
+        assert (cat(b, "אוכל בחוץ")["planned"], cat(b, "אוכל בחוץ")["spent"]) == (1255.7, 153.4)

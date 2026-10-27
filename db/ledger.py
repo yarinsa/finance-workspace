@@ -216,8 +216,14 @@ def main():
         connect().close()   # upgrade head, and set the finance_api login password if configured
         print("db: schema is at head", file=sys.stderr)
         return
+    if sys.argv[1:] == ["merges"]:
+        from overrides import category_merges
+        with connect() as conn:
+            json.dump(category_merges(conn), sys.stdout, ensure_ascii=False)
+        return
     if sys.argv[1:] != ["sync"]:
-        raise SystemExit("usage: ledger.py sync  < ledger.json  > ledger.json\n       ledger.py migrate")
+        raise SystemExit("usage: ledger.py sync  < ledger.json  > ledger.json\n       ledger.py migrate\n"
+                         "       ledger.py merges   (merged categories as {name: into})")
     ledger = json.load(sys.stdin)
     with connect() as conn:
         out = sync(conn, ledger)
