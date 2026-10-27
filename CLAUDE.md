@@ -300,6 +300,10 @@ command; push the result with `sync-data`.
 
 ### UX references
 
+The app's calm design system (Holst palette, Frank Ruhl Libre + Heebo, primitives, calm copy)
+is owned by the **`design-system` subagent** (`.claude/agents/design-system.md`), which holds
+the decisions and the checks. Use it for any UI work.
+
 Before designing a dashboard screen, read `docs/ux-references.md`: Mobbin
 patterns per feature, what the app has vs. lacks, and the design principles
 (one number + verdict first, balance-after per row, label confidence).
