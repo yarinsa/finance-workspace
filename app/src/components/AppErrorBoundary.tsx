@@ -38,7 +38,7 @@ export default class AppErrorBoundary extends Component<Props, State> {
       return (
         <div dir="rtl" style={{ padding: "2rem", fontFamily: "system-ui", lineHeight: 1.6 }}>
           <h1 style={{ fontSize: "1.25rem", marginBottom: ".5rem" }}>משהו השתבש</h1>
-          <p style={{ color: "#64748b", fontSize: "0.875rem", marginBottom: "1rem" }}>
+          <p style={{ color: "var(--lg-muted, #5e6b60)", fontSize: "0.875rem", marginBottom: "1rem" }}>
             {this.state.error.message || "שגיאה לא צפויה"}
           </p>
           <div style={{ display: "flex", gap: "0.75rem" }}>
@@ -49,10 +49,10 @@ export default class AppErrorBoundary extends Component<Props, State> {
                 padding: ".6rem 1.2rem",
                 borderRadius: 999,
                 border: 0,
-                background: "#14b48c",
-                color: "#fff",
+                background: "var(--lg-primary, #314c3b)",
+                color: "var(--lg-on-accent, #f7f3ea)",
                 fontSize: "1rem",
-                fontWeight: 700,
+                fontWeight: 600,
                 cursor: "pointer",
               }}
             >
@@ -64,11 +64,11 @@ export default class AppErrorBoundary extends Component<Props, State> {
               style={{
                 padding: ".6rem 1.2rem",
                 borderRadius: 999,
-                border: "1px solid #e2e8f0",
+                border: "1px solid var(--lg-secondary-line, #bdc9b8)",
                 background: "transparent",
-                color: "#1e293b",
+                color: "var(--lg-text, #1f2a23)",
                 fontSize: "1rem",
-                fontWeight: 700,
+                fontWeight: 600,
                 cursor: "pointer",
               }}
             >

@@ -1,0 +1,53 @@
+# Assets no scraper sees: the apartment's value, typed in by hand (db/asset_store.py).
+# An edit changes snapshot totals, so it signals a ledger rebuild like a transaction edit.
+
+enum AssetKind {
+  PROPERTY
+}
+
+"""Where the value came from: typed by the household, or (later) an automatic estimate."""
+enum ValuationSource {
+  MANUAL
+  ESTIMATE
+}
+
+type Asset implements Node {
+  id: ID!
+  kind: AssetKind!
+  label: String!
+  value: Money!
+  """The day the value was true; a new value without a date is dated today."""
+  valuedAt: Date!
+  valuationSource: ValuationSource!
+  updatedAt: DateTime!
+}
+
+type AssetConnection {
+  edges: [AssetEdge!]!
+  pageInfo: PageInfo!
+  totalCount: Int!
+}
+
+type AssetEdge {
+  cursor: String!
+  node: Asset!
+}
+
+input AssetCreateInput {
+  kind: AssetKind!
+  label: String!
+  value: Money!
+  valuedAt: Date
+}
+
+"""Any of the asset's fields; none can be cleared."""
+input AssetUpdateInput {
+  label: String
+  value: Money
+  valuedAt: Date
+}
+
+type AssetPayload {
+  success: Boolean!
+  asset: Asset
+}

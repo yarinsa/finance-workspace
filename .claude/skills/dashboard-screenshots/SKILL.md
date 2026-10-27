@@ -13,7 +13,7 @@ Screenshots contain real financial figures. They go to `.claude/screenshots/` (g
 node .claude/skills/dashboard-screenshots/scripts/screenshot.mjs --full-page
 ```
 
-Flags: `--routes /overview,/cashflow` (default: every route parsed from `app/src/routes/index.tsx`), `--desktop` (adds 1440x900), `--no-mobile` (desktop only), `--full-page`, `--port 5173`, `--keep-server`.
+Flags: `--routes /overview,/cashflow` (default: every route parsed from `app/src/routes/index.tsx`), `--desktop` (adds 1440x900), `--no-mobile` (desktop only), `--full-page`, `--port 5173`, `--keep-server`, `--light` (light colour scheme; files get a `-light` suffix).
 
 Output: `.claude/screenshots/<timestamp>/<viewport>-<route>.png` (e.g. `mobile-my-plan.png`). The script prints the directory, the file list, and console/page errors per route. Exit code is 1 if any route failed or logged errors.
 

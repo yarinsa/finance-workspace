@@ -122,8 +122,9 @@ export default function OffsetSection({
       ))}
 
       {closed && (open || txn.offsets.length > 0) && (
-        <div role="alert" className="mt-2 rounded-lg bg-warn/15 p-2 text-xs text-warn">
-          ⚠ ההוצאה מ{monthName(txn.date)}, חודש שכבר נסגר: קיזוז משנה את הסיכום שלו, גם אם ההחזר נכנס בחודש אחר.
+        <div role="note" className="mt-2 flex gap-2 rounded-xl bg-panel-2 p-3 text-xs text-muted-foreground">
+          <span className="mt-1 size-1.5 shrink-0 rounded-full bg-warn" aria-hidden />
+          ההוצאה מ{monthName(txn.date)}, חודש שכבר נסגר: קיזוז משנה את הסיכום שלו, גם אם ההחזר נכנס בחודש אחר.
         </div>
       )}
 
@@ -169,7 +170,7 @@ export default function OffsetSection({
                           type="button"
                           disabled={busy || !(Number(amount) > 0 && Number(amount) <= max + 0.005)}
                           onClick={link}
-                          className="rounded-lg bg-brand px-3 py-2 text-sm font-semibold text-white disabled:opacity-40"
+                          className="rounded-full bg-[var(--lg-primary)] px-3 py-2 text-sm font-semibold text-[var(--lg-on-accent)] disabled:opacity-40"
                         >
                           {busy ? "מקזז…" : "קזז"}
                         </button>

@@ -81,7 +81,7 @@ function Loader({ onClose }: { onClose: () => void }) {
   return (
     <>
       <SheetHeader>
-        <SheetTitle className="text-lg font-bold">יעדים כלליים</SheetTitle>
+        <SheetTitle className="font-display text-xl font-medium">יעדים כלליים</SheetTitle>
         <SheetDescription>{loaded.state === "loading" ? "טוען…" : loaded.message}</SheetDescription>
       </SheetHeader>
       <div className="px-4 pb-6">
@@ -133,7 +133,7 @@ function Form({ initial, onClose }: { initial: Fields; onClose: () => void }) {
   return (
     <>
       <SheetHeader>
-        <SheetTitle className="text-lg font-bold">יעדים כלליים</SheetTitle>
+        <SheetTitle className="font-display text-xl font-medium">יעדים כלליים</SheetTitle>
         <SheetDescription>קרן חירום, פרישה והורשה</SheetDescription>
       </SheetHeader>
 

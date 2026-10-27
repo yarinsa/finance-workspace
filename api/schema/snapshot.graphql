@@ -25,6 +25,10 @@ type SnapshotTotals {
   illiquidSavings: Money!
   """What we are worth: tracked net position plus savings."""
   netPositionWithSavings: Money!
+  """The apartment's hand-typed value (Query.assets); null until one is entered."""
+  propertyValue: Money
+  """Net position with savings plus the property; null without a property value."""
+  netWorthWithProperty: Money
   monthlyLoanService: Money!
   detectedMonthlySalary: Money
 }

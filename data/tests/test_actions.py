@@ -51,7 +51,7 @@ def test_limit_breach_is_critical_with_buffer_hint():
     a = by_id(build(), "limit-breach:")[0]
     assert a["id"] == "limit-breach:2026-11-11"
     assert a["severity"] == "critical"
-    assert a["title"] == "חריגה מהמסגרת ב-11/11"
+    assert a["title"] == "ב-11/11 החשבון צפוי לעבור את המסגרת"
     assert "₪11,695" in a["detail"] and "₪10,000" in a["detail"]
     assert "אפשר להעביר ₪2,490 מנזיל יומי+" in a["detail"]
     assert a["cta"] == {"label": "לתוכנית התזרים", "to": "/monthly?view=forecast"}
@@ -83,7 +83,7 @@ def test_budget_over_caps_at_three_and_groups_rest():
     acts = build(budgets={"cycle_start": "2026-10-01", "categories": cats})
     assert len([a for a in acts if a["id"].startswith("budget-over:")]) == 3
     more = by_id(acts, "budget-over-more:")[0]
-    assert more["severity"] == "medium" and more["title"] == "עוד 2 קטגוריות בחריגה"
+    assert more["severity"] == "medium" and more["title"] == "עוד 2 קטגוריות מעל התקציב"
     assert (more["category"], more["type"]) == ("WARNING", "budgetOverMore")
     assert more["subject"] == {"kind": "budget", "categories": ["c1", "c0"], "cycle_start": "2026-10-01"}
     assert more["cta"]["to"] == "/monthly?section=variable"

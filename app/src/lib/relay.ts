@@ -4,6 +4,7 @@
 // screens handle "the home computer is off" the same way for REST and GraphQL.
 import { Environment, Network, RecordSource, Store, type FetchFunction } from "relay-runtime";
 import { ApiError, ApiOffline, unauthenticated } from "./api";
+import { isEditMutation, showToast } from "./toast";
 
 const OFFLINE_STATUSES = new Set([502, 503, 504]);
 
@@ -50,8 +51,12 @@ async function postGraphQL(text: string | null | undefined, variables: unknown, 
   return body;
 }
 
-const fetchGraphQL: FetchFunction = async (operation, variables) =>
-  (await postGraphQL(operation.text, variables, operation.name)) as never;
+/** Every successful edit confirms itself calmly ("השינוי נשמר."); failures are the screen's to show. */
+const fetchGraphQL: FetchFunction = async (operation, variables) => {
+  const body = await postGraphQL(operation.text, variables, operation.name);
+  if (operation.operationKind === "mutation" && isEditMutation(operation.name)) showToast("השינוי נשמר.");
+  return body as never;
+};
 
 /**
  * Run a plain GraphQL document outside Relay's store, for lists that are held in their own

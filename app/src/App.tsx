@@ -24,6 +24,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { MobileTabBar } from "@/components/MobileTabBar";
 import { PwaStatus } from "@/components/PwaStatus";
+import { Toaster } from "@/components/Toaster";
 
 /**
  * "Updated N days ago" — tap-able so the stale warning works on touch. The dot
@@ -70,7 +71,7 @@ function AppSidebar({ days }: { days: number }) {
   return (
     <Sidebar side="right">
       <SidebarHeader>
-        <div className="px-2 py-1 text-lg font-bold">תמונת מצב</div>
+        <div className="px-2 py-1 text-lg font-semibold">תמונת מצב</div>
       </SidebarHeader>
       <SidebarContent>
         {groups.map((g) => (
@@ -133,7 +134,7 @@ export default function App() {
             className="sticky top-0 z-30 flex h-12 items-center justify-between border-b bg-background/80 px-4 backdrop-blur-xl md:hidden"
             style={{ paddingTop: "env(safe-area-inset-top)", boxSizing: "content-box" }}
           >
-            <span className="font-bold">{current?.label ?? ""}</span>
+            <span className="font-semibold">{current?.label ?? ""}</span>
             <Freshness days={days} />
           </header>
           <main className="content">
@@ -150,6 +151,7 @@ export default function App() {
           </main>
         </SidebarInset>
         <MobileTabBar />
+        <Toaster />
       </SidebarProvider>
     </TooltipProvider>
     </LedgerApiProvider>

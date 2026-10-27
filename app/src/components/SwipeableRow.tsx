@@ -29,7 +29,7 @@ export function SwipeableRow({
   rightLabel = "קזז",
   leftIcon: LeftIcon = Tag,
   rightIcon: RightIcon = ArrowLeftRight,
-  leftClass = "bg-sky-600",
+  leftClass = "bg-[var(--lg-primary)]",
   rightClass = "bg-good",
 }: SwipeableRowProps) {
   const id = useId();
@@ -105,7 +105,7 @@ export function SwipeableRow({
           aria-hidden
           style={{ opacity: rightOpacity, width: ACTION_WIDTH }}
           onClick={() => run(onSwipeLeft)}
-          className={`absolute inset-y-0 right-0 flex flex-col items-center justify-center gap-1 ${leftClass} text-[11px] font-semibold text-white`}
+          className={`absolute inset-y-0 right-0 flex flex-col items-center justify-center gap-1 ${leftClass} text-[11px] font-semibold text-[var(--lg-on-accent)]`}
         >
           <motion.span style={{ scale: rightScale }} className="flex">
             <LeftIcon className="size-5" />
@@ -120,7 +120,7 @@ export function SwipeableRow({
           aria-hidden
           style={{ opacity: leftOpacity, width: ACTION_WIDTH }}
           onClick={() => run(onSwipeRight)}
-          className={`absolute inset-y-0 left-0 flex flex-col items-center justify-center gap-1 ${rightClass} text-[11px] font-semibold text-white`}
+          className={`absolute inset-y-0 left-0 flex flex-col items-center justify-center gap-1 ${rightClass} text-[11px] font-semibold text-[var(--lg-on-accent)]`}
         >
           <motion.span style={{ scale: leftScale }} className="flex">
             <RightIcon className="size-5" />

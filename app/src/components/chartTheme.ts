@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { numCompact } from "@/lib/data";
+import { mixHex } from "@/lib/color";
 
 /**
  * One look for every recharts chart, following the CSS theme tokens in
@@ -19,9 +20,11 @@ export interface ChartColors {
   line: string;
   panel: string;
   text: string;
+  /** Category series: the Holst greens darkest-first, then terracotta/ochre tints (never more greens). */
+  series: string[];
 }
 
-const TOKENS: Record<keyof ChartColors, string> = {
+const TOKENS: Record<Exclude<keyof ChartColors, "series">, string> = {
   accent: "--lg-accent",
   good: "--lg-good",
   bad: "--lg-bad",
@@ -32,11 +35,14 @@ const TOKENS: Record<keyof ChartColors, string> = {
   text: "--lg-text",
 };
 
+const SERIES_TOKENS = ["--holst-1", "--holst-3", "--holst-4", "--holst-2", "--holst-5"];
+
 function readColors(): ChartColors {
   const css = getComputedStyle(document.documentElement);
-  return Object.fromEntries(
-    Object.entries(TOKENS).map(([k, v]) => [k, css.getPropertyValue(v).trim()])
-  ) as unknown as ChartColors;
+  const read = (v: string) => css.getPropertyValue(v).trim();
+  const base = Object.fromEntries(Object.entries(TOKENS).map(([k, v]) => [k, read(v)])) as Omit<ChartColors, "series">;
+  const tint = (c: string) => mixHex(c, base.panel, 0.35);
+  return { ...base, series: [...SERIES_TOKENS.map(read), tint(base.bad), tint(base.warn)] };
 }
 
 /** Theme colors for charts; re-reads when the OS switches light/dark. */
@@ -70,11 +76,11 @@ export function chartProps(C: ChartColors) {
         borderRadius: 12,
         direction: "rtl" as const,
         fontSize: 13,
-        boxShadow: "0 6px 24px rgba(15,31,61,.12)",
+        boxShadow: "var(--shadow)",
       },
       labelStyle: { color: C.text, fontWeight: 700 },
       itemStyle: { padding: 0 },
-      cursor: { stroke: C.line, fill: "rgba(127,127,127,.06)" },
+      cursor: { stroke: C.line, fill: "color-mix(in srgb, var(--lg-muted) 8%, transparent)" },
     },
   } as const;
 }

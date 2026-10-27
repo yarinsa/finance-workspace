@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Screenshot every dashboard route. See ../SKILL.md.
-// Usage: node screenshot.mjs [--routes /overview,/cashflow] [--desktop] [--no-mobile] [--full-page] [--port 5173]
+// Usage: node screenshot.mjs [--routes /overview,/cashflow] [--desktop] [--no-mobile] [--full-page] [--port 5173] [--light]
 import { spawn } from "node:child_process";
 import { existsSync, mkdirSync, readdirSync, readFileSync, openSync } from "node:fs";
 import { homedir } from "node:os";
@@ -80,7 +80,7 @@ try {
       deviceScaleFactor: vp.dsf,
       isMobile: vp.mobile,
       hasTouch: vp.mobile,
-      colorScheme: "dark",
+      colorScheme: flag("light") ? "light" : "dark",
     });
     for (const route of routes) {
       const page = await ctx.newPage();
@@ -91,7 +91,7 @@ try {
       try {
         await page.goto(base + route, { waitUntil: "networkidle", timeout: 30000 });
         await page.waitForTimeout(1500); // let recharts finish animating
-        const file = join(outDir, `${vp.name}-${route.replace(/^\//, "").replace(/\//g, "_") || "root"}.png`);
+        const file = join(outDir, `${vp.name}${flag("light") ? "-light" : ""}-${route.replace(/^\//, "").replace(/\//g, "_") || "root"}.png`);
         await page.screenshot({ path: file, fullPage });
         files.push(file);
         console.log(`ok   ${vp.name} ${route}${errors.length ? `  (${errors.length} console errors)` : ""}`);

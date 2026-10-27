@@ -54,7 +54,7 @@ function Body() {
   return (
     <>
       <SheetHeader>
-        <SheetTitle className="text-lg font-bold">תנועות מוסתרות</SheetTitle>
+        <SheetTitle className="font-display text-xl font-medium">תנועות מוסתרות</SheetTitle>
         <SheetDescription>תנועות שהוסתרו לא נספרות בהוצאות. אפשר להחזיר אותן.</SheetDescription>
       </SheetHeader>
       <div className="px-4 pb-4">

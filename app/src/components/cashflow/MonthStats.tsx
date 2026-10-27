@@ -29,7 +29,7 @@ function Figure({
       <div className="text-xs text-muted-foreground">{label}</div>
       <div
         className={cn(
-          "text-[15px] font-extrabold tabular-nums",
+          "font-display text-[20px] font-semibold tabular-nums",
           bad && "text-bad",
         )}
       >

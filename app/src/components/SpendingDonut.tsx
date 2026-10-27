@@ -9,9 +9,8 @@ export default function SpendingDonut() {
   const total = cats.reduce((a, c) => a + c.amount, 0);
   if (!cats.length || total <= 0) return <div className="muted">אין הוצאות החודש.</div>;
 
-  // Largest slices get the brand colors; "אחר" is always the neutral one.
-  const palette = [C.accent, "#1d3b6e", C.warn, "#8b7cf6", C.bad];
-  const color = (name: string, i: number) => (name === "אחר" ? C.muted : palette[i % palette.length]);
+  // Largest slices get the deepest greens; "אחר" is always the neutral one.
+  const color = (name: string, i: number) => (name === "אחר" ? C.line : C.series[i % C.series.length]);
 
   return (
     <div className="donut">

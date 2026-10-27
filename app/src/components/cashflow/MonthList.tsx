@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { ChevronDown } from "lucide-react";
-import { Card, Section } from "@/components/common";
+import { Card, ProgressBar, Section, StatusPill } from "@/components/common";
 import BudgetPlan from "@/components/BudgetPlan";
 import ExcludedSpendingCard from "@/components/ExcludedSpendingCard";
 import HiddenTransactionsSheet from "@/components/HiddenTransactionsSheet";
@@ -52,19 +52,9 @@ const dayMonth = new Intl.DateTimeFormat("he-IL", {
   month: "numeric",
 });
 
-/** Thin progress bar; overspend fills it fully in red. */
-function Bar({ pct, over }: { pct: number; over?: boolean }) {
-  return (
-    <div className="h-1.5 overflow-hidden rounded-full bg-line">
-      <div
-        className={cn(
-          "h-full rounded-full",
-          over ? "bg-bad" : pct >= 90 ? "bg-warn" : "bg-brand",
-        )}
-        style={{ width: `${Math.min(Math.max(pct, 0), 100)}%` }}
-      />
-    </div>
-  );
+/** The calm bar stays forest; the amount carries the verdict: terracotta over, ochre nearly spent. */
+function amountTone(pct: number, over: boolean): string {
+  return over ? "text-bad" : pct >= 90 ? "text-warn" : "";
 }
 
 /** A fixed charge: status (✓ paid / due day / overdue), flags from the "what can I cut?" review. */
@@ -93,7 +83,7 @@ function ChargeRow({ c, onOpen }: { c: ChargeItem; onOpen: () => void }) {
         </span>
         <span className="flex flex-wrap gap-x-2 text-xs text-muted-foreground">
           {c.category && <span>{c.category}</span>}
-          {overdue && <span className="font-semibold text-warn">באיחור</span>}
+          {overdue && <StatusPill tone="warn">עוד לא חויב</StatusPill>}
           {c.status === "upcoming" && (
             <span>
               {c.due_day != null ? `צפוי ב-${num(c.due_day)}` : "צפוי החודש"}
@@ -155,7 +145,7 @@ function CategoryRow({ l, onOpen }: { l: Line; onOpen: () => void }) {
         <strong
           className={cn(
             "shrink-0 text-sm tabular-nums",
-            planned?.over && "text-bad",
+            planned && amountTone(pct, planned.over),
           )}
         >
           {planned
@@ -165,14 +155,14 @@ function CategoryRow({ l, onOpen }: { l: Line; onOpen: () => void }) {
       </div>
       {planned && (
         <div className="mt-1.5">
-          <Bar pct={pct} over={planned.over} />
+          <ProgressBar value={pct / 100} />
         </div>
       )}
       {b && (
         <div className="mt-1 text-xs text-muted-foreground tabular-nums">
           {planned
             ? planned.over
-              ? `חריגה ${shekel(-planned.left)}`
+              ? `${shekel(-planned.left)} מעל התקציב`
               : `${shekel(planned.left)} נותרו`
             : null}
           {b.estimate != null &&
@@ -360,9 +350,12 @@ export default function MonthList({
                             {g.name}
                           </span>
                           {g.alert && (
-                            <span className="pill pill-warn whitespace-nowrap">
-                              דורש תשומת לב
-                            </span>
+                            <StatusPill
+                              tone="warn"
+                              className="whitespace-nowrap"
+                            >
+                              כדאי לבדוק
+                            </StatusPill>
                           )}
                           <strong className="shrink-0 tabular-nums">
                             {shekel(g.total)}
@@ -464,7 +457,7 @@ export default function MonthList({
           {sheet && (
             <>
               <SheetHeader>
-                <SheetTitle className="text-lg font-bold">
+                <SheetTitle className="font-display text-xl font-medium">
                   {sheet.title}
                 </SheetTitle>
                 <SheetDescription className="tabular-nums">

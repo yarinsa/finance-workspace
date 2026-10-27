@@ -556,7 +556,7 @@ def build():
         ledger, snapshot["bank_accounts"], snapshot.get("savings", []),
         _local_today())
     # Mint-style monthly views (PRD 12): bills status, budgets, spending explorer
-    import actions, bills, budgets, goals, horizons, spending, validate
+    import actions, bills, budgets, goals, history, horizons, spending, validate
     budget_doc = bills.load_budget()
     bills_block = bills.build_bills(budget_doc, ledger, _local_today())
     expected = expected_for_month(forecast, (budget_doc or {}).get("budgetDate"))
@@ -597,6 +597,9 @@ def build():
             "focal_points": proj["focal_points"],
         },
         "runway": runway_block,
+        # How the money got here: cash (running balances), debt (amortization), and the
+        # daily positions recorded in Postgres. Read by the home screen's lenses.
+        "history": history.build(snapshot, _local_today()),
         "bills": bills_block,
         "budgets": budgets_block,
         "spending": spending_block,

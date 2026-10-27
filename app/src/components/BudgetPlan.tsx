@@ -131,13 +131,13 @@ export default function BudgetPlan({ c }: { c: BudgetCategory }) {
             <div className="text-xs text-muted-foreground">
               ממוצע {history.length} חודשים
             </div>
-            <div className="font-bold tabular-nums">
+            <div className="font-semibold tabular-nums">
               {avg != null ? shekel(avg) : "—"}
             </div>
           </div>
           <div>
             <div className="text-xs text-muted-foreground">תקציב מומלץ</div>
-            <div className="font-bold tabular-nums">
+            <div className="font-semibold tabular-nums">
               {suggested != null ? shekel(suggested) : "—"}
             </div>
             {suggested != null && suggested !== amount && (
@@ -163,7 +163,7 @@ export default function BudgetPlan({ c }: { c: BudgetCategory }) {
             >
               −
             </button>
-            <div className="min-w-24 text-center text-xl font-extrabold tabular-nums">
+            <div className="min-w-24 text-center font-display text-2xl font-semibold tabular-nums">
               {shekel(amount)}
             </div>
             <button
@@ -186,7 +186,7 @@ export default function BudgetPlan({ c }: { c: BudgetCategory }) {
             </code>
             <button
               type="button"
-              className="shrink-0 rounded-lg bg-brand px-3 py-2 text-xs font-semibold text-white"
+              className="shrink-0 rounded-full bg-[var(--lg-primary)] px-3 py-2 text-xs font-semibold text-[var(--lg-on-accent)]"
               onClick={copy}
             >
               {copied ? "הועתק" : "העתק"}

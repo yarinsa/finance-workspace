@@ -29,7 +29,7 @@ from pydantic import BaseModel
 
 from api.schema_bindings import load_schema, snake
 
-from .inputs import (BulkNotificationInput, ClearTransactionOverrideInput, GoalCreateInput, GoalDeleteInput, DeleteTagInput, GroupArgs,
+from .inputs import (AssetCreateInput, AssetUpdateInput, BulkNotificationInput, ClearTransactionOverrideInput, GoalCreateInput, GoalDeleteInput, DeleteTagInput, GroupArgs,
                      GroupOrder, LinkOffsetInput, NotificationArgs, NotificationIdInput, ResetOffsetsInput,
                      SetTransactionTagsInput, SnoozeAllNotificationsInput, SyncSourceRetryInput, TransactionArgs, TransactionOrder,
                      UnlinkOffsetInput, UnreadCountArgs, GoalUpdateInput, UpdateNotificationInput, PlanTargetsUpdateInput, UpdateTagInput,
@@ -40,6 +40,7 @@ from .ledger import CENT, Ledger, Merchant, Txn, offset_candidates, totals
 from .relay import ConnectionArgs, GlobalId, paginate, to_global_id, validated
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "db"))   # the shared write paths
+import asset_store  # noqa: E402
 import goal_store  # noqa: E402
 import inbox  # noqa: E402
 import offset_store  # noqa: E402
@@ -602,6 +603,61 @@ class PlanTargetsResolver(NodeResolver):
             schema.mutation_type.fields[field].resolve = self._mutation(model, method)
 
 
+class AssetResolver(NodeResolver[dict]):
+    """`Query.assets`, `assetCreate`, `assetUpdate` (db/asset_store.py). A new value changes
+    the snapshot totals, so these signal a ledger rebuild."""
+    type_name = "Asset"
+
+    @staticmethod
+    def _typed(a):
+        """asset_store's JSON-ready dict with the date/time/amount types the scalars serialize."""
+        return {**a, "value": Decimal(str(a["value"])), "valued_at": dt.date.fromisoformat(a["valued_at"]),
+                "updated_at": dt.datetime.fromisoformat(a["updated_at"])}
+
+    def key(self, a):
+        return str(a["id"])
+
+    def fetch(self, lg, key):
+        a = asset_store.get_asset(lg.conn, int(key)) if key.isdigit() else None
+        return self._typed(a) if a else None
+
+    def resolve_all(self, _, info, **args):
+        a = validated(ConnectionArgs, args)
+        rows = [self._typed(x) for x in asset_store.all_assets(ledger(info).conn)]   # oldest first
+        return paginate([{"node": x} for x in rows], lambda e: (e["node"]["id"],), a)
+
+    def mutations(self):
+        return {"assetCreate": (AssetCreateInput, self.create), "assetUpdate": (AssetUpdateInput, self.update)}
+
+    def create(self, inp, info):
+        try:
+            a = asset_store.create_asset(ledger(info).conn, inp.kind.value, inp.label.strip(), inp.value,
+                                         inp.valued_at)
+        except ValueError as e:
+            raise GraphQLError(str(e)) from None
+        return lambda: {"asset": self._typed(a)}
+
+    def update(self, inp, info):
+        a = self.require(info, inp.id)
+        changes = inp.changes()
+        if not changes:
+            raise GraphQLError("send at least one asset field")
+        if "label" in changes:
+            changes["label"] = changes["label"].strip()
+        try:
+            out = asset_store.update_asset(ledger(info).conn, a["id"], **changes)
+        except ValueError as e:
+            raise GraphQLError(str(e)) from None
+        return lambda: {"asset": self._typed(out)}
+
+    def bind(self, schema):
+        super().bind(schema)
+        schema.query_type.fields["assets"].resolve = self.resolve_all
+        for enum in ("AssetKind", "ValuationSource"):
+            for name, value in schema.type_map[enum].values.items():
+                value.value = name.lower()
+
+
 class SyncSourceResolver(NodeResolver[SyncSource]):
     """Each source's latest run (sync_status). Retrying starts a sync on the Mac and changes no
     ledger data here (the sync publishes when it finishes), so it never signals a rebuild."""
@@ -644,7 +700,9 @@ TRANSACTIONS = TransactionResolver(GOALS)
 NOTIFICATIONS = NotificationResolver()
 SYNC_SOURCES = SyncSourceResolver()
 PLAN_TARGETS = PlanTargetsResolver()
-NODES: dict[str, NodeResolver] = {r.type_name: r for r in [TRANSACTIONS, *ENTITIES, NOTIFICATIONS, SYNC_SOURCES]}
+ASSETS = AssetResolver()
+NODES: dict[str, NodeResolver] = {r.type_name: r for r in [TRANSACTIONS, *ENTITIES, NOTIFICATIONS, SYNC_SOURCES,
+                                                           ASSETS]}
 
 
 class _NodeArgs(BaseModel):
@@ -716,6 +774,7 @@ def build():
     NOTIFICATIONS.bind(schema)
     SYNC_SOURCES.bind(schema)
     PLAN_TARGETS.bind(schema)
+    ASSETS.bind(schema)
     for entity in ENTITIES:
         entity.bind(schema, ENTITIES)
     return schema
