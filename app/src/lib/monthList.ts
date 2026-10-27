@@ -452,21 +452,6 @@ export function buildCards(sections: SectionBlock[]): SpendCard[] {
     .sort((a, b) => size(b) - size(a));
 }
 
-/** Merchant totals of the month's (overlaid) transactions, biggest first. */
-export function byMerchant(m: SpendingMonth | undefined) {
-  const map = new Map<
-    string,
-    { name: string; amount: number; count: number }
-  >();
-  for (const t of m?.transactions ?? []) {
-    const e = map.get(t.merchant) ?? { name: t.merchant, amount: 0, count: 0 };
-    e.amount += net(t);
-    e.count += 1;
-    map.set(t.merchant, e);
-  }
-  return [...map.values()].sort((a, b) => b.amount - a.amount);
-}
-
 /** The line a `?category=` deep link names (budget line first, then a category or charge). */
 export function findLine(
   sections: SectionBlock[],
