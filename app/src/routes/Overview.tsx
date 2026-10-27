@@ -26,12 +26,12 @@ export default function Overview() {
     <Page>
       {age > 7 && !hasStaleAction && (
         <Nudge action="לעדכון יתרות ▸">
-          🕑 הגיע זמן לעדכן את היתרות שלך — הנתונים מלפני {num(age)} ימים.
+          הנתונים מלפני {num(age)} ימים. כדאי לרענן את היתרות.
         </Nudge>
       )}
 
       <header className="greeting flex items-center justify-between">
-        <h1>{greeting(new Date().getHours())} 👋</h1>
+        <h1>{greeting(new Date().getHours())}</h1>
         <InboxButton />
       </header>
 

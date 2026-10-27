@@ -37,7 +37,7 @@ export default function CategoryBreakdown({ month }: { month: string }) {
   return (
     <Card>
       <CardLabel>לאן הלך הכסף</CardLabel>
-      <div className="-mt-1 mb-2 text-[28px] leading-tight font-extrabold tabular-nums">
+      <div className="-mt-1 mb-2 font-display text-[36px] leading-[1.15] font-medium tabular-nums">
         {shekel(m.total)}
         {m.partial && <span className="text-sm font-semibold text-muted-foreground"> עד היום</span>}
       </div>

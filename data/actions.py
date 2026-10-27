@@ -51,14 +51,14 @@ def _runway_actions(runway):
                   default=None)
         if low is None:
             low = (runway.get("low_point") or {}).get("balance", 0)
-        detail = f"היתרה תרד למינוס {shekel(low)} — מעבר למסגרת {shekel(runway.get('overdraft_limit'))}"
+        detail = f"היתרה צפויה לרדת ל־{shekel(low)}, מעבר למסגרת של {shekel(runway.get('overdraft_limit'))}"
         buffer = [b for b in runway.get("liquid_buffer") or [] if (b.get("balance") or 0) > 0]
         total = sum(b["balance"] for b in buffer)
         if total > 0:
             detail += f" · אפשר להעביר {shekel(total)} מ{buffer[0]['label']}"
         overshoot = abs(low) - (runway.get("overdraft_limit") or 0)
         out.append(_action(f"limit-breach:{breach}", "critical", "PROBLEM", "limitBreach",
-                           f"חריגה מהמסגרת ב-{_dm(breach)}",
+                           f"ב-{_dm(breach)} החשבון צפוי לעבור את המסגרת",
                            detail, ("לתוכנית התזרים", "/monthly?view=forecast"), max(overshoot, 0),
                            {"kind": "cashflow", "date": breach}))
     safe = runway.get("safe_to_spend")
@@ -66,7 +66,7 @@ def _runway_actions(runway):
         payday = (runway.get("next_payday") or {}).get("date") or runway.get("as_of", "")
         out.append(_action(f"short-until-payday:{payday}", "high", "WARNING", "shortUntilPayday",
                            f"חסרים {shekel(safe)} עד המשכורת",
-                           "הוצאות קבועות צפויות לעבור את היתרה לפני המשכורת הבאה",
+                           "החיובים הקבועים צפויים לעבור את היתרה לפני המשכורת הבאה",
                            ("לתוכנית התזרים", "/monthly?view=forecast"), abs(safe),
                            {"kind": "cashflow", "date": payday}))
     return out
@@ -83,14 +83,14 @@ def _budget_actions(budgets):
     out = []
     for c in over[:MAX_BUDGET_ITEMS]:
         extra = c["spent"] - c["planned"]
-        out.append(_action(f"budget-over:{c['name']}:{month}", "high", "WARNING", "budgetOver", f"חריגה בתקציב {c['name']}",
+        out.append(_action(f"budget-over:{c['name']}:{month}", "high", "WARNING", "budgetOver", f"{c['name']} מעל התקציב",
                            f"{shekel(c['spent'])} מתוך {shekel(c['planned'])} (+{shekel(extra)})",
                            ("לתקציב", "/budgets"), extra,
                            {"kind": "budget", "categories": [c["name"]], "cycle_start": cycle}))
     rest = over[MAX_BUDGET_ITEMS:]
     if rest:
         extra = sum(c["spent"] - c["planned"] for c in rest)
-        out.append(_action(f"budget-over-more:{month}", "medium", "WARNING", "budgetOverMore", ("עוד קטגוריה בחריגה" if len(rest) == 1 else f"עוד {len(rest)} קטגוריות בחריגה"),
+        out.append(_action(f"budget-over-more:{month}", "medium", "WARNING", "budgetOverMore", ("עוד קטגוריה מעל התקציב" if len(rest) == 1 else f"עוד {len(rest)} קטגוריות מעל התקציב"),
                            ", ".join(c["name"] for c in rest) + f" · +{shekel(extra)}",
                            ("לתקציב", "/budgets"), extra,
                            {"kind": "budget", "categories": [c["name"] for c in rest], "cycle_start": cycle}))

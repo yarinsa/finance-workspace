@@ -34,7 +34,7 @@ export default function BillsCard({ compact = false }: { compact?: boolean }) {
     <Card>
       <CardLabel>חשבונות ומנויים החודש</CardLabel>
       <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <div className="text-[28px] leading-tight font-extrabold tabular-nums">
+        <div className="font-display text-[36px] leading-[1.15] font-medium tabular-nums">
           {shekel(left)}
           <span className="text-sm font-semibold text-muted-foreground"> נותר לשלם</span>
         </div>

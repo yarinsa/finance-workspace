@@ -466,7 +466,7 @@ function Body({ tx, onClose, txn, categories = [], tagNames = [], goals = [], lo
             type="button"
             disabled={disabled || !dirty}
             onClick={() => void run(save)}
-            className="flex-1 rounded-lg bg-brand px-3 py-2.5 text-sm font-semibold text-white disabled:opacity-40"
+            className="flex-1 rounded-full bg-[var(--lg-primary)] px-3 py-2.5 text-sm font-semibold text-[var(--lg-on-accent)] disabled:opacity-40"
           >
             {busy ? "שומר…" : "שמירה"}
           </button>

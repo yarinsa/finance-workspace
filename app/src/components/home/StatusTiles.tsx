@@ -20,14 +20,14 @@ function Tile({
   return (
     <Link
       to={to}
-      className="block min-w-0 rounded-[16px] border border-line bg-panel p-3 shadow-[var(--shadow)] transition active:scale-[.98] active:border-brand [-webkit-tap-highlight-color:transparent]"
+      className="block min-w-0 surface p-3 transition duration-200 active:scale-[.99] active:bg-panel-2 [-webkit-tap-highlight-color:transparent]"
     >
       <div className="truncate text-xs font-semibold text-muted-foreground">
         {label}
       </div>
       <div
         className={cn(
-          "mt-1 truncate text-[17px] font-extrabold tabular-nums md:text-xl",
+          "mt-1 truncate font-display text-[20px] font-semibold tabular-nums md:text-[22px]",
           tone === "bad" && "text-bad",
         )}
       >

@@ -1,45 +1,72 @@
-/* Palette: mint + navy, light by default; `.dark` on <html> (set from the OS
-   theme in index.html) switches to the dark values. Tailwind utilities read
-   these via the --color-* mapping in index.css. */
+/* Palette "Holst": sage greens on warm cream (docs/home-redesign.md), light by default;
+   `.dark` on <html> (set from the OS theme in index.html) switches to the dark values.
+   Tailwind utilities read these via the --color-* mapping in index.css, and the shadcn
+   tokens (--background, --primary, ...) are mapped onto them there too. Contrast-checked:
+   every text pair is >= 4.5:1 except --hero-muted (4.4, only at >= 14px). */
 :root {
-  --lg-bg: #eef4f2;
-  --lg-panel: #ffffff;
-  --lg-panel-2: #f1f6f4;
-  --lg-line: #e2eae7;
-  --lg-text: #0f1d33;
-  --lg-muted: #6b7a8c;
-  --lg-accent: #14b48c;
-  --lg-on-accent: #ffffff;
-  --lg-good: #10a37f;
-  --lg-bad: #e5484d;
-  --lg-warn: #e5a50a;
-  --lg-radius: 20px;
-  --hero-1: #0f1f3d;
-  --hero-2: #17305a;
-  --hero-text: #f3f7ff;
-  --hero-accent: #3ee0b4;
-  --shadow: 0 6px 24px rgba(15, 31, 61, .07);
-
+  --lg-bg: #f7f3ea;
+  --lg-panel: #fffdf8;
+  --lg-panel-2: #efeadf;
+  --lg-line: #e2ded2;
+  --lg-text: #1f2a23;
+  --lg-muted: #5e6b60;
+  --lg-accent: #4c6b55;
+  --lg-on-accent: #f7f3ea;
+  --lg-good: #4c6b55;
+  --lg-bad: #b4533c;
+  --lg-warn: #9a6b12;
+  --lg-radius: 22px;
+  /* The forest primary pill and the secondary (mint-tinted) one. */
+  --lg-primary: #314c3b;
+  --lg-secondary: #eef2ec;
+  --lg-secondary-line: #bdc9b8;
+  /* Holst ramp, darkest first: charts and quiet fills. */
+  --holst-1: #314c3b;
+  --holst-2: #4c6b55;
+  --holst-3: #6d8c73;
+  --holst-4: #92aa97;
+  --holst-5: #bdc9b8;
+  /* Home band. */
+  --hero-bg: linear-gradient(160deg, #4c6b55 0%, #314c3b 100%);
+  --hero-text: #f7f3ea;
+  --hero-muted: #e2ded2;
+  --hero-line: #bdc9b8;
+  --hero-fill: rgba(189, 201, 184, .35);
+  --shadow: 0 6px 24px rgba(49, 76, 59, .08);
+  /* Quiet surfaces: in light a soft shadow and no line, in dark a hairline and no shadow. */
+  --card-border: transparent;
+  --card-shadow: 0 1px 2px rgba(49, 76, 59, .04), 0 8px 24px rgba(49, 76, 59, .06);
 }
 
 .dark {
-  --lg-bg: #0d1117;
-  --lg-panel: #161b24;
-  --lg-panel-2: #1e2430;
-  --lg-line: #2a3140;
-  --lg-text: #e8ecf2;
-  --lg-muted: #94a0b2;
-  --lg-accent: #2fd1a4;
-  --lg-on-accent: #08130f;
-  --lg-good: #34d399;
-  --lg-bad: #f87171;
-  --lg-warn: #fbbf24;
-  --hero-1: #13264a;
-  --hero-2: #0c1830;
+  --lg-bg: #18201b;
+  --lg-panel: #222d26;
+  --lg-panel-2: #2b3830;
+  --lg-line: #344538;
+  --lg-text: #f7f3ea;
+  --lg-muted: #bdc9b8;
+  --lg-accent: #92aa97;
+  --lg-on-accent: #18201b;
+  --lg-good: #a9c7a4;
+  --lg-bad: #e08b74;
+  --lg-warn: #d9b26a;
+  --lg-primary: #92aa97;
+  --lg-secondary: #2b3830;
+  --lg-secondary-line: #4c6b55;
+  --holst-1: #bdc9b8;
+  --holst-2: #92aa97;
+  --holst-3: #6d8c73;
+  --holst-4: #4c6b55;
+  --holst-5: #314c3b;
+  --hero-bg: linear-gradient(160deg, #314c3b 0%, #22362a 100%);
+  --hero-text: #f7f3ea;
+  --hero-muted: #bdc9b8;
+  --hero-line: #92aa97;
+  --hero-fill: rgba(146, 170, 151, .25);
   --shadow: 0 6px 24px rgba(0, 0, 0, .35);
+  --card-border: var(--lg-line);
+  --card-shadow: none;
 }
-
-
 
 /* Native feel (installed PWA): no rubber-band reveal of white, no grey tap flash, no iOS text
    inflation, no double-tap-zoom delay. */
@@ -77,8 +104,15 @@ header, nav, button, [role="tab"], [role="button"], .pill, .tab-bar {
 body {
   background: var(--lg-bg);
   color: var(--lg-text);
-  font-family: "Heebo", "Assistant", system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-family: var(--font-sans);
   direction: rtl;
+  line-height: 1.5;
+}
+
+/* Display serif (Frank Ruhl Libre): big numbers, greetings, page and section titles. */
+.font-display, .big-num, .wallet-balance, .kpi-value, .greeting h1, .section-title {
+  font-family: var(--font-display);
+  font-feature-settings: "lnum" 1, "tnum" 1;
 }
 
 .stale-dot {
@@ -104,7 +138,7 @@ body {
 @media (max-width: 767px) {
   /* Extra bottom room so the floating tab bar never covers content. */
   .content {
-    padding: 16px max(16px, env(safe-area-inset-right)) calc(env(safe-area-inset-bottom) + 112px) max(16px, env(safe-area-inset-left));
+    padding: 16px max(16px, env(safe-area-inset-right)) calc(env(safe-area-inset-bottom) + 88px) max(16px, env(safe-area-inset-left));
   }
   .grid-2, .grid-3 { grid-template-columns: 1fr; }
   .grid-4, .grid-5 { grid-template-columns: repeat(2, 1fr); }
@@ -113,17 +147,25 @@ body {
 
 .kpi { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
 .kpi-label { font-size: 13px; color: var(--lg-muted); }
-.kpi-value { font-size: 22px; font-weight: 800; }
+.kpi-value { font-size: 24px; font-weight: 600; }
 
+/* Status pill with a dot (the kit's "● In progress"): a quiet tint, the tone on the dot and text. */
 .pill {
-  font-size: 12px; font-weight: 700; padding: 2px 10px; border-radius: 999px;
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 12px; font-weight: 600; padding: 3px 10px; border-radius: 999px;
+  background: var(--lg-panel-2); color: var(--lg-muted); white-space: nowrap;
 }
-.pill-good { background: rgba(52,211,153,.15); color: var(--lg-good); }
-.pill-bad { background: rgba(248,113,113,.15); color: var(--lg-bad); }
-.pill-warn { background: rgba(251,191,36,.15); color: var(--lg-warn); }
+.pill-good, .pill-bad, .pill-warn, .pill-brand { color: var(--pill-tone); background: color-mix(in srgb, var(--pill-tone) 12%, transparent); }
+.pill-good::before, .pill-bad::before, .pill-warn::before, .pill-brand::before {
+  content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; flex: none;
+}
+.pill-good { --pill-tone: var(--lg-good); }
+.pill-bad { --pill-tone: var(--lg-bad); }
+.pill-warn { --pill-tone: var(--lg-warn); }
+.pill-brand { --pill-tone: var(--lg-accent); }
 
 
-.big-num { font-size: 34px; font-weight: 800; }
+.big-num { font-size: 40px; font-weight: 500; line-height: 1.15; }
 .muted { color: var(--lg-muted); }
 .row { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid var(--lg-line); }
 .row:last-child { border-bottom: 0; }
@@ -134,59 +176,57 @@ body {
   padding: 22px;
 }
 .stub-badge {
-  display: inline-block; font-size: 12px; font-weight: 700; padding: 3px 10px;
+  display: inline-block; font-size: 12px; font-weight: 600; padding: 3px 10px;
   border-radius: 999px; background: var(--lg-panel-2); color: var(--lg-muted); margin-bottom: 12px;
 }
 .stub-body { color: var(--lg-muted); line-height: 1.6; }
 .stub-body code { background: var(--lg-panel-2); padding: 1px 6px; border-radius: 6px; }
 
-.bar-track { background: var(--lg-panel-2); border-radius: 8px; height: 10px; overflow: hidden; }
-.bar-fill { height: 100%; background: var(--lg-accent); }
+.bar-track { background: var(--lg-line); border-radius: 999px; height: 6px; overflow: hidden; }
+.bar-fill { height: 100%; background: var(--lg-primary); border-radius: inherit; }
 
 
 /* ---- Wallet header (Overview) ------------------------------------------ */
 .wallet-card {
   display: block; text-decoration: none; color: var(--hero-text); position: relative; overflow: hidden;
-  border-radius: 22px; padding: 20px 20px 14px;
-  background:
-    radial-gradient(90% 120% at 0% 100%, rgba(62, 224, 180, .22), transparent 60%),
-    linear-gradient(150deg, var(--hero-2) 0%, var(--hero-1) 70%);
-  box-shadow: 0 14px 34px rgba(15, 31, 61, .28);
+  border-radius: var(--lg-radius); padding: 20px 20px 14px;
+  background: var(--hero-bg);
+  box-shadow: var(--shadow);
 }
 .wallet-top { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
 .wallet-label { font-size: 14px; font-weight: 600; opacity: .85; }
 .wallet-asof { font-size: 12px; opacity: .7; }
 .wallet-balance {
-  font-size: 44px; font-weight: 800; letter-spacing: -1px; line-height: 1.1;
+  font-size: 48px; font-weight: 500; letter-spacing: -0.5px; line-height: 1.1;
   margin: 6px 0 4px; text-align: right; font-variant-numeric: tabular-nums;
 }
 .wallet-sub { font-size: 13px; opacity: .78; }
 .wallet-chip {
   display: inline-block; margin-top: 12px; padding: 5px 12px; border-radius: 999px;
-  font-size: 13px; font-weight: 700; background: rgba(255,255,255,.14);
+  font-size: 13px; font-weight: 600; background: color-mix(in srgb, var(--hero-text) 14%, transparent);
 }
-.wallet-chip.chip-good { color: var(--hero-accent); }
-.wallet-chip.chip-bad { color: #ff9a9e; }
+.wallet-chip.chip-good { color: var(--hero-text); }
+.wallet-chip.chip-bad { color: #f6c9bb; }
 .wallet-spark { display: block; width: 100%; height: 64px; margin-top: 12px; overflow: visible; }
-.spark-prev { fill: none; stroke: rgba(255,255,255,.4); stroke-width: 1.5; stroke-dasharray: 4 4; vector-effect: non-scaling-stroke; }
-.spark-cur { fill: none; stroke: var(--hero-accent); stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
-.spark-dot { fill: var(--hero-accent); stroke: var(--hero-1); stroke-width: 2; }
+.spark-prev { fill: none; stroke: color-mix(in srgb, var(--hero-text) 40%, transparent); stroke-width: 1.5; stroke-dasharray: 4 4; vector-effect: non-scaling-stroke; }
+.spark-cur { fill: none; stroke: var(--hero-text); stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
+.spark-dot { fill: var(--hero-line); stroke: var(--hero-text); stroke-width: 2; }
 .wallet-legend { display: flex; gap: 14px; font-size: 12px; opacity: .8; margin-top: 6px; }
 .wallet-legend i { display: inline-block; width: 14px; height: 0; vertical-align: middle; margin-inline-end: 4px; }
-.lg-cur { border-top: 2.5px solid var(--hero-accent); }
-.lg-prev { border-top: 1.5px dashed rgba(255,255,255,.6); }
+.lg-cur { border-top: 2.5px solid var(--hero-text); }
+.lg-prev { border-top: 1.5px dashed color-mix(in srgb, var(--hero-text) 60%, transparent); }
 
 .wallet-stats { margin-top: 12px; display: flex; flex-direction: column; gap: 14px; }
-.wallet-stats-title { display: flex; justify-content: space-between; font-size: 14px; font-weight: 700; }
+.wallet-stats-title { display: flex; justify-content: space-between; font-size: 14px; font-weight: 600; }
 .wallet-stats-title .muted { font-size: 12px; font-weight: 500; }
 .wstat { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
 .wstat-line { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
 .wstat-meta { font-size: 12px; color: var(--lg-muted); }
 .wstat-label { font-size: 14px; }
 .wstat strong { font-size: 18px; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.delta { font-size: 11px; font-weight: 700; white-space: nowrap; }
-.wstat-bar { position: relative; height: 6px; border-radius: 4px; background: var(--lg-panel-2); }
-.wstat-fill { height: 100%; border-radius: 4px; background: var(--lg-accent); }
+.delta { font-size: 11px; font-weight: 600; white-space: nowrap; }
+.wstat-bar { position: relative; height: 6px; border-radius: 999px; background: var(--lg-line); }
+.wstat-fill { height: 100%; border-radius: 999px; background: var(--lg-primary); }
 .wstat-fill.fill-good { background: var(--lg-good); }
 .wstat-fill.fill-warn { background: var(--lg-warn); }
 .wstat-tick { position: absolute; top: -3px; width: 2px; height: 11px; background: var(--lg-text); opacity: .7; border-radius: 1px; }
@@ -197,7 +237,7 @@ body {
 /* ---- Overview sections -------------------------------------------------- */
 .section + .section { margin-top: 28px; }
 .section-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 10px; }
-.section-title { font-size: 19px; font-weight: 800; margin: 0; }
+.section-title { font-size: 20px; font-weight: 600; margin: 0; }
 .section-link { color: var(--lg-accent); text-decoration: none; font-size: 14px; font-weight: 600; }
 
 .list-foot {
@@ -224,7 +264,7 @@ body {
 @keyframes live-pulse { 50% { opacity: .35; } }
 @media (prefers-reduced-motion: reduce) { .live-pulse, .sync-dot-running { animation: none; } }
 .live-progress { height: 4px; border-radius: 999px; background: var(--lg-panel-2); overflow: hidden; margin: 2px 0 6px; }
-.live-progress > span { display: block; height: 100%; background: var(--lg-accent); border-radius: inherit; transition: width .4s ease; }
+.live-progress > span { display: block; height: 100%; background: var(--lg-primary); border-radius: inherit; transition: width .4s ease; }
 .live-meta { font-size: 12px; margin-bottom: 4px; }
 
 /* One collapsible row per source */
@@ -240,7 +280,7 @@ body {
 .sync-intake { display: flex; flex-direction: column; gap: 2px; }
 .sync-timeline { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
 .sync-timeline li { display: grid; grid-template-columns: 16px 1fr auto; align-items: center; gap: 8px; }
-.sync-step-icon { font-weight: 800; text-align: center; }
+.sync-step-icon { font-weight: 600; text-align: center; }
 .sync-facts { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 2px 12px; font-size: 13px; }
 .sync-facts dt { color: var(--lg-muted); }
 .sync-facts dd { margin: 0; }
@@ -258,13 +298,13 @@ body {
 .mix { margin: 12px 0 6px; }
 .mix-bar { display: flex; height: 8px; border-radius: 6px; overflow: hidden; background: var(--lg-panel-2); }
 .mix-bar span { display: block; flex-grow: 0; flex-shrink: 0; }
-.mix-fixed { background: var(--lg-accent); }
-.mix-var { background: var(--lg-warn); }
+.mix-fixed { background: var(--holst-1); }
+.mix-var { background: var(--holst-4); }
 .mix-legend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12px; margin-top: 6px; }
 .mix-legend i { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-inline-end: 4px; }
 .rate-chip {
   display: inline-block; margin-inline-start: 8px; padding: 1px 7px; border-radius: 999px;
-  font-size: 11px; font-weight: 700; background: var(--lg-panel-2); color: var(--lg-text);
+  font-size: 11px; font-weight: 600; background: var(--lg-panel-2); color: var(--lg-text);
   font-variant-numeric: tabular-nums;
 }
 
@@ -293,9 +333,8 @@ body {
 
 /* ---- Reference look: greeting, icon tabs, donut ----------------------- */
 .greeting { margin: 0; }
-.greeting h1 { font-size: 24px; font-weight: 800; margin: 0; }
+.greeting h1 { font-size: 28px; font-weight: 500; margin: 0; }
 .greeting p { margin: 2px 0 0; font-size: 14px; }
-.section-title { font-size: 18px; }
 
 
 .donut { display: flex; align-items: center; gap: 16px; }
@@ -312,23 +351,28 @@ body {
 .donut-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 
-/* shadcn surfaces (SidebarInset, sheets) follow the dashboard palette */
-:root, .dark { --background: var(--lg-bg); }
+/* The calm surface every list/tile shares with <Card>: hairline in dark, soft shadow in light. */
+.surface {
+  background: var(--lg-panel);
+  border: 1px solid var(--card-border);
+  border-radius: var(--lg-radius);
+  box-shadow: var(--card-shadow);
+}
 
 /* Plain card surface for non-component markup (e.g. the wallet's stats panel) */
 .card {
   background: var(--lg-panel);
-  border: 1px solid var(--lg-line);
+  border: 1px solid var(--card-border);
   border-radius: var(--lg-radius);
-  padding: 18px;
-  box-shadow: var(--shadow);
+  padding: 20px;
+  box-shadow: var(--card-shadow);
 }
 
 /* 12-month average comparison */
 .wallet-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
 .wallet-chips .wallet-chip { margin-top: 0; }
-.spark-avg { fill: none; stroke: rgba(255,255,255,.55); stroke-width: 1.5; stroke-dasharray: 1 4; stroke-linecap: round; vector-effect: non-scaling-stroke; }
-.lg-avg { border-top: 2px dotted rgba(255,255,255,.7); }
+.spark-avg { fill: none; stroke: color-mix(in srgb, var(--hero-text) 55%, transparent); stroke-width: 1.5; stroke-dasharray: 1 4; stroke-linecap: round; vector-effect: non-scaling-stroke; }
+.lg-avg { border-top: 2px dotted color-mix(in srgb, var(--hero-text) 70%, transparent); }
 .wstat-deltas { display: inline-flex; gap: 10px; align-items: baseline; }
 .wstat-avg { display: inline-flex; gap: 3px; align-items: baseline; font-size: 11px; color: var(--lg-muted); }
 .wallet-legend { flex-wrap: wrap; gap: 4px 12px; }
@@ -345,4 +389,10 @@ body {
   flex-direction: column;
   gap: 0.375rem;
   padding-block: 0.25rem 0.5rem;
+}
+
+/* Slow, small motion: one ease for the whole app. */
+:root { --ease-calm: cubic-bezier(.2, .7, .2, 1); }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition-duration: 0ms !important; animation-duration: 0ms !important; }
 }

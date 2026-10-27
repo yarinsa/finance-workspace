@@ -33,7 +33,7 @@ export default function UpcomingChips({ runway }: { runway: Runway | undefined }
           >
             <div className="text-xs font-semibold text-muted-foreground">{when(days)}</div>
             <div className="mt-0.5 truncate text-sm font-bold">{e.name}</div>
-            <div className={cn("mt-0.5 text-sm font-extrabold tabular-nums", e.amount > 0 && "text-good")}>
+            <div className={cn("mt-0.5 text-sm font-semibold tabular-nums", e.amount > 0 && "text-good")}>
               {shekelSigned(e.amount)}
             </div>
           </div>

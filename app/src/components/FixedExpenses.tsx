@@ -33,7 +33,7 @@ export default function FixedExpenses() {
     <Card>
       <CardLabel>הוצאות קבועות — מה אפשר לקצץ</CardLabel>
       <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <div className="text-[28px] leading-tight font-extrabold tabular-nums">
+        <div className="font-display text-[36px] leading-[1.15] font-medium tabular-nums">
           {shekel(fx.total)}
           <span className="text-sm font-semibold text-muted-foreground"> / חודש</span>
         </div>

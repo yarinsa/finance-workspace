@@ -17,18 +17,18 @@ function fail(err: unknown) {
   root.render(
     <div dir="rtl" style={{ padding: "2rem", fontFamily: "system-ui", lineHeight: 1.6 }}>
       <h1 style={{ fontSize: "1.25rem", marginBottom: ".5rem" }}>לא ניתן לטעון את הנתונים</h1>
-      <p style={{ color: "#64748b" }}>{err instanceof Error ? err.message : String(err)}</p>
+      <p style={{ color: "var(--lg-muted, #5e6b60)" }}>{err instanceof Error ? err.message : String(err)}</p>
       {expired ? (
         // The cookie lapsed: a full navigation lets the edge send us through the login again.
         <button
           type="button"
           onClick={() => location.assign("/?login=1")}
-          style={{ marginTop: "1rem", padding: ".6rem 1.2rem", borderRadius: 999, border: 0, background: "#14b48c", color: "#fff", fontSize: "1rem", fontWeight: 700 }}
+          style={{ marginTop: "1rem", padding: ".6rem 1.2rem", borderRadius: 999, border: 0, background: "var(--lg-primary, #314c3b)", color: "var(--lg-on-accent, #f7f3ea)", fontSize: "1rem", fontWeight: 600 }}
         >
           התחבר מחדש
         </button>
       ) : (
-        <p style={{ color: "#64748b", marginTop: "1rem" }}>
+        <p style={{ color: "var(--lg-muted, #5e6b60)", marginTop: "1rem" }}>
           הרץ <code>python3 data/digest.py</code> ואז <code>infra/deploy.sh --data-only</code>.
         </p>
       )}

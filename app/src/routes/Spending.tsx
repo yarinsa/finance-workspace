@@ -55,8 +55,7 @@ export default function Spending() {
   }
 
   const m = months[idx];
-  const palette = [C.accent, "#1d3b6e", C.warn, "#8b7cf6", C.bad, C.good, "#e879a9"];
-  const color = (i: number) => palette[i % palette.length];
+  const color = (i: number) => C.series[i % C.series.length];
   const catColor = (name: string) => {
     const i = m.by_category.findIndex((c) => c.name === name);
     return i < 0 ? C.muted : color(i);

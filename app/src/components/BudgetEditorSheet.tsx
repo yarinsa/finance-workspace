@@ -120,7 +120,7 @@ function Body({ c }: { c: BudgetCategory }) {
             >
               −
             </button>
-            <div className="min-w-24 text-center text-xl font-extrabold tabular-nums">{shekel(amount)}</div>
+            <div className="min-w-24 text-center font-display text-2xl font-semibold tabular-nums">{shekel(amount)}</div>
             <button
               type="button"
               aria-label="הוסף"
@@ -136,7 +136,7 @@ function Body({ c }: { c: BudgetCategory }) {
           </div>
           <div className="flex items-center gap-2" dir="ltr">
             <code className="min-w-0 flex-1 overflow-x-auto whitespace-nowrap rounded-lg bg-line/40 px-2 py-2 text-xs">{command}</code>
-            <button type="button" className="shrink-0 rounded-lg bg-brand px-3 py-2 text-xs font-semibold text-white" onClick={copy}>
+            <button type="button" className="shrink-0 rounded-full bg-[var(--lg-primary)] px-3 py-2 text-xs font-semibold text-[var(--lg-on-accent)]" onClick={copy}>
               {copied ? "הועתק" : "העתק"}
             </button>
           </div>

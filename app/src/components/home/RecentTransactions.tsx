@@ -36,7 +36,7 @@ export default function RecentTransactions() {
   if (rows.length === 0) return null;
   return (
     <Section title="תנועות אחרונות" to="/spending">
-      <div className="overflow-hidden rounded-[20px] border border-line bg-panel shadow-[var(--shadow)]">
+      <div className="overflow-hidden surface">
         <TransactionList inset>
           {rows.map((r, i) => (
             <TransactionRow

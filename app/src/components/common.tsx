@@ -18,8 +18,8 @@ export function Card({
   const inner = (
     <div
       className={cn(
-        "h-full rounded-[20px] border border-line bg-panel p-4 shadow-[var(--shadow)] transition md:p-[18px]",
-        to && "group-hover:border-brand group-active:scale-[.98] group-active:border-brand",
+        "h-full rounded-[22px] border border-[color:var(--card-border)] bg-panel p-5 shadow-[var(--card-shadow)] transition duration-200 ease-[var(--ease-calm)]",
+        to && "group-active:scale-[.99] group-active:bg-panel-2",
         className,
       )}
     >
@@ -38,29 +38,107 @@ export function Card({
 /** Heading level for card titles: h2 on a page, h3 once inside a `Section`. */
 const HeadingLevel = createContext<2 | 3>(2);
 
+/** The kit's letter-spaced label ("COLOR PALETTE"): Hebrew has no capitals, so small, muted and barely spaced. */
+const SECTION_LABEL = "m-0 text-xs font-semibold tracking-[.04em] text-muted-foreground";
+
 /** Small muted heading at the top of a card (h2, or h3 inside a `Section`). */
 export function CardLabel({ children }: { children: ReactNode }) {
   const Tag = useContext(HeadingLevel) === 3 ? "h3" : "h2";
-  return <Tag className="m-0 mb-2.5 text-sm font-semibold text-muted-foreground">{children}</Tag>;
+  return <Tag className={cn(SECTION_LABEL, "mb-3")}>{children}</Tag>;
 }
 
-/** Headline figure; `tone` colours it by sign or verdict. */
+/** A label above a group of rows, not a heading (no document outline). */
+export function SectionLabel({ children, className }: { children: ReactNode; className?: string }) {
+  return <div className={cn(SECTION_LABEL, className)}>{children}</div>;
+}
+
+/**
+ * An amount with the ₪ sign set smaller and lighter than the digits (calm big numbers).
+ * Anything that isn't a formatted ₪ string renders as is.
+ */
+export function Money({ children }: { children: ReactNode }) {
+  if (typeof children !== "string" || !children.includes("₪")) return <>{children}</>;
+  const [before, after] = children.split("₪");
+  return (
+    <>
+      {before}
+      <span className="mx-[.08em] align-baseline text-[.55em] font-normal opacity-70">₪</span>
+      {after}
+    </>
+  );
+}
+
+/** The one big number of a screen, in the display serif; `tone` colours it only when it is a real verdict. */
 export function BigNumber({
   children,
   tone,
+  size = "md",
 }: {
   children: ReactNode;
   tone?: "good" | "bad";
+  /** `lg` for the home band (48–56px), `md` for detail heroes (40px). */
+  size?: "md" | "lg";
 }) {
   return (
     <div
       className={cn(
-        "text-[28px] leading-tight font-extrabold tabular-nums md:text-[34px]",
+        "font-display leading-[1.15] font-medium tabular-nums",
+        size === "lg" ? "text-[48px] md:text-[56px]" : "text-[36px] md:text-[40px]",
         tone === "good" && "text-good",
         tone === "bad" && "text-bad",
       )}
     >
-      {children}
+      <Money>{children}</Money>
+    </div>
+  );
+}
+
+/** "● label" status pill: sync states, bill paid/upcoming, "משוער", goal on track. */
+export function StatusPill({
+  tone = "neutral",
+  children,
+  className,
+}: {
+  tone?: "good" | "warn" | "bad" | "brand" | "neutral";
+  children: ReactNode;
+  className?: string;
+}) {
+  return <span className={cn("pill", tone !== "neutral" && `pill-${tone}`, className)}>{children}</span>;
+}
+
+/** Thin (6px) forest bar on a hairline track; `value` in 0–1. Optional label on the side. */
+export function ProgressBar({
+  value,
+  tone = "brand",
+  label,
+  className,
+}: {
+  value: number;
+  tone?: "brand" | "warn" | "bad";
+  label?: ReactNode;
+  className?: string;
+}) {
+  const pct = Math.max(0, Math.min(1, value)) * 100;
+  return (
+    <div className={cn("flex items-center gap-3", className)}>
+      <div
+        className="h-1.5 flex-1 overflow-hidden rounded-full bg-line"
+        role="progressbar"
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={Math.round(pct)}
+      >
+        <div
+          className={cn(
+            "h-full rounded-full transition-[width] duration-300 ease-[var(--ease-calm)]",
+            tone === "brand" && "bg-[var(--lg-primary)]",
+            tone === "warn" && "bg-warn",
+            tone === "bad" && "bg-bad",
+          )}
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+      {label != null && <span className="shrink-0 text-xs text-muted-foreground tabular-nums">{label}</span>}
     </div>
   );
 }
@@ -103,23 +181,21 @@ export function BarRow({
         <span className="truncate">{label}</span>
         <strong className="shrink-0 tabular-nums">{value}</strong>
       </div>
-      <div className="h-2.5 overflow-hidden rounded-full bg-panel-2">
-        <div
-          className="h-full rounded-full bg-brand"
-          style={{ width: `${Math.max(0, Math.min(1, fraction)) * 100}%` }}
-        />
-      </div>
+      <ProgressBar value={fraction} />
     </div>
   );
 }
 
-/** Amber call-to-action strip (e.g. "time to refresh balances"). */
+/** A quiet "look soon" strip (e.g. "time to refresh balances"): an ochre dot, never an amber banner. */
 export function Nudge({ children, action }: { children: ReactNode; action?: ReactNode }) {
   return (
-    <div className="flex flex-col gap-3 rounded-[14px] border border-warn/30 bg-warn/8 px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between">
-      <span>{children}</span>
+    <div className="flex flex-col gap-3 rounded-[22px] border border-[color:var(--card-border)] bg-panel px-5 py-4 shadow-[var(--card-shadow)] sm:flex-row sm:items-center sm:justify-between">
+      <span className="flex items-start gap-2.5">
+        <span className="mt-2 size-1.5 shrink-0 rounded-full bg-warn" aria-hidden />
+        <span>{children}</span>
+      </span>
       {action && (
-        <span className="self-start rounded-[10px] bg-brand px-3.5 py-2 font-bold text-[#0b0e14] sm:self-auto">
+        <span className="self-start rounded-full border border-[color:var(--lg-secondary-line)] bg-secondary px-4 py-1.5 text-sm font-semibold sm:self-auto">
           {action}
         </span>
       )}
@@ -128,9 +204,9 @@ export function Nudge({ children, action }: { children: ReactNode; action?: Reac
 }
 
 const RANK_LABEL: Record<string, { text: string; cls: string }> = {
-  good: { text: "מעולה", cls: "pill-good" },
-  bad: { text: "לא משהו", cls: "pill-bad" },
-  warning: { text: "לב לב", cls: "pill-warn" },
+  good: { text: "במסלול", cls: "pill-good" },
+  bad: { text: "דורש תשומת לב", cls: "pill-bad" },
+  warning: { text: "כדאי לבדוק", cls: "pill-warn" },
 };
 
 export function RankPill({ rank }: { rank: Rank }) {
@@ -191,7 +267,7 @@ export function Kpi({
           </Popover>
         )}
       </div>
-      <div className="text-[22px] font-extrabold tabular-nums">
+      <div className="font-display text-[24px] font-semibold tabular-nums">
         {compactValue != null ? (
           <>
             <span className="@max-[7.5rem]:hidden">{value}</span>
@@ -225,7 +301,7 @@ export function KpiGrid({ cols = 4, children }: { cols?: 3 | 4 | 5; children: Re
 
 /** Page heading. On phones the sticky header already names the page, so it's visually hidden there. */
 export function PageTitle({ children }: { children: ReactNode }) {
-  return <h1 className="text-[26px] font-extrabold max-md:sr-only">{children}</h1>;
+  return <h1 className="font-display text-[28px] font-medium max-md:sr-only">{children}</h1>;
 }
 
 /**
@@ -242,7 +318,7 @@ export function Page({
   children: ReactNode;
 }) {
   return (
-    <div className={cn("flex flex-col gap-4 md:gap-[18px]", !wide && "max-w-[720px]")}>
+    <div className={cn("flex flex-col gap-5 md:gap-6", !wide && "max-w-[720px]")}>
       {title && <PageTitle>{title}</PageTitle>}
       {children}
     </div>
@@ -282,7 +358,7 @@ export function Section({
   return (
     <section className="mt-3 first:mt-0 [h1+&]:mt-0">
       <header className="mb-2.5 flex items-baseline justify-between">
-        <h2 className="m-0 text-lg font-extrabold">{title}</h2>
+        <h2 className="m-0 font-display text-xl font-semibold">{title}</h2>
         {action}
         {to && (
           <Link to={to} className="text-sm font-semibold text-brand no-underline">
@@ -317,9 +393,7 @@ export function ListRow({
         <strong className="whitespace-nowrap tabular-nums">{value}</strong>
       </div>
       {share != null && (
-        <div className="mt-2 h-1 overflow-hidden rounded-full bg-panel-2">
-          <div className="h-full rounded-full bg-brand" style={{ width: `${Math.max(share * 100, 1)}%` }} />
-        </div>
+        <ProgressBar value={Math.max(share, 0.01)} className="mt-2" />
       )}
     </div>
   );

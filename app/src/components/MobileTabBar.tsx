@@ -1,18 +1,20 @@
 import { NavLink, useLocation } from "react-router-dom";
-import { LayoutGrid } from "lucide-react";
 import { groupOf, groups, routes } from "@/routes";
 import { useSidebar } from "@/components/ui/sidebar";
 import { cn } from "@/lib/utils";
 
+const TAB = "flex min-w-0 flex-1 flex-col items-center justify-center gap-1 py-2 text-[11px] font-medium transition-colors duration-200 active:scale-95";
+
 /**
- * Floating bottom navigation for phones: a pill of the primary routes plus a
- * detached round button that opens the sidebar sheet with everything else.
+ * Bottom navigation for phones (Empathy-style): a cream bar of labelled tabs, the active one
+ * in forest. "עוד" is a tab like the others and opens the sidebar sheet with everything else.
  * Hidden from `md` up, where the regular sidebar takes over.
  */
 export function MobileTabBar() {
-  const { setOpenMobile } = useSidebar();
+  const { setOpenMobile, openMobile } = useSidebar();
   const { pathname } = useLocation();
   const active = groupOf(pathname);
+  const more = groups.find((g) => !g.tab);
   const tabs = groups
     .filter((g) => g.tab)
     .map((g) => ({ ...g, path: routes.find((r) => r.group === g.key && r.hub)!.path }));
@@ -20,33 +22,36 @@ export function MobileTabBar() {
   return (
     <nav
       aria-label="ניווט ראשי"
-      className="tab-bar fixed inset-x-0 z-40 flex items-center justify-center gap-3 px-4 md:hidden"
-      style={{ bottom: "calc(env(safe-area-inset-bottom) + 12px)" }}
+      className="tab-bar fixed inset-x-0 bottom-0 z-40 border-t border-line bg-[color-mix(in_srgb,var(--lg-bg)_92%,transparent)] backdrop-blur-xl md:hidden"
+      style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
     >
-      <div className="flex h-16 flex-1 items-center justify-around rounded-full border bg-background/80 px-2 shadow-lg backdrop-blur-xl">
-        {tabs.map(({ key, path, label, icon: Icon }) => (
-          <NavLink
-            key={key}
-            to={path}
-            viewTransition
-            aria-label={label}
-            className={cn(
-              "flex size-12 items-center justify-center rounded-full transition-colors active:scale-95",
-              active === key ? "text-[var(--lg-accent)]" : "text-foreground/80",
-            )}
+      <div className="mx-auto flex h-16 max-w-md items-stretch px-2">
+        {tabs.map(({ key, path, label, icon: Icon }) => {
+          const on = active === key && !openMobile;
+          return (
+            <NavLink
+              key={key}
+              to={path}
+              viewTransition
+              aria-current={on ? "page" : undefined}
+              className={cn(TAB, on ? "text-[var(--lg-primary)]" : "text-muted-foreground")}
+            >
+              <Icon className="size-[22px]" strokeWidth={on ? 2.25 : 1.75} />
+              <span className="truncate">{label}</span>
+            </NavLink>
+          );
+        })}
+        {more && (
+          <button
+            type="button"
+            onClick={() => setOpenMobile(true)}
+            className={cn(TAB, active === "more" || openMobile ? "text-[var(--lg-primary)]" : "text-muted-foreground")}
           >
-            <Icon className="size-6" strokeWidth={2.25} />
-          </NavLink>
-        ))}
+            <more.icon className="size-[22px]" strokeWidth={1.75} />
+            <span>{more.label}</span>
+          </button>
+        )}
       </div>
-      <button
-        type="button"
-        aria-label="עוד"
-        onClick={() => setOpenMobile(true)}
-        className="flex size-16 shrink-0 items-center justify-center rounded-full bg-[var(--lg-accent)] text-white shadow-lg transition-transform active:scale-95"
-      >
-        <LayoutGrid className="size-6" strokeWidth={2.25} />
-      </button>
     </nav>
   );
 }

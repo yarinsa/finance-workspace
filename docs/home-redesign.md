@@ -195,17 +195,24 @@ move to `/metrics`, debt % also as a footer on the חובות lens), `home/Hero`
   RiseUp's stale Leumi `loan_account` copy instead of the direct checking account, which
   dropped Leumi from the runway pool.
 
-### Phase 2a — calm design system (app-wide, before any new screen)
-- [ ] Holst palette (tokens above): `styles.css`, the shadcn mapping in
-      `index.css`, `chartTheme.ts`, `theme-color`/manifest, the hardcoded `#14b48c` in
-      `main.tsx`. Find others with `grep -rn '#[0-9a-fA-F]\{6\}' app/src`.
-- [ ] Fonts: Frank Ruhl Libre (display) + Heebo (body), the type scale, `--font-display`.
-- [ ] Primitives: `Button` primary/secondary, `StatusPill`, `ProgressBar`, `Toast`
-      (wired to the existing edit mutations), `SectionLabel`, `BigNumber` in the serif.
-- [ ] Calm copy pass: remove emoji, rewrite alarm wording in `actions.py` titles and
-      the UI's verdict lines.
-- [ ] Bottom bar: labels, ivory, forest active, "עוד" as a normal tab.
-- [ ] Screenshot every route, light + dark, before/after.
+### Phase 2a — calm design system (app-wide, before any new screen) — done 2026-10-27
+- [x] Holst palette (tokens above): `styles.css`, the shadcn tokens in `index.css` now
+      read the `--lg-*` values (one `.dark` switch), `chartTheme.ts` (`series`: greens,
+      then terracotta/ochre tints mixed in JS — SVG attributes don't take `color-mix()`),
+      `theme-color`/manifest, the error screens. Off-palette navy/purple/pink/sky are gone.
+- [x] Tailwind's default palette, fonts and shadows are **reset** (`--color-*: initial` …):
+      only Holst tokens exist as utilities, `shadow-sm/md/lg` are our calm shadows.
+- [x] Fonts: Frank Ruhl Libre (display) + Heebo (body), **Hebrew + Latin subsets only**
+      (`src/fonts.css`; 4 woff2 / 105 KB instead of 8 / 179 KB), `--font-display`.
+- [x] Primitives: `Button` `primary` + `secondary` + size `pill`, `StatusPill` (and every
+      `.pill-*` now draws the dot), `ProgressBar` (6px forest on hairline), `Toast`
+      (raised by the Relay network layer after any edit mutation), `SectionLabel`,
+      `Money` (₪ smaller than the digits), `BigNumber` in the serif, `.surface`.
+- [x] Calm copy: no emoji; "חריגה" → "מעל התקציב" / "החשבון צפוי לעבור את המסגרת"
+      (`actions.py` titles too), rank pills "במסלול / כדאי לבדוק / דורש תשומת לב".
+- [x] Bottom bar: labels, cream bar, forest active, "עוד" as a normal tab.
+- [x] Screenshots light + dark (`dashboard-screenshots --light` added).
+- Not yet: "בטל" (undo) in the toast — the Toast supports it, no edit passes one yet.
 
 ### Phase 2b — home shell (ships with מזומן + הוצאות)
 - [ ] `WeekStrip` for "בקרוב" (replaces `UpcomingChips`).

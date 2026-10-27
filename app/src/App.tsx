@@ -24,6 +24,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { MobileTabBar } from "@/components/MobileTabBar";
 import { PwaStatus } from "@/components/PwaStatus";
+import { Toaster } from "@/components/Toaster";
 
 /**
  * "Updated N days ago" — tap-able so the stale warning works on touch. The dot
@@ -150,6 +151,7 @@ export default function App() {
           </main>
         </SidebarInset>
         <MobileTabBar />
+        <Toaster />
       </SidebarProvider>
     </TooltipProvider>
     </LedgerApiProvider>

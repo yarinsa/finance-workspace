@@ -64,11 +64,11 @@ export default function Inbox() {
               <span className="grid size-8 shrink-0 place-items-center rounded-full bg-good/15 text-good">
                 <Check className="size-4" />
               </span>
-              <span className="flex-1 font-bold">{showArchived ? "הארכיון ריק" : "האינבוקס ריק ✓"}</span>
+              <span className="flex-1 font-bold">{showArchived ? "הארכיון ריק" : "אין כרגע משהו לטפל בו"}</span>
             </div>
           </Card>
         ) : (
-          <div className="overflow-hidden rounded-[20px] border border-line bg-panel shadow-[var(--shadow)]">
+          <div className="overflow-hidden surface">
             {shown.map((n) => (
               <div key={n.id} className="border-b border-line last:border-b-0">
                 {showArchived ? (
@@ -81,7 +81,7 @@ export default function Inbox() {
                     rightLabel="השהה"
                     leftIcon={Archive}
                     rightIcon={BellOff}
-                    leftClass="bg-sky-600"
+                    leftClass="bg-[var(--lg-primary)]"
                     rightClass="bg-warn"
                   >
                     <NotificationRow n={n} onRead={inbox.markRead} />

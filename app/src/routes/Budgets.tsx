@@ -23,7 +23,7 @@ function Hero({ b }: { b: BudgetsData }) {
     <Card>
       <CardLabel>תקציב החודש</CardLabel>
       <BigNumber tone={over ? "bad" : undefined}>
-        {over ? `חריגה ${shekel(-b.left)}` : `${shekel(b.left)} נותרו`}
+        {over ? `${shekel(-b.left)} מעל התקציב` : `${shekel(b.left)} נותרו`}
       </BigNumber>
       <div className="mt-3">
         <Bar pct={pct} over={over} />
@@ -50,7 +50,7 @@ function Row({ c, onOpen }: { c: BudgetCategory; onOpen: () => void }) {
           {c.source === "override" && <span className="ms-1.5 text-xs font-normal text-muted-foreground">מותאם אישית</span>}
         </span>
         <span className={`text-sm font-bold tabular-nums ${c.over ? "text-bad" : ""}`}>
-          {c.over ? `חריגה ${shekel(-c.left)}` : `${shekel(c.left)} נותרו`}
+          {c.over ? `${shekel(-c.left)} מעל` : `${shekel(c.left)} נותרו`}
         </span>
       </div>
       <Bar pct={pct} over={c.over} />

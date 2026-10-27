@@ -23,8 +23,8 @@ function PaceSpark({ cur, prev, avg }: { cur: PaceSide; prev: PaceSide; avg?: Pa
     <svg className="wallet-spark" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" aria-hidden>
       <defs>
         <linearGradient id="spark-glow" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" style={{ stopColor: "var(--hero-accent)", stopOpacity: 0.35 }} />
-          <stop offset="100%" style={{ stopColor: "var(--hero-accent)", stopOpacity: 0 }} />
+          <stop offset="0%" style={{ stopColor: "var(--hero-line)", stopOpacity: 0.35 }} />
+          <stop offset="100%" style={{ stopColor: "var(--hero-line)", stopOpacity: 0 }} />
         </linearGradient>
       </defs>
       {last > 0 && (

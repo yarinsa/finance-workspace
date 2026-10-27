@@ -1,9 +1,26 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
-@import "@fontsource-variable/geist";
+@import "./fonts.css";
 
 @custom-variant dark (&:is(.dark *));
+
+/* Reset Tailwind's default palette, fonts and shadows: the only colours that exist are the
+   Holst tokens below (no bg-sky-600 by accident), and the shadows are our calm ones. */
+@theme {
+    --color-*: initial;
+    --font-*: initial;
+    --shadow-*: initial;
+    --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+    --color-scrim: #18201b;
+}
+
+@theme inline {
+    --shadow-xs: 0 1px 2px rgba(49, 76, 59, .05);
+    --shadow-sm: var(--card-shadow);
+    --shadow-md: var(--shadow);
+    --shadow-lg: var(--shadow);
+}
 
 /* Dashboard palette (values live in styles.css as --lg-*) exposed as utilities:
    bg-panel, border-line, text-good / text-bad / text-warn, bg-brand … */
@@ -18,8 +35,9 @@
 }
 
 @theme inline {
-    --font-heading: var(--font-sans);
-    --font-sans: 'Geist Variable', sans-serif;
+    --font-heading: var(--font-display);
+    --font-display: 'Frank Ruhl Libre Variable', 'Frank Ruhl Libre', serif;
+    --font-sans: 'Heebo Variable', 'Heebo', system-ui, sans-serif;
     --color-sidebar-ring: var(--sidebar-ring);
     --color-sidebar-border: var(--sidebar-border);
     --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -61,72 +79,40 @@
 }
 
 :root {
-    --background: oklch(1 0 0);
-    --foreground: oklch(0.145 0 0);
-    --card: oklch(1 0 0);
-    --card-foreground: oklch(0.145 0 0);
-    --popover: oklch(1 0 0);
-    --popover-foreground: oklch(0.145 0 0);
-    --primary: oklch(0.205 0 0);
-    --primary-foreground: oklch(0.985 0 0);
-    --secondary: oklch(0.97 0 0);
-    --secondary-foreground: oklch(0.205 0 0);
-    --muted: oklch(0.97 0 0);
-    --muted-foreground: oklch(0.556 0 0);
-    --accent: oklch(0.97 0 0);
-    --accent-foreground: oklch(0.205 0 0);
-    --destructive: oklch(0.577 0.245 27.325);
-    --border: oklch(0.922 0 0);
-    --input: oklch(0.922 0 0);
-    --ring: oklch(0.708 0 0);
-    --chart-1: oklch(0.87 0 0);
-    --chart-2: oklch(0.556 0 0);
-    --chart-3: oklch(0.439 0 0);
-    --chart-4: oklch(0.371 0 0);
-    --chart-5: oklch(0.269 0 0);
-    --radius: 0.625rem;
-    --sidebar: oklch(0.985 0 0);
-    --sidebar-foreground: oklch(0.145 0 0);
-    --sidebar-primary: oklch(0.205 0 0);
-    --sidebar-primary-foreground: oklch(0.985 0 0);
-    --sidebar-accent: oklch(0.97 0 0);
-    --sidebar-accent-foreground: oklch(0.205 0 0);
-    --sidebar-border: oklch(0.922 0 0);
-    --sidebar-ring: oklch(0.708 0 0);
-}
-
-.dark {
-    --background: oklch(0.145 0 0);
-    --foreground: oklch(0.985 0 0);
-    --card: oklch(0.205 0 0);
-    --card-foreground: oklch(0.985 0 0);
-    --popover: oklch(0.205 0 0);
-    --popover-foreground: oklch(0.985 0 0);
-    --primary: oklch(0.922 0 0);
-    --primary-foreground: oklch(0.205 0 0);
-    --secondary: oklch(0.269 0 0);
-    --secondary-foreground: oklch(0.985 0 0);
-    --muted: oklch(0.269 0 0);
-    --muted-foreground: oklch(0.708 0 0);
-    --accent: oklch(0.269 0 0);
-    --accent-foreground: oklch(0.985 0 0);
-    --destructive: oklch(0.704 0.191 22.216);
-    --border: oklch(1 0 0 / 10%);
-    --input: oklch(1 0 0 / 15%);
-    --ring: oklch(0.556 0 0);
-    --chart-1: oklch(0.87 0 0);
-    --chart-2: oklch(0.556 0 0);
-    --chart-3: oklch(0.439 0 0);
-    --chart-4: oklch(0.371 0 0);
-    --chart-5: oklch(0.269 0 0);
-    --sidebar: oklch(0.205 0 0);
-    --sidebar-foreground: oklch(0.985 0 0);
-    --sidebar-primary: oklch(0.488 0.243 264.376);
-    --sidebar-primary-foreground: oklch(0.985 0 0);
-    --sidebar-accent: oklch(0.269 0 0);
-    --sidebar-accent-foreground: oklch(0.985 0 0);
-    --sidebar-border: oklch(1 0 0 / 10%);
-    --sidebar-ring: oklch(0.556 0 0);
+    /* shadcn tokens read the Holst palette (styles.css), so sheets, popovers and the
+       sidebar match in both themes; `.dark` switches the --lg-* values underneath. */
+    --background: var(--lg-bg);
+    --foreground: var(--lg-text);
+    --card: var(--lg-panel);
+    --card-foreground: var(--lg-text);
+    --popover: var(--lg-panel);
+    --popover-foreground: var(--lg-text);
+    --primary: var(--lg-primary);
+    --primary-foreground: var(--lg-on-accent);
+    --secondary: var(--lg-secondary);
+    --secondary-foreground: var(--lg-text);
+    --muted: var(--lg-panel-2);
+    --muted-foreground: var(--lg-muted);
+    --accent: var(--lg-panel-2);
+    --accent-foreground: var(--lg-text);
+    --destructive: var(--lg-bad);
+    --border: var(--lg-line);
+    --input: var(--lg-line);
+    --ring: var(--lg-accent);
+    --chart-1: var(--holst-1);
+    --chart-2: var(--holst-2);
+    --chart-3: var(--holst-3);
+    --chart-4: var(--holst-4);
+    --chart-5: var(--holst-5);
+    --radius: 0.875rem;
+    --sidebar: var(--lg-panel);
+    --sidebar-foreground: var(--lg-text);
+    --sidebar-primary: var(--lg-primary);
+    --sidebar-primary-foreground: var(--lg-on-accent);
+    --sidebar-accent: var(--lg-panel-2);
+    --sidebar-accent-foreground: var(--lg-text);
+    --sidebar-border: var(--lg-line);
+    --sidebar-ring: var(--lg-accent);
 }
 
 @layer base {

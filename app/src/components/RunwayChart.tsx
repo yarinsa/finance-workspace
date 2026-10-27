@@ -1,5 +1,5 @@
 import { Area, AreaChart, CartesianGrid, ReferenceDot, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { Card, Section } from "@/components/common";
+import { Card, Section, StatusPill } from "@/components/common";
 import { chartProps, noAnim, useChartColors } from "@/components/chartTheme";
 import { shekel, shekelSigned, type Runway as RunwayData } from "@/lib/data";
 
@@ -73,14 +73,14 @@ export function RunwayChart({ r, height = 240 }: { r: RunwayData; height?: numbe
 
 /** Pills for the first overdraft-limit and below-zero days, if any. */
 export function RunwayAlerts({ r }: { r: RunwayData }) {
-  const chips: { text: string; cls: string }[] = [];
-  if (r.first_limit_breach) chips.push({ text: `בחריגה מהמסגרת מ-${shortDate(r.first_limit_breach)}`, cls: "border-bad/40 bg-bad/10 text-bad" });
-  if (r.first_floor_breach) chips.push({ text: `במינוס מ-${shortDate(r.first_floor_breach)}`, cls: "border-warn/40 bg-warn/10 text-warn" });
+  const chips: { text: string; tone: "bad" | "warn" }[] = [];
+  if (r.first_limit_breach) chips.push({ text: `מעבר למסגרת מ-${shortDate(r.first_limit_breach)}`, tone: "bad" });
+  if (r.first_floor_breach) chips.push({ text: `מתחת לאפס מ-${shortDate(r.first_floor_breach)}`, tone: "warn" });
   if (!chips.length) return null;
   return (
     <div className="flex flex-wrap gap-2">
       {chips.map((c) => (
-        <span key={c.text} className={`rounded-full border px-3 py-1 text-sm font-semibold ${c.cls}`}>{c.text}</span>
+        <StatusPill key={c.text} tone={c.tone}>{c.text}</StatusPill>
       ))}
     </div>
   );
