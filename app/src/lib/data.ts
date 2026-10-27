@@ -198,6 +198,41 @@ export interface Cashflow {
   months_view?: MonthsView;
   /** Net income split across current / near-future / future me (data/horizons.py); absent until emitted. */
   horizons?: Horizons;
+  /** How the money got here (data/history.py), for the home lenses; absent in older data. */
+  history?: History;
+}
+
+/** End-of-day pool balance; days before `measured_from` are rebuilt from the ledger (estimated). */
+export interface CashHistory {
+  as_of: string;
+  days: { date: string; balance: number }[];
+  measured_from: string | null;
+}
+
+export interface DebtPoint {
+  month: string; // "2026-10"
+  mortgage: number;
+  consumer: number;
+  total: number;
+  kind: "estimated" | "actual" | "projected";
+}
+
+/** One recorded day of the household's position (Postgres position_snapshots). */
+export interface PositionPoint {
+  date: string;
+  cash: number;
+  card_debt: number;
+  consumer_loans: number;
+  mortgage: number;
+  savings: number;
+  property: number | null;
+  net_worth: number;
+}
+
+export interface History {
+  cash: CashHistory;
+  debt: DebtPoint[];
+  positions: PositionPoint[];
 }
 
 export interface HorizonBucket {
@@ -341,14 +376,29 @@ export interface SnapshotTotals {
   liquid_savings?: number;
   /** tracked_net_position + long_term_savings. */
   net_position_with_savings?: number;
+  /** The apartment's hand-typed value (assets table); null until entered. */
+  property_value?: number | null;
+  /** net_position_with_savings + property_value; null without a property value. */
+  net_worth_with_property?: number | null;
   monthly_loan_service: number;
   detected_monthly_salary: number;
+}
+
+export interface SnapshotAsset {
+  id: number;
+  kind: "property";
+  label: string;
+  value: number;
+  valued_at: string;
+  valuation_source: "manual" | "estimate";
 }
 
 export interface Snapshot {
   generated_at: string;
   currency: string;
   note?: string;
+  /** Hand-typed assets (the apartment); null/absent without the database. */
+  assets?: SnapshotAsset[] | null;
   bank_accounts: unknown[];
   credit_cards: unknown[];
   loans: Loan[];

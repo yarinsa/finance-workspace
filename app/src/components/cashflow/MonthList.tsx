@@ -364,6 +364,11 @@ export default function MonthList({
                             {shekel(g.total)}
                           </strong>
                         </button>
+                        {expanded && g.lever && (
+                          <div className="ps-6 pb-1 text-xs text-muted-foreground">
+                            {g.lever}
+                          </div>
+                        )}
                         {expanded && (
                           <div className="divide-y divide-line pb-1 ps-6">
                             {g.lines.map((l) =>

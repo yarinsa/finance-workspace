@@ -234,6 +234,21 @@ describe("chargeHint", () => {
       ),
     ).toBeNull();
   });
+  it("a subscription row gets no generic advice (the group says it once)", () => {
+    expect(
+      chargeHint(
+        {
+          name: "SUPERHUMAN MAIL",
+          category: "דיגיטל",
+          amount: 95.51,
+          last_charged: "2026-10-19",
+          lever_key: "subscriptions",
+          lever: "לבטל מה שלא בשימוש ומה שכפול",
+        },
+        today,
+      ),
+    ).toBeNull();
+  });
   it("a service not charged for over 70 days looks cancelled", () => {
     expect(
       chargeHint(

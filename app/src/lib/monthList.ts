@@ -41,8 +41,8 @@ const dayMonth = new Intl.DateTimeFormat("he-IL", {
 
 /**
  * The one quiet saving hint for a fixed charge, or null: a duplicate service first,
- * then a service not charged for a while, then the easy lever of fees ("לבקש ויתור")
- * and subscriptions ("לבטל מה שלא בשימוש"). Bills, installments and debt get none.
+ * then a service not charged for a while, then a fee's "לבקש ויתור". The general
+ * subscriptions advice is the group's (`GroupBlock.lever`), not repeated on each row.
  */
 export function chargeHint(
   c: ChargeItem,
@@ -55,8 +55,7 @@ export function chargeHint(
     if ((today.getTime() - at.getTime()) / 864e5 > STALE_DAYS)
       return `לא חויב מאז ${dayMonth.format(at)} — אולי בוטל?`;
   }
-  if ((c.lever_key === "fees" || c.lever_key === "subscriptions") && c.lever)
-    return c.lever;
+  if (c.lever_key === "fees" && c.lever) return c.lever;
   return null;
 }
 
@@ -83,6 +82,8 @@ export interface GroupBlock {
   lines: Line[];
   /** Holds an over-budget line or an overdue charge: shown open by default. */
   alert: boolean;
+  /** The group's general way to save (subscriptions: "לבטל מה שלא בשימוש"), said once. */
+  lever?: string;
 }
 
 export interface SectionBlock {
@@ -301,6 +302,8 @@ export function buildMonthList({
         g.lines.push(l);
         g.total += l.amount;
         if (l.budget?.over || l.charge?.status === "overdue") g.alert = true;
+        if (l.charge?.lever_key === "subscriptions" && l.charge.lever)
+          g.lever = l.charge.lever;
         groups.set(l.group, g);
       }
       const list = [...groups.values()];

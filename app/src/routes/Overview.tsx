@@ -1,45 +1,52 @@
+import { useState } from "react";
 import { Nudge, Page } from "@/components/common";
-import AccountRows from "@/components/home/AccountRows";
-import InboxButton from "@/components/home/InboxButton";
-import { RUNWAY_PATH, RunwayCard } from "@/components/RunwayChart";
+import GoalEditorSheet, { type GoalEditorTarget } from "@/components/GoalEditorSheet";
+import PropertyEditorSheet from "@/components/PropertyEditorSheet";
+import AccountCards from "@/components/home/AccountCards";
+import HomeBand from "@/components/home/HomeBand";
+import QuickActionsSheet, { type QuickAction } from "@/components/home/QuickActionsSheet";
 import RecentTransactions from "@/components/home/RecentTransactions";
-import StatusTiles from "@/components/home/StatusTiles";
-import UpcomingChips from "@/components/home/UpcomingChips";
-import { cashflow, daysSince, num, snapshot } from "@/lib/data";
+import WeekStrip from "@/components/home/WeekStrip";
+import { cashflow, daysSince, num } from "@/lib/data";
 
-function greeting(hour: number): string {
-  if (hour < 5) return "לילה טוב";
-  if (hour < 12) return "בוקר טוב";
-  if (hour < 17) return "צהריים טובים";
-  if (hour < 21) return "ערב טוב";
-  return "לילה טוב";
-}
-
-/** Action-first home: status tiles, balance runway chart, next 14 days (to-dos live in /inbox), accounts, recent spending. */
+/**
+ * Home (docs/home-redesign.md): the teal band with one lens at a time, the account cards
+ * rising out of it, the week ahead, and the latest transactions. To-dos live behind the bell.
+ */
 export default function Overview() {
   const age = daysSince(cashflow.generated_at);
   // A pipeline-emitted stale-data action replaces the generic nudge.
   const hasStaleAction = (cashflow.actions ?? []).some((a) => /stale|sync|refresh/i.test(a.id));
-  const netWorth = snapshot.totals.net_position_with_savings ?? cashflow.projection?.net_worth_today ?? null;
+  const [quick, setQuick] = useState(false);
+  const [property, setProperty] = useState(false);
+  const [goal, setGoal] = useState<GoalEditorTarget | null>(null);
+
+  const pick = (a: QuickAction) => {
+    setQuick(false);
+    if (a === "property") setProperty(true);
+    else setGoal({});
+  };
 
   return (
-    <Page>
-      {age > 7 && !hasStaleAction && (
-        <Nudge action="לעדכון יתרות ▸">
-          הנתונים מלפני {num(age)} ימים. כדאי לרענן את היתרות.
-        </Nudge>
-      )}
+    <Page wide>
+      <div className="max-w-[720px]">
+        <HomeBand onQuickActions={() => setQuick(true)} />
+        <div className="relative z-10 -mt-9">
+          <AccountCards onEditProperty={() => setProperty(true)} />
+        </div>
+      </div>
 
-      <header className="greeting flex items-center justify-between">
-        <h1>{greeting(new Date().getHours())}</h1>
-        <InboxButton />
-      </header>
+      <div className="flex max-w-[720px] flex-col gap-6">
+        {age > 7 && !hasStaleAction && (
+          <Nudge action="לסנכרון">הנתונים מלפני {num(age)} ימים. כדאי לרענן את היתרות.</Nudge>
+        )}
+        <WeekStrip runway={cashflow.runway} />
+        <RecentTransactions />
+      </div>
 
-      <StatusTiles />
-      <RunwayCard r={cashflow.runway} to={RUNWAY_PATH} />
-      <UpcomingChips runway={cashflow.runway} />
-      <AccountRows netWorth={netWorth} />
-      <RecentTransactions />
+      <QuickActionsSheet open={quick} onClose={() => setQuick(false)} onPick={pick} />
+      <PropertyEditorSheet open={property} onClose={() => setProperty(false)} />
+      <GoalEditorSheet goal={goal} onClose={() => setGoal(null)} />
     </Page>
   );
 }
