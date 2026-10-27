@@ -6,23 +6,19 @@ import {
   Inbox as InboxIcon,
   Landmark,
   RefreshCw,
-  Target,
   CalendarCheck,
   Compass,
   Ellipsis,
-  Scale,
   type LucideIcon,
 } from "lucide-react";
 import Overview from "./Overview";
 import Inbox from "./Inbox";
-import Goals from "./Goals";
 import Networth from "./Networth";
 import Metrics from "./Metrics";
 import Timeline from "./Timeline";
 import Syncs from "./Syncs";
 import Monthly from "./Monthly";
 import Plan from "./Plan";
-import HorizonsPage from "./Horizons";
 
 /** Navigation hubs, Mint-style: each is one bottom tab (and one sidebar section). */
 export type RouteGroup = "overview" | "monthly" | "plan" | "more";
@@ -111,20 +107,6 @@ export const routes: RouteDef[] = [
     hub: true,
     Component: Plan,
   },
-  {
-    path: "/horizons",
-    label: "היום · קרוב · פרישה",
-    icon: Scale,
-    group: "plan",
-    Component: HorizonsPage,
-  },
-  {
-    path: "/goals",
-    label: "יעדים",
-    icon: Target,
-    group: "plan",
-    Component: Goals,
-  },
 
   {
     path: "/syncs",
@@ -143,6 +125,8 @@ export const redirects: { from: string; to: string }[] = [
   { from: "/runway", to: "/monthly?view=forecast" },
   { from: "/recommendations", to: "/inbox?tab=suggestions" },
   { from: "/summary", to: "/plan" },
+  { from: "/goals", to: "/plan" },
+  { from: "/horizons", to: "/plan" },
   { from: "/portfolio", to: "/overview?lens=savings&holdings=1" },
 ];
 

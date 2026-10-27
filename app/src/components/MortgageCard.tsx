@@ -37,15 +37,26 @@ function groupTracks(loans: Loan[]) {
 export default function MortgageCard() {
   const profile = snapshot.debt_profile?.mortgage;
   if (!profile) return null;
+  return (
+    <Card>
+      <CardLabel>יתרת משכנתא</CardLabel>
+      <BigNumber>{shekel(profile.balance)}</BigNumber>
+      <MortgageDetails />
+    </Card>
+  );
+}
+
+/** Everything under the balance: the three stats, the rate mix and the tracks. Also the
+ *  body of the home's משכנתא card, whose header already shows the balance. */
+export function MortgageDetails() {
+  const profile = snapshot.debt_profile?.mortgage;
+  if (!profile) return null;
   const tracks = groupTracks(snapshot.loans.filter((l) => l.category === "mortgage" && (l.balance ?? 0) > 0));
   const mix = profile.rate_mix;
   const years = Math.round(profile.payments_remaining / 12);
 
   return (
-    <Card>
-      <CardLabel>יתרת משכנתא</CardLabel>
-      <BigNumber>{shekel(profile.balance)}</BigNumber>
-
+    <>
       <div className="mini-stats">
         <div>
           <span>ריבית ממוצעת</span>
@@ -90,6 +101,6 @@ export default function MortgageCard() {
           share={g.balance / profile.balance}
         />
       ))}
-    </Card>
+    </>
   );
 }
