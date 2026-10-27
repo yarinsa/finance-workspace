@@ -3,6 +3,8 @@ export interface BudgetCategory {
   /** A category of finance/categories.py, or a whole group (`scope: "group"`, e.g. תחבורה). */
   name: string;
   scope?: "category" | "group";
+  /** The line's category group (the name itself for a group line). */
+  group?: string | null;
   planned: number;
   spent: number;
   left: number;

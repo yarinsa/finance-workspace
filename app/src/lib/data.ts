@@ -8,7 +8,11 @@
 import { useSyncExternalStore } from "react";
 import { setAppStatus } from "./appStatus";
 import { FRESH_HEADER } from "./swRoutes";
-import { SessionExpiredError, isExpiredNetworkError, isSessionExpired } from "./dataFetch";
+import {
+  SessionExpiredError,
+  isExpiredNetworkError,
+  isSessionExpired,
+} from "./dataFetch";
 
 export type Rank = "good" | "bad" | "warning" | null;
 
@@ -76,12 +80,20 @@ export interface Pace {
   previous: PaceSide;
   average?: PaceAverage | null;
   /** Full-month expectation from forecast.py's budget envelopes; null when stale/missing. */
-  expected?: { income: number; expense: number; net: number; source: string } | null;
+  expected?: {
+    income: number;
+    expense: number;
+    net: number;
+    source: string;
+  } | null;
 }
 
 export interface FixedItem {
   name: string;
   category?: string | null;
+  group?: string | null;
+  /** "debt_savings" for loans and the mortgage. */
+  block?: "fixed" | "debt_savings";
   amount: number;
   /** A monthly charge that has not hit yet this month (seen the two months before). */
   expected?: boolean;
@@ -115,7 +127,11 @@ export interface Runway {
   start_balance: number;
   overdraft_limit: number;
   floor: number;
-  accounts: { institution: string; balance: number; overdraft_limit?: number }[];
+  accounts: {
+    institution: string;
+    balance: number;
+    overdraft_limit?: number;
+  }[];
   liquid_buffer: { label: string; balance: number }[];
   next_payday: { date: string; amount: number; name: string } | null;
   events: {
@@ -152,7 +168,12 @@ export interface HomeAction {
   /** Which rule produced it (limitBreach, billOverdue, ...). */
   type?: string;
   /** What the item is about; `kind` picks the detail chip. */
-  subject?: ({ kind: "cashflow" | "budget" | "bill" | "service" | "sync" | "transaction" } & Record<string, unknown>) | null;
+  subject?:
+    | ({
+        kind:
+          "cashflow" | "budget" | "bill" | "service" | "sync" | "transaction";
+      } & Record<string, unknown>)
+    | null;
 }
 
 export interface Cashflow {
@@ -189,7 +210,16 @@ export interface HorizonBucket {
   /** The target share of income for this horizon (the `horizons` table), in percent. */
   target_pct?: number;
   /** `amount` is the real charge (the row key); `offset` is the ₪ paid back and netted out of `amount` totals. */
-  top: { date: string; description: string; amount: number; category?: string | null; overridden: boolean; tags?: string[]; goal?: string | null; offset?: number }[];
+  top: {
+    date: string;
+    description: string;
+    amount: number;
+    category?: string | null;
+    overridden: boolean;
+    tags?: string[];
+    goal?: string | null;
+    offset?: number;
+  }[];
 }
 
 /** A goal as listed under the horizon it is assigned to. */
@@ -266,7 +296,12 @@ export interface LoanProfile {
   /** Nominal, balance-weighted. Interest refunds the bank pays back are not visible. */
   avg_rate_pct: number;
   /** Shares of balance, 0–1. index_linked overlaps fixed/variable. */
-  rate_mix: { fixed: number; variable: number; index_linked: number; zero_rate: number };
+  rate_mix: {
+    fixed: number;
+    variable: number;
+    index_linked: number;
+    zero_rate: number;
+  };
   tracks: number;
   final_date: string | null;
   payments_remaining: number;
@@ -280,7 +315,8 @@ export interface LoanProfile {
  */
 export interface Savings {
   institution: string;
-  kind: "pension" | "study_fund" | "provident_fund" | "savings" | "bank_deposit";
+  kind:
+    "pension" | "study_fund" | "provident_fund" | "savings" | "bank_deposit";
   /** Withdrawable today (e.g. a daily deposit) vs. locked until liquidity date. */
   liquid?: boolean;
   label: string;
@@ -426,17 +462,23 @@ export interface Forecast {
  * When the data was last fetched, and whether the service worker answered from its cache
  * (no network) instead — `cachedAt` is then when that copy was saved.
  */
-export const dataMeta: { fetchedAt: number; fromCache: boolean; cachedAt: number | null } = {
+export const dataMeta: {
+  fetchedAt: number;
+  fromCache: boolean;
+  cachedAt: number | null;
+} = {
   fetchedAt: Date.now(),
   fromCache: false,
   cachedAt: null,
 };
 
-
 async function loadDigested<T>(name: string, fresh = false): Promise<T> {
   let res: Response;
   try {
-    res = await fetch(`/data/${name}.json`, { cache: "no-store", headers: fresh ? { [FRESH_HEADER]: "1" } : undefined });
+    res = await fetch(`/data/${name}.json`, {
+      cache: "no-store",
+      headers: fresh ? { [FRESH_HEADER]: "1" } : undefined,
+    });
   } catch (err) {
     if (isExpiredNetworkError(err, navigator.onLine)) {
       void clearCachedData();
@@ -444,14 +486,23 @@ async function loadDigested<T>(name: string, fresh = false): Promise<T> {
     }
     throw err;
   }
-  if (isSessionExpired({ status: res.status, redirected: res.redirected, type: res.type, contentType: res.headers.get("content-type") })) {
+  if (
+    isSessionExpired({
+      status: res.status,
+      redirected: res.redirected,
+      type: res.type,
+      contentType: res.headers.get("content-type"),
+    })
+  ) {
     void clearCachedData();
     throw new SessionExpiredError();
   }
   // A missing key comes back as the SPA's index.html (CloudFront maps S3's
   // 403/404 to it), so check the content type, not just the status.
   if (!res.ok || !res.headers.get("content-type")?.includes("json")) {
-    throw new Error(`data/${name}.json not available — run python3 data/digest.py and publish it`);
+    throw new Error(
+      `data/${name}.json not available — run python3 data/digest.py and publish it`,
+    );
   }
   if (res.headers.get("x-sw-from-cache")) {
     dataMeta.fromCache = true;
@@ -462,7 +513,9 @@ async function loadDigested<T>(name: string, fresh = false): Promise<T> {
 
 /** Ask the service worker to drop its copy of the financial JSON (expired session). */
 async function clearCachedData(): Promise<void> {
-  (await navigator.serviceWorker?.getRegistration())?.active?.postMessage({ type: "CLEAR_DATA" });
+  (await navigator.serviceWorker?.getRegistration())?.active?.postMessage({
+    type: "CLEAR_DATA",
+  });
 }
 
 /** forecast.json is a nice-to-have: pages that read it render without it. */
@@ -501,7 +554,8 @@ async function loadAll(fresh = false) {
 }
 
 // `let` exports are live bindings: importers see the new value after reloadData().
-export let [cashflow, snapshot, transactions, goals, forecast] = await loadAll();
+export let [cashflow, snapshot, transactions, goals, forecast] =
+  await loadAll();
 
 let dataVersion = 0;
 const dataListeners = new Set<() => void>();
@@ -518,7 +572,8 @@ export async function reloadData(): Promise<void> {
     next = await loadAll(true);
   } catch (err) {
     // Keep showing the old data, but tell the user why it isn't refreshing.
-    if (err instanceof SessionExpiredError) setAppStatus({ sessionExpired: true });
+    if (err instanceof SessionExpiredError)
+      setAppStatus({ sessionExpired: true });
     throw err;
   }
   [cashflow, snapshot, transactions, goals, forecast] = next;
@@ -556,17 +611,31 @@ function fmt(opts: Intl.NumberFormatOptions): Intl.NumberFormat {
 
 /** ₪ formatter — ILS, no decimals, RTL-safe. */
 export function shekel(n: number, opts: { decimals?: number } = {}): string {
-  return fmt({ style: "currency", currency: "ILS", maximumFractionDigits: opts.decimals ?? 0 }).format(n);
+  return fmt({
+    style: "currency",
+    currency: "ILS",
+    maximumFractionDigits: opts.decimals ?? 0,
+  }).format(n);
 }
 
 /** Signed ₪ for deltas: +₪1,200 / -₪300 (zero stays unsigned). */
 export function shekelSigned(n: number): string {
-  return fmt({ style: "currency", currency: "ILS", maximumFractionDigits: 0, signDisplay: "exceptZero" }).format(n);
+  return fmt({
+    style: "currency",
+    currency: "ILS",
+    maximumFractionDigits: 0,
+    signDisplay: "exceptZero",
+  }).format(n);
 }
 
 /** Compact ₪ for axes/large figures (₪2.6M). */
 export function shekelCompact(n: number): string {
-  return fmt({ style: "currency", currency: "ILS", notation: "compact", maximumFractionDigits: 1 }).format(n);
+  return fmt({
+    style: "currency",
+    currency: "ILS",
+    notation: "compact",
+    maximumFractionDigits: 1,
+  }).format(n);
 }
 
 /** Format a cashflow metric by its unit; `null` (not computable yet) renders as "—". */
@@ -578,14 +647,19 @@ export function formatMetric(value: number | null, units: string): string {
 }
 
 /** Short form of `formatMetric` for narrow tiles (₪1.6M); non-₪ units are already short. */
-export function formatMetricCompact(value: number | null, units: string): string {
+export function formatMetricCompact(
+  value: number | null,
+  units: string,
+): string {
   if (value != null && units === "₪") return shekelCompact(value);
   return formatMetric(value, units);
 }
 
 /** Percent from a 0–100 figure (the pipeline's convention): pct(66.6, 1) → "66.6%". */
 export function pct(n: number, decimals = 0): string {
-  return fmt({ style: "percent", maximumFractionDigits: decimals }).format(n / 100);
+  return fmt({ style: "percent", maximumFractionDigits: decimals }).format(
+    n / 100,
+  );
 }
 
 /** Compact plain number for chart axes: 1,540,121 → "1.5M". */
@@ -600,7 +674,10 @@ export function num(n: number, decimals = 0): string {
 
 /** Month + year for a loan end date, e.g. "אוג׳ 2053". */
 export function monthYear(iso: string): string {
-  return new Intl.DateTimeFormat(LOCALE, { month: "short", year: "numeric" }).format(new Date(`${iso.slice(0, 10)}T12:00:00`));
+  return new Intl.DateTimeFormat(LOCALE, {
+    month: "short",
+    year: "numeric",
+  }).format(new Date(`${iso.slice(0, 10)}T12:00:00`));
 }
 
 /** A pipeline Metric's value in its own units. */

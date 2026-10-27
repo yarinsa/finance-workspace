@@ -35,7 +35,7 @@ export default function RecentTransactions() {
   const rows = recent(overlay);
   if (rows.length === 0) return null;
   return (
-    <Section title="תנועות אחרונות" to="/spending">
+    <Section title="תנועות אחרונות" to="/monthly?group=none">
       <div className="overflow-hidden rounded-[20px] border border-line bg-panel shadow-[var(--shadow)]">
         <TransactionList inset>
           {rows.map((r, i) => (

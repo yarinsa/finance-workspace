@@ -20,7 +20,7 @@ describe("classifyRequest", () => {
 
   it("does not mistake look-alike paths for the API", () => {
     expect(get("/apiary")).toBe("other");
-    expect(get("/spending", "navigate")).toBe("navigation");
+    expect(get("/monthly", "navigate")).toBe("navigation");
   });
 
   it("leaves writes and cross-origin requests alone", () => {

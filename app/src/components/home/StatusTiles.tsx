@@ -92,7 +92,7 @@ export default function StatusTiles() {
             tone={bank < 0 ? "bad" : undefined}
           />
           <Tile
-            to="/spending"
+            to="/monthly"
             label="הוצאות/הכנסה"
             value={ratio != null ? `${Math.round(ratio)}%` : cur != null ? tileValue(cur) : "—"}
             tone={ratio != null && ratio > 100 ? "bad" : undefined}
@@ -103,7 +103,7 @@ export default function StatusTiles() {
             }
           />
           <Tile
-            to="/budgets"
+            to="/monthly?section=variable"
             label="נותר בתקציב"
             value={b ? tileValue(b.left) : "—"}
             tone={b && b.left < 0 ? "bad" : undefined}
