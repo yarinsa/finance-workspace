@@ -250,6 +250,9 @@ move to `/metrics`, debt % also as a footer on the חובות lens), `home/Hero`
       (principal when the original amount explains the balance, else payments made). A loan the
       bank names "ללא ריבית" counts at 0%. /networth is gone (redirects to the net
       worth lens): the home band and cards carry all of it.
+- [x] The apartment card is collapsible too: opened, its value, the mortgage and the equity
+      (value − mortgage), with עדכון השווי / הוספת שווי opening `PropertyEditorSheet`. Only the
+      credit-card card still links out.
 
 ### Phase 4 — polish
 - [ ] Scrub readout, view transitions into detail pages, desktop layout.
