@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { buildMonthList, findLine, mergeCharges } from "./monthList";
+import {
+  buildMonthList,
+  chargeHint,
+  findLine,
+  mergeCharges,
+} from "./monthList";
 import type { SpendingMonth } from "./spending";
 import type { Budgets } from "./budgets";
 import type { Bills } from "./bills";
@@ -181,5 +186,65 @@ describe("mergeCharges", () => {
     expect(out).toHaveLength(3);
     expect(out[0]).toMatchObject({ status: "paid", due_day: 11, loan: false });
     expect(out.find((c) => c.name === "קרן הוכשטיין")?.loan).toBe(true);
+  });
+});
+
+describe("chargeHint", () => {
+  const today = new Date("2026-10-27T12:00:00");
+  it("flags the second international-call plan as a duplicate", () => {
+    expect(
+      chargeHint(
+        {
+          name: 'אקספון 018 בע"מ',
+          category: "תקשורת",
+          amount: 34.9,
+          duplicate: true,
+          duplicate_reason: "שיחות לחו״ל",
+          lever_key: "bills",
+        },
+        today,
+      ),
+    ).toBe("כפול · שיחות לחו״ל — לבדוק אם אפשר לבטל אחד");
+  });
+  it("a card fee gets the fee lever, a rent payment gets nothing", () => {
+    expect(
+      chargeHint(
+        {
+          name: "דמי כרטיס /הנפקה",
+          category: "עמלות",
+          amount: 102.38,
+          last_charged: "2026-10-23",
+          lever_key: "fees",
+          lever: "לבקש ויתור מהבנק / חברת האשראי",
+        },
+        today,
+      ),
+    ).toBe("לבקש ויתור מהבנק / חברת האשראי");
+    expect(
+      chargeHint(
+        {
+          name: 'הו"ק לעיין ניהול נכסי',
+          category: "שכר דירה",
+          amount: 6800,
+          last_charged: "2026-10-11",
+          lever_key: "committed",
+          lever: "x",
+        },
+        today,
+      ),
+    ).toBeNull();
+  });
+  it("a service not charged for over 70 days looks cancelled", () => {
+    expect(
+      chargeHint(
+        {
+          name: "MEDIUM MONTHLY",
+          category: "הוצאות עסק",
+          amount: 15.34,
+          last_charged: "2026-07-01",
+        },
+        today,
+      ),
+    ).toMatch(/^לא חויב מאז/);
   });
 });

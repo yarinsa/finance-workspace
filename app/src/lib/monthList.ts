@@ -26,6 +26,38 @@ export interface ChargeItem {
   duplicate?: boolean;
   duplicate_reason?: string | null;
   last_charged?: string | null;
+  /** The "what can I cut?" lever of its fixed_expenses group (fees, subscriptions, …). */
+  lever_key?: string;
+  lever?: string;
+}
+
+/** Days without a charge after which a monthly service looks cancelled (bi-monthly bills are normal). */
+const STALE_DAYS = 70;
+
+const dayMonth = new Intl.DateTimeFormat("he-IL", {
+  day: "numeric",
+  month: "numeric",
+});
+
+/**
+ * The one quiet saving hint for a fixed charge, or null: a duplicate service first,
+ * then a service not charged for a while, then the easy lever of fees ("לבקש ויתור")
+ * and subscriptions ("לבטל מה שלא בשימוש"). Bills, installments and debt get none.
+ */
+export function chargeHint(
+  c: ChargeItem,
+  today: Date = new Date(),
+): string | null {
+  if (c.duplicate)
+    return `כפול${c.duplicate_reason ? ` · ${c.duplicate_reason}` : ""} — לבדוק אם אפשר לבטל אחד`;
+  if (c.last_charged) {
+    const at = new Date(`${c.last_charged}T12:00:00`);
+    if ((today.getTime() - at.getTime()) / 864e5 > STALE_DAYS)
+      return `לא חויב מאז ${dayMonth.format(at)} — אולי בוטל?`;
+  }
+  if ((c.lever_key === "fees" || c.lever_key === "subscriptions") && c.lever)
+    return c.lever;
+  return null;
 }
 
 /** A row of the list: a category (with its transactions) or, for fixed/debt in the current cycle, a charge. */
@@ -93,7 +125,7 @@ export function lineTransactions(
 
 /** Pair each fixed-expense item with the bill of the same name (and roughly the same amount). */
 export function mergeCharges(
-  fixed: FixedItem[],
+  fixed: (FixedItem & { lever_key?: string; lever?: string })[],
   bills: BillItem[],
 ): (ChargeItem & { group: string | null; loan: boolean })[] {
   const left = [...bills];
@@ -113,6 +145,8 @@ export function mergeCharges(
       duplicate: f.duplicate,
       duplicate_reason: f.duplicate_reason,
       last_charged: f.last_charged,
+      lever_key: f.lever_key,
+      lever: f.lever,
       status: b?.status ?? (f.expected ? "upcoming" : "paid"),
       due_day: b?.due_day,
       estimated: b?.estimated,
@@ -179,7 +213,9 @@ export function buildMonthList({
   const charges =
     fixed || bills
       ? mergeCharges(
-          fixed?.groups.flatMap((g) => g.items) ?? [],
+          fixed?.groups.flatMap((g) =>
+            g.items.map((i) => ({ ...i, lever_key: g.key, lever: g.lever })),
+          ) ?? [],
           bills?.items ?? [],
         )
       : null;

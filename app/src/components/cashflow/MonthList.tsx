@@ -1,7 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { ChevronDown } from "lucide-react";
-import { Card, ProgressBar, Section, StatusPill } from "@/components/common";
+import {
+  Card,
+  ProgressBar,
+  Section,
+  SectionLabel,
+  StatusPill,
+} from "@/components/common";
 import BudgetPlan from "@/components/BudgetPlan";
 import ExcludedSpendingCard from "@/components/ExcludedSpendingCard";
 import HiddenTransactionsSheet from "@/components/HiddenTransactionsSheet";
@@ -25,6 +31,7 @@ import { cashflow, num, shekel, useDataVersion } from "@/lib/data";
 import { applyOverlay, overlayFor } from "@/lib/ledgerOverlay";
 import {
   buildMonthList,
+  chargeHint,
   byMerchant,
   findLine,
   lineTransactions,
@@ -43,14 +50,11 @@ export type GroupBy = "category" | "merchant" | "none";
 interface SheetTarget {
   title: string;
   sub?: string;
+  /** A fixed charge's saving hint (chargeHint). */
+  hint?: string | null;
   txns: SpendingTransaction[];
   budget?: BudgetCategory;
 }
-
-const dayMonth = new Intl.DateTimeFormat("he-IL", {
-  day: "numeric",
-  month: "numeric",
-});
 
 /** The calm bar stays forest; the amount carries the verdict: terracotta over, ochre nearly spent. */
 function amountTone(pct: number, over: boolean): string {
@@ -61,10 +65,7 @@ function amountTone(pct: number, over: boolean): string {
 function ChargeRow({ c, onOpen }: { c: ChargeItem; onOpen: () => void }) {
   const paid = c.status === "paid";
   const overdue = c.status === "overdue";
-  const stale =
-    c.last_charged &&
-    (Date.now() - new Date(`${c.last_charged}T12:00:00`).getTime()) / 864e5 >
-      70;
+  const hint = chargeHint(c);
   return (
     <button
       type="button"
@@ -90,19 +91,10 @@ function ChargeRow({ c, onOpen }: { c: ChargeItem; onOpen: () => void }) {
             </span>
           )}
           {c.estimated && <span>משוער</span>}
-          {stale && (
-            <span className="text-warn">
-              לא חויב מאז{" "}
-              {dayMonth.format(new Date(`${c.last_charged}T12:00:00`))} — אולי
-              בוטל?
-            </span>
-          )}
-          {c.duplicate && (
-            <span className="font-semibold text-warn">
-              כפול · {c.duplicate_reason}
-            </span>
-          )}
         </span>
+        {hint && (
+          <span className="mt-0.5 text-xs text-muted-foreground">{hint}</span>
+        )}
       </div>
       <strong className="shrink-0 tabular-nums">{shekel(c.amount)}</strong>
       <span
@@ -216,6 +208,11 @@ export default function MonthList({
     [m, month, current],
   );
 
+  // fees + subscriptions: the low-effort ceiling of the fixed review, current cycle only
+  const cuttable =
+    current && cashflow.fixed_expenses?.month === month
+      ? cashflow.fixed_expenses.cuttable_total
+      : 0;
   const [open, setOpen] = useState<ReadonlySet<string>>(new Set());
   const [sheet, setSheet] = useState<SheetTarget | null>(null);
   const [editing, setEditing] = useState<EditTarget | null>(null);
@@ -240,6 +237,7 @@ export default function MonthList({
       sub: l.charge
         ? `${l.charge.category ?? ""} · ${shekel(l.charge.amount)}`
         : undefined,
+      hint: l.charge ? chargeHint(l.charge) : null,
       txns: lineTransactions(m, l),
       budget: l.budget,
     });
@@ -327,6 +325,11 @@ export default function MonthList({
         sections.map((s) => (
           <div key={s.key} id={`sec-${s.key}`} className="scroll-mt-20">
             <Section title={`${s.label} · ${shekel(s.total)}`}>
+              {s.key === "fixed" && cuttable > 0 && (
+                <div className="-mt-1.5 mb-2.5 text-xs text-muted-foreground">
+                  עד {shekel(cuttable)} בחודש בעמלות ומנויים אפשר לבדוק בקלות
+                </div>
+              )}
               <Card className="!py-1">
                 <ul className="divide-y divide-line">
                   {s.groups.map((g) => {
@@ -464,8 +467,20 @@ export default function MonthList({
                   {sheet.sub ??
                     `${shekel(sheet.txns.reduce((s, t) => s + net(t), 0))} · ${num(sheet.txns.length)} תנועות`}
                 </SheetDescription>
+                {sheet.hint && (
+                  <div className="text-sm text-muted-foreground">
+                    {sheet.hint}
+                  </div>
+                )}
               </SheetHeader>
               <div className="px-4 pb-4">
+                {sheet.budget && (
+                  <div className="mb-4 border-b border-line pb-4">
+                    <SectionLabel className="mb-1">תקציב</SectionLabel>
+                    <BudgetPlan key={sheet.budget.name} c={sheet.budget} />
+                  </div>
+                )}
+                <SectionLabel className="mb-1">תנועות החודש</SectionLabel>
                 {sheet.txns.length ? (
                   <TransactionList>
                     {sheet.txns.map((t, i) => txRow(t, i, false))}
@@ -473,12 +488,6 @@ export default function MonthList({
                 ) : (
                   <div className="py-2 text-sm text-muted-foreground">
                     אין תנועות החודש.
-                  </div>
-                )}
-                {sheet.budget && (
-                  <div className="mt-4 border-t border-line pt-3">
-                    <div className="mb-1 font-semibold">תקציב</div>
-                    <BudgetPlan key={sheet.budget.name} c={sheet.budget} />
                   </div>
                 )}
               </div>

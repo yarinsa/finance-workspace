@@ -36,7 +36,7 @@ function Figure({
         {value}
       </div>
       {sub && (
-        <div className="truncate text-[11px] text-muted-foreground tabular-nums">
+        <div className="whitespace-pre text-[11px] leading-snug text-muted-foreground tabular-nums">
           {sub}
         </div>
       )}
@@ -107,7 +107,7 @@ export function FreeMoneyCard({ s }: { s: BudgetSummary }) {
             v.projected != null ? `צפוי ${shekel(v.projected)}` : null,
           ]
             .filter(Boolean)
-            .join(" · ")}
+            .join("\n")}
           bad={plan != null && (v.projected ?? v.actual) > plan}
           to="variable"
         />
