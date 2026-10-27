@@ -23,7 +23,7 @@ const ACTUAL_MONTHS = 6;
  * show their net and actuals), then the month's transactions grouped by section and
  * category with budget bars and bill statuses inline (MonthList). תחזית: the expected
  * landing, plan-vs-expected rows and the balance runway.
- * State lives in the URL: ?view=forecast&month=YYYY-MM&group=none, plus the
+ * State lives in the URL: ?view=forecast&month=YYYY-MM, plus the
  * deep links ?category=<name> (opens that line) and ?section=fixed|variable|debt_savings.
  */
 export default function Monthly() {
