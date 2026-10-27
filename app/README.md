@@ -57,7 +57,7 @@ Code and data ship separately:
 | `/metrics` | 08 | ✅ real (full metric catalog) |
 | `/timeline` | 09 | ⚠️ partial (focal points; monthly waterfall is Phase 2) |
 | `/recommendations` | 05 | ⚠️ heuristic nudges (no rules engine yet) |
-| `/goals` | 04 | ✅ real (4 general cards + personal goals, from `data/goals/`) |
+| `/plan` | 04 | ✅ real (journey chart, 4 general cards + personal goals, today/near/retirement split); `/goals`, `/horizons`, `/summary` redirect here |
 | `/portfolio` | 07 | ⚠️ real (Harel pension + study funds; no fees/yield, no real-estate) |
 
 The ⛔/⚠️ screens render honest "needs input / not captured" notices rather than

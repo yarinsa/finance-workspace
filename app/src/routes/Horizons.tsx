@@ -1,6 +1,6 @@
 import { TransactionList, TransactionRow } from "@/components/TransactionRow";
 import { useState } from "react";
-import { BigNumber, Card, CardLabel, Page, Section } from "@/components/common";
+import { BigNumber, Card, CardLabel, Section } from "@/components/common";
 import TransactionEditSheet, { HORIZON_LABEL, type EditTarget } from "@/components/TransactionEditSheet";
 import { useQuickEdit } from "@/components/QuickEditSheets";
 import type { Horizon } from "@/lib/api";
@@ -64,6 +64,7 @@ const editTarget = (t: { date: string; amount: number; description: string; cate
   tags: t.tags,
 });
 
+/** The income split across today / near / retirement, as one section of the plan hub. */
 export default function Horizons() {
   const data = cashflow.horizons;
   const [idx, setIdx] = useState(0);
@@ -72,9 +73,9 @@ export default function Horizons() {
 
   if (!data || data.months.length === 0) {
     return (
-      <Page title="היום · קרוב · פרישה">
+      <Section title="היום · קרוב · פרישה">
         <Card>אין עדיין נתוני חלוקה. הריצו את ה-digest כדי ליצור אותם.</Card>
-      </Page>
+      </Section>
     );
   }
 
@@ -85,7 +86,8 @@ export default function Horizons() {
   const v = verdict(m, target, order);
 
   return (
-    <Page title="היום · קרוב · פרישה">
+    <Section title="היום · קרוב · פרישה">
+      <div className="flex flex-col gap-5 md:gap-6">
       {data.months.length > 1 && (
         <div className="flex gap-1.5 overflow-x-auto">
           {data.months.map((x, i) => (
@@ -193,6 +195,7 @@ export default function Horizons() {
 
       <TransactionEditSheet tx={editing} onClose={() => setEditing(null)} />
       {sheets}
-    </Page>
+      </div>
+    </Section>
   );
 }
