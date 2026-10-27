@@ -4,10 +4,10 @@ import { shekel, type MonthGroup } from "@/lib/data";
 import type { SectionKey } from "@/lib/monthList";
 import { cn } from "@/lib/utils";
 
-/** Scroll the month list to one of its sections (ids `sec-<key>`). */
+/** Scroll the month list to one of its sections: קבוע and משתנה share the spending cards (`sec-spend`). */
 export function scrollToSection(key: SectionKey) {
   document
-    .getElementById(`sec-${key}`)
+    .getElementById(key === "debt_savings" ? `sec-${key}` : "sec-spend")
     ?.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 

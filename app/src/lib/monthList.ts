@@ -76,6 +76,8 @@ export interface Line {
   charge?: ChargeItem;
   /** A utility's bill (electricity, water, gas): its status on the variable row. */
   bill?: ChargeItem;
+  /** A group-scope budget line: the categories it covers (רכב, דלק for תחבורה). */
+  parts?: string[];
 }
 
 /** Usage-priced bills: variable spending, so listed under משתנה with a "חשבון" status. */
@@ -259,6 +261,13 @@ export function buildMonthList({
   if (budgets?.categories.length) {
     const covered = new Set<string>();
     for (const b of budgets.categories) {
+      const parts =
+        b.scope === "group"
+          ? [...sums.values()]
+              .filter((l) => l.section === "variable" && l.group === b.name)
+              .sort((x, y) => y.amount - x.amount)
+              .map((l) => l.name)
+          : undefined;
       lines.push({
         key: `budget|${b.name}`,
         section: "variable",
@@ -268,6 +277,7 @@ export function buildMonthList({
         scope: b.scope ?? "category",
         amount: b.spent,
         budget: b,
+        parts,
       });
       covered.add(b.scope === "group" ? `g|${b.name}` : b.name);
     }
@@ -354,6 +364,92 @@ export function buildMonthList({
       };
     })
     .filter((s) => s.groups.length > 0);
+}
+
+/**
+ * One card per category group across קבוע and משתנה (תחבורה holds Metro Motor's
+ * installments and the fuel): what it spent, what was planned and how much of it is fixed.
+ */
+export interface SpendCard {
+  name: string;
+  fixedLines: Line[];
+  variableLines: Line[];
+  /** ₪ charged this month, by kind. */
+  fixed: number;
+  variable: number;
+  /** Fixed charges still expected this cycle (upcoming or not charged yet). */
+  fixedPending: number;
+  /** Σ plan of its variable budget lines (unplanned ones count ₪0). */
+  variablePlan: number;
+  /** fixed + pending fixed + the variable plan; null without a budget (a past month). */
+  planned: number | null;
+  actual: number;
+  over: boolean;
+  /** Holds an over-budget line or an overdue charge: shown open by default. */
+  alert: boolean;
+  lever?: string;
+}
+
+const isPending = (l: Line) =>
+  l.charge != null && l.charge.status !== "paid";
+
+/** Merge the fixed and variable sections into one card per group, biggest first. */
+export function buildCards(sections: SectionBlock[]): SpendCard[] {
+  const cards = new Map<string, SpendCard>();
+  const card = (name: string) => {
+    const c = cards.get(name) ?? {
+      name,
+      fixedLines: [],
+      variableLines: [],
+      fixed: 0,
+      variable: 0,
+      fixedPending: 0,
+      variablePlan: 0,
+      planned: null,
+      actual: 0,
+      over: false,
+      alert: false,
+    };
+    cards.set(name, c);
+    return c;
+  };
+  let planned = false;
+  for (const s of sections) {
+    if (s.key === "debt_savings") continue;
+    for (const g of s.groups) {
+      const c = card(g.name);
+      c.alert ||= g.alert;
+      c.lever ??= g.lever;
+      for (const l of g.lines) {
+        if (s.key === "fixed") {
+          c.fixedLines.push(l);
+          if (isPending(l)) c.fixedPending += l.amount;
+          else c.fixed += l.amount;
+          if (l.charge) planned = true;
+        } else {
+          c.variableLines.push(l);
+          c.variable += l.amount;
+          if (l.budget) {
+            planned = true;
+            if (l.budget.source !== "unplanned")
+              c.variablePlan += l.budget.planned;
+          }
+        }
+      }
+    }
+  }
+  const list = [...cards.values()];
+  for (const c of list) {
+    c.actual = c.fixed + c.variable;
+    if (planned) {
+      c.planned = c.fixed + c.fixedPending + c.variablePlan;
+      c.over = c.actual > c.planned + 0.5;
+    }
+  }
+  const size = (c: SpendCard) => Math.max(c.actual, c.planned ?? 0);
+  return list
+    .filter((c) => size(c) > 0.005 || c.fixedLines.length || c.variableLines.length)
+    .sort((a, b) => size(b) - size(a));
 }
 
 /** Merchant totals of the month's (overlaid) transactions, biggest first. */

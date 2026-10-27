@@ -294,17 +294,21 @@ upcoming card bills, duplicate services, stale syncs) from those blocks, with pe
 
 **The month screen is one screen: `/monthly`** (there is no `/budgets`, `/spending` or `/fixed`).
 בפועל: free money (`budgets.summary.left`) and income / קבוע / משתנה on top (a figure scrolls to its
-section; past months show their net and `months_view` actuals instead), then the month's
-transactions grouped by section → category group → line (`app/src/lib/monthList.ts`): קבוע lists
-the cycle's charges (`fixed_expenses` items merged with `bills` by name: status, due day,
-due day) with one quiet saving hint each when there is one (`chargeHint`: duplicate service,
-not charged in 70+ days, or the fees/subscriptions lever — also shown in its sheet) and the
-cuttable total (fees + subscriptions) under the קבוע header, משתנה the budget lines with their bars (unplanned: average only),
-הלוואות וחיסכון loans plus savings. Groups start collapsed unless over budget or overdue. A line
+section; past months show their net and `months_view` actuals instead), then the month's spending
+as **one card per category group** across קבוע and משתנה (`buildCards` in `app/src/lib/monthList.ts`;
+תחבורה holds Metro Motor's installments and the fuel): actual of planned (fixed paid + fixed still
+expected + the variable plan) on a `StackedBar` split into fixed (dark) and variable (light). Inside:
+the fixed charges (`fixed_expenses` items merged with `bills` by name: status, due day) with one
+quiet saving hint each when there is one (`chargeHint`: duplicate service, not charged in 70+ days,
+or the fees/subscriptions lever — also shown in its sheet), then the variable budget lines with
+their bars (unplanned: average only; a group-scope line like תחבורה is named by the categories it
+covers, not the group again). The cuttable total (fees + subscriptions) sits under the הוצאות
+header; הלוואות וחיסכון (loans plus savings) stays its own list. Cards start collapsed unless they
+hold an over-budget line or an overdue charge. A line
 opens a sheet with the plan editor and its transactions (tap → the edit sheet). Group-by switch
-`?group=merchant|none`. Past months have no budget/bill data, so they show plain category lines.
-Deep links: `/monthly?category=<name>` opens that line, `?section=fixed|variable|debt_savings`
-scrolls to it; `actions.py` CTAs use them. תחזית keeps the hero, plan rows and runway.
+`?group=merchant|none`. Past months have no budget/bill data: their cards show only the split.
+Deep links: `/monthly?category=<name>` opens that line, `?section=fixed|variable` scrolls to the
+cards and `?section=debt_savings` to the loans; `actions.py` CTAs use them. תחזית keeps the hero, plan rows and runway.
 
 **Budget overrides.** Each budget line carries `history` (its ledger spend in the last 4
 cycles). To change a planned

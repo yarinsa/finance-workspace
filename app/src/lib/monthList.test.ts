@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildCards,
   buildMonthList,
   chargeHint,
   findLine,
@@ -299,5 +300,65 @@ describe("utility bills", () => {
     expect(line.bill?.status).toBe("overdue");
     expect(line.amount).toBe(0);
     expect(v.groups.find((g) => g.name === "חשבונות")?.alert).toBe(true);
+  });
+});
+
+describe("buildCards", () => {
+  // Real October 2026 תחבורה: Metro Motor's ₪500 installment (fixed, paid), PRO ₪60.84
+  // not charged yet, fuel ₪37 and parking ₪6.80 under the group's ₪200 plan.
+  const month: SpendingMonth = {
+    ...OCT,
+    transactions: [
+      ...OCT.transactions,
+      { date: "2026-10-02", merchant: "מטרו מוטור שווק (1981)בעמ", amount: 500, category: "רכב", group: "תחבורה", kind: "fixed", block: "fixed" },
+      { date: "2026-10-09", merchant: "פז אפליקציה", amount: 36.88, category: "דלק", group: "תחבורה", kind: "variable", block: "variable" },
+      { date: "2026-10-12", merchant: "פנגו", amount: 6.8, category: "רכב", group: "תחבורה", kind: "variable", block: "variable" },
+    ],
+  };
+  const budgets = {
+    ...BUDGETS,
+    categories: [
+      ...BUDGETS.categories,
+      { name: "תחבורה", scope: "group", group: "תחבורה", planned: 200, spent: 43.68, left: 156.32, pct: 21.8, over: false, source: "override", estimate: 447.94 },
+    ],
+  } as unknown as Budgets;
+  const bills = {
+    ...BILLS,
+    items: [
+      ...BILLS.items,
+      { name: "מטרו מוטור שווק (1981)בעמ", category: "רכב", group: "תחבורה", kind: "bill", amount: 500, due_day: 2, due_date: "2026-10-02", status: "paid", paid_on: "2026-10-02" },
+      { name: "PRO", category: "רכב", group: "תחבורה", kind: "bill", amount: 60.84, due_day: 18, due_date: "2026-10-18", status: "overdue", paid_on: null },
+    ],
+  } as unknown as Bills;
+  const cards = buildCards(buildMonthList({ month, budgets, bills }));
+
+  it("one תחבורה card holds the fixed installment and the variable plan", () => {
+    const t = cards.find((c) => c.name === "תחבורה")!;
+    expect(cards.filter((c) => c.name === "תחבורה")).toHaveLength(1);
+    expect(t.fixed).toBe(500);
+    expect(t.fixedPending).toBeCloseTo(60.84);
+    expect(t.variable).toBeCloseTo(43.68);
+    expect(t.planned).toBeCloseTo(500 + 60.84 + 200);
+    expect(t.over).toBe(false);
+    expect(t.alert).toBe(true); // PRO not charged yet
+  });
+
+  it("the group-scope line names the categories it covers, not the group again", () => {
+    const t = cards.find((c) => c.name === "תחבורה")!;
+    expect(t.variableLines.map((l) => l.parts)).toEqual([["דלק", "רכב"]]);
+  });
+
+  it("unplanned spending puts a card over its plan; debt stays out", () => {
+    const home = cards.find((c) => c.name === "בית")!;
+    expect([home.planned, home.over]).toEqual([0, true]);
+    expect(cards.some((c) => c.name === "פיננסים")).toBe(false);
+  });
+
+  it("past month: no plan, just the fixed/variable split", () => {
+    const past = buildCards(buildMonthList({ month: OCT }));
+    expect(past.map((c) => [c.name, c.fixed, c.variable, c.planned])).toEqual([
+      ["דיור", 6800, 0, null],
+      ["אוכל", 0, 250, null],
+    ]);
   });
 });

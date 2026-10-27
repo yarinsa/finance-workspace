@@ -143,6 +143,38 @@ export function ProgressBar({
   );
 }
 
+/**
+ * Thin bar split into fixed (darkest green) and variable (light green) parts, out of
+ * `total` (the plan; the bar fills when spending passes it). Same colours as `.mix-bar`.
+ */
+export function StackedBar({
+  fixed,
+  variable,
+  total,
+  className,
+}: {
+  fixed: number;
+  variable: number;
+  total: number;
+  className?: string;
+}) {
+  const denom = Math.max(total, fixed + variable, 1e-9);
+  const pct = (v: number) => `${(Math.max(0, v) / denom) * 100}%`;
+  const done = Math.min(100, ((fixed + variable) / Math.max(total, 1e-9)) * 100);
+  return (
+    <div
+      className={cn("flex h-1.5 overflow-hidden rounded-full bg-line", className)}
+      role="progressbar"
+      aria-valuemin={0}
+      aria-valuemax={100}
+      aria-valuenow={Math.round(done)}
+    >
+      <span className="h-full shrink-0 bg-[var(--holst-1)]" style={{ width: pct(fixed) }} />
+      <span className="h-full shrink-0 bg-[var(--holst-4)]" style={{ width: pct(variable) }} />
+    </div>
+  );
+}
+
 /** Label / value line inside a card; consecutive rows get a divider. */
 export function StatRow({
   label,
