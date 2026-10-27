@@ -6,6 +6,7 @@ import {
   ProgressBar,
   Section,
   SectionLabel,
+  StackedBar,
   StatusPill,
 } from "@/components/common";
 import BudgetPlan from "@/components/BudgetPlan";
@@ -30,6 +31,7 @@ import type { BudgetCategory } from "@/lib/budgets";
 import { cashflow, num, shekel, useDataVersion } from "@/lib/data";
 import { applyOverlay, overlayFor } from "@/lib/ledgerOverlay";
 import {
+  buildCards,
   buildMonthList,
   chargeHint,
   byMerchant,
@@ -39,6 +41,7 @@ import {
   type ChargeItem,
   type Line,
   type SectionKey,
+  type SpendCard,
 } from "@/lib/monthList";
 import type { SpendingTransaction } from "@/lib/spending";
 import { useLedgerApi } from "@/lib/useLedgerApi";
@@ -147,7 +150,7 @@ function CategoryRow({ l, onOpen }: { l: Line; onOpen: () => void }) {
     >
       <div className="flex items-baseline justify-between gap-3">
         <span className="min-w-0 truncate">
-          {l.name}
+          {l.scope === "group" ? l.parts?.join(", ") || "משתנה" : l.name}
           {b?.source === "unplanned" && !l.bill && (
             <span className="ms-1.5 text-xs text-muted-foreground">
               לא מתוכנן
@@ -183,6 +186,116 @@ function CategoryRow({ l, onOpen }: { l: Line; onOpen: () => void }) {
         </div>
       )}
     </button>
+  );
+}
+
+function LineRow({ l, onOpen }: { l: Line; onOpen: () => void }) {
+  return l.charge ? (
+    <ChargeRow c={l.charge} onOpen={onOpen} />
+  ) : (
+    <CategoryRow l={l} onOpen={onOpen} />
+  );
+}
+
+/**
+ * A category group's card: actual of planned with a bar split into its fixed and
+ * variable parts; tapping it lists the fixed charges and the variable lines. An alert
+ * card starts open and its rows say what to check, so the card itself carries no pill.
+ */
+function SpendCardView({
+  c,
+  expanded,
+  onToggle,
+  onOpen,
+}: {
+  c: SpendCard;
+  expanded: boolean;
+  onToggle: () => void;
+  onOpen: (l: Line) => void;
+}) {
+  const plan = c.planned;
+  const pct = plan ? (c.actual / plan) * 100 : c.actual > 0 ? 100 : 0;
+  const both = c.fixedLines.length > 0 && c.variableLines.length > 0;
+  const parts = [
+    c.fixed + c.fixedPending > 0 &&
+      `קבוע ${shekel(c.fixed)}${c.fixedPending > 0.005 ? ` + ${shekel(c.fixedPending)} צפוי` : ""}`,
+    c.variableLines.length > 0 &&
+      `משתנה ${shekel(c.variable)}${c.variablePlan > 0 ? ` מתוך ${shekel(c.variablePlan)}` : ""}`,
+  ].filter(Boolean);
+  return (
+    <Card className="!px-4 !py-3">
+      <button
+        type="button"
+        aria-expanded={expanded}
+        onClick={onToggle}
+        className="block w-full text-start"
+      >
+        <div className="flex items-baseline gap-2">
+          <ChevronDown
+            className={cn(
+              "size-4 shrink-0 self-center text-muted-foreground transition-transform",
+              !expanded && "rotate-90",
+            )}
+          />
+          <span className="min-w-0 flex-1 truncate font-semibold">
+            {c.name}
+          </span>
+          <strong
+            className={cn(
+              "shrink-0 text-sm tabular-nums",
+              plan != null && amountTone(pct, c.over),
+            )}
+          >
+            {plan != null
+              ? `${shekel(c.actual)} מתוך ${shekel(plan)}`
+              : shekel(c.actual)}
+          </strong>
+        </div>
+        <StackedBar
+          className="mt-2"
+          fixed={c.fixed}
+          variable={c.variable}
+          total={plan ?? c.actual}
+        />
+        <div className="mt-1.5 flex flex-wrap justify-between gap-x-3 text-xs text-muted-foreground tabular-nums">
+          <span>{parts.join(" · ")}</span>
+          {plan != null && (
+            <span className={cn(c.over && "text-bad")}>
+              {c.over
+                ? `${shekel(c.actual - plan)} מעל התכנון`
+                : `${shekel(plan - c.actual)} נותרו`}
+            </span>
+          )}
+        </div>
+      </button>
+      {expanded && c.lever && (
+        <div className="mt-2 text-xs text-muted-foreground">{c.lever}</div>
+      )}
+      {expanded && (
+        <div className="mt-1">
+          {c.fixedLines.length > 0 && (
+            <>
+              {both && <SectionLabel className="mt-2">קבוע</SectionLabel>}
+              <div className="divide-y divide-line">
+                {c.fixedLines.map((l) => (
+                  <LineRow key={l.key} l={l} onOpen={() => onOpen(l)} />
+                ))}
+              </div>
+            </>
+          )}
+          {c.variableLines.length > 0 && (
+            <>
+              {both && <SectionLabel className="mt-2">משתנה</SectionLabel>}
+              <div className="divide-y divide-line">
+                {c.variableLines.map((l) => (
+                  <LineRow key={l.key} l={l} onOpen={() => onOpen(l)} />
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+      )}
+    </Card>
   );
 }
 
@@ -229,6 +342,9 @@ export default function MonthList({
     [m, month, current],
   );
 
+  const cards = useMemo(() => buildCards(sections), [sections]);
+  const spendTotal = cards.reduce((t, c) => t + c.actual, 0);
+
   // fees + subscriptions: the low-effort ceiling of the fixed review, current cycle only
   const cuttable =
     current && cashflow.fixed_expenses?.month === month
@@ -270,7 +386,13 @@ export default function MonthList({
     if (!linkCategory) return;
     const hit = findLine(sections, linkCategory);
     if (!hit) return;
-    setOpen((prev) => new Set(prev).add(`${hit.section}|${hit.group}`));
+    setOpen((prev) =>
+      new Set(prev).add(
+        hit.section === "debt_savings"
+          ? `${hit.section}|${hit.group}`
+          : `card|${hit.group}`,
+      ),
+    );
     openLine(hit.line);
     requestAnimationFrame(() => scrollToSection(hit.section));
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -343,80 +465,103 @@ export default function MonthList({
           </div>
         </Card>
       ) : groupBy === "category" ? (
-        sections.map((s) => (
-          <div key={s.key} id={`sec-${s.key}`} className="scroll-mt-20">
-            <Section title={`${s.label} · ${shekel(s.total)}`}>
-              {s.key === "fixed" && cuttable > 0 && (
-                <div className="-mt-1.5 mb-2.5 text-xs text-muted-foreground">
-                  עד {shekel(cuttable)} בחודש בעמלות ומנויים אפשר לבדוק בקלות
-                </div>
-              )}
-              <Card className="!py-1">
-                <ul className="divide-y divide-line">
-                  {s.groups.map((g) => {
-                    const key = `${s.key}|${g.name}`;
-                    const expanded = isOpen(key, g.alert);
+        <>
+          {cards.length > 0 && (
+            <div id="sec-spend" className="scroll-mt-20">
+              <Section title={`הוצאות · ${shekel(spendTotal)}`}>
+                {cuttable > 0 && (
+                  <div className="-mt-1.5 mb-2.5 text-xs text-muted-foreground">
+                    עד {shekel(cuttable)} בחודש בעמלות ומנויים אפשר לבדוק בקלות
+                  </div>
+                )}
+                {cards.some((c) => c.fixed + c.fixedPending > 0) && (
+                  <div className="mix-legend -mt-1 mb-2.5 text-muted-foreground">
+                    <span>
+                      <i className="mix-fixed" />
+                      קבוע
+                    </span>
+                    <span>
+                      <i className="mix-var" />
+                      משתנה
+                    </span>
+                  </div>
+                )}
+                <div className="flex flex-col gap-2.5">
+                  {cards.map((c) => {
+                    const key = `card|${c.name}`;
                     return (
-                      <li key={key}>
-                        <button
-                          type="button"
-                          aria-expanded={expanded}
-                          onClick={() => toggle(key)}
-                          className="flex w-full items-center gap-2 py-2.5 text-start"
-                        >
-                          <ChevronDown
-                            className={cn(
-                              "size-4 shrink-0 text-muted-foreground transition-transform",
-                              !expanded && "rotate-90",
-                            )}
-                          />
-                          <span className="min-w-0 flex-1 truncate font-semibold">
-                            {g.name}
-                          </span>
-                          {g.alert && (
-                            <StatusPill
-                              tone="warn"
-                              className="whitespace-nowrap"
-                            >
-                              כדאי לבדוק
-                            </StatusPill>
-                          )}
-                          <strong className="shrink-0 tabular-nums">
-                            {shekel(g.total)}
-                          </strong>
-                        </button>
-                        {expanded && g.lever && (
-                          <div className="ps-6 pb-1 text-xs text-muted-foreground">
-                            {g.lever}
-                          </div>
-                        )}
-                        {expanded && (
-                          <div className="divide-y divide-line pb-1 ps-6">
-                            {g.lines.map((l) =>
-                              l.charge ? (
-                                <ChargeRow
-                                  key={l.key}
-                                  c={l.charge}
-                                  onOpen={() => openLine(l)}
-                                />
-                              ) : (
-                                <CategoryRow
-                                  key={l.key}
-                                  l={l}
-                                  onOpen={() => openLine(l)}
-                                />
-                              ),
-                            )}
-                          </div>
-                        )}
-                      </li>
+                      <SpendCardView
+                        key={key}
+                        c={c}
+                        expanded={isOpen(key, c.alert)}
+                        onToggle={() => toggle(key)}
+                        onOpen={openLine}
+                      />
                     );
                   })}
-                </ul>
-              </Card>
-            </Section>
-          </div>
-        ))
+                </div>
+              </Section>
+            </div>
+          )}
+          {sections
+            .filter((s) => s.key === "debt_savings")
+            .map((s) => (
+              <div key={s.key} id={`sec-${s.key}`} className="scroll-mt-20">
+                <Section title={`${s.label} · ${shekel(s.total)}`}>
+                  <Card className="!py-1">
+                    <ul className="divide-y divide-line">
+                      {s.groups.map((g) => {
+                        const key = `${s.key}|${g.name}`;
+                        const expanded = isOpen(key, g.alert);
+                        return (
+                          <li key={key}>
+                            <button
+                              type="button"
+                              aria-expanded={expanded}
+                              onClick={() => toggle(key)}
+                              className="flex w-full items-center gap-2 py-2.5 text-start"
+                            >
+                              <ChevronDown
+                                className={cn(
+                                  "size-4 shrink-0 text-muted-foreground transition-transform",
+                                  !expanded && "rotate-90",
+                                )}
+                              />
+                              <span className="min-w-0 flex-1 truncate font-semibold">
+                                {g.name}
+                              </span>
+                              {g.alert && (
+                                <StatusPill
+                                  tone="warn"
+                                  className="whitespace-nowrap"
+                                >
+                                  כדאי לבדוק
+                                </StatusPill>
+                              )}
+                              <strong className="shrink-0 tabular-nums">
+                                {shekel(g.total)}
+                              </strong>
+                            </button>
+                            {expanded && (
+                              <div className="divide-y divide-line pb-1 ps-6">
+                                {g.lines.map((l) => (
+                                  <LineRow
+                                    key={l.key}
+                                    l={l}
+                                    onOpen={() => openLine(l)}
+                                  />
+                                ))}
+                              </div>
+                            )}
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </Card>
+                </Section>
+              </div>
+            ))}
+        </>
       ) : groupBy === "merchant" ? (
         <Card className="!py-1">
           <ul className="divide-y divide-line">
