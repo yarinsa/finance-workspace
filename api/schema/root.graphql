@@ -32,6 +32,9 @@ type Query {
   """The Goals screen's three general targets; a null amount is unset."""
   planTargets: PlanTargets!
 
+  """Assets no scraper sees (assets.graphql), oldest first."""
+  assets(first: Int, after: String, last: Int, before: String): AssetConnection!
+
   """Every scraped source's latest sync run (sync.graphql), by source id."""
   syncSources(first: Int, after: String, last: Int, before: String): SyncSourceConnection!
 
@@ -76,6 +79,10 @@ type Mutation {
   goalDelete(id: ID!): DeletePayload!
   """Set any of the general targets; null or 0 unsets one, an omitted one is untouched."""
   planTargetsUpdate(input: PlanTargetsUpdateInput!): PlanTargetsPayload!
+
+  # assets (assets.graphql)
+  assetCreate(input: AssetCreateInput!): AssetPayload!
+  assetUpdate(id: ID!, input: AssetUpdateInput!): AssetPayload!
 
   # sync (sync.graphql): no ledger rebuild
   """

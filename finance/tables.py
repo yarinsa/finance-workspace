@@ -341,3 +341,43 @@ class Notification(SQLModel, table=True):
     resolved_at: dt.datetime | None = Field(default=None, sa_column=_when())
     pushed_at: dt.datetime | None = Field(default=None, sa_column=_when())   # Web Push sent it (finance/push.py only)
 
+
+
+class Asset(SQLModel, table=True):
+    """Something the household owns that no scraper sees: the apartment, for now.
+
+    The value is typed in by hand (`valuation_source` 'manual'); an automatic estimate will
+    write 'estimate' later. The digest adds the property value to `snapshot.totals`
+    (`property_value`, `net_worth_with_property`). `finance_api` may read, add and edit."""
+    __tablename__ = "assets"
+    __table_args__ = (
+        CheckConstraint("kind IN ('property')", name="assets_kind_check"),
+        CheckConstraint("valuation_source IN ('manual', 'estimate')", name="assets_valuation_source_check"),
+    )
+
+    id: int | None = Field(default=None, primary_key=True)
+    kind: str = Field(sa_type=Text)
+    label: str = Field(sa_type=Text)
+    value: Decimal = Field(sa_type=Money)
+    valued_at: dt.date
+    valuation_source: str = Field(default="manual", sa_type=Text)
+    created_at: dt.datetime | None = Field(default=None, sa_column=_now())
+    updated_at: dt.datetime | None = Field(default=None, sa_column=_now())
+
+
+class PositionSnapshot(SQLModel, table=True):
+    """The household's position on one day, recorded by every digest (data/history.py).
+
+    One row per date, overwritten by later digests the same day. This is the only
+    record of how net worth moved over time: scraped sources only know today."""
+    __tablename__ = "position_snapshots"
+
+    date: dt.date = Field(primary_key=True)
+    cash: Decimal = Field(sa_type=Money)              # bank_balances_sum
+    card_debt: Decimal = Field(sa_type=Money)
+    consumer_loans: Decimal = Field(sa_type=Money)
+    mortgage: Decimal = Field(sa_type=Money)
+    savings: Decimal = Field(sa_type=Money)           # long_term_savings (liquid + illiquid)
+    property: Decimal | None = Field(default=None, sa_type=Money)
+    net_worth: Decimal = Field(sa_type=Money)         # incl. savings and property
+    recorded_at: dt.datetime | None = Field(default=None, sa_column=_now())

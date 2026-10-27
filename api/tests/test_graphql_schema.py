@@ -74,7 +74,7 @@ def test_every_node_type_is_refetchable():
     assert {t.name for t in SCHEMA.get_possible_types(node)} == {
         "Transaction", "Merchant", "Category", "Tag", "Horizon", "Goal", "CashflowNotification", "BudgetNotification",
         "BillNotification", "ServiceNotification", "SyncNotification", "TransactionNotification",
-        "GenericNotification", "SyncSource"}
+        "GenericNotification", "SyncSource", "Asset"}
 
 
 def test_connections_follow_the_relay_spec():
@@ -87,7 +87,8 @@ def test_connections_follow_the_relay_spec():
 
 # Linear style (`entityVerb`, optional `id` argument, `{success, entity}` payload); every other
 # mutation is Relay style and pending migration.
-LINEAR = {"goalCreate", "goalUpdate", "goalDelete", "planTargetsUpdate", "syncSourceRetry"}
+LINEAR = {"goalCreate", "goalUpdate", "goalDelete", "planTargetsUpdate", "syncSourceRetry", "assetCreate",
+          "assetUpdate"}
 
 
 def test_relay_mutations_take_one_input_and_echo_client_mutation_id():

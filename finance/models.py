@@ -210,6 +210,8 @@ class SnapshotTotals(BaseModel):
     liquid_savings: float
     illiquid_savings: float
     net_position_with_savings: float
+    property_value: float | None = None          # the apartment, typed in by hand (assets table)
+    net_worth_with_property: float | None = None
     monthly_loan_service: float
     detected_monthly_salary: float | None = None
 

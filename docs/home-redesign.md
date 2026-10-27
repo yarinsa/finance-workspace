@@ -177,22 +177,23 @@ move to `/metrics`, debt % also as a footer on the חובות lens), `home/Hero`
 
 ## Phases
 
-### Phase 1 — data (Python, pytest from real records)
-- [ ] `data/history.py`: daily cash balance, last 90 days, from the banks' running
+### Phase 1 — data (Python, pytest from real records) — done 2026-10-27
+- [x] `data/history.py`: daily cash balance, last 90 days, from the banks' running
       balances (the chain `validate.py` already walks). Emits `cashflow.history.cash`.
-- [ ] Debt series past + future from mortgage / Leumi / Discount amortization schedules
-      → `cashflow.history.debt`.
-- [ ] Daily position snapshot on every digest: Postgres `position_snapshots`
-      (date PK, cash, card_debt, loans, mortgage, savings, property, net_worth),
-      published as `data/digested/history.json`. Best-effort like `db/inbox.py` (a
-      dead DB never stops the digest). Follow the `schema-change` skill.
-- [ ] Property asset: table `assets` (id, kind, label, value, valued_at,
-      valuation_source, updated_at), `finance_api` select/insert/update. Digest adds
+- [x] Debt series past + future from the loan dumps (reverse / forward amortization;
+      the dumps carry no full schedules) → `cashflow.history.debt`.
+- [x] Daily position snapshot on every digest: Postgres `position_snapshots`
+      (date PK, cash, card_debt, consumer_loans, mortgage, savings, property, net_worth).
+      **Published inside `cashflow.json` → `history.positions`** rather than a separate
+      `history.json` (no new file to deploy or fetch). Best-effort like `db/inbox.py`.
+- [x] Property asset: table `assets` (migration 0014), `db/asset_store.py`, digest adds
       `snapshot.totals.property_value` and `net_worth_with_property`.
-      Keep `tracked_net_position` / `net_position_with_savings` unchanged.
-- [ ] GraphQL, Linear style (`api/schema/root.graphql` conventions):
-      `assets` query, `assetCreate(input)`, `assetUpdate(id, input)` → `AssetPayload
-      {success, asset}`. An update signals the ledger rebuild (the totals change).
+- [x] GraphQL, Linear style: `assets` connection, `assetCreate(input)`,
+      `assetUpdate(id, input)` → `AssetPayload {success, asset}`; edits signal a rebuild.
+- Found on the way, fixed with regression tests: the 2026-10-27 Leumi scrape saved loan
+  2529 twice (consumer debt +₪13k, the מילואים loan lost), and the snapshot kept
+  RiseUp's stale Leumi `loan_account` copy instead of the direct checking account, which
+  dropped Leumi from the runway pool.
 
 ### Phase 2a — calm design system (app-wide, before any new screen)
 - [ ] Holst palette (tokens above): `styles.css`, the shadcn mapping in

@@ -422,7 +422,9 @@ def loan_profile(loans):
     }
 
 
-def build_snapshot(e):
+def build_snapshot(e, assets=None):
+    """The headline position. `assets` are the household's hand-typed assets
+    (db/asset_store.py: the apartment), None when there is no database."""
     accounts = e.get("accounts", [])
     cards = e.get("credit_cards", [])
     loans = e.get("loans", [])
@@ -440,6 +442,10 @@ def build_snapshot(e):
         return RISEUP_ORIGIN.get(a.get("institution"), a.get("institution"))
 
     def is_direct(a):
+        # RiseUp's copy can be stale or mislabelled (it reports Leumi checking as a
+        # 'loan_account'), so any direct scrape beats it.
+        if a.get("_source"):
+            return a["_source"] != "riseup"
         return "available_balance" in a or "overdraft_limit" in a
 
     by_inst = {}
@@ -491,6 +497,12 @@ def build_snapshot(e):
     liquid_savings_sum = round(sum(s["balance"] for s in savings if s.get("liquid")), 2)
     illiquid_savings_sum = round(savings_sum - liquid_savings_sum, 2)
 
+    # Property (the apartment) is typed in by hand. It joins net worth only in its own
+    # figure, so the existing totals keep answering the questions they always did.
+    assets = assets or []
+    prop = [a for a in assets if a.get("kind") == "property"]
+    property_value = round(sum(a["value"] for a in prop), 2) if prop else None
+
     def clean(records):                           # drop internal stamps from output
         return [{k: v for k, v in r.items() if not k.startswith("_")} for r in records]
 
@@ -504,6 +516,7 @@ def build_snapshot(e):
         "credit_cards": clean(cards),
         "loans": clean(loans),
         "savings": clean(savings),
+        "assets": assets,
         "income": clean(income),
         "transactions_count": len(txns),
         "debt_profile": {
@@ -522,10 +535,34 @@ def build_snapshot(e):
             "liquid_savings": liquid_savings_sum,
             "illiquid_savings": illiquid_savings_sum,
             "net_position_with_savings": round(tracked_net + savings_sum, 2),
+            "property_value": property_value,
+            "net_worth_with_property": (round(tracked_net + savings_sum + property_value, 2)
+                                        if property_value is not None else None),
             "monthly_loan_service": loan_monthly,
             "detected_monthly_salary": salary,
         },
     }
+
+
+def load_assets():
+    """The hand-typed assets from Postgres (db/asset_store.py), or None with no database.
+
+    Best-effort: an unreachable database prints to stderr and the digest carries on."""
+    url = database_url()
+    if not url or "--no-db" in sys.argv:
+        return None
+    db = str(ROOT.parent / "db")
+    sys.path.insert(0, db)
+    try:
+        import asset_store
+        from ledger import connect
+        with connect(url) as conn:
+            return asset_store.all_assets(conn)
+    except Exception as e:   # noqa: BLE001 — a dead DB must not stop the digest
+        print(f"assets: database unavailable ({e})", file=sys.stderr)
+        return None
+    finally:
+        sys.path.remove(db)
 
 
 def write_markdown(s):
@@ -673,7 +710,7 @@ def main():
          "transactions": ledger},
         ensure_ascii=False, indent=2))
 
-    snapshot = build_snapshot(entities)
+    snapshot = build_snapshot(entities, load_assets())
     snapshot["spending"] = summary
     snapshot["syncs"] = source_syncs()
     snapshot["freshness"] = freshness.status()

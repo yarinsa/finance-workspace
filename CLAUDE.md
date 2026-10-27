@@ -286,6 +286,21 @@ Before designing a dashboard screen, read `docs/ux-references.md`: Mobbin
 patterns per feature, what the app has vs. lacks, and the design principles
 (one number + verdict first, balance-after per row, label confidence).
 
+### History and the property asset
+
+Scraped sources only know today, so `data/history.py` (called from `cashflow.py`, output in
+`cashflow.json` → `history`) rebuilds the past for the home screen's lenses:
+`cash` (end-of-day Discount + Leumi checking, the runway's pool, last 90 days: days inside a
+bank's running-balance chain are measured, earlier days are walked back through its ledger;
+`measured_from` marks the line), `debt` (month-start loan balances, 12 months back by reverse
+amortization, 36 ahead on `projection.amortize_loans`) and `positions` (one row a day in Postgres
+`position_snapshots`, recorded by every digest; best-effort, a dead DB gives `[]`).
+
+The apartment is an **asset** typed in by hand (`assets` table, `db/asset_store.py`,
+GraphQL `assetCreate` / `assetUpdate`; `valuation_source` is `manual` until an estimate exists).
+The digest adds `snapshot.totals.property_value` and `net_worth_with_property`; the older totals
+(`tracked_net_position`, `net_position_with_savings`) keep their meaning.
+
 ### Long-range projection
 
 `poetry run python data/projection.py` writes a net-worth projection to retirement/end age.

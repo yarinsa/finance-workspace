@@ -3,6 +3,8 @@
 The ledger is conftest's: PURCHASE (-123.45, cal, קניות), SALARY (+1000, משכורת),
 CARD_BILL (-500, חיובי כרטיס). Each test is a question the dashboard asks.
 """
+import datetime as dt
+
 import pytest
 
 import ledger
@@ -489,6 +491,39 @@ def test_invalid_plan_targets_input_is_an_error_and_signals_nothing(client, rebu
     status, body = gql(client, UPDATE_TARGETS, input=inp)
     assert body.get("errors") and rebuilder.signals == 0
     assert data(client, TARGETS)["planTargets"] == NO_TARGETS
+
+
+# --- assets: the apartment's hand-typed value ----------------------------------------------
+
+ASSETS = "{ assets { totalCount edges { node { id kind label value valuedAt valuationSource } } } }"
+CREATE_ASSET = """mutation($input: AssetCreateInput!) { assetCreate(input: $input) {
+  success asset { id kind label value valuedAt valuationSource } } }"""
+UPDATE_ASSET = """mutation($id: ID!, $input: AssetUpdateInput!) { assetUpdate(id: $id, input: $input) {
+  success asset { id value valuedAt label } } }"""
+
+
+def test_property_value_is_entered_then_revalued_as_finance_api_with_a_rebuild_each(client, rebuilder):
+    """As the household, I type the apartment's value once and correct it later; each edit
+    rebuilds the digest so net worth picks it up."""
+    assert data(client, ASSETS)["assets"] == {"totalCount": 0, "edges": []}
+    a = data(client, CREATE_ASSET, input={"kind": "PROPERTY", "label": " דירה ", "value": "2350000",
+                                          "valuedAt": "2026-10-01"})["assetCreate"]
+    assert a["success"] is True
+    assert {k: a["asset"][k] for k in ("kind", "label", "value", "valuedAt", "valuationSource")} == \
+        {"kind": "PROPERTY", "label": "דירה", "value": "2350000.00", "valuedAt": "2026-10-01",
+         "valuationSource": "MANUAL"}
+    u = data(client, UPDATE_ASSET, id=a["asset"]["id"], input={"value": "2400000"})["assetUpdate"]["asset"]
+    assert u["value"] == "2400000.00" and u["label"] == "דירה"
+    assert u["valuedAt"] == dt.date.today().isoformat()
+    assert data(client, ASSETS)["assets"]["edges"][0]["node"]["value"] == "2400000.00"
+    assert rebuilder.signals == 2
+
+
+@pytest.mark.parametrize("inp", [{"value": "-1"}, {"value": None}, {}, {"color": 1}])
+def test_invalid_asset_update_is_an_error_and_signals_nothing(client, rebuilder, inp):
+    a = data(client, CREATE_ASSET, input={"kind": "PROPERTY", "label": "דירה", "value": "1"})["assetCreate"]
+    status, body = gql(client, UPDATE_ASSET, id=a["asset"]["id"], input=inp)
+    assert body.get("errors") and rebuilder.signals == 1
 
 
 # --- sync sources: retry a failed sync from where it stopped ------------------------------

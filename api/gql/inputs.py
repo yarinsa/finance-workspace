@@ -219,6 +219,34 @@ class PlanTargetsUpdateInput(MutationInput):
                 if f in self.model_fields_set}
 
 
+class AssetKind(str, Enum):
+    PROPERTY = "property"
+
+
+class AssetCreateInput(MutationInput):
+    kind: AssetKind
+    label: str = Field(min_length=1, max_length=80)
+    value: Decimal = Field(ge=0, le=1_000_000_000, max_digits=12, decimal_places=2)
+    valued_at: dt.date | None = None
+
+
+class AssetUpdateInput(MutationInput):
+    id: node_id_of("Asset")
+    label: str | None = Field(default=None, min_length=1, max_length=80)
+    value: Decimal | None = Field(default=None, ge=0, le=1_000_000_000, max_digits=12, decimal_places=2)
+    valued_at: dt.date | None = None
+
+    @model_validator(mode="after")
+    def nothing_cleared(self):
+        if any(f in self.model_fields_set and getattr(self, f) is None for f in ("label", "value", "valued_at")):
+            raise ValueError("an asset's label, value and valuedAt cannot be cleared")
+        return self
+
+    def changes(self):
+        """asset_store.update_asset keyword arguments for the fields that were sent."""
+        return {f: getattr(self, f) for f in ("label", "value", "valued_at") if f in self.model_fields_set}
+
+
 class UpdateNotificationInput(MutationInput):
     id: node_id_of("Notification")
     read: bool | None = None
