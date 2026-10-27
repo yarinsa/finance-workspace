@@ -5,6 +5,7 @@ import { Money } from "@/components/common";
 import { cn } from "@/lib/utils";
 import { getDataVersion, shekel, snapshot, useDataVersion, type Loan } from "@/lib/data";
 import { shownProperty, usePropertyOverlay } from "@/lib/propertyOverlay";
+import { MortgageDetails } from "@/components/MortgageCard";
 
 const ROW = "flex w-full items-center gap-3 px-5 py-4 text-inherit no-underline transition duration-200 active:bg-panel-2";
 const CARD = `surface ${ROW} active:scale-[.99]`;
@@ -208,8 +209,9 @@ function loanTitle(l: Loan): string {
 }
 
 /**
- * הלוואות / משכנתא: one line per loan or mortgage track, largest first, with what it costs a
- * month and when it ends. Leumi's unread remainder (its summary total minus the loans it
+ * הלוואות / משכנתא. Loans: one line per loan, largest first, with what it costs a month and
+ * when it ends. The mortgage opens to the same details as /networth's mortgage card (rates,
+ * mix, tracks). Leumi's unread remainder (its summary total minus the loans it
  * lists) has no schedule, so it says so. No rates: a refunded-interest loan would look costly.
  */
 function DebtCard({ label, category, total }: { label: string; category: "consumer" | "mortgage"; total: number }) {
@@ -217,20 +219,29 @@ function DebtCard({ label, category, total }: { label: string; category: "consum
   const monthly = loans.reduce((n, l) => n + (l.monthly_payment ?? 0), 0);
   return (
     <CollapsibleCard label={label} sub={monthly ? `${shekel(monthly)} בחודש` : undefined} value={-total}>
-      <Group title={category === "mortgage" ? "מסלולים" : null}>
-        {loans.map((l) => (
-          <Line
-            key={`${l.lender}-${String(l.loan_id)}`}
-            title={loanTitle(l) || label}
-            sub={
-              l.monthly_payment
-                ? [category === "consumer" && (LENDER[l.lender ?? ""] ?? l.lender), `${shekel(l.monthly_payment)} בחודש`, untilMonth(l.final_date)]
-                : [LENDER[l.lender ?? ""] ?? l.lender, "הבנק מדווח רק את היתרה"]
-            }
-            value={-(l.balance ?? 0)}
-          />
-        ))}
-      </Group>
+      {category === "mortgage" ? (
+        <div className="pt-4">
+          <MortgageDetails />
+        </div>
+      ) : (
+        <Group title={null}>
+          {loans.map((l) => {
+            const lender = LENDER[l.lender ?? ""] ?? l.lender;
+            return (
+              <Line
+                key={`${l.lender}-${String(l.loan_id)}`}
+                title={loanTitle(l) || label}
+                sub={
+                  l.monthly_payment
+                    ? [lender, `${shekel(l.monthly_payment)} בחודש`, untilMonth(l.final_date)]
+                    : [lender, "הבנק מדווח רק את היתרה"]
+                }
+                value={-(l.balance ?? 0)}
+              />
+            );
+          })}
+        </Group>
+      )}
       <Link
         to="/networth"
         className="mt-1 flex items-center justify-between border-t border-line py-3 text-sm font-medium text-[var(--lg-primary)]"
