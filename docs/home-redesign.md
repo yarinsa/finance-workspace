@@ -61,6 +61,69 @@ picked to sit with it. Contrast (WCAG) checked; all text pairs ≥ 4.5 unless no
 - `index.html` `theme-color` and the PWA manifest colours: `#F7F3EA` / `#18201B`.
 - Remove the old `--hero-1/2` navy and `--hero-accent` mint once nothing reads them.
 
+## Design language: calm
+
+References: **Empathy** (a calm fintech/estate app: warm ivory surfaces, serif
+headlines, human copy, one dark primary button, quiet checklists) and a **"Mint /
+System"** Pinterest kit (forest/mint/ivory/ink, serif "Aa", pill buttons, status pill
+with a dot, thin progress bars, a week strip with a filled "today", a check-circle
+toast). We take their *tone and components*; colours come from Holst (below).
+
+The feeling we want: money news, delivered calmly. The household should be able to
+open the app on a bad week and not feel shouted at.
+
+### Principles
+1. **One big number per screen**, in the serif, 48–56px on the home band and
+   40px on detail heroes. ₪ sign smaller and lighter than the digits; no agorot in
+   heroes. A plain-language verdict sits under it in the sans.
+2. **Colour is information, not decoration.** Green = brand and "ok". Terracotta
+   only on a number or a dot that is really a problem — never a red background, banner
+   or card. Ochre for "look soon". Everything else is ink and muted.
+3. **Quiet surfaces.** Ivory page, cream cards, a hairline border *or* a soft
+   shadow (not both), radius 20–24, 20px card padding, 24px between sections. Fewer
+   cards per screen; group rows inside one card with hairline dividers (Empathy
+   checklist) instead of stacking many small cards.
+4. **One primary action per screen**: a full-width forest pill. Everything else is
+   the secondary pill (mint-tinted fill, hairline border) or a text link.
+5. **Calm copy.** Say what happens and what to do, without alarm words or emoji:
+   "עד המשכורת חסרים ₪1,200 ב־3.11 · אפשר להזיז את חיוב הכרטיס" rather than "חריגה!".
+   Greetings and screen titles in the serif ("ערב טוב"). Drop the 👋 / 🕑 emoji.
+6. **Slow, small motion.** 200–300ms ease-out, no bounce, no count-up animations
+   on money; respect `prefers-reduced-motion`.
+7. **Confidence stays visible** (from `ux-references.md`): estimated values get a
+   quiet "משוער" status pill, not a warning colour.
+
+### Typography
+- **Display (serif): Frank Ruhl Libre** (`@fontsource-variable/frank-ruhl-libre`,
+  Hebrew + Latin). Big numbers, greetings, screen titles, card titles.
+- **Body (sans): Heebo** (`@fontsource-variable/heebo`, Hebrew + Latin). Geist has no
+  Hebrew glyphs, so today Hebrew falls back to the system font; Heebo gives one
+  consistent face. Rows and tables keep `tabular-nums`.
+- Section labels (the kit's letter-spaced "COLOR PALETTE"): Hebrew has no capitals,
+  so 12px, weight 600, muted, letter-spacing .04em at most (more hurts Hebrew).
+- Scale: 56 / 40 / 28 / 20 serif; 17 / 15 / 13 / 12 sans. Line-height 1.15 for
+  serif display, 1.5 for body.
+- Check that Frank Ruhl Libre's digits look right in large ₪ amounts; if they
+  don't, use Heebo light for the digits and keep the serif for words.
+
+### Components (from the kit, adapted)
+| Kit component | Our use |
+|---|---|
+| Primary / secondary pill buttons | `Button` variants `primary` (forest `#314C3B`, cream text) and `secondary` (fill `#EEF2EC`, border `#BDC9B8`, ink text) |
+| Status pill with a dot ("In progress") | `StatusPill`: sync states, bill paid/upcoming/overdue, "משוער", goal on track. Replaces the coloured `.pill-*` blocks |
+| Thin progress bar + % | `ProgressBar` (6px, forest on `#E2DED2`): budgets, goals, month elapsed |
+| Week strip with a filled "today" and dots | `WeekStrip` on home "בקרוב": days with a debit get a dot; tap a day to see its bills and balance-after |
+| Search pill + filter chips | Transaction search on `/spending` and the ledger |
+| Toast with a check circle | `Toast` "השינוי נשמר." (+ "בטל" when the edit can be undone) for every ledger, goal and property edit. No toast exists today |
+| Toggle (forest on) | Settings and the push-notifications card |
+| Task card (icon tile, title, meta, ⋮) | Inbox items and goals: meta label above the title (Empathy "The Funeral / Look for final wishes") |
+| Empathy checklist with sections and counts | Inbox: "לטיפול (3)" / "נדחה לאחר כך (2)" sections, circle check to archive |
+
+### Navigation tone
+Keep the bottom-bar structure, but make it calmer: ivory/cream bar, **text labels
+under the icons** (Empathy's Home / Explore / To Do / Vault), forest for the active
+tab, and the "עוד" button becomes a normal tab instead of the bright round button.
+
 ## Layout (mobile, RTL)
 
 ```
@@ -131,10 +194,20 @@ move to `/metrics`, debt % also as a footer on the חובות lens), `home/Hero`
       `assets` query, `assetCreate(input)`, `assetUpdate(id, input)` → `AssetPayload
       {success, asset}`. An update signals the ledger rebuild (the totals change).
 
-### Phase 2 — shell (ships with מזומן + הוצאות)
-- [ ] Holst palette first (tokens above): `styles.css`, the shadcn mapping in
-      `index.css`, `chartTheme.ts`, `theme-color`/manifest. Screenshot every route light
-      + dark to catch hardcoded colours (`grep -rn '#[0-9a-fA-F]\{6\}' app/src`).
+### Phase 2a — calm design system (app-wide, before any new screen)
+- [ ] Holst palette (tokens above): `styles.css`, the shadcn mapping in
+      `index.css`, `chartTheme.ts`, `theme-color`/manifest, the hardcoded `#14b48c` in
+      `main.tsx`. Find others with `grep -rn '#[0-9a-fA-F]\{6\}' app/src`.
+- [ ] Fonts: Frank Ruhl Libre (display) + Heebo (body), the type scale, `--font-display`.
+- [ ] Primitives: `Button` primary/secondary, `StatusPill`, `ProgressBar`, `Toast`
+      (wired to the existing edit mutations), `SectionLabel`, `BigNumber` in the serif.
+- [ ] Calm copy pass: remove emoji, rewrite alarm wording in `actions.py` titles and
+      the UI's verdict lines.
+- [ ] Bottom bar: labels, ivory, forest active, "עוד" as a normal tab.
+- [ ] Screenshot every route, light + dark, before/after.
+
+### Phase 2b — home shell (ships with מזומן + הוצאות)
+- [ ] `WeekStrip` for "בקרוב" (replaces `UpcomingChips`).
 - [ ] `components/home/HomeBand.tsx`: header (signal, bell, ＋), tabs, scroll-snap
       carousel, dots, הרחב, ⋮ (pin default lens).
 - [ ] `components/home/Signal.tsx`: spent/income % ⇄ safe to spend, persisted.
