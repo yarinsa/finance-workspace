@@ -214,21 +214,23 @@ move to `/metrics`, debt % also as a footer on the חובות lens), `home/Hero`
 - [x] Screenshots light + dark (`dashboard-screenshots --light` added).
 - Not yet: "בטל" (undo) in the toast — the Toast supports it, no edit passes one yet.
 
-### Phase 2b — home shell (ships with מזומן + הוצאות)
-- [ ] `WeekStrip` for "בקרוב" (replaces `UpcomingChips`).
-- [ ] `components/home/HomeBand.tsx`: header (signal, bell, ＋), tabs, scroll-snap
-      carousel, dots, הרחב, ⋮ (pin default lens).
-- [ ] `components/home/Signal.tsx`: spent/income % ⇄ safe to spend, persisted.
-- [ ] `components/home/QuickActionsSheet.tsx`: sync now (existing sync mutation),
-      property value, add goal (`GoalEditorSheet`), offset (deep link to the ledger).
-- [ ] `components/home/AccountCards.tsx` replacing `AccountRows` (cards, overlap).
-- [ ] `lib/lenses.ts`: pure builders (series, big number, delta) + vitest.
-- [ ] Remove `StatusTiles` / `Hero` / `RunwayCard` from `Overview`; move the two
-      metric tiles to `/metrics`.
+### Phase 2b — home shell (ships with מזומן + הוצאות) — done 2026-10-27
+- [x] `WeekStrip` for "בקרוב" (replaces `UpcomingChips`): today filled, dots on debit days,
+      balance-after and "משוער" per item (`lib/week.ts` + tests).
+- [x] `components/home/HomeBand.tsx`: header (signal, bell, ＋), tabs, scroll-snap
+      carousel (RTL), dots, הרחב, ⋮ (pin default lens); `LensChart` on `--hero-*` tokens,
+      ₪0 line when the cash runway dips below zero. The mobile sticky header hides on home.
+- [x] `components/home/Signal.tsx`: spent/income % ⇄ safe to spend, persisted.
+- [x] `components/home/QuickActionsSheet.tsx`: סנכרון (→ /syncs: there is no "sync all"
+      endpoint), שווי הדירה (`PropertyEditorSheet`, pulled forward from Phase 3), יעד חדש
+      (`GoalEditorSheet`), קיזוז החזר (→ /spending, offsets start from the expense).
+- [x] `components/home/AccountCards.tsx` replacing `AccountRows` (cards, overlap, property card).
+- [x] `lib/lenses.ts`: pure builders (series, big number, delta) + vitest.
+- [x] Removed `StatusTiles` / `RunwayCard` / `UpcomingChips` / `InboxButton` from home; the
+      growth index and debt-repayment % were already on `/metrics`.
 
 ### Phase 3 — remaining lenses
-- [ ] חובות lens. Property card + `PropertyEditorSheet` (value, date; read-only when the
-      API is down, like other edits).
+- [ ] חובות lens (`history.debt`). (Property card + `PropertyEditorSheet` shipped in 2b.)
 - [ ] חיסכון and שווי נקי lenses on `history.json`, projection placeholder until ≥14
       points. Default-lens rule from decision 4.
 

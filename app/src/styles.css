@@ -32,6 +32,7 @@
   --hero-muted: #e2ded2;
   --hero-line: #bdc9b8;
   --hero-fill: rgba(189, 201, 184, .35);
+  --hero-alert: #f0a58f;   /* the inbox dot on the band: terracotta lifted to read on teal */
   --shadow: 0 6px 24px rgba(49, 76, 59, .08);
   /* Quiet surfaces: in light a soft shadow and no line, in dark a hairline and no shadow. */
   --card-border: transparent;
@@ -63,6 +64,7 @@
   --hero-muted: #bdc9b8;
   --hero-line: #92aa97;
   --hero-fill: rgba(146, 170, 151, .25);
+  --hero-alert: #f0a58f;
   --shadow: 0 6px 24px rgba(0, 0, 0, .35);
   --card-border: var(--lg-line);
   --card-shadow: none;

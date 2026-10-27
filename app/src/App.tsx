@@ -130,6 +130,8 @@ export default function App() {
         <SidebarInset>
           <DevBanner />
           <PwaStatus />
+          {/* Home's band is its own header (title, freshness, inbox); other pages get the bar. */}
+          {pathname !== "/overview" && (
           <header
             className="sticky top-0 z-30 flex h-12 items-center justify-between border-b bg-background/80 px-4 backdrop-blur-xl md:hidden"
             style={{ paddingTop: "env(safe-area-inset-top)", boxSizing: "content-box" }}
@@ -137,6 +139,7 @@ export default function App() {
             <span className="font-semibold">{current?.label ?? ""}</span>
             <Freshness days={days} />
           </header>
+          )}
           <main className="content">
             <Routes>
               <Route path="/" element={<Navigate to="/overview" replace />} />
