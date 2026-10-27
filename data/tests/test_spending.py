@@ -101,3 +101,39 @@ def test_overridden_flag_reaches_the_month_rows():
     rows = {t["merchant"]: t for t in month["transactions"]}
     assert rows[spending.merchant_name(GROCERY["description"])]["overridden"] is True
     assert "overridden" not in rows[spending.merchant_name(APPLE_CORK["description"])]
+
+
+class TestSections:
+    """Rows carry the ledger's kind and group so /monthly can group by section."""
+    RENT = {"date": "2026-10-01", "amount": -6800.0, "description": 'הו"ק לעיין ניהול נכסי',
+            "category": "שכר דירה", "category_group": "דיור", "kind": "fixed"}
+    MORTGAGE = {"date": "2026-10-02", "amount": -5817.25, "description": "דסק-משכנתא",
+                "category": "משכנתא", "category_group": "פיננסים", "kind": "fixed"}
+    FOOD = {"date": "2026-10-14", "amount": -250.0, "description": "שופרסל דיל",
+            "category": "כלכלה", "category_group": "אוכל", "kind": "variable"}
+    # a household edit made this grocery run fixed; the edit wins, never re-derived
+    EDITED = {"date": "2026-10-15", "amount": -100.0, "description": "שופרסל דיל",
+              "category": "כלכלה", "category_group": "אוכל", "kind": "fixed", "overridden": True}
+    PENSION_DEBIT = {"date": "2026-10-10", "amount": -250.0, "description": "הראל פנסיה חיוב",
+                     "category": "השקעה וחיסכון", "category_group": "הכנסות וחיסכון"}
+
+    def oct(self):
+        rows = [self.RENT, self.MORTGAGE, self.FOOD, self.EDITED, self.PENSION_DEBIT]
+        return spending.build_spending(rows)["months"][0]
+
+    def test_rows_carry_kind_group_and_block(self):
+        tx = {t["merchant"]: t for t in self.oct()["transactions"]}
+        rent = tx['הו"ק לעיין ניהול נכסי']
+        assert (rent["kind"], rent["group"], rent["block"]) == ("fixed", "דיור", "fixed")
+        assert tx["שופרסל דיל"]["block"] in ("fixed", "variable")
+        assert tx["דסק-משכנתא"]["block"] == "debt_savings"
+        assert tx["הראל פנסיה חיוב"]["block"] == "debt_savings"
+        assert "kind" not in tx["הראל פנסיה חיוב"]
+
+    def test_by_line_splits_a_category_by_section(self):
+        lines = {(x["block"], x["category"]): x["amount"] for x in self.oct()["by_line"]}
+        assert lines[("variable", "כלכלה")] == 250.0
+        assert lines[("fixed", "כלכלה")] == 100.0
+        assert lines[("fixed", "שכר דירה")] == 6800.0
+        assert lines[("debt_savings", "משכנתא")] == 5817.25
+        assert sum(lines.values()) == self.oct()["total"]

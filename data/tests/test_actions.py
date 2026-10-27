@@ -74,6 +74,8 @@ def test_budget_over_skips_placeholder():
     assert a["severity"] == "high" and a["detail"] == "₪1,763 מתוך ₪1,200 (+₪563)"
     assert (a["category"], a["type"]) == ("WARNING", "budgetOver")
     assert a["subject"] == {"kind": "budget", "categories": ["פנאי"], "cycle_start": "2026-10-01"}
+    # deep-links into the merged month screen, opening the category
+    assert a["cta"]["to"] == "/monthly?category=%D7%A4%D7%A0%D7%90%D7%99"
 
 
 def test_budget_over_caps_at_three_and_groups_rest():
@@ -84,6 +86,7 @@ def test_budget_over_caps_at_three_and_groups_rest():
     assert more["severity"] == "medium" and more["title"] == "עוד 2 קטגוריות בחריגה"
     assert (more["category"], more["type"]) == ("WARNING", "budgetOverMore")
     assert more["subject"] == {"kind": "budget", "categories": ["c1", "c0"], "cycle_start": "2026-10-01"}
+    assert more["cta"]["to"] == "/monthly?section=variable"
 
 
 def test_overdue_water_bill_is_medium():
@@ -107,8 +110,8 @@ def test_duplicate_service_is_low():
     a = by_id(build(), "dup:")[0]
     assert a["id"] == "dup:APPLE.COM/BILL CORK IRL:2026-10" and a["severity"] == "low"
     assert a["amount"] == 109.4
-    # Duplicates are flagged in FixedExpenses on /monthly; /cashflow never shows them.
-    assert a["cta"]["to"] == "/monthly"
+    # Duplicates are flagged in the fixed section of /monthly.
+    assert a["cta"]["to"] == "/monthly?section=fixed"
     assert (a["category"], a["type"]) == ("SUGGESTION", "duplicateService")
     assert a["subject"] == {"kind": "service", "services": ["APPLE.COM/BILL CORK IRL"] * 2}
 

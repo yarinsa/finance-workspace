@@ -492,6 +492,8 @@ def fixed_expenses(transactions, month_key, start_day=1):
         grouped[key].append({
             "name": name,
             "category": t.get("category"),
+            "group": t.get("category_group") or categories.group_of(t.get("category")),
+            "block": "debt_savings" if t.get("category") in categories.DEBT_CATEGORIES else "fixed",
             "amount": round(abs(float(t["amount"])), 2),
             "expected": t["expected"],
             "duplicate": dup,

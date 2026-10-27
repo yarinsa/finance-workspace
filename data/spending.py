@@ -2,9 +2,10 @@
 """Month spending explorer model (PRD 12, Phase 3).
 
 ``build_spending(transactions)`` turns the unified ledger into the ``spending``
-block of ``cashflow.json`` behind the app's ``/spending`` screen: for each of the
+block of ``cashflow.json`` behind the app's ``/monthly`` screen: for each of the
 last N months with data, the real spending broken down by category and merchant,
-the individual transactions, the change vs. the previous month, and an
+the individual transactions, ``by_line`` (spend per section — fixed / variable /
+debt_savings, see ``block`` — category group and category, for the group-by list), the change vs. the previous month, and an
 ``excluded`` block that explains what was *not* counted as spending.
 
 Exclusion semantics match ``cashflow.aggregate_by_month`` so the two screens agree:
@@ -22,6 +23,7 @@ import os
 from collections import defaultdict
 from datetime import date
 
+from finance.categories import DEBT_CATEGORIES
 from finance.merchants import merchant_name
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -46,6 +48,16 @@ def classify(t):
     return "spend"
 
 
+def block(t):
+    """The month screen's section for one spend row, the same rule as
+    ``months_view.classify_expense``: loans and the mortgage are ``debt_savings``,
+    otherwise the ledger's (household-editable) ``kind``; a kindless expense (a
+    pension debit, deposit tax) is debt/savings too."""
+    if t.get("savings") or (t.get("category") or "").strip() in DEBT_CATEGORIES:
+        return "debt_savings"
+    return t.get("kind") or "debt_savings"
+
+
 def _prev_month(ym):
     y, m = int(ym[:4]), int(ym[5:7])
     return f"{y - 1}-12" if m == 1 else f"{y}-{m - 1:02d}"
@@ -63,6 +75,7 @@ def build_spending(transactions, months=MONTHS, today=None):
         "total": 0.0,
         "cats": defaultdict(lambda: [0.0, 0]),
         "merchants": defaultdict(lambda: [0.0, 0]),
+        "lines": defaultdict(lambda: [0.0, 0]),
         "tx": [],
         "excluded": {k: {"amount": 0.0, "count": 0}
                      for k in ("card_bills", "transfers", "savings", "income")},
@@ -88,10 +101,17 @@ def build_spending(transactions, months=MONTHS, today=None):
         b["cats"][cat][1] += 1
         b["merchants"][merchant][0] += spent
         b["merchants"][merchant][1] += 1
+        group = t.get("category_group")
+        sec = block(t)
+        line = b["lines"][(sec, group, cat)]
+        line[0] += spent
+        line[1] += 1
         # `amount` stays the real charge (it is the row's ledger key); totals above count
         # the net, after a payback offset (finance/offsets.py) took `offset` off it.
         row = {"date": d, "merchant": merchant, "amount": round(-float(t.get("gross_amount", amount)), 2),
-               "category": cat}
+               "category": cat, "group": group, "block": sec}
+        if t.get("kind"):
+            row["kind"] = t["kind"]
         if t.get("offset_amount"):
             row["offset"] = t["offset_amount"]
             row["offsets"] = [{"date": str(o["date"])[:10], "description": o.get("description"),
@@ -115,6 +135,10 @@ def build_spending(transactions, months=MONTHS, today=None):
         by_merchant = sorted(
             ({"name": k, "amount": round(v[0], 2), "count": v[1]} for k, v in b["merchants"].items()),
             key=lambda m: -m["amount"])[:MAX_MERCHANTS]
+        by_line = sorted(
+            ({"block": k[0], "group": k[1], "category": k[2], "amount": round(v[0], 2), "count": v[1]}
+             for k, v in b["lines"].items()),
+            key=lambda x: -x["amount"])
         txs = sorted(b["tx"], key=lambda x: (x["date"], x["amount"]), reverse=True)[:MAX_TX_PER_MONTH]
         out.append({
             "month": ym,
@@ -123,6 +147,7 @@ def build_spending(transactions, months=MONTHS, today=None):
             "partial": ym == this_month,
             "by_category": by_cat,
             "by_merchant": by_merchant,
+            "by_line": by_line,
             "transactions": txs,
             "excluded": {k: {"amount": round(v["amount"], 2), "count": v["count"]}
                          for k, v in b["excluded"].items()},

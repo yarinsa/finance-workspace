@@ -26,7 +26,7 @@ enum NotificationSeverity {
 
 type NotificationAction {
   label: String!
-  """An app route, e.g. "/budgets"."""
+  """An app route, e.g. "/monthly?category=פנאי"."""
   to: String!
 }
 

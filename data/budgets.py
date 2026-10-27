@@ -318,6 +318,7 @@ def build_budgets(budget, transactions, as_of, overrides=None, ledger=None, expe
         rows.append({
             "name": name,
             "scope": scope,
+            "group": name if scope == "group" else categories.group_of(name),
             "planned": round(planned, 2),
             "spent": round(spent, 2),
             "left": round(planned - spent, 2),

@@ -60,7 +60,7 @@ TRIP = [
 class TestCategoryMath:
     def test_group_line_counts_variable_rows_only(self):
         c = cat(build([env("תחבורה", 200)], TRANSPORT), "תחבורה")
-        assert c["scope"] == "group"
+        assert c["scope"] == "group" and c["group"] == "תחבורה"
         assert c["spent"] == 43.68 and c["left"] == 156.32
         assert c["pct"] == 21.8 and not c["over"] and c["source"] == "riseup"
 
@@ -68,6 +68,7 @@ class TestCategoryMath:
         b = build([env("חופשה ✈️", 1000)], TRIP)
         c = cat(b, "תיירות")
         assert c["scope"] == "category" and c["spent"] == 1110.06 and c["over"]
+        assert c["group"] == "פנאי"  # תיירות sits under פנאי on /monthly
 
     def test_over_plan_category(self):
         # עציצים: ₪700 planned; a ₪1,000 cash withdrawal and ₪129 on 10-13, ₪14 on 10-21
