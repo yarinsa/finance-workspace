@@ -34,7 +34,6 @@ import {
   buildCards,
   buildMonthList,
   chargeHint,
-  byMerchant,
   findLine,
   lineTransactions,
   net,
@@ -47,7 +46,7 @@ import type { SpendingTransaction } from "@/lib/spending";
 import { useLedgerApi } from "@/lib/useLedgerApi";
 import { cn } from "@/lib/utils";
 
-export type GroupBy = "category" | "merchant" | "none";
+export type GroupBy = "category" | "none";
 
 /** What the drill-down sheet shows: a title, the transactions, and the plan editor when there is a budget line. */
 interface SheetTarget {
@@ -316,7 +315,7 @@ export default function MonthList({
   const { overlay } = useLedgerApi();
   const [params, setParams] = useSearchParams();
   const groupBy: GroupBy =
-    (["merchant", "none"] as const).find((g) => g === params.get("group")) ??
+    (["none"] as const).find((g) => g === params.get("group")) ??
     "category";
   const months = useMemo(
     () => applyOverlay(cashflow.spending?.months ?? [], overlay),
@@ -445,7 +444,6 @@ export default function MonthList({
         >
           <TabsList className="w-full">
             <TabsTrigger value="category">קטגוריה</TabsTrigger>
-            <TabsTrigger value="merchant">בית עסק</TabsTrigger>
             <TabsTrigger value="none">ללא</TabsTrigger>
           </TabsList>
         </Tabs>
@@ -562,39 +560,6 @@ export default function MonthList({
               </div>
             ))}
         </>
-      ) : groupBy === "merchant" ? (
-        <Card className="!py-1">
-          <ul className="divide-y divide-line">
-            {byMerchant(m).map((x) => (
-              <li key={x.name}>
-                <button
-                  type="button"
-                  className="flex w-full items-baseline justify-between gap-3 py-2.5 text-start"
-                  onClick={() =>
-                    setSheet({
-                      title: x.name,
-                      txns: m.transactions
-                        .filter((t) => t.merchant === x.name)
-                        .sort((a, b) => b.date.localeCompare(a.date)),
-                    })
-                  }
-                >
-                  <span className="min-w-0 truncate" dir="auto">
-                    {x.name}
-                    {x.count > 1 && (
-                      <span className="ms-1 text-xs text-muted-foreground">
-                        ×{x.count}
-                      </span>
-                    )}
-                  </span>
-                  <strong className="shrink-0 tabular-nums">
-                    {shekel(x.amount)}
-                  </strong>
-                </button>
-              </li>
-            ))}
-          </ul>
-        </Card>
       ) : (
         <Card>
           <Input
