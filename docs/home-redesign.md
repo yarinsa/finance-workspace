@@ -157,7 +157,7 @@ move to `/metrics`, debt % also as a footer on the חובות lens), `home/Hero`
 | הוצאות | Spent this month | Cumulative this month vs last month | `/spending` | `pace` + daily cumulative (small addition) |
 | מזומן | Checking balance | 30 days actual + 45-day runway dashed; low point, ₪0, overdraft lines | `/monthly?view=forecast` | future ✅ runway; past **new** (running balances) |
 | שווי נקי | Net worth incl. property | History to היום; projection placeholder until ≥14 points | `/networth` | **new** daily snapshots |
-| חיסכון | Long-term savings | Monthly points | `/portfolio` | **new** daily snapshots (monthly sources) |
+| חיסכון | Long-term savings | Monthly points | the home savings card, opened (`?holdings=1`; `/portfolio` redirects there) | **new** daily snapshots (monthly sources) |
 | חובות | Total debt | Paid-down line, past + future | `/networth` | ✅ amortization schedules in the dumps |
 
 ## Interaction rules
@@ -240,6 +240,9 @@ move to `/metrics`, debt % also as a footer on the חובות lens), `home/Hero`
       days whose coverage (bank accounts, loans, savings accounts) matches today's: before
       10-24 the Leumi loan 66730014 was unread and a liquid deposit still counted, which
       would draw moves that never happened. Seeded 10-25 and 10-26.
+
+- [x] חיסכון ארוך טווח card is collapsible and holds the החזקות list (fund type,
+      institution · עצמאי/שכיר · policies); the `/portfolio` page and its disclaimer are gone.
 
 ### Phase 4 — polish
 - [ ] Scrub readout, view transitions into detail pages, desktop layout.

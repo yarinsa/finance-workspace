@@ -357,6 +357,8 @@ export interface Savings {
   label: string;
   section?: string | null;
   policies_count?: number | null;
+  /** "עצמאי" / "שכיר" on self-employed vs salaried funds (More, Analyst). */
+  work_state?: string | null;
   balance: number;
   currency: string;
   management_fee?: number | null;

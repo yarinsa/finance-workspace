@@ -206,7 +206,7 @@ function recordedLens(
         : { amount: change, text: `מאז ${dayMonth(first.date)}`, good: change > 0 },
     series: days.map((d) => ({ x: d.date, actual: d.value })),
     todayIndex: days.length - 1,
-    to: key === "savings" ? "/portfolio" : "/networth",
+    to: key === "savings" ? "/overview?lens=savings&holdings=1" : "/networth",
     note,
   };
 }
