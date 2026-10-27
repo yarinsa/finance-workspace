@@ -45,6 +45,14 @@ A Harel-only run started from the app (`POST /api/sync/harel/login`, workflow id
 signal relays the code typed on `/syncs` through `deliver_otp` to the waiting `scrape_login`. The
 code is in that workflow's Temporal history (single-use, minutes-long, local dev server).
 
+**Retry from the app.** A failed or rejected source shows "נסה שוב" on `/syncs`, which calls the
+GraphQL mutation `syncSourceRetry(id)` (`api/schema/sync.graphql`). The API reads the source's
+`sync_status` entry and continues where it stopped (`api/rebuild.py` `resume_point`): a failure up to
+validation re-runs that source (`FinanceSyncWorkflow([source])`; a live session needs no new login),
+a failure at step 4-5 (digest/publish) skips straight to them (`[source], {"resume": "digest"}`).
+Workflow id `finance-sync-retry-<source>` (Harel: `finance-sync-login-harel`, so a dead session can
+still take the SMS code).
+
 No Discount source needs Chrome any more. Business, mortgage and checking
 (`scrapers/discount/scrape-business.mjs`, `scrape-mortgage.mjs`, `scrape.mjs`, sharing
 `lib.mjs`) log in headless from `.env` (check mode `self`, always "live" in the

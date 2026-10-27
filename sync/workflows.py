@@ -11,6 +11,11 @@ ever logging in.
   gate        validate_dump after each scrape; a rejected dump does not count
   finish      digest once, publish once, if at least one source scraped
 
+A retry from the app (api POST /api/sync/{source}/retry) is a one-source run that continues
+where that source stopped: a failed or rejected scrape runs the whole flow again (a live
+session is not asked to log in again), a failure in digest/publish skips straight to
+`finish` (opts {"resume": "digest"}), since the dump is already on disk and validated.
+
 Every source's progress is also published (publish_status) as its own entry in
 sync-status.json, which the dashboard polls: checking_session -> waiting_for_login ->
 scraping -> validating -> digesting -> publishing -> done, or needs_login / failed /
@@ -286,9 +291,9 @@ class _FinanceSync:
         self._res(source, OK, f"{note}scraped, validation {gate}")
         return OK
 
-    async def run(self, requested=None) -> dict:
+    async def run(self, requested=None, opts=None) -> dict:
         try:
-            return await self._run(requested)
+            return await self._run(requested, opts or {})
         except Exception as e:
             # Anything not already reported (digest/publish failures) still reaches
             # the dashboard as `failed` for every source that was mid-run.
@@ -297,13 +302,19 @@ class _FinanceSync:
                     await self._set(s, "failed", error=_reason(e))
             raise
 
-    async def _run(self, requested=None) -> dict:
+    async def _run(self, requested=None, opts=None) -> dict:
         try:
             order = sources.ordered(requested)
         except ValueError as e:
             raise ApplicationError(str(e), non_retryable=True)
         self._results = {s: {"status": PENDING, "detail": ""} for s in order}
         self._requested = set(order) if requested else set()
+        if (opts or {}).get("resume") == "digest":
+            if not requested:
+                raise ApplicationError("resume needs named sources", non_retryable=True)
+            for s in order:  # scraped and validated by the run that failed later
+                self._res(s, OK, "resumed at digest")
+            return await self._finish(order)
 
         # 1. Preflight: every session, before anything is scraped.
         self._phase = "preflight"
@@ -353,6 +364,9 @@ class _FinanceSync:
             if await self._scrape_one(s, unverified=state[s] == "unknown", login=state[s] == "otp") == NEEDS_LOGIN:
                 expired_groups[group] = s
 
+        return await self._finish(order)
+
+    async def _finish(self, order: list) -> dict:
         # 4. Digest and publish once. A rejected dump is already on disk and the digest
         #    reads it, so the numbers are not published until that source is sorted out.
         scraped = [s for s in order if self._results[s]["status"] == OK]
@@ -426,8 +440,8 @@ class FinanceSyncWorkflow:
         return self._sync.status()
 
     @workflow.run
-    async def run(self, sources: list[str] | None = None) -> dict:
-        return await self._sync.run(sources)
+    async def run(self, sources: list[str] | None = None, opts: dict | None = None) -> dict:
+        return await self._sync.run(sources, opts)
 
 
 @workflow.defn

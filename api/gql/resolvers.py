@@ -31,10 +31,11 @@ from api.schema_bindings import load_schema, snake
 
 from .inputs import (BulkNotificationInput, ClearTransactionOverrideInput, GoalCreateInput, GoalDeleteInput, DeleteTagInput, GroupArgs,
                      GroupOrder, LinkOffsetInput, NotificationArgs, NotificationIdInput, ResetOffsetsInput,
-                     SetTransactionTagsInput, SnoozeAllNotificationsInput, TransactionArgs, TransactionOrder,
+                     SetTransactionTagsInput, SnoozeAllNotificationsInput, SyncSourceRetryInput, TransactionArgs, TransactionOrder,
                      UnlinkOffsetInput, UnreadCountArgs, GoalUpdateInput, UpdateNotificationInput, PlanTargetsUpdateInput, UpdateTagInput,
                      UpdateTransactionInput)
 from .inbox import TYPENAMES, Notification
+from .sync import SyncSource
 from .ledger import CENT, Ledger, Merchant, Txn, offset_candidates, totals
 from .relay import ConnectionArgs, GlobalId, paginate, to_global_id, validated
 
@@ -601,12 +602,49 @@ class PlanTargetsResolver(NodeResolver):
             schema.mutation_type.fields[field].resolve = self._mutation(model, method)
 
 
+class SyncSourceResolver(NodeResolver[SyncSource]):
+    """Each source's latest run (sync_status). Retrying starts a sync on the Mac and changes no
+    ledger data here (the sync publishes when it finishes), so it never signals a rebuild."""
+    type_name = "SyncSource"
+    rebuilds = False
+
+    def key(self, s):
+        return s.source
+
+    def fetch(self, lg, key):
+        return SyncSource.get(lg.conn, key)
+
+    def mutations(self):
+        return {"syncSourceRetry": (SyncSourceRetryInput, self.retry)}
+
+    def retry(self, inp, info):
+        s = self.require(info, inp.id)
+        if not s.retry_from:
+            raise GraphQLError("the last sync of this source did not fail")
+        rebuilder = info.context.get("rebuilder")
+        if rebuilder is None or not rebuilder.retry(s.source, s.retry_from):
+            raise GraphQLError("the sync worker is not reachable")
+        return lambda: {"sync_source": s}
+
+    def resolve_all(self, _, info, **args):
+        a = validated(ConnectionArgs, args)
+        rows = SyncSource.all(ledger(info).conn)   # ordered by source
+        return paginate([{"node": s} for s in rows], lambda e: (e["node"].source,), a)
+
+    def bind(self, schema):
+        super().bind(schema)
+        schema.query_type.fields["syncSources"].resolve = self.resolve_all
+        for name, value in schema.type_map["SyncRetryPoint"].values.items():
+            value.value = name.lower()
+
+
 GOALS = GoalResolver()
 ENTITIES: list[GroupResolver] = [MerchantResolver(), CategoryResolver(), TagResolver(), HorizonResolver(GOALS), GOALS]
 TRANSACTIONS = TransactionResolver(GOALS)
 NOTIFICATIONS = NotificationResolver()
+SYNC_SOURCES = SyncSourceResolver()
 PLAN_TARGETS = PlanTargetsResolver()
-NODES: dict[str, NodeResolver] = {r.type_name: r for r in [TRANSACTIONS, *ENTITIES, NOTIFICATIONS]}
+NODES: dict[str, NodeResolver] = {r.type_name: r for r in [TRANSACTIONS, *ENTITIES, NOTIFICATIONS, SYNC_SOURCES]}
 
 
 class _NodeArgs(BaseModel):
@@ -676,6 +714,7 @@ def build():
     schema.query_type.fields["snapshot"].resolve = resolve_snapshot
     TRANSACTIONS.bind(schema)
     NOTIFICATIONS.bind(schema)
+    SYNC_SOURCES.bind(schema)
     PLAN_TARGETS.bind(schema)
     for entity in ENTITIES:
         entity.bind(schema, ENTITIES)

@@ -247,3 +247,7 @@ class BulkNotificationInput(MutationInput):
 
 class SnoozeAllNotificationsInput(BulkNotificationInput):
     snoozed_until_at: dt.datetime
+
+
+class SyncSourceRetryInput(MutationInput):
+    id: node_id_of("SyncSource")

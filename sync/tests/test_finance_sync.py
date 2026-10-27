@@ -384,3 +384,21 @@ def test_code_for_a_source_not_waiting_is_ignored():
     result = run(fake, scenario, args=[["harel"]])
     assert result["harel"]["status"] == "ok" and fake.of("deliver_otp") == []
     assert fake.of("scrape") == ["harel"]  # a live session needs no code
+
+
+# --- retry from the app: continue where the source stopped ---------------------
+
+def test_retry_after_a_failed_scrape_runs_that_source_again_without_a_new_login():
+    fake = Fake()
+    result = result_of(fake, args=[["harel"]])
+    assert fake.of("scrape") == ["harel"] and fake.of("scrape_login") == []
+    assert result["harel"]["status"] == "ok"
+
+
+def test_retry_resumed_at_digest_skips_session_check_and_scrape():
+    fake = Fake()
+    result = result_of(fake, args=[["harel"], {"resume": "digest"}])
+    assert fake.of("check") == [] and fake.of("scrape") == [] and fake.of("validate") == []
+    assert fake.calls.count(("digest",)) == 1 and fake.calls.count(("publish",)) == 1
+    assert fake.published("harel")[-3:] == ["digesting", "publishing", "done"]
+    assert result["harel"]["status"] == "ok"

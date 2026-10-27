@@ -337,7 +337,8 @@ def create_app(settings=None, pool=None, rebuilder=None, verifier=None, broadcas
 
         def work():
             with db(request) as conn:
-                return endpoint.run(body, conn, user, allow_introspection=bool(settings.dev_user))
+                return endpoint.run(body, conn, user, allow_introspection=bool(settings.dev_user),
+                                    rebuilder=request.app.state.rebuilder)
         status, out, writes = await run_in_threadpool(work)   # committed when work() returns
         if writes:
             await run_in_threadpool(signal_rebuild, request)

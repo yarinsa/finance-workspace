@@ -30,6 +30,27 @@ OTP_SIGNAL = "submit_otp"
 def login_workflow_id(source):
     return f"finance-sync-login-{source}"
 
+
+def retry_workflow_id(source):
+    # An OTP source's retry may have to log in again, and submit_otp signals the login id.
+    return login_workflow_id(source) if source in OTP_SOURCES else f"finance-sync-retry-{source}"
+
+
+RETRYABLE = frozenset({"failed", "rejected"})
+DIGEST_STEP = 4  # sync/workflows.py STEPS: digesting = 4, publishing = 5
+
+
+def resume_point(entry):
+    """Where a retry continues for this sync_status entry: "digest" when the source stopped in
+    digest/publish (its dump is on disk and validated), "scrape" for anything earlier, None when
+    the last run did not fail. A failed entry keeps the step it reached."""
+    if not entry or entry.get("status") not in RETRYABLE:
+        return None
+    if entry["status"] == "failed" and (entry.get("step") or 0) >= DIGEST_STEP:
+        return "digest"
+    return "scrape"
+
+
 IDLE = {"state": "idle", "last_published_at": None, "last_error": None}
 
 
@@ -79,6 +100,20 @@ class Rebuilder:
             return True
         except Exception:
             log.exception("could not start the %s login", source)
+            return False
+
+    def retry(self, source, resume):
+        """Start (or join the running) one-source sync continuing at `resume`. True on success."""
+        args = [[source], {"resume": resume}] if resume == "digest" else [[source]]
+        async def go(client):
+            await client.start_workflow(
+                SYNC_WORKFLOW, args=args, id=retry_workflow_id(source), task_queue=TASK_QUEUE,
+                id_conflict_policy=WorkflowIDConflictPolicy.USE_EXISTING)
+        try:
+            self._run(go)
+            return True
+        except Exception:
+            log.exception("could not start the %s retry", source)
             return False
 
     def submit_otp(self, source, code):

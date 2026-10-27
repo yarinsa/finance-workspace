@@ -32,6 +32,9 @@ type Query {
   """The Goals screen's three general targets; a null amount is unset."""
   planTargets: PlanTargets!
 
+  """Every scraped source's latest sync run (sync.graphql), by source id."""
+  syncSources(first: Int, after: String, last: Int, before: String): SyncSourceConnection!
+
   # inbox (inbox.graphql)
   """Most severe first, then most recently updated."""
   notifications(first: Int, after: String, last: Int, before: String,
@@ -73,6 +76,13 @@ type Mutation {
   goalDelete(id: ID!): DeletePayload!
   """Set any of the general targets; null or 0 unsets one, an omitted one is untouched."""
   planTargetsUpdate(input: PlanTargetsUpdateInput!): PlanTargetsPayload!
+
+  # sync (sync.graphql): no ledger rebuild
+  """
+  Retry a failed or rejected source from where it stopped (`retryFrom`): a one-source sync on
+  the Mac. An error when the last run did not fail or the sync worker is not reachable.
+  """
+  syncSourceRetry(id: ID!): SyncSourcePayload!
 
   # inbox (inbox.graphql): no ledger rebuild
   """Mark read or unread, and/or snooze (or clear the snooze with a null). Snoozing marks it unread."""

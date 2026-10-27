@@ -37,6 +37,9 @@ const CLIENT_VIEW = `${PORTAL}/personal-info/my-harel/Pages/client-view.aspx`;
 const API = 'https://digital.harel-group.co.il/apps.client-view/client-view';
 // Fixed, named endpoint list (same as dump.sh); customer-products is what validate.py requires.
 const ENDPOINTS = ['online-data', 'customer-products', 'client-claims-by-area', 'client-requests'];
+// Supporting context only (no normalizer reads them); Harel answers 200 with an empty body when
+// there are none (2026-10-27: client-claims-by-area), which must not fail the scrape.
+const OPTIONAL = new Set(['client-claims-by-area', 'client-requests']);
 
 class Exit extends Error {
   constructor(code, msg) { super(msg); this.code = code; }
@@ -228,6 +231,10 @@ async function dump(page, name, query) {
     failed = true;
   };
   if (/^\s*<(!doctype|html)/i.test(body)) return reject('LOGIN-SHELL HTML');
+  if (status === 200 && !body.trim() && OPTIONAL.has(name)) {
+    console.log(`  ${status}  ${size}B  ${fname}  (empty, nothing to write)`);
+    return;
+  }
   let parsed;
   try { parsed = JSON.parse(body); } catch { return reject('NOT JSON'); }
   if (status !== 200) return reject(`HTTP ${status}`);

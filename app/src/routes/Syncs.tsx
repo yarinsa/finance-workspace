@@ -3,7 +3,15 @@ import { Card, CardLabel, Page, StubNotice } from "@/components/common";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ApiError, startLogin, submitOtp } from "@/lib/api";
-import { currentSubscription, disablePush, enablePush, pushState, readPushEnv, type PushState } from "@/lib/push";
+import { retrySync, type SyncRetryPoint } from "@/lib/syncRetry";
+import {
+  currentSubscription,
+  disablePush,
+  enablePush,
+  pushState,
+  readPushEnv,
+  type PushState,
+} from "@/lib/push";
 import { daysSince, snapshot, type SourceSync } from "@/lib/data";
 import { fmt, toTime } from "@/lib/dates";
 import {
@@ -58,11 +66,24 @@ function ago(days: number): string {
 }
 
 const num = new Intl.NumberFormat("he-IL");
-const dateTime = new Intl.DateTimeFormat("he-IL", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
-const dateOnly = new Intl.DateTimeFormat("he-IL", { day: "numeric", month: "short", year: "numeric" });
-const timeOnly = new Intl.DateTimeFormat("he-IL", { hour: "2-digit", minute: "2-digit" });
+const dateTime = new Intl.DateTimeFormat("he-IL", {
+  day: "numeric",
+  month: "short",
+  hour: "2-digit",
+  minute: "2-digit",
+});
+const dateOnly = new Intl.DateTimeFormat("he-IL", {
+  day: "numeric",
+  month: "short",
+  year: "numeric",
+});
+const timeOnly = new Intl.DateTimeFormat("he-IL", {
+  hour: "2-digit",
+  minute: "2-digit",
+});
 
-const txDate = (d: string | null | undefined) => fmt(dateOnly, d ? `${d}T12:00:00` : d);
+const txDate = (d: string | null | undefined) =>
+  fmt(dateOnly, d ? `${d}T12:00:00` : d);
 
 /**
  * A source can be scraped today yet carry nothing recent (the endpoint returned
@@ -70,7 +91,11 @@ const txDate = (d: string | null | undefined) => fmt(dateOnly, d ? `${d}T12:00:0
  */
 function txnLagDays(s: SourceSync): number | null {
   if (!s.latest_txn_date) return null;
-  const lag = Math.floor((new Date(s.last_synced).getTime() - new Date(`${s.latest_txn_date}T12:00:00`).getTime()) / 86_400_000);
+  const lag = Math.floor(
+    (new Date(s.last_synced).getTime() -
+      new Date(`${s.latest_txn_date}T12:00:00`).getTime()) /
+      86_400_000,
+  );
   return lag > 14 ? lag : null;
 }
 
@@ -93,16 +118,25 @@ function rank(it: Item): number {
 }
 
 /** Timeline mark per step: done steps are ticks, the step a run ended on carries its outcome. */
-const STEP_MARK: Record<"ok" | "run" | "bad" | "warn", { icon: string; cls: string }> = {
+const STEP_MARK: Record<
+  "ok" | "run" | "bad" | "warn",
+  { icon: string; cls: string }
+> = {
   ok: { icon: "✓", cls: "text-good" },
   run: { icon: "•", cls: "text-brand" },
   bad: { icon: "✕", cls: "text-bad" },
   warn: { icon: "!", cls: "text-warn" },
 };
 
-function stepMark(status: SyncState, last: boolean, running: boolean): (typeof STEP_MARK)["ok"] {
-  if (status === "failed" || status === "rejected" || status === "needs_login") return STEP_MARK.bad;
-  if (status === "waiting_for_login" || status === "waiting_for_otp") return STEP_MARK.warn;
+function stepMark(
+  status: SyncState,
+  last: boolean,
+  running: boolean,
+): (typeof STEP_MARK)["ok"] {
+  if (status === "failed" || status === "rejected" || status === "needs_login")
+    return STEP_MARK.bad;
+  if (status === "waiting_for_login" || status === "waiting_for_otp")
+    return STEP_MARK.warn;
   if (last && running) return STEP_MARK.run;
   return STEP_MARK.ok;
 }
@@ -128,7 +162,8 @@ function Intake({ live }: { live: SourceStatus }) {
   if (!after) return null;
   const before = live.records_before ?? {};
   const tx = after.transactions;
-  const delta = tx != null && before.transactions != null ? tx - before.transactions : null;
+  const delta =
+    tx != null && before.transactions != null ? tx - before.transactions : null;
   const others = Object.entries(after).filter(([e]) => e !== "transactions");
   return (
     <div className="sync-intake">
@@ -169,7 +204,9 @@ function Timeline({ live, running }: { live: SourceStatus; running: boolean }) {
               {mark.icon}
             </span>
             <span>{STATE_PILL[step.status].text}</span>
-            <span className="text-xs text-muted-foreground tabular-nums">{fmt(timeOnly, step.at)}</span>
+            <span className="text-xs text-muted-foreground tabular-nums">
+              {fmt(timeOnly, step.at)}
+            </span>
           </li>
         );
       })}
@@ -216,7 +253,12 @@ function OtpLogin({ source, display }: { source: string; display?: Display }) {
     if (/^\d{4,8}$/.test(code)) void act(() => submitOtp(source, code), "code");
   }
 
-  if (online === false) return <p className="text-xs text-muted-foreground">התחברות מהאפליקציה זמינה כשהמק פועל.</p>;
+  if (online === false)
+    return (
+      <p className="text-xs text-muted-foreground">
+        התחברות מהאפליקציה זמינה כשהמק פועל.
+      </p>
+    );
 
   return (
     <div className="sync-otp">
@@ -224,7 +266,9 @@ function OtpLogin({ source, display }: { source: string; display?: Display }) {
         <form onSubmit={onSubmit} className="flex items-center gap-2">
           <Input
             value={code}
-            onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 8))}
+            onChange={(e) =>
+              setCode(e.target.value.replace(/\D/g, "").slice(0, 8))
+            }
             inputMode="numeric"
             autoComplete="one-time-code"
             placeholder="קוד מה-SMS"
@@ -240,10 +284,69 @@ function OtpLogin({ source, display }: { source: string; display?: Display }) {
       ) : waiting ? (
         <p className="text-xs text-muted-foreground">הקוד נשלח — מתחבר…</p>
       ) : (
-        <Button size="sm" variant="outline" disabled={busy || sent === "login"} onClick={() => void act(() => startLogin(source), "login")}>
+        <Button
+          size="sm"
+          variant="outline"
+          disabled={busy || sent === "login"}
+          onClick={() => void act(() => startLogin(source), "login")}
+        >
           {sent === "login" ? "שולח SMS…" : "התחבר עם קוד SMS"}
         </Button>
       )}
+      {error && <p className="text-xs text-bad">{error}</p>}
+    </div>
+  );
+}
+
+/**
+ * Retry a failed or rejected source. The Mac decides where to continue: a failed scrape is
+ * scraped again (a live session needs no new login), a failure in digest/publish only re-digests.
+ */
+function RetrySync({ source }: { source: string }) {
+  const { online } = useLedgerApi();
+  const [busy, setBusy] = useState(false);
+  const [started, setStarted] = useState<SyncRetryPoint | "started" | null>(
+    null,
+  );
+  const [error, setError] = useState<string | null>(null);
+  if (online === false) return null;
+
+  async function retry() {
+    setBusy(true);
+    setError(null);
+    try {
+      setStarted((await retrySync(source)) ?? "started");
+    } catch (e) {
+      setError(
+        e instanceof ApiError &&
+          e.message === "the last sync of this source did not fail"
+          ? "הסנכרון האחרון לא נכשל"
+          : e instanceof ApiError &&
+              e.message === "the sync worker is not reachable"
+            ? "ה-worker במק לא זמין"
+            : e instanceof ApiError
+              ? e.message || "הפעולה נכשלה"
+              : "המק לא זמין כרגע",
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="sync-otp">
+      <Button
+        size="sm"
+        variant="outline"
+        disabled={busy || started !== null}
+        onClick={() => void retry()}
+      >
+        {started === "DIGEST"
+          ? "ממשיך מבניית הנתונים…"
+          : started
+            ? "מוריד שוב…"
+            : "נסה שוב"}
+      </Button>
       {error && <p className="text-xs text-bad">{error}</p>}
     </div>
   );
@@ -303,7 +406,12 @@ function NotificationsCard() {
       <div className="flex items-center justify-between gap-3">
         <p className="m-0 text-sm text-muted-foreground">{PUSH_HINT[state]}</p>
         {usable && (
-          <Button size="sm" variant={state === "on" ? "outline" : "default"} disabled={busy} onClick={() => void toggle()}>
+          <Button
+            size="sm"
+            variant={state === "on" ? "outline" : "default"}
+            disabled={busy}
+            onClick={() => void toggle()}
+          >
             {busy ? "רגע…" : state === "on" ? "כבה" : "הפעל"}
           </Button>
         )}
@@ -333,14 +441,20 @@ function SyncItem({ it }: { it: Item }) {
       ? "העדכון האחרון מהסנכרון התקבל מזמן — ייתכן שה-worker נפל"
       : (display === "done" && intakeLine(live)) || live.message
     : data && `${fmt(dateTime, data.last_synced)} · ${ago(days ?? 0)}`;
-  const pct = live?.step && live.total_steps ? Math.round((live.step / live.total_steps) * 100) : 0;
+  const pct =
+    live?.step && live.total_steps
+      ? Math.round((live.step / live.total_steps) * 100)
+      : 0;
   const failed = display === "failed" || display === "rejected";
 
   return (
     <details className="sync-item group/sync" open={attention}>
       <summary className="flex cursor-pointer list-none items-center justify-between gap-3 py-2.5">
         <span className="flex min-w-0 items-center gap-2">
-          <span className="text-muted-foreground transition-transform group-open/sync:-rotate-90" aria-hidden>
+          <span
+            className="text-muted-foreground transition-transform group-open/sync:-rotate-90"
+            aria-hidden
+          >
             ‹
           </span>
           <span className="flex min-w-0 flex-col">
@@ -348,7 +462,11 @@ function SyncItem({ it }: { it: Item }) {
               {SOURCE_LABEL[it.source] ?? it.source}
               <span className="sync-mode">{live ? "אוטומטי" : "ידני"}</span>
             </span>
-            {sub && <span className="truncate text-xs text-muted-foreground">{sub}</span>}
+            {sub && (
+              <span className="truncate text-xs text-muted-foreground">
+                {sub}
+              </span>
+            )}
           </span>
         </span>
         <span className="sync-value shrink-0">
@@ -362,7 +480,13 @@ function SyncItem({ it }: { it: Item }) {
 
       <div className="sync-body">
         {running && (
-          <div className="live-progress" role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100}>
+          <div
+            className="live-progress"
+            role="progressbar"
+            aria-valuenow={pct}
+            aria-valuemin={0}
+            aria-valuemax={100}
+          >
             <span style={{ width: `${pct}%` }} />
           </div>
         )}
@@ -371,7 +495,10 @@ function SyncItem({ it }: { it: Item }) {
             {live.error}
           </pre>
         )}
-        {OTP_SOURCES.has(it.source) && <OtpLogin key={live?.run_id} source={it.source} display={display} />}
+        {failed && <RetrySync key={live?.run_id} source={it.source} />}
+        {OTP_SOURCES.has(it.source) && (
+          <OtpLogin key={live?.run_id} source={it.source} display={display} />
+        )}
         {live && <Intake live={live} />}
         {live && <Timeline live={live} running={running} />}
 
@@ -380,7 +507,9 @@ function SyncItem({ it }: { it: Item }) {
             <dt>נתונים מעודכנים</dt>
             <dd>
               {fmt(dateTime, data.last_synced)}
-              {lag != null && <span className="sync-lag">פער של {lag} ימים</span>}
+              {lag != null && (
+                <span className="sync-lag">פער של {lag} ימים</span>
+              )}
             </dd>
             {data.latest_txn_date && (
               <>
@@ -421,7 +550,8 @@ export default function Syncs() {
     return (
       <Page title="סנכרונים">
         <StubNotice status="אין נתונים">
-          אין עדיין נתוני סנכרון — הריצו <code>python3 data/digest.py</code> ואז sync-data.
+          אין עדיין נתוני סנכרון — הריצו <code>python3 data/digest.py</code> ואז
+          sync-data.
         </StubNotice>
       </Page>
     );
@@ -431,21 +561,32 @@ export default function Syncs() {
   for (const s of syncs) bySource.set(s.source, { source: s.source, data: s });
   // A source the newest run left out (e.g. moved off the schedule) keeps its last entry in
   // sync-status.json; that old "needs login" is not current, so judge it like a manual source.
-  const newestRun = Math.max(0, ...Object.values(liveSources).map((s) => toTime(s.started_at)));
+  const newestRun = Math.max(
+    0,
+    ...Object.values(liveSources).map((s) => toTime(s.started_at)),
+  );
   for (const [source, s] of Object.entries(liveSources)) {
     if (newestRun - toTime(s.started_at) > DROPPED_AFTER_MS) continue;
-    bySource.set(source, { ...(bySource.get(source) ?? { source }), live: s, display: displayState(s) });
+    bySource.set(source, {
+      ...(bySource.get(source) ?? { source }),
+      live: s,
+      display: displayState(s),
+    });
   }
   const items = [...bySource.values()].sort(
-    (a, b) => rank(a) - rank(b) || (a.data?.last_synced ?? "").localeCompare(b.data?.last_synced ?? ""),
+    (a, b) =>
+      rank(a) - rank(b) ||
+      (a.data?.last_synced ?? "").localeCompare(b.data?.last_synced ?? ""),
   );
   const stale = syncs.filter((s) => daysSince(s.last_synced) > 7).length;
 
   return (
     <Page title="סנכרונים">
       <p className="muted">
-        {stale ? `${stale} מקורות לא סונכרנו מעל שבוע.` : "כל המקורות סונכרנו בשבוע האחרון."} הנתונים חושבו{" "}
-        {ago(daysSince(snapshot.generated_at))}.
+        {stale
+          ? `${stale} מקורות לא סונכרנו מעל שבוע.`
+          : "כל המקורות סונכרנו בשבוע האחרון."}{" "}
+        הנתונים חושבו {ago(daysSince(snapshot.generated_at))}.
       </p>
       <NotificationsCard />
       <Card>

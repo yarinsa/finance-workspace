@@ -87,7 +87,7 @@ def pool(test_url, owner):
 class FakeRebuilder:
     def __init__(self):
         self.signals = 0
-        self.logins, self.codes = [], []
+        self.logins, self.codes, self.retries = [], [], []
         self.state = {"state": "idle", "last_published_at": None, "last_error": None}
 
     def signal_edited(self):
@@ -108,6 +108,10 @@ class FakeRebuilder:
 
     def start_login(self, source):
         self.logins.append(source)
+        return self.up
+
+    def retry(self, source, resume):
+        self.retries.append((source, resume))
         return self.up
 
     def submit_otp(self, source, code):

@@ -1,0 +1,45 @@
+# Scheduled sync (sync/): each scraped source's latest run, from Postgres `sync_status`, which the
+# worker writes. Live progress still arrives over SSE (`/api/sync/events`); this is the
+# GraphQL view of the same row plus the one thing the app can ask of a failed run: retry it.
+
+"""Where a retry continues: scrape the source again, or straight to digest + publish."""
+enum SyncRetryPoint {
+  """The scrape or its validation failed: run the source again (a live session needs no new login)."""
+  SCRAPE
+  """The dump is on disk and validated; only digest and publish failed."""
+  DIGEST
+}
+
+"""One scraped source's latest sync run."""
+type SyncSource implements Node {
+  id: ID!
+  """The source id, e.g. "harel"."""
+  source: String!
+  """checking_session … done, or needs_login / failed / rejected."""
+  status: String!
+  message: String
+  """The last step the run reached (1-5), kept on a failure."""
+  step: Int
+  totalSteps: Int
+  error: String
+  startedAt: DateTime
+  updatedAt: DateTime
+  """Where `syncSourceRetry` would continue; null when the last run did not fail."""
+  retryFrom: SyncRetryPoint
+}
+
+type SyncSourceConnection {
+  edges: [SyncSourceEdge!]!
+  pageInfo: PageInfo!
+  totalCount: Int!
+}
+
+type SyncSourceEdge {
+  cursor: String!
+  node: SyncSource!
+}
+
+type SyncSourcePayload {
+  success: Boolean!
+  syncSource: SyncSource
+}

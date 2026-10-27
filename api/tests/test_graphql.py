@@ -6,6 +6,7 @@ CARD_BILL (-500, חיובי כרטיס). Each test is a question the dashboard a
 import pytest
 
 import ledger
+from psycopg.types.json import Jsonb
 from api.tests.conftest import LEDGER, ME, PURCHASE_URL, WRITE
 
 GQL = "/api/graphql"
@@ -466,3 +467,52 @@ def test_invalid_plan_targets_input_is_an_error_and_signals_nothing(client, rebu
     status, body = gql(client, UPDATE_TARGETS, input=inp)
     assert body.get("errors") and rebuilder.signals == 0
     assert data(client, TARGETS)["planTargets"] == NO_TARGETS
+
+
+# --- sync sources: retry a failed sync from where it stopped ------------------------------
+
+RETRY = """mutation($id: ID!) { syncSourceRetry(id: $id) { success syncSource { id source status retryFrom } } }"""
+
+
+def _status(owner, source, entry):
+    owner.execute("INSERT INTO sync_status(source, entry, updated_at) VALUES (%s, %s, now()) "
+                  "ON CONFLICT (source) DO UPDATE SET entry = EXCLUDED.entry", (source, Jsonb(entry)))
+    owner.execute("DELETE FROM sync_status WHERE source = 'no-such-source'")
+    owner.commit()
+
+
+@pytest.mark.parametrize("entry, resume", [
+    ({"status": "failed", "step": 2}, "scrape"),     # the scrape failed (2026-10-27: Harel, empty claims body)
+    ({"status": "rejected", "step": 3}, "scrape"),   # a bad dump is scraped again
+    ({"status": "failed", "step": 4}, "digest"),     # dump on disk and validated: digest + publish only
+    ({"status": "failed", "step": 5}, "digest"),
+])
+def test_retry_continues_where_the_source_stopped(client, owner, rebuilder, entry, resume):
+    _status(owner, "retry-test", entry)
+    out = data(client, RETRY, id=to_global_id("SyncSource", "retry-test"))["syncSourceRetry"]
+    assert out["success"] and out["syncSource"]["retryFrom"] == resume.upper()
+    assert rebuilder.retries == [("retry-test", resume)] and rebuilder.signals == 0
+
+
+def test_sync_sources_lists_each_run_with_where_a_retry_would_continue(client, owner):
+    _status(owner, "retry-test", {"status": "done", "step": 5, "message": "הסנכרון הושלם"})
+    conn = data(client, "{ syncSources { totalCount edges { node { source status step retryFrom message } } } }")["syncSources"]
+    rows = [e["node"] for e in conn["edges"]]
+    assert {"source": "retry-test", "status": "done", "step": 5, "retryFrom": None,
+            "message": "הסנכרון הושלם"} in rows
+
+
+def test_retry_refuses_a_source_that_did_not_fail_or_does_not_exist(client, owner, rebuilder):
+    _status(owner, "retry-test", {"status": "done", "step": 5})
+    _, body = gql(client, RETRY, id=to_global_id("SyncSource", "retry-test"))
+    assert body["errors"][0]["message"] == "the last sync of this source did not fail"
+    _, body = gql(client, RETRY, id=to_global_id("SyncSource", "no-such-source"))
+    assert body["errors"][0]["message"] == "no such syncsource"
+    assert rebuilder.retries == []
+
+
+def test_retry_with_the_worker_down_is_an_error(client, owner, rebuilder):
+    _status(owner, "retry-test", {"status": "failed", "step": 2})
+    rebuilder.up = False
+    _, body = gql(client, RETRY, id=to_global_id("SyncSource", "retry-test"))
+    assert body["errors"][0]["message"] == "the sync worker is not reachable"
