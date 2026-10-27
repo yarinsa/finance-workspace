@@ -237,10 +237,10 @@ export interface History {
 
 export interface HorizonBucket {
   amount: number;
-  /** Share of the month's net income, in percent. */
-  pct: number;
-  /** pct minus target_pct, in percentage points. */
-  gap_pts: number;
+  /** Share of the month's net income, in percent; null while the month has no income yet. */
+  pct: number | null;
+  /** pct minus target_pct, in percentage points; null when pct is. */
+  gap_pts: number | null;
   count: number;
   /** The target share of income for this horizon (the `horizons` table), in percent. */
   target_pct?: number;
@@ -278,7 +278,7 @@ export interface Horizons {
     month: string;
     income: number;
     buckets: Record<"current" | "near" | "future", HorizonBucket>;
-    unallocated: { amount: number; pct: number };
+    unallocated: { amount: number; pct: number | null };
   }[];
 }
 

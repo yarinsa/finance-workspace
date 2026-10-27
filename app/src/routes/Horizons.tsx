@@ -23,8 +23,10 @@ const ON_TRACK = 5;
 
 /** The biggest miss this month, as one sentence. */
 function verdict(m: Month, target: number, order: Horizon[]): { text: string; ok: boolean } {
-  const worst = order.reduce((a, b) => (Math.abs(m.buckets[b].gap_pts) > Math.abs(m.buckets[a].gap_pts) ? b : a));
-  const gap = m.buckets[worst].gap_pts;
+  if (m.income <= 0) return { text: "עדיין אין הכנסה החודש, אז אין חלוקה להשוות", ok: true };
+  const gapOf = (h: Horizon) => m.buckets[h].gap_pts ?? 0;
+  const worst = order.reduce((a, b) => (Math.abs(gapOf(b)) > Math.abs(gapOf(a)) ? b : a));
+  const gap = gapOf(worst);
   if (Math.abs(gap) <= ON_TRACK) return { text: "החלוקה קרובה ליעד", ok: true };
   const pts = Math.abs(gap).toFixed(0);
   const amount = shekel((Math.abs(gap) / 100) * m.income);
@@ -35,7 +37,7 @@ function verdict(m: Month, target: number, order: Horizon[]): { text: string; ok
 
 /** One stacked bar of the month: each bucket's share of net income, target marks at 33/67/100. */
 function SplitBar({ m, order }: { m: Month; order: Horizon[] }) {
-  const parts = [...order.map((h) => [h, m.buckets[h].pct] as const), ["unallocated", m.unallocated.pct] as const];
+  const parts = [...order.map((h) => [h, m.buckets[h].pct ?? 0] as const), ["unallocated", m.unallocated.pct ?? 0] as const];
   const total = Math.max(100, parts.reduce((s, [, p]) => s + Math.max(0, p), 0));
   return (
     <div className="relative mt-3 flex h-3 overflow-hidden rounded-full bg-panel-2" dir="ltr">
@@ -103,7 +105,7 @@ export default function Horizons() {
 
       <Card className="h-auto">
         <CardLabel>לאני של העתיד (פרישה) · יעד {target}%</CardLabel>
-        <BigNumber tone={Math.abs(future.gap_pts) <= ON_TRACK ? "good" : "bad"}>{future.pct.toFixed(0)}% מההכנסה</BigNumber>
+        <BigNumber tone={Math.abs(future.gap_pts ?? 0) <= ON_TRACK ? "good" : "bad"}>{future.pct == null ? "—" : `${future.pct.toFixed(0)}% מההכנסה`}</BigNumber>
         <div className={`mt-1 text-sm font-semibold ${v.ok ? "text-good" : "text-warn"}`}>{v.text}</div>
         <SplitBar m={m} order={order} />
         <div className="mt-2 text-xs text-muted-foreground">
@@ -116,6 +118,7 @@ export default function Horizons() {
           {[...order, "unallocated" as const].map((k) => {
             const b = k === "unallocated" ? null : m.buckets[k];
             const pct = b ? b.pct : m.unallocated.pct;
+            const gap = b?.gap_pts ?? null;
             const amount = b ? b.amount : m.unallocated.amount;
             return (
               <div key={k} className="flex items-center gap-3 border-line py-2 [&+&]:border-t">
@@ -128,11 +131,11 @@ export default function Horizons() {
                   </div>
                 </div>
                 <div className="text-end tabular-nums">
-                  <div className="text-sm font-semibold">{pct.toFixed(1)}%</div>
-                  {b && (
-                    <div className={`text-xs ${Math.abs(b.gap_pts) <= ON_TRACK ? "text-good" : "text-warn"}`}>
-                      {b.gap_pts > 0 ? "+" : ""}
-                      {b.gap_pts.toFixed(1)} נק׳ מהיעד
+                  <div className="text-sm font-semibold">{pct == null ? "—" : `${pct.toFixed(1)}%`}</div>
+                  {gap != null && (
+                    <div className={`text-xs ${Math.abs(gap) <= ON_TRACK ? "text-good" : "text-warn"}`}>
+                      {gap > 0 ? "+" : ""}
+                      {gap.toFixed(1)} נק׳ מהיעד
                     </div>
                   )}
                 </div>
