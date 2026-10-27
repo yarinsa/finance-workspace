@@ -1,19 +1,17 @@
 import { useState } from "react";
 import BudgetEditorSheet from "@/components/BudgetEditorSheet";
-import { BigNumber, Card, CardLabel, Page, Section, StatRow } from "@/components/common";
+import { BigNumber, Card, CardLabel, Page, ProgressBar, Section, StatRow } from "@/components/common";
 import { cashflow, shekel } from "@/lib/data";
 import type { BudgetCategory, BudgetSummary, Budgets as BudgetsData } from "@/lib/budgets";
 
-/** Thin progress bar; overspend fills it fully in red. */
-function Bar({ pct, over }: { pct: number; over?: boolean }) {
-  return (
-    <div className="h-2 overflow-hidden rounded-full bg-line">
-      <div
-        className={`h-full rounded-full ${over ? "bg-bad" : pct >= 90 ? "bg-warn" : "bg-brand"}`}
-        style={{ width: `${Math.min(Math.max(pct, 0), 100)}%` }}
-      />
-    </div>
-  );
+/** The calm bar: always forest; the amount next to it carries the verdict (principle 2). */
+function Bar({ pct }: { pct: number }) {
+  return <ProgressBar value={pct / 100} />;
+}
+
+/** Terracotta when over, ochre when nearly spent, otherwise plain. */
+function amountTone(pct: number, over: boolean): string {
+  return over ? "text-bad" : pct >= 90 ? "text-warn" : "";
 }
 
 function Hero({ b }: { b: BudgetsData }) {
@@ -26,7 +24,7 @@ function Hero({ b }: { b: BudgetsData }) {
         {over ? `${shekel(-b.left)} מעל התקציב` : `${shekel(b.left)} נותרו`}
       </BigNumber>
       <div className="mt-3">
-        <Bar pct={pct} over={over} />
+        <Bar pct={pct} />
       </div>
       <div className="mt-2 text-sm text-muted-foreground">
         {shekel(b.total_spent)} מתוך {shekel(b.total_planned)}
@@ -88,11 +86,11 @@ function Row({ c, onOpen }: { c: BudgetCategory; onOpen: () => void }) {
           {c.name}
           {c.source === "unplanned" && <span className="ms-1.5 text-xs font-normal text-muted-foreground">לא מתוכנן</span>}
         </span>
-        <span className={`text-sm font-semibold tabular-nums ${c.over ? "text-bad" : ""}`}>
+        <span className={`text-sm font-semibold tabular-nums ${amountTone(pct, c.over)}`}>
           {c.source === "unplanned" ? shekel(c.spent) : c.over ? `${shekel(-c.left)} מעל` : `${shekel(c.left)} נותרו`}
         </span>
       </div>
-      <Bar pct={pct} over={c.over} />
+      <Bar pct={pct} />
       <div className="mt-1.5 text-xs text-muted-foreground tabular-nums">
         {shekel(c.spent)} מתוך {shekel(c.planned)}
         {c.estimate != null && ` · בחודש רגיל ${shekel(c.estimate)}`}
