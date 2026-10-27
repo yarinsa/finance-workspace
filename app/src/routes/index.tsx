@@ -1,13 +1,11 @@
 import type { ComponentType } from "react";
 import {
   CalendarRange,
-  ClipboardList,
   Gauge,
   House,
   Inbox as InboxIcon,
   Landmark,
   RefreshCw,
-  Sparkles,
   Target,
   CalendarCheck,
   Compass,
@@ -17,12 +15,10 @@ import {
 } from "lucide-react";
 import Overview from "./Overview";
 import Inbox from "./Inbox";
-import Summary from "./Summary";
 import Goals from "./Goals";
 import Networth from "./Networth";
 import Metrics from "./Metrics";
 import Timeline from "./Timeline";
-import MyPlan from "./MyPlan";
 import Syncs from "./Syncs";
 import Monthly from "./Monthly";
 import Plan from "./Plan";
@@ -129,20 +125,6 @@ export const routes: RouteDef[] = [
     group: "plan",
     Component: Goals,
   },
-  {
-    path: "/summary",
-    label: "סיכום התוכנית",
-    icon: ClipboardList,
-    group: "plan",
-    Component: Summary,
-  },
-  {
-    path: "/my-plan",
-    label: "תכנון פלוס",
-    icon: Sparkles,
-    group: "plan",
-    Component: MyPlan,
-  },
 
   {
     path: "/syncs",
@@ -160,6 +142,7 @@ export const redirects: { from: string; to: string }[] = [
   { from: "/forecast", to: "/monthly?view=forecast" },
   { from: "/runway", to: "/monthly?view=forecast" },
   { from: "/recommendations", to: "/inbox?tab=suggestions" },
+  { from: "/summary", to: "/plan" },
   { from: "/portfolio", to: "/overview?lens=savings&holdings=1" },
 ];
 

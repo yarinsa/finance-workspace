@@ -1,4 +1,5 @@
 import { Card, CardLabel, Page, Section } from "@/components/common";
+import NetWorthChart from "@/components/NetWorthChart";
 import GroupLinks from "@/components/GroupLinks";
 import { goals } from "@/lib/data";
 
@@ -7,6 +8,10 @@ export default function Plan() {
   const personal = goals.personal_goals ?? [];
   return (
     <Page title="יעדים ותכנון">
+      <Card>
+        <CardLabel>המסע הפיננסי שלי</CardLabel>
+        <NetWorthChart height={280} />
+      </Card>
       {personal.length > 0 && (
         <Section title="יעדים" to="/goals">
           <Card to="/goals">
