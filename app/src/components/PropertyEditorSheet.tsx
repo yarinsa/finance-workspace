@@ -3,7 +3,9 @@ import { fetchQuery, graphql, useMutation } from "react-relay";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { getDataVersion } from "@/lib/data";
 import { failureMessage } from "@/lib/mutationError";
+import { recordProperty } from "@/lib/propertyOverlay";
 import { environment } from "@/lib/relay";
 import { useLedgerApi } from "@/lib/useLedgerApi";
 import type { PropertyEditorSheetQuery } from "@/__generated__/PropertyEditorSheetQuery.graphql";
@@ -101,7 +103,13 @@ function Form({ property, onClose }: { property: Existing | null; onClose: () =>
   const amount = parse(value);
   const changed = amount != null && (property == null || amount !== Number(property.value) || label.trim() !== property.label);
 
-  const done = () => {
+  const done = (r: { readonly asset?: { readonly value: string; readonly valuedAt: string } | null } | null) => {
+    if (r?.asset) {
+      recordProperty({
+        version: getDataVersion(),
+        property: { label: label.trim() || "דירה", value: Number(r.asset.value), valued_at: r.asset.valuedAt },
+      });
+    }
     setBusy(false);
     markDirty();
     onClose();
@@ -117,9 +125,9 @@ function Form({ property, onClose }: { property: Existing | null; onClose: () =>
     setError(null);
     const money = amount.toFixed(2);
     if (property) {
-      update({ variables: { id: property.id, input: { value: money, label: label.trim() } }, onCompleted: done, onError: failed });
+      update({ variables: { id: property.id, input: { value: money, label: label.trim() } }, onCompleted: (r) => done(r.assetUpdate), onError: failed });
     } else {
-      create({ variables: { input: { kind: "PROPERTY", label: label.trim() || "דירה", value: money } }, onCompleted: done, onError: failed });
+      create({ variables: { input: { kind: "PROPERTY", label: label.trim() || "דירה", value: money } }, onCompleted: (r) => done(r.assetCreate), onError: failed });
     }
   };
 
