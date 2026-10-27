@@ -111,6 +111,26 @@ function ChargeRow({ c, onOpen }: { c: ChargeItem; onOpen: () => void }) {
 }
 
 /** A category or budget line: amount, and for a planned line its bar (spent of planned) and usual month. */
+/** A utility's bill on its variable row: "חשבון" + paid / due / overdue (/ estimated). */
+function BillStatus({ c }: { c: ChargeItem }) {
+  return (
+    <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground tabular-nums">
+      <span className="font-semibold">חשבון</span>
+      {c.status === "paid" && <span>שולם ✓</span>}
+      {c.status === "overdue" && (
+        <StatusPill tone="warn">עוד לא חויב</StatusPill>
+      )}
+      {c.status === "upcoming" && (
+        <span>
+          {c.due_day != null ? `צפוי ב-${num(c.due_day)}` : "צפוי החודש"} ·{" "}
+          {shekel(c.amount)}
+        </span>
+      )}
+      {c.estimated && <span>משוער</span>}
+    </div>
+  );
+}
+
 function CategoryRow({ l, onOpen }: { l: Line; onOpen: () => void }) {
   const b = l.budget;
   const planned = b && b.source !== "unplanned" ? b : null;
@@ -128,7 +148,7 @@ function CategoryRow({ l, onOpen }: { l: Line; onOpen: () => void }) {
       <div className="flex items-baseline justify-between gap-3">
         <span className="min-w-0 truncate">
           {l.name}
-          {b?.source === "unplanned" && (
+          {b?.source === "unplanned" && !l.bill && (
             <span className="ms-1.5 text-xs text-muted-foreground">
               לא מתוכנן
             </span>
@@ -150,6 +170,7 @@ function CategoryRow({ l, onOpen }: { l: Line; onOpen: () => void }) {
           <ProgressBar value={pct / 100} />
         </div>
       )}
+      {l.bill && <BillStatus c={l.bill} />}
       {b && (
         <div className="mt-1 text-xs text-muted-foreground tabular-nums">
           {planned

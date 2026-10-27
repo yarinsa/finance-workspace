@@ -128,3 +128,13 @@ def test_merchant_fixed_by_decision_is_one_bill_whatever_the_amount():
               for m, a in ((7, -160.0), (8, -240.0), (9, -200.0))]
     b = build(ledger)
     assert [(i["name"], i["amount"], i["status"]) for i in b["items"]] == [("גורביץ מרק", 200.0, "upcoming")]
+
+
+def test_electricity_under_two_payee_names_is_one_bill():
+    """חב החשמל-דן (Aug, Sep) and חברת החשמל לישראל ₪499.06 on 2026-10-10 are one
+    electricity bill, paid this cycle."""
+    ledger = [tx("2026-08-18", "חב החשמל-דן תש אינט'", -691.0, "חשמל", kind="variable"),
+              tx("2026-09-18", "חב החשמל-דן תש אינט'", -611.37, "חשמל", kind="variable"),
+              tx("2026-10-10", 'חברת החשמל לישראל בע"מ', -499.06, "חשמל", kind="variable")]
+    items = build(ledger)["items"]
+    assert [(i["category"], i["status"], i["amount"]) for i in items] == [("חשמל", "paid", 499.06)]

@@ -263,3 +263,41 @@ describe("chargeHint", () => {
     ).toMatch(/^לא חויב מאז/);
   });
 });
+
+describe("utility bills", () => {
+  it("electricity's bill rides on its משתנה row, not under קבוע", () => {
+    const sections = buildMonthList({
+      bills: {
+        month: "2026-10",
+        cycle_start: "2026-10-01",
+        cycle_end: "2026-10-31",
+        paid_total: 0,
+        upcoming_total: 0,
+        overdue_total: 611.37,
+        items: [
+          {
+            name: "חב החשמל-דן תש אינט'",
+            category: "חשמל",
+            group: "חשבונות",
+            kind: "bill",
+            amount: 611.37,
+            due_day: 18,
+            due_date: "2026-10-18",
+            status: "overdue",
+            paid_on: null,
+            estimated: true,
+          },
+        ],
+      },
+    });
+    const fixed = sections.find((s) => s.key === "fixed");
+    expect(fixed?.groups.flatMap((g) => g.lines) ?? []).toHaveLength(0);
+    const v = sections.find((s) => s.key === "variable")!;
+    const line = v.groups
+      .flatMap((g) => g.lines)
+      .find((l) => l.category === "חשמל")!;
+    expect(line.bill?.status).toBe("overdue");
+    expect(line.amount).toBe(0);
+    expect(v.groups.find((g) => g.name === "חשבונות")?.alert).toBe(true);
+  });
+});

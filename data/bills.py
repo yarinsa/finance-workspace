@@ -12,7 +12,8 @@ mortgage step-up starts a new series. Two kinds of series are bills:
   (סילוק פיגור) are הלוואה but not a bill. Expected amount = the latest charge; day = its day of month.
   This is what brings in AWS, SUPERHUMAN or ANTHROPIC, which RiseUp never had.
 - **Utilities** (``UTILITIES``: electricity, water, gas, ארנונה): usage-priced and
-  often bi-monthly, so never ``fixed``. Their cadence (1 or 2 months) is the median
+  often bi-monthly, so never ``fixed``. One series per utility category, whatever the
+  payee name ("חב החשמל-דן" and "חברת החשמל לישראל" are one electricity bill). Their cadence (1 or 2 months) is the median
   gap between charges; the next one is the last + cadence; the amount is the median
   of the last three (``estimated``).
 
@@ -140,7 +141,8 @@ def _utility_series(transactions, start, end):
     by_merchant = defaultdict(list)
     for t in _expense_rows(transactions):
         if t.get("category") in UTILITIES and t["date"][:10] <= end.isoformat():
-            by_merchant[t.get("merchant") or merchant_name(t.get("description"))].append(t)
+            # one bill per utility: the electric company bills under two payee names
+            by_merchant[t["category"]].append(t)
     out = []
     for rows in by_merchant.values():
         rows.sort(key=lambda t: t["date"])

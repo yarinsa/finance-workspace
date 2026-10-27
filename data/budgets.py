@@ -292,7 +292,9 @@ def build_budgets(budget, transactions, as_of, overrides=None, ledger=None, expe
     month = budget.get("budgetDate") or as_of.strftime("%Y-%m")
     start_day = int(budget.get("cashflowStartDay") or 1)
     start, end = cycle_bounds(month, start_day)
-    planned_by = planned_lines(budget)
+    # Once seeded (`budgets.py seed`), the household's store is the whole plan: a line
+    # removed from it is gone, not back to RiseUp's (e.g. its ₪1 placeholders).
+    planned_by = {} if overrides else planned_lines(budget)
     cur = _cycle_rows(transactions, month, start_day)
     history_months = _covered_months(transactions, month, HISTORY_CYCLES)
     estimate_months = _covered_months(transactions, month, ESTIMATE_CYCLES)
@@ -310,6 +312,9 @@ def build_budgets(budget, transactions, as_of, overrides=None, ledger=None, expe
     for name in [*names, *sorted(unplanned)]:
         if name in unplanned and not any(line_spent(by_month[m], name) for m in estimate_months):
             continue
+        if name in unplanned and not line_spent(cur, name) \
+                and not median(line_spent(by_month[m], name) for m in estimate_months):
+            continue   # nothing this month and a ₪0 usual month: not worth a line
         scope = "group" if name in categories.GROUP_KEY and name not in categories.CATEGORY_GROUP else "category"
         source = "override" if name in overrides else "riseup" if name in planned_by else "unplanned"
         planned = overrides[name] if source == "override" else planned_by.get(name, 0.0)

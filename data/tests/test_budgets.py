@@ -299,3 +299,12 @@ class TestPlanBaseline:
         ledger = [row(f"2026-{m:02d}-05", "פז אפליקצית-YELLOW", -36.0, "דלק") for m in range(5, 11)]
         names = [c["name"] for c in build([env("תחבורה", 200)], ledger)["categories"]]
         assert names == ["תחבורה"]
+
+
+    def test_a_line_removed_from_the_seeded_plan_is_not_riseups_again(self):
+        """After seeding, דייטים's ₪1 RiseUp placeholder was removed: it shows only as
+        unplanned with its average, never as "₪1, over budget"."""
+        ledger = [row(f"2026-{m:02d}-12", "גילי קופי האוס", -150.0, "דייטים", group="פנאי") for m in range(5, 11)]
+        b = build([env("דייטים", 1), env("אוכל בחוץ", 1000)], ledger, overrides={"אוכל בחוץ": 1000})
+        c = next(c for c in b["categories"] if c["name"] == "דייטים")
+        assert (c["source"], c["planned"], c["over"]) == ("unplanned", 0, False)

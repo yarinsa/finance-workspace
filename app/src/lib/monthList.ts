@@ -74,7 +74,12 @@ export interface Line {
   amount: number;
   budget?: BudgetCategory;
   charge?: ChargeItem;
+  /** A utility's bill (electricity, water, gas): its status on the variable row. */
+  bill?: ChargeItem;
 }
+
+/** Usage-priced bills: variable spending, so listed under משתנה with a "חשבון" status. */
+export const UTILITY_CATEGORIES = new Set(["חשמל", "מים", "גז"]);
 
 export interface GroupBlock {
   name: string;
@@ -220,8 +225,13 @@ export function buildMonthList({
           bills?.items ?? [],
         )
       : null;
+  const utilityBills = new Map<string, ChargeItem & { group: string | null }>();
   if (charges) {
     for (const [i, c] of charges.entries()) {
+      if (!c.loan && c.category && UTILITY_CATEGORIES.has(c.category)) {
+        utilityBills.set(c.category, c);
+        continue;
+      }
       const section: SectionKey = c.loan ? "debt_savings" : "fixed";
       lines.push({
         key: `charge|${i}|${c.name}`,
@@ -273,6 +283,26 @@ export function buildMonthList({
     for (const l of sums.values()) if (l.section === "variable") lines.push(l);
   }
 
+  // A utility's bill status rides on its variable row; a bill due with nothing spent
+  // yet still gets a row (₪0) so the status is visible.
+  for (const [category, bill] of utilityBills) {
+    const row = lines.find(
+      (l) => l.section === "variable" && l.category === category,
+    );
+    if (row) row.bill = bill;
+    else
+      lines.push({
+        key: `bill|${category}`,
+        section: "variable",
+        group: bill.group ?? OTHER_GROUP,
+        name: category,
+        category,
+        scope: "category",
+        amount: 0,
+        bill,
+      });
+  }
+
   const savings = month?.excluded.savings;
   if (savings && savings.amount > 0) {
     lines.push({
@@ -291,7 +321,9 @@ export function buildMonthList({
     .map((key) => {
       const groups = new Map<string, GroupBlock>();
       for (const l of lines.filter(
-        (x) => x.section === key && (x.amount > 0.005 || x.budget || x.charge),
+        (x) =>
+          x.section === key &&
+          (x.amount > 0.005 || x.budget || x.charge || x.bill),
       )) {
         const g = groups.get(l.group) ?? {
           name: l.group,
@@ -301,7 +333,12 @@ export function buildMonthList({
         };
         g.lines.push(l);
         g.total += l.amount;
-        if (l.budget?.over || l.charge?.status === "overdue") g.alert = true;
+        if (
+          l.budget?.over ||
+          l.charge?.status === "overdue" ||
+          l.bill?.status === "overdue"
+        )
+          g.alert = true;
         if (l.charge?.lever_key === "subscriptions" && l.charge.lever)
           g.lever = l.charge.lever;
         groups.set(l.group, g);
