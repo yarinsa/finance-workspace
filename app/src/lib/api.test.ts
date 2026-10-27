@@ -1,25 +1,21 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { ApiError, ApiOffline, getHealth, getTransaction, ledgerKey, listTransactions, patchTransaction, resetTransaction } from "./api";
+import { ApiOffline, getHealth, getTransaction, ledgerKey, listTransactions, patchTransaction, resetTransaction } from "./api";
+import { getAppStatus, setAppStatus } from "./appStatus";
 import { buildPatch } from "./editPatch";
+import { graphqlRequest } from "./relay";
 
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
 
-/** Minimal in-memory Storage (vitest runs in node, which has no sessionStorage). */
-function memoryStorage(): Pick<Storage, "getItem" | "setItem" | "clear"> {
-  const m = new Map<string, string>();
-  return { getItem: (k) => m.get(k) ?? null, setItem: (k, v) => void m.set(k, v), clear: () => m.clear() };
-}
-
 const fetchMock = vi.fn();
-const reload = vi.fn();
+const assign = vi.fn();
 
 beforeEach(() => {
   fetchMock.mockReset();
-  reload.mockReset();
+  assign.mockReset();
+  setAppStatus({ sessionExpired: false });
   vi.stubGlobal("fetch", fetchMock);
-  vi.stubGlobal("location", { href: "https://app.test/syncs", assign: reload });
-  vi.stubGlobal("sessionStorage", memoryStorage());
+  vi.stubGlobal("location", { href: "https://app.test/overview", assign });
 });
 afterEach(() => vi.unstubAllGlobals());
 
@@ -32,31 +28,21 @@ describe("ledgerKey", () => {
 });
 
 describe("error mapping", () => {
-  it("reloads the page on the first 401", async () => {
+  it("a 401 never navigates: it goes offline and raises the re-login banner", async () => {
     fetchMock.mockResolvedValue(json({ error: "unauthenticated" }, 401));
-    await expect(getHealth()).rejects.toBeInstanceOf(ApiError);
-    expect(reload).toHaveBeenCalledWith("https://app.test/syncs?login=1");
-  });
-
-  it("goes offline instead of reloading on a repeat 401 within a minute", async () => {
-    fetchMock.mockResolvedValue(json({ error: "unauthenticated" }, 401));
-    await expect(getHealth()).rejects.toBeInstanceOf(ApiError);
     await expect(getHealth()).rejects.toBeInstanceOf(ApiOffline);
-    expect(reload).toHaveBeenCalledOnce();
-  });
-
-  it("goes offline without reloading when sessionStorage is unavailable", async () => {
-    fetchMock.mockResolvedValue(json({ error: "unauthenticated" }, 401));
-    vi.stubGlobal("sessionStorage", undefined);
     await expect(getHealth()).rejects.toBeInstanceOf(ApiOffline);
-    expect(reload).not.toHaveBeenCalled();
+    expect(assign).not.toHaveBeenCalled();
+    expect(getAppStatus().sessionExpired).toBe(true);
   });
 
-  it("reloads again once the minute has passed", async () => {
+  // The inbox badge's POST /api/graphql on a cold open of the installed iOS app with an
+  // expired session navigated to /overview?login=1, left the app's scope and froze it.
+  it("a 401 on the inbox's GraphQL call does not navigate either", async () => {
     fetchMock.mockResolvedValue(json({ error: "unauthenticated" }, 401));
-    sessionStorage.setItem("ledger-api-401-reload-at", String(Date.now() - 61_000));
-    await expect(getHealth()).rejects.toBeInstanceOf(ApiError);
-    expect(reload).toHaveBeenCalledOnce();
+    await expect(graphqlRequest("query InboxNotifications { notifications { edges { node { id } } } }")).rejects.toBeInstanceOf(ApiOffline);
+    expect(assign).not.toHaveBeenCalled();
+    expect(getAppStatus().sessionExpired).toBe(true);
   });
 
   it.each([502, 503, 504])("treats %i as offline", async (status) => {

@@ -81,6 +81,8 @@ def test_publish_status_upserts_merged_entry_into_db(tmp_path, monkeypatch):
     monkeypatch.setattr(activities, "STATUS_FILE", target)
     monkeypatch.delenv("SYNC_PUBLISH", raising=False)
     monkeypatch.setenv("DATABASE_URL", "postgresql://x")
+    # Restore _database_url to read from the env for this test
+    monkeypatch.setattr(activities, "_database_url", lambda: "postgresql://x")
     calls = _capture_db(monkeypatch)
     asyncio.run(activities.publish_status("amex", entry("done", at="2026-10-15T07:35:00+03:00")))
     asyncio.run(activities.publish_status("amex", entry("scraping", at="2026-10-16T07:31:00+03:00")))
@@ -94,6 +96,8 @@ def test_publish_status_db_failure_does_not_break_json(tmp_path, monkeypatch):
     monkeypatch.setattr(activities, "STATUS_FILE", target)
     monkeypatch.delenv("SYNC_PUBLISH", raising=False)
     monkeypatch.setenv("DATABASE_URL", "postgresql://x")
+    # Restore _database_url to read from the env for this test
+    monkeypatch.setattr(activities, "_database_url", lambda: "postgresql://x")
     _capture_db(monkeypatch, fail=True)
     assert asyncio.run(activities.publish_status("amex", entry("done"))) == "local"
     assert json.loads(target.read_text())["sources"]["amex"]["status"] == "done"
@@ -113,3 +117,27 @@ def test_seed_status_db_skips_without_database_url(tmp_path, monkeypatch):
     # The worker seeds sync_status from the JSON on start; no DB configured means a quiet no-op.
     monkeypatch.setattr(activities, "_database_url", lambda: None)
     assert activities.seed_status_db() == 0
+
+
+def test_publish_status_without_guard_does_not_hit_db(tmp_path, monkeypatch):
+    """Regression test: the three leaky tests must not invoke _db_upsert_status when
+    called without explicit DB setup. The guard_database_writes fixture prevents this."""
+    target = tmp_path / "digested" / "sync-status.json"
+    monkeypatch.setattr(activities, "STATUS_FILE", target)
+    monkeypatch.delenv("SYNC_PUBLISH", raising=False)
+
+    # Spy on _db_upsert_status to verify it's never called
+    upsert_calls = []
+    original_upsert = activities._db_upsert_status
+
+    def spy_upsert(url, source, entry):
+        upsert_calls.append((url, source))
+        return original_upsert(url, source, entry)
+
+    monkeypatch.setattr(activities, "_db_upsert_status", spy_upsert)
+
+    # This should succeed and not call _db_upsert_status (because _database_url returns None)
+    assert asyncio.run(activities.publish_status("amex", entry("scraping"))) == "local"
+
+    # Verify the upsert was never called
+    assert upsert_calls == [], f"_db_upsert_status should not be called when DATABASE_URL is not set, but got calls: {upsert_calls}"

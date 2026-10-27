@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { ApiError, startLogin, submitOtp } from "@/lib/api";
 import { currentSubscription, disablePush, enablePush, pushState, readPushEnv, type PushState } from "@/lib/push";
 import { daysSince, snapshot, type SourceSync } from "@/lib/data";
+import { fmt, toTime } from "@/lib/dates";
 import {
   displayState,
   isRunning,
@@ -61,7 +62,7 @@ const dateTime = new Intl.DateTimeFormat("he-IL", { day: "numeric", month: "shor
 const dateOnly = new Intl.DateTimeFormat("he-IL", { day: "numeric", month: "short", year: "numeric" });
 const timeOnly = new Intl.DateTimeFormat("he-IL", { hour: "2-digit", minute: "2-digit" });
 
-const txDate = (d: string) => dateOnly.format(new Date(`${d}T12:00:00`));
+const txDate = (d: string | null | undefined) => fmt(dateOnly, d ? `${d}T12:00:00` : d);
 
 /**
  * A source can be scraped today yet carry nothing recent (the endpoint returned
@@ -168,7 +169,7 @@ function Timeline({ live, running }: { live: SourceStatus; running: boolean }) {
               {mark.icon}
             </span>
             <span>{STATE_PILL[step.status].text}</span>
-            <span className="text-xs text-muted-foreground tabular-nums">{timeOnly.format(new Date(step.at))}</span>
+            <span className="text-xs text-muted-foreground tabular-nums">{fmt(timeOnly, step.at)}</span>
           </li>
         );
       })}
@@ -331,7 +332,7 @@ function SyncItem({ it }: { it: Item }) {
     ? display === "stale"
       ? "העדכון האחרון מהסנכרון התקבל מזמן — ייתכן שה-worker נפל"
       : (display === "done" && intakeLine(live)) || live.message
-    : data && `${dateTime.format(new Date(data.last_synced))} · ${ago(days ?? 0)}`;
+    : data && `${fmt(dateTime, data.last_synced)} · ${ago(days ?? 0)}`;
   const pct = live?.step && live.total_steps ? Math.round((live.step / live.total_steps) * 100) : 0;
   const failed = display === "failed" || display === "rejected";
 
@@ -378,7 +379,7 @@ function SyncItem({ it }: { it: Item }) {
           <dl className="sync-facts">
             <dt>נתונים מעודכנים</dt>
             <dd>
-              {dateTime.format(new Date(data.last_synced))}
+              {fmt(dateTime, data.last_synced)}
               {lag != null && <span className="sync-lag">פער של {lag} ימים</span>}
             </dd>
             {data.latest_txn_date && (
@@ -399,11 +400,11 @@ function SyncItem({ it }: { it: Item }) {
             )}
           </dl>
         )}
-        {live && (
+        {live && fmt(dateTime, live.started_at) && (
           <p className="live-meta muted">
-            ריצה אחרונה {dateTime.format(new Date(live.started_at))}
+            ריצה אחרונה {fmt(dateTime, live.started_at)}
             {live.last_success_at
-              ? ` · סנכרון מוצלח אחרון ${dateTime.format(new Date(live.last_success_at))}`
+              ? ` · סנכרון מוצלח אחרון ${fmt(dateTime, live.last_success_at)}`
               : " · עדיין אין סנכרון מוצלח"}
           </p>
         )}
@@ -430,9 +431,9 @@ export default function Syncs() {
   for (const s of syncs) bySource.set(s.source, { source: s.source, data: s });
   // A source the newest run left out (e.g. moved off the schedule) keeps its last entry in
   // sync-status.json; that old "needs login" is not current, so judge it like a manual source.
-  const newestRun = Math.max(0, ...Object.values(liveSources).map((s) => new Date(s.started_at).getTime()));
+  const newestRun = Math.max(0, ...Object.values(liveSources).map((s) => toTime(s.started_at)));
   for (const [source, s] of Object.entries(liveSources)) {
-    if (newestRun - new Date(s.started_at).getTime() > DROPPED_AFTER_MS) continue;
+    if (newestRun - toTime(s.started_at) > DROPPED_AFTER_MS) continue;
     bySource.set(source, { ...(bySource.get(source) ?? { source }), live: s, display: displayState(s) });
   }
   const items = [...bySource.values()].sort(

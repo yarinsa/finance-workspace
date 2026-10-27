@@ -4,6 +4,7 @@ import { BrowserRouter } from "react-router-dom";
 import "./index.css";
 import "./styles.css";
 import { initPwa } from "./lib/pwa";
+import AppErrorBoundary from "./components/AppErrorBoundary";
 
 initPwa();
 
@@ -42,9 +43,11 @@ import("./App")
   .then(({ default: App }) =>
     root.render(
       <StrictMode>
-        <BrowserRouter>
-          <App />
-        </BrowserRouter>
+        <AppErrorBoundary>
+          <BrowserRouter>
+            <App />
+          </BrowserRouter>
+        </AppErrorBoundary>
       </StrictMode>
     )
   )
