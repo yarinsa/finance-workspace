@@ -387,6 +387,13 @@ class TestFixedExpenses:
         assert items["טלזר 019 שירותי תקשורת בינלאומ"]["last_charged"] == "2026-10-11"
         assert items["כלל ב.בריאות ה.ק"]["last_charged"] == "2026-09-28"
 
+    def test_items_carry_group_and_month_section(self):
+        # /monthly lists rent under קבוע · דיור and the mortgage under הלוואות וחיסכון
+        items = self.items()
+        rent = items['הו"ק לעיין ניהול נכסי']
+        assert (rent["group"], rent["block"]) == ("דיור", "fixed")
+        assert items["דסק-משכנתא"]["block"] == "debt_savings"
+
     def test_month_without_fixed_rows_gives_nothing(self):
         assert cashflow.fixed_expenses(self.LEDGER, "2027-01") is None
 

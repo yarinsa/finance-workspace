@@ -272,7 +272,7 @@ RiseUp's budget still supplies the *plan*:
 the category's default made it fixed), plus utilities (electricity/water/gas/ארנונה) on
 their own cadence (bi-monthly water is due every other month, amount = median of the
 last three, `estimated`); paid/upcoming/overdue, kind = `categories.bill_kind`. RiseUp
-gives only the cycle's start day. `budgets.py` (`/budgets`) — one line per **our category** (or group, e.g.
+gives only the cycle's start day. `budgets.py` — one line per **our category** (or group, e.g.
 תחבורה), planned = RiseUp's tracking envelope through `tracking_category` or the override,
 spent = the cycle's `kind == "variable"` ledger rows of that category (refunds subtract,
 floored at 0), `estimate` = median of the last 3–6 cycles, plus `summary`: the cycle in
@@ -283,19 +283,35 @@ variable *plan* (the budget lines' total) — what is not assigned to anything, 
 ~0 — and `projected_end`: the same with variable at `projected` = actual + the estimate ×
 the share of the cycle still ahead (a daily run-rate, so a trip-heavy median doesn't
 swamp the last days). Fixed/debt at expected; income at max(actual, the forecast's). `spending.py`
-(per-month category/merchant/transaction breakdown with excluded buckets, `/spending`).
-`cashflow.fixed_expenses` (the "what can I cut?" card) is the month's kind=fixed ledger
+(per-month category/merchant/transaction breakdown with excluded buckets; every row carries
+the ledger's `kind`, `group` = `category_group` and `block` — fixed / variable / debt_savings,
+the `months_view.classify_expense` rule — plus `by_line` per section/group/category).
+`cashflow.fixed_expenses` (the "what can I cut?" review, shown inline in /monthly's קבוע section) is the month's kind=fixed ledger
 rows plus the still-expected monthly ones (`budgets.fixed_items`), grouped by
 `categories.lever` (fees → subscriptions → bills → installments → committed → other).
 `actions.py` derives the home page's "לטיפול" list (limit breach, over-budget, overdue bills,
 upcoming card bills, duplicate services, stale syncs) from those blocks, with period-stable ids.
+
+**The month screen is one screen: `/monthly`** (there is no `/budgets`, `/spending` or `/fixed`).
+בפועל: free money (`budgets.summary.left`) and income / קבוע / משתנה on top (a figure scrolls to its
+section; past months show their net and `months_view` actuals instead), then the month's
+transactions grouped by section → category group → line (`app/src/lib/monthList.ts`): קבוע lists
+the cycle's charges (`fixed_expenses` items merged with `bills` by name: status, due day,
+due day) with one quiet saving hint each when there is one (`chargeHint`: duplicate service,
+not charged in 70+ days, or the fees/subscriptions lever — also shown in its sheet) and the
+cuttable total (fees + subscriptions) under the קבוע header, משתנה the budget lines with their bars (unplanned: average only),
+הלוואות וחיסכון loans plus savings. Groups start collapsed unless over budget or overdue. A line
+opens a sheet with the plan editor and its transactions (tap → the edit sheet). Group-by switch
+`?group=merchant|none`. Past months have no budget/bill data, so they show plain category lines.
+Deep links: `/monthly?category=<name>` opens that line, `?section=fixed|variable|debt_savings`
+scrolls to it; `actions.py` CTAs use them. תחזית keeps the hero, plan rows and runway.
 
 **Budget overrides.** Each budget line carries `history` (its ledger spend in the last 4
 cycles). To change a planned
 amount: `poetry run python data/budgets.py set "<category>" <amount>`, `unset "<category>"`, or
 `list`; it edits gitignored `data/budgets/budgets.json` (a RiseUp envelope name is stored as
 our category; a category RiseUp has no envelope for adds a line), reruns `cashflow.py` and
-prints the new line. The app's budget editor sheet is read-only and only shows this
+prints the new line. The budget editor in the `/monthly` category sheet is read-only and only shows this
 command; push the result with `sync-data`.
 
 ### UX references

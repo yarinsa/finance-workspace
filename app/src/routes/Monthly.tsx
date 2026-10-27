@@ -1,12 +1,16 @@
 import { useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Card, Page } from "@/components/common";
-import BillsCard from "@/components/BillsCard";
-import { RunwayCard, RunwayEvents, RunwayFootnote } from "@/components/RunwayChart";
-import CategoryBreakdown from "@/components/CategoryBreakdown";
+import {
+  RunwayCard,
+  RunwayEvents,
+  RunwayFootnote,
+} from "@/components/RunwayChart";
 import MonthStrip from "@/components/cashflow/MonthStrip";
 import MonthHero, { type MonthViewMode } from "@/components/cashflow/MonthHero";
 import { MonthGroups, MonthLinks } from "@/components/cashflow/MonthDetail";
+import MonthList from "@/components/cashflow/MonthList";
+import { FreeMoneyCard, MonthFigures } from "@/components/cashflow/MonthStats";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cashflow } from "@/lib/data";
 
@@ -14,17 +18,21 @@ import { cashflow } from "@/lib/data";
 const ACTUAL_MONTHS = 6;
 
 /**
- * "החודש": one month-by-month screen with a בפועל | תחזית toggle. The strip, hero and
- * plan-vs-actual rows follow the selected month; sections below are view-specific.
- * View and month live in the URL (?view=forecast&month=YYYY-MM) so back-navigation
- * from /spending restores them.
+ * "החודש": the one cashflow screen, with a בפועל | תחזית toggle and a month strip.
+ * בפועל: free money and income / fixed / variable on top (the current cycle; past months
+ * show their net and actuals), then the month's transactions grouped by section and
+ * category with budget bars and bill statuses inline (MonthList). תחזית: the expected
+ * landing, plan-vs-expected rows and the balance runway.
+ * State lives in the URL: ?view=forecast&month=YYYY-MM&group=merchant|none, plus the
+ * deep links ?category=<name> (opens that line) and ?section=fixed|variable|debt_savings.
  */
 export default function Monthly() {
   const view = cashflow.months_view;
   const [params, setParams] = useSearchParams();
   const months = view?.months ?? [];
 
-  const mode: MonthViewMode = params.get("view") === "forecast" ? "forecast" : "actual";
+  const mode: MonthViewMode =
+    params.get("view") === "forecast" ? "forecast" : "actual";
   const forecast = mode === "forecast";
 
   // Strip rows per view. Forecast bars show where each month is expected to land, so the
@@ -32,12 +40,18 @@ export default function Monthly() {
   const strip = forecast
     ? months
         .filter((m) => m.kind !== "actual")
-        .map((m) => (m.kind === "current" && m.projected_end ? { ...m, net: m.projected_end.net } : m))
+        .map((m) =>
+          m.kind === "current" && m.projected_end
+            ? { ...m, net: m.projected_end.net }
+            : m,
+        )
     : months.filter((m) => m.kind !== "projected").slice(-ACTUAL_MONTHS);
 
   // The picked month survives a view switch when the other view has it; otherwise fall back to now.
   const picked = params.get("month");
-  const selected = strip.some((m) => m.month === picked) ? picked! : view?.current;
+  const selected = strip.some((m) => m.month === picked)
+    ? picked!
+    : view?.current;
 
   /** The one URL writer: merges into the current params so view and month never drop each other. */
   const update = (next: Record<string, string>) =>
@@ -59,12 +73,21 @@ export default function Monthly() {
     return (
       <Page title="החודש">
         <Card>
-          <div className="text-muted-foreground">אין עדיין תצוגה חודשית — הריצו את הפייפליין ופרסמו מחדש.</div>
+          <div className="text-muted-foreground">
+            אין עדיין תצוגה חודשית — הריצו את הפייפליין ופרסמו מחדש.
+          </div>
         </Card>
       </Page>
     );
   }
-  const m = months.find((x) => x.month === selected) ?? months[months.length - 1];
+  const m =
+    months.find((x) => x.month === selected) ?? months[months.length - 1];
+  // budgets.summary describes the current cycle only
+  const b = cashflow.budgets;
+  const summary =
+    m.kind === "current" && b?.summary && b.cycle_start.startsWith(m.month)
+      ? b.summary
+      : null;
 
   return (
     <Page title="החודש">
@@ -75,18 +98,25 @@ export default function Monthly() {
         </TabsList>
       </Tabs>
 
-      <MonthStrip months={strip} selected={m.month} onSelect={(month) => update({ month })} forecast={forecast} />
-      <MonthHero m={m} mode={mode} />
-      <MonthGroups m={m} mode={mode} />
-
+      <MonthStrip
+        months={strip}
+        selected={m.month}
+        onSelect={(month) => update({ month })}
+        forecast={forecast}
+      />
       {forecast ? (
         <>
+          <MonthHero m={m} mode={mode} />
+          <MonthGroups m={m} mode={mode} />
           {m.kind === "current" && <RunwayCard r={cashflow.runway} />}
-          <RunwayEvents r={cashflow.runway} month={m.month} current={m.kind === "current"} />
+          <RunwayEvents
+            r={cashflow.runway}
+            month={m.month}
+            current={m.kind === "current"}
+          />
           <MonthLinks
             links={[
               { to: "/timeline", label: "ציר זמן" },
-              { to: "/fixed", label: "הוצאות קבועות" },
               { to: "/metrics", label: "התקדמות" },
             ]}
           />
@@ -94,14 +124,15 @@ export default function Monthly() {
         </>
       ) : (
         <>
-          <CategoryBreakdown key={m.month} month={m.month} />
-          {m.kind === "current" && <BillsCard compact />}
-          <MonthLinks
-            links={[
-              ...(m.kind === "current" ? [{ to: "/budgets", label: "תקציב מפורט" }] : []),
-              { to: "/fixed", label: "הוצאות קבועות" },
-            ]}
-          />
+          {summary ? (
+            <FreeMoneyCard s={summary} />
+          ) : (
+            <>
+              <MonthHero m={m} mode={mode} />
+              <MonthFigures groups={m.groups} />
+            </>
+          )}
+          <MonthList month={m.month} current={m.kind === "current"} />
         </>
       )}
     </Page>

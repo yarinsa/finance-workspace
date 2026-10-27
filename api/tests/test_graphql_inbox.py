@@ -21,7 +21,7 @@ LIMIT = {"id": "limit-breach:2026-11-11", "severity": "critical", "category": "P
          "subject": {"kind": "cashflow", "date": "2026-11-11"}}
 BUDGET = {"id": "budget-over:פנאי:2026-10", "severity": "high", "category": "WARNING", "type": "budgetOver",
           "title": "חריגה בתקציב פנאי", "detail": "₪1,763 מתוך ₪1,200 (+₪563)", "amount": 563.0,
-          "cta": {"label": "לתקציב", "to": "/budgets"},
+          "cta": {"label": "לתקציב", "to": "/monthly?section=variable"},
           "subject": {"kind": "budget", "categories": ["פנאי"], "cycle_start": "2026-10-01"}}
 WATER = {"id": "bill-overdue:מי אביבים חיוב תקופת:2026-10", "severity": "medium", "category": "WARNING",
          "type": "billOverdue", "title": "לא נמצא תשלום למי אביבים", "detail": "₪267 · היה צפוי ב-11/10",

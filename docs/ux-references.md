@@ -17,7 +17,7 @@ Gathered 2026-10-16 while choosing the next feature (→ balance runway, below).
 | Bills / subscriptions calendar | Not started; natural second view of runway data | Rocket Money, Orbit |
 | What-if scenario simulator (sliders → future net worth) | Stub (`/my-plan`, תכנון פלוס) | Wealthfront, Monzo, Stake |
 | Loan / prepayment simulator | Not started; pairs with the "הקטנת התשלום" advice in CLAUDE.md | Zopa, Shopee |
-| Category budgets with "left to spend" | Not started (RiseUp owns envelopes) | YNAB, Monarch, Copilot, Buddy |
+| Category budgets with "left to spend" | **Shipped** inline in `/monthly` (משתנה section: spent of planned bars; the category sheet holds the history-bars editor) | YNAB, Monarch, Copilot, Buddy |
 
 ## Patterns worth copying
 

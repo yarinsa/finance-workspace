@@ -1,4 +1,4 @@
-/** Shape of the `spending` block in cashflow.json (built by data/spending.py). */
+/** Shape of the `spending` block in cashflow.json (built by data/spending.py), read by /monthly. */
 export interface SpendingCategory {
   name: string;
   amount: number;
@@ -19,6 +19,12 @@ export interface SpendingTransaction {
   /** Positive ₪ spent. */
   amount: number;
   category: string;
+  /** The ledger's category_group (דיור, אוכל, …); null when the category has none. */
+  group?: string | null;
+  /** The ledger's kind (household edits win); absent for kindless rows. */
+  kind?: "fixed" | "variable";
+  /** The month screen's section: loans/mortgage and kindless rows are debt_savings (spending.block). */
+  block?: "fixed" | "variable" | "debt_savings";
   /** True when a manual override exists for this transaction (ledger API). */
   overridden?: boolean;
   /** Tag names from the DB `transaction_tags` table, sorted; absent when untagged. */
@@ -26,7 +32,12 @@ export interface SpendingTransaction {
   /** ₪ paid back (קיזוז) and netted out of the month's totals; `amount` stays the real charge. */
   offset?: number;
   /** The paybacks behind `offset`. */
-  offsets?: { date: string; description: string | null; amount: number; kind: OffsetKind }[];
+  offsets?: {
+    date: string;
+    description: string | null;
+    amount: number;
+    kind: OffsetKind;
+  }[];
 }
 
 /** How a payback came to be netted against an expense (finance/offsets.py). */
@@ -53,6 +64,14 @@ export interface SpendingMonth {
   partial: boolean;
   by_category: SpendingCategory[];
   by_merchant: SpendingMerchant[];
+  /** Spend per section, category group and category (spending.py by_line). */
+  by_line?: {
+    block: "fixed" | "variable" | "debt_savings";
+    group: string | null;
+    category: string;
+    amount: number;
+    count: number;
+  }[];
   /** Spending only, newest first, capped. */
   transactions: SpendingTransaction[];
   excluded: {

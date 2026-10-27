@@ -15,9 +15,6 @@ import {
   Ellipsis,
   Scale,
   type LucideIcon,
-  Receipt,
-  Repeat,
-  Wallet,
 } from "lucide-react";
 import Overview from "./Overview";
 import Inbox from "./Inbox";
@@ -29,10 +26,7 @@ import Metrics from "./Metrics";
 import Timeline from "./Timeline";
 import MyPlan from "./MyPlan";
 import Syncs from "./Syncs";
-import Budgets from "./Budgets";
-import Spending from "./Spending";
 import Monthly from "./Monthly";
-import Fixed from "./Fixed";
 import Plan from "./Plan";
 import HorizonsPage from "./Horizons";
 
@@ -68,26 +62,105 @@ export const groups: GroupDef[] = [
 
 /** Every page keeps its own path (deep links); `group` only decides where it is listed. */
 export const routes: RouteDef[] = [
-  { path: "/overview", label: "מבט על", icon: House, group: "overview", hub: true, Component: Overview },
-  { path: "/inbox", label: "אינבוקס", icon: InboxIcon, group: "overview", Component: Inbox },
-  { path: "/networth", label: "שווי נקי", icon: Landmark, group: "overview", Component: Networth },
+  {
+    path: "/overview",
+    label: "מבט על",
+    icon: House,
+    group: "overview",
+    hub: true,
+    Component: Overview,
+  },
+  {
+    path: "/inbox",
+    label: "אינבוקס",
+    icon: InboxIcon,
+    group: "overview",
+    Component: Inbox,
+  },
+  {
+    path: "/networth",
+    label: "שווי נקי",
+    icon: Landmark,
+    group: "overview",
+    Component: Networth,
+  },
 
-  { path: "/monthly", label: "החודש", icon: CalendarCheck, group: "monthly", hub: true, Component: Monthly },
-  { path: "/budgets", label: "תקציב", icon: Wallet, group: "monthly", Component: Budgets },
-  { path: "/spending", label: "הוצאות החודש", icon: Receipt, group: "monthly", Component: Spending },
-  { path: "/fixed", label: "הוצאות קבועות", icon: Repeat, group: "monthly", Component: Fixed },
+  {
+    path: "/monthly",
+    label: "החודש",
+    icon: CalendarCheck,
+    group: "monthly",
+    hub: true,
+    Component: Monthly,
+  },
 
-  { path: "/timeline", label: "ציר זמן", icon: CalendarRange, group: "monthly", Component: Timeline },
-  { path: "/metrics", label: "התקדמות", icon: Gauge, group: "monthly", Component: Metrics },
+  {
+    path: "/timeline",
+    label: "ציר זמן",
+    icon: CalendarRange,
+    group: "monthly",
+    Component: Timeline,
+  },
+  {
+    path: "/metrics",
+    label: "התקדמות",
+    icon: Gauge,
+    group: "monthly",
+    Component: Metrics,
+  },
 
-  { path: "/plan", label: "יעדים ותכנון", icon: Compass, group: "plan", hub: true, Component: Plan },
-  { path: "/horizons", label: "היום · קרוב · פרישה", icon: Scale, group: "plan", Component: HorizonsPage },
-  { path: "/goals", label: "יעדים", icon: Target, group: "plan", Component: Goals },
-  { path: "/summary", label: "סיכום התוכנית", icon: ClipboardList, group: "plan", Component: Summary },
-  { path: "/my-plan", label: "תכנון פלוס", icon: Sparkles, group: "plan", Component: MyPlan },
-  { path: "/portfolio", label: "השקעות", icon: PieChart, group: "plan", Component: Portfolio },
+  {
+    path: "/plan",
+    label: "יעדים ותכנון",
+    icon: Compass,
+    group: "plan",
+    hub: true,
+    Component: Plan,
+  },
+  {
+    path: "/horizons",
+    label: "היום · קרוב · פרישה",
+    icon: Scale,
+    group: "plan",
+    Component: HorizonsPage,
+  },
+  {
+    path: "/goals",
+    label: "יעדים",
+    icon: Target,
+    group: "plan",
+    Component: Goals,
+  },
+  {
+    path: "/summary",
+    label: "סיכום התוכנית",
+    icon: ClipboardList,
+    group: "plan",
+    Component: Summary,
+  },
+  {
+    path: "/my-plan",
+    label: "תכנון פלוס",
+    icon: Sparkles,
+    group: "plan",
+    Component: MyPlan,
+  },
+  {
+    path: "/portfolio",
+    label: "השקעות",
+    icon: PieChart,
+    group: "plan",
+    Component: Portfolio,
+  },
 
-  { path: "/syncs", label: "סנכרונים", icon: RefreshCw, group: "more", hub: true, Component: Syncs },
+  {
+    path: "/syncs",
+    label: "סנכרונים",
+    icon: RefreshCw,
+    group: "more",
+    hub: true,
+    Component: Syncs,
+  },
 ];
 
 /** Retired paths kept alive for bookmarks: `from` redirects to `to`. */

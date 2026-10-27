@@ -12,6 +12,7 @@ INFO), `type` the camelCase event, and `subject` what it is about: a dict with a
 """
 from collections import defaultdict
 from datetime import date, datetime, time, timedelta
+from urllib.parse import quote
 
 import freshness
 
@@ -85,14 +86,14 @@ def _budget_actions(budgets):
         extra = c["spent"] - c["planned"]
         out.append(_action(f"budget-over:{c['name']}:{month}", "high", "WARNING", "budgetOver", f"{c['name']} מעל התקציב",
                            f"{shekel(c['spent'])} מתוך {shekel(c['planned'])} (+{shekel(extra)})",
-                           ("לתקציב", "/budgets"), extra,
+                           ("לתקציב", f"/monthly?category={quote(c['name'])}"), extra,
                            {"kind": "budget", "categories": [c["name"]], "cycle_start": cycle}))
     rest = over[MAX_BUDGET_ITEMS:]
     if rest:
         extra = sum(c["spent"] - c["planned"] for c in rest)
         out.append(_action(f"budget-over-more:{month}", "medium", "WARNING", "budgetOverMore", ("עוד קטגוריה מעל התקציב" if len(rest) == 1 else f"עוד {len(rest)} קטגוריות מעל התקציב"),
                            ", ".join(c["name"] for c in rest) + f" · +{shekel(extra)}",
-                           ("לתקציב", "/budgets"), extra,
+                           ("לתקציב", "/monthly?section=variable"), extra,
                            {"kind": "budget", "categories": [c["name"] for c in rest], "cycle_start": cycle}))
     return out
 
@@ -106,7 +107,7 @@ def _bill_actions(bills):
                            "WARNING", "billOverdue",
                            f"לא נמצא תשלום ל{b['name']}",
                            f"{shekel(b['amount'])} · היה צפוי ב-{_dm(b['due_date'])}",
-                           ("לחשבונות", "/monthly"), b["amount"],
+                           ("לחשבונות", "/monthly?section=fixed"), b["amount"],
                            {"kind": "bill", "name": b["name"], "due_date": str(b["due_date"])[:10]}))
     return out
 
@@ -156,7 +157,7 @@ def _duplicate_actions(fixed):
         out.append(_action(f"dup:{key}:{month}", "low", "SUGGESTION", "duplicateService", f"שירות כפול: {key}",
                            names if key != items[0]["name"] else
                            f"{GENERIC_DUP_REASON} · " + " + ".join(shekel(i["amount"]) for i in items),
-                           ("לבדיקה", "/monthly"), total,
+                           ("לבדיקה", "/monthly?section=fixed"), total,
                            {"kind": "service", "services": [i["name"] for i in items]}))
     return out
 

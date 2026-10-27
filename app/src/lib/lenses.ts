@@ -57,32 +57,48 @@ function dayMonth(iso: string): string {
  * The delta compares today with the end of last month, only when that day was measured
  * from the bank's own running balance.
  */
-export function cashLens(history: History | undefined, runway: Runway | undefined): Lens | null {
+export function cashLens(
+  history: History | undefined,
+  runway: Runway | undefined,
+): Lens | null {
   if (!runway) return null;
   const today = runway.as_of;
   const measuredFrom = history?.cash.measured_from ?? null;
   const from = addDays(today, -CASH_PAST_DAYS);
-  const past = (history?.cash.days ?? []).filter((d) => d.date >= from && d.date < today);
+  const past = (history?.cash.days ?? []).filter(
+    (d) => d.date >= from && d.date < today,
+  );
   const series: LensPoint[] = past.map((d) => ({
     x: d.date,
     actual: d.balance,
     estimated: measuredFrom == null || d.date < measuredFrom,
   }));
   const todayIndex = series.length;
-  series.push({ x: today, actual: runway.start_balance, projected: runway.start_balance });
-  for (const d of runway.days) if (d.date > today) series.push({ x: d.date, projected: d.balance });
+  series.push({
+    x: today,
+    actual: runway.start_balance,
+    projected: runway.start_balance,
+  });
+  for (const d of runway.days)
+    if (d.date > today) series.push({ x: d.date, projected: d.balance });
 
   const monthEnd = addDays(`${today.slice(0, 7)}-01`, -1);
   const then = (history?.cash.days ?? []).find((d) => d.date === monthEnd);
-  const measured = then != null && measuredFrom != null && monthEnd >= measuredFrom;
+  const measured =
+    then != null && measuredFrom != null && monthEnd >= measuredFrom;
   const change = measured ? runway.start_balance - then.balance : null;
 
-  const estimatedDays = past.filter((d) => measuredFrom == null || d.date < measuredFrom);
+  const estimatedDays = past.filter(
+    (d) => measuredFrom == null || d.date < measuredFrom,
+  );
   return {
     key: "cash",
     label: "מזומן",
     value: runway.start_balance,
-    delta: change == null ? null : { amount: change, text: "החודש", good: change >= 0 },
+    delta:
+      change == null
+        ? null
+        : { amount: change, text: "החודש", good: change >= 0 },
     series,
     todayIndex,
     to: "/monthly?view=forecast",
@@ -115,10 +131,14 @@ export function spendLens(pace: Pace | undefined): Lens | null {
     delta:
       diff == null || Math.round(diff) === 0
         ? null
-        : { amount: diff, text: diff < 0 ? "פחות מבחודש שעבר" : "יותר מבחודש שעבר", good: diff < 0 },
+        : {
+            amount: diff,
+            text: diff < 0 ? "פחות מבחודש שעבר" : "יותר מבחודש שעבר",
+            good: diff < 0,
+          },
     series,
     todayIndex: Math.max(cur.length - 1, 0),
-    to: "/spending",
+    to: "/monthly",
     note: "מצטבר מתחילת החודש · מקווקו: החודש שעבר באותו יום",
   };
 }
@@ -155,20 +175,38 @@ export type SignalMode = "ratio" | "safe";
 export const SIGNAL_KEY = "home.signal";
 
 /** The two faces of the corner signal: spent / income this month, and safe to spend until payday. */
-export function signalValue(mode: SignalMode, pace: Pace | undefined, runway: Runway | undefined) {
+export function signalValue(
+  mode: SignalMode,
+  pace: Pace | undefined,
+  runway: Runway | undefined,
+) {
   if (mode === "safe") {
     const safe = runway?.safe_to_spend;
-    return safe == null ? null : { label: "בטוח להוציא עד המשכורת", value: safe, unit: "₪" as const, good: safe > 0 };
+    return safe == null
+      ? null
+      : {
+          label: "בטוח להוציא עד המשכורת",
+          value: safe,
+          unit: "₪" as const,
+          good: safe > 0,
+        };
   }
   const income = pace?.current.income ?? 0;
   const expense = pace?.current.expense;
   if (expense == null || income <= 0) return null;
   const ratio = (expense / income) * 100;
-  return { label: "הוצאות מתוך ההכנסה", value: ratio, unit: "%" as const, good: ratio <= 100 };
+  return {
+    label: "הוצאות מתוך ההכנסה",
+    value: ratio,
+    unit: "%" as const,
+    good: ratio <= 100,
+  };
 }
 
 /** The stored face, "ratio" by default (decision 3). */
-export function readSignalMode(storage: Pick<Storage, "getItem"> | undefined): SignalMode {
+export function readSignalMode(
+  storage: Pick<Storage, "getItem"> | undefined,
+): SignalMode {
   return storage?.getItem(SIGNAL_KEY) === "safe" ? "safe" : "ratio";
 }
 
@@ -187,7 +225,8 @@ export function defaultLens(
   pinned: string | null,
 ): LensKey {
   if (pinned && available.includes(pinned as LensKey)) return pinned as LensKey;
-  if (totals?.property_value != null && available.includes("networth")) return "networth";
+  if (totals?.property_value != null && available.includes("networth"))
+    return "networth";
   if (available.includes("cash")) return "cash";
   return available[0] ?? "cash";
 }

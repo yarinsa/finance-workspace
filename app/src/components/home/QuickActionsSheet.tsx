@@ -1,10 +1,31 @@
 import { Link } from "react-router-dom";
-import { ArrowLeftRight, ChevronLeft, Home, RefreshCw, Target, type LucideIcon } from "lucide-react";
-import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import {
+  ArrowLeftRight,
+  ChevronLeft,
+  Home,
+  RefreshCw,
+  Target,
+  type LucideIcon,
+} from "lucide-react";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 
 export type QuickAction = "property" | "goal";
 
-function Row({ icon: Icon, title, sub }: { icon: LucideIcon; title: string; sub: string }) {
+function Row({
+  icon: Icon,
+  title,
+  sub,
+}: {
+  icon: LucideIcon;
+  title: string;
+  sub: string;
+}) {
   return (
     <>
       <span className="grid size-10 shrink-0 place-items-center rounded-2xl bg-secondary text-[var(--lg-primary)]">
@@ -19,7 +40,8 @@ function Row({ icon: Icon, title, sub }: { icon: LucideIcon; title: string; sub:
   );
 }
 
-const ROW = "flex w-full items-center gap-3 border-b border-line py-3 last:border-b-0 active:bg-panel-2";
+const ROW =
+  "flex w-full items-center gap-3 border-b border-line py-3 last:border-b-0 active:bg-panel-2";
 
 /**
  * The band's ＋: the few things worth starting from home (decision 2). Syncing happens per
@@ -36,23 +58,45 @@ export default function QuickActionsSheet({
 }) {
   return (
     <Sheet open={open} onOpenChange={(o) => !o && onClose()}>
-      <SheetContent side="bottom" dir="rtl" className="pb-[calc(env(safe-area-inset-bottom)+12px)]">
+      <SheetContent
+        side="bottom"
+        dir="rtl"
+        className="pb-[calc(env(safe-area-inset-bottom)+12px)]"
+      >
         <SheetHeader>
-          <SheetTitle className="font-display text-xl font-medium">מה עושים?</SheetTitle>
+          <SheetTitle className="font-display text-xl font-medium">
+            מה עושים?
+          </SheetTitle>
           <SheetDescription className="sr-only">פעולות מהירות</SheetDescription>
         </SheetHeader>
         <div className="px-4">
           <Link to="/syncs" className={ROW} onClick={onClose}>
-            <Row icon={RefreshCw} title="סנכרון" sub="רענון היתרות מהבנקים והכרטיסים" />
+            <Row
+              icon={RefreshCw}
+              title="סנכרון"
+              sub="רענון היתרות מהבנקים והכרטיסים"
+            />
           </Link>
-          <button type="button" className={ROW} onClick={() => onPick("property")}>
-            <Row icon={Home} title="שווי הדירה" sub="עדכון ההערכה שנכנסת לשווי הנקי" />
+          <button
+            type="button"
+            className={ROW}
+            onClick={() => onPick("property")}
+          >
+            <Row
+              icon={Home}
+              title="שווי הדירה"
+              sub="עדכון ההערכה שנכנסת לשווי הנקי"
+            />
           </button>
           <button type="button" className={ROW} onClick={() => onPick("goal")}>
             <Row icon={Target} title="יעד חדש" sub="סכום, תאריך ואופק" />
           </button>
-          <Link to="/spending" className={ROW} onClick={onClose}>
-            <Row icon={ArrowLeftRight} title="קיזוז החזר" sub="בחרו את ההוצאה שההחזר מכסה" />
+          <Link to="/monthly?group=none" className={ROW} onClick={onClose}>
+            <Row
+              icon={ArrowLeftRight}
+              title="קיזוז החזר"
+              sub="בחרו את ההוצאה שההחזר מכסה"
+            />
           </Link>
         </div>
       </SheetContent>

@@ -385,10 +385,8 @@ body {
 .wallet-legend { flex-wrap: wrap; gap: 4px 12px; }
 .wallet-legend span { white-space: nowrap; }
 
-/* Fixed-expenses review */
+/* Muted pill (month list, sync rows) */
 .pill-muted { background: var(--lg-panel-2); color: var(--lg-muted); }
-.fixed-group .pill-muted { background: var(--lg-panel); }
-.fixed-group summary::-webkit-details-marker { display: none; }
 
 /* Harel's in-app login: the button, or the SMS code field once the login is waiting. */
 .sync-otp {
