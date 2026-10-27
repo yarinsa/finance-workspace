@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  unassignedTransactions,
   buildCards,
   buildMonthList,
   chargeHint,
@@ -360,5 +361,20 @@ describe("buildCards", () => {
       ["דיור", 6800, 0, null],
       ["אוכל", 0, 250, null],
     ]);
+  });
+});
+
+describe("unassignedTransactions", () => {
+  it("rows with no group, newest first; loans and savings stay out", () => {
+    const m: SpendingMonth = {
+      ...OCT,
+      transactions: [
+        ...OCT.transactions,
+        { date: "2026-10-03", merchant: "העברה לחשבון אחר", amount: 1725.25, category: "אחר", kind: "variable", block: "variable" },
+        { date: "2026-10-15", merchant: "BIT", amount: 80, category: "אחר", kind: "variable", block: "variable" },
+        { date: "2026-10-05", merchant: "פירעון", amount: 300, category: "אחר", block: "debt_savings" },
+      ],
+    };
+    expect(unassignedTransactions(m).map((t) => t.merchant)).toEqual(["BIT", "העברה לחשבון אחר"]);
   });
 });

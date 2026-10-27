@@ -17,7 +17,6 @@ import TransactionEditSheet, {
   type EditTarget,
 } from "@/components/TransactionEditSheet";
 import { useQuickEdit } from "@/components/QuickEditSheets";
-import { Input } from "@/components/ui/input";
 import {
   Sheet,
   SheetContent,
@@ -25,7 +24,6 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { scrollToSection } from "@/components/cashflow/MonthStats";
 import type { BudgetCategory } from "@/lib/budgets";
 import { cashflow, num, shekel, useDataVersion } from "@/lib/data";
@@ -33,8 +31,9 @@ import { applyOverlay, overlayFor } from "@/lib/ledgerOverlay";
 import {
   buildCards,
   buildMonthList,
+  unassignedTransactions,
+  OTHER_GROUP,
   chargeHint,
-  byMerchant,
   findLine,
   lineTransactions,
   net,
@@ -46,8 +45,6 @@ import {
 import type { SpendingTransaction } from "@/lib/spending";
 import { useLedgerApi } from "@/lib/useLedgerApi";
 import { cn } from "@/lib/utils";
-
-export type GroupBy = "category" | "merchant" | "none";
 
 /** What the drill-down sheet shows: a title, the transactions, and the plan editor when there is a budget line. */
 interface SheetTarget {
@@ -315,9 +312,6 @@ export default function MonthList({
   useDataVersion(); // re-render when a published rebuild is re-fetched
   const { overlay } = useLedgerApi();
   const [params, setParams] = useSearchParams();
-  const groupBy: GroupBy =
-    (["merchant", "none"] as const).find((g) => g === params.get("group")) ??
-    "category";
   const months = useMemo(
     () => applyOverlay(cashflow.spending?.months ?? [], overlay),
     [overlay],
@@ -342,7 +336,10 @@ export default function MonthList({
     [m, month, current],
   );
 
-  const cards = useMemo(() => buildCards(sections), [sections]);
+  const cards = useMemo(
+    () => buildCards(sections).filter((c) => c.name !== OTHER_GROUP),
+    [sections],
+  );
   const spendTotal = cards.reduce((t, c) => t + c.actual, 0);
 
   // fees + subscriptions: the low-effort ceiling of the fixed review, current cycle only
@@ -354,7 +351,6 @@ export default function MonthList({
   const [sheet, setSheet] = useState<SheetTarget | null>(null);
   const [editing, setEditing] = useState<EditTarget | null>(null);
   const [hiddenOpen, setHiddenOpen] = useState(false);
-  const [query, setQuery] = useState("");
   const { swipeProps, sheets } = useQuickEdit();
 
   const setParam = (k: string, v: string | null) =>
@@ -424,31 +420,14 @@ export default function MonthList({
     />
   );
 
-  const q = query.trim().toLowerCase();
-  const flat = (m?.transactions ?? [])
-    .filter(
-      (t) =>
-        !q ||
-        t.merchant.toLowerCase().includes(q) ||
-        String(t.amount).includes(q.replace(/[^\d.]/g, "") || "\0"),
-    )
-    .sort((a, b) => b.date.localeCompare(a.date));
+  // Rows with no category group (an unmapped label or none): triage them into a
+  // category from the edit sheet, or leave them as they are.
+  const unassigned = unassignedTransactions(m);
+  const unassignedTotal = unassigned.reduce((t, x) => t + net(x), 0);
 
   return (
     <>
-      <div className="flex items-center justify-between gap-3">
-        <Tabs
-          value={groupBy}
-          onValueChange={(v) => setParam("group", v === "category" ? null : v)}
-          dir="rtl"
-          className="flex-1"
-        >
-          <TabsList className="w-full">
-            <TabsTrigger value="category">קטגוריה</TabsTrigger>
-            <TabsTrigger value="merchant">בית עסק</TabsTrigger>
-            <TabsTrigger value="none">ללא</TabsTrigger>
-          </TabsList>
-        </Tabs>
+      <div className="flex justify-end">
         <button
           type="button"
           className="shrink-0 text-xs text-muted-foreground underline"
@@ -464,11 +443,11 @@ export default function MonthList({
             אין תנועות לחודש הזה.
           </div>
         </Card>
-      ) : groupBy === "category" ? (
+      ) : (
         <>
-          {cards.length > 0 && (
+          {(cards.length > 0 || unassigned.length > 0) && (
             <div id="sec-spend" className="scroll-mt-20">
-              <Section title={`הוצאות · ${shekel(spendTotal)}`}>
+              <Section title={`הוצאות · ${shekel(spendTotal + unassignedTotal)}`}>
                 {cuttable > 0 && (
                   <div className="-mt-1.5 mb-2.5 text-xs text-muted-foreground">
                     עד {shekel(cuttable)} בחודש בעמלות ומנויים אפשר לבדוק בקלות
@@ -487,6 +466,25 @@ export default function MonthList({
                   </div>
                 )}
                 <div className="flex flex-col gap-2.5">
+                  {unassigned.length > 0 && (
+                    <Card className="!px-4 !py-3">
+                      <div className="flex items-baseline gap-2">
+                        <span className="min-w-0 flex-1 font-semibold">
+                          לא משויך
+                        </span>
+                        <strong className="shrink-0 text-sm tabular-nums">
+                          {shekel(unassignedTotal)}
+                        </strong>
+                      </div>
+                      <div className="mt-0.5 text-xs text-muted-foreground">
+                        {num(unassigned.length)} תנועות בלי קטגוריה · לחיצה
+                        לשיוך, או להשאיר כך
+                      </div>
+                      <TransactionList>
+                        {unassigned.map((t, i) => txRow(t, i, false))}
+                      </TransactionList>
+                    </Card>
+                  )}
                   {cards.map((c) => {
                     const key = `card|${c.name}`;
                     return (
@@ -562,55 +560,6 @@ export default function MonthList({
               </div>
             ))}
         </>
-      ) : groupBy === "merchant" ? (
-        <Card className="!py-1">
-          <ul className="divide-y divide-line">
-            {byMerchant(m).map((x) => (
-              <li key={x.name}>
-                <button
-                  type="button"
-                  className="flex w-full items-baseline justify-between gap-3 py-2.5 text-start"
-                  onClick={() =>
-                    setSheet({
-                      title: x.name,
-                      txns: m.transactions
-                        .filter((t) => t.merchant === x.name)
-                        .sort((a, b) => b.date.localeCompare(a.date)),
-                    })
-                  }
-                >
-                  <span className="min-w-0 truncate" dir="auto">
-                    {x.name}
-                    {x.count > 1 && (
-                      <span className="ms-1 text-xs text-muted-foreground">
-                        ×{x.count}
-                      </span>
-                    )}
-                  </span>
-                  <strong className="shrink-0 tabular-nums">
-                    {shekel(x.amount)}
-                  </strong>
-                </button>
-              </li>
-            ))}
-          </ul>
-        </Card>
-      ) : (
-        <Card>
-          <Input
-            type="search"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="חיפוש בית עסק או סכום"
-            aria-label="חיפוש תנועות"
-            className="mb-2"
-          />
-          {flat.length === 0 ? (
-            <div className="py-3 text-muted-foreground">אין תנועות.</div>
-          ) : (
-            <TransactionList>{flat.map((t, i) => txRow(t, i))}</TransactionList>
-          )}
-        </Card>
       )}
 
       {m && <ExcludedSpendingCard excluded={m.excluded} />}

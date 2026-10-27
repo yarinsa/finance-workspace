@@ -1,32 +1,24 @@
 import type { ComponentType } from "react";
 import {
   CalendarRange,
-  ClipboardList,
   Gauge,
   House,
   Inbox as InboxIcon,
   Landmark,
   RefreshCw,
-  Sparkles,
-  Target,
   CalendarCheck,
   Compass,
   Ellipsis,
-  Scale,
   type LucideIcon,
 } from "lucide-react";
 import Overview from "./Overview";
 import Inbox from "./Inbox";
-import Summary from "./Summary";
-import Goals from "./Goals";
 import Networth from "./Networth";
 import Metrics from "./Metrics";
 import Timeline from "./Timeline";
-import MyPlan from "./MyPlan";
 import Syncs from "./Syncs";
 import Monthly from "./Monthly";
 import Plan from "./Plan";
-import HorizonsPage from "./Horizons";
 
 /** Navigation hubs, Mint-style: each is one bottom tab (and one sidebar section). */
 export type RouteGroup = "overview" | "monthly" | "plan" | "more";
@@ -115,34 +107,6 @@ export const routes: RouteDef[] = [
     hub: true,
     Component: Plan,
   },
-  {
-    path: "/horizons",
-    label: "היום · קרוב · פרישה",
-    icon: Scale,
-    group: "plan",
-    Component: HorizonsPage,
-  },
-  {
-    path: "/goals",
-    label: "יעדים",
-    icon: Target,
-    group: "plan",
-    Component: Goals,
-  },
-  {
-    path: "/summary",
-    label: "סיכום התוכנית",
-    icon: ClipboardList,
-    group: "plan",
-    Component: Summary,
-  },
-  {
-    path: "/my-plan",
-    label: "תכנון פלוס",
-    icon: Sparkles,
-    group: "plan",
-    Component: MyPlan,
-  },
 
   {
     path: "/syncs",
@@ -160,6 +124,9 @@ export const redirects: { from: string; to: string }[] = [
   { from: "/forecast", to: "/monthly?view=forecast" },
   { from: "/runway", to: "/monthly?view=forecast" },
   { from: "/recommendations", to: "/inbox?tab=suggestions" },
+  { from: "/summary", to: "/plan" },
+  { from: "/goals", to: "/plan" },
+  { from: "/horizons", to: "/plan" },
   { from: "/portfolio", to: "/overview?lens=savings&holdings=1" },
 ];
 

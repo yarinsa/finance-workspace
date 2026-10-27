@@ -305,8 +305,8 @@ their bars (unplanned: average only; a group-scope line like תחבורה is nam
 covers, not the group again). The cuttable total (fees + subscriptions) sits under the הוצאות
 header; הלוואות וחיסכון (loans plus savings) stays its own list. Cards start collapsed unless they
 hold an over-budget line or an overdue charge. A line
-opens a sheet with the plan editor and its transactions (tap → the edit sheet). Group-by switch
-`?group=merchant|none`. Past months have no budget/bill data: their cards show only the split.
+opens a sheet with the plan editor and its transactions (tap → the edit sheet). Rows with no category group sit in a "לא משויך" card at the top (tap → the
+edit sheet to pick a category, or leave them). Past months have no budget/bill data: their cards show only the split.
 Deep links: `/monthly?category=<name>` opens that line, `?section=fixed|variable` scrolls to the
 cards and `?section=debt_savings` to the loans; `actions.py` CTAs use them. תחזית keeps the hero, plan rows and runway.
 

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { graphql, useMutation } from "react-relay";
-import { Card, CardLabel, Page, Section } from "@/components/common";
+import { Card, CardLabel, Section } from "@/components/common";
 import { HORIZON_LABEL, HORIZON_SHORT } from "@/components/TransactionEditSheet";
 import GoalEditorSheet, { type GoalEditorTarget } from "@/components/GoalEditorSheet";
 import TargetsSheet from "@/components/TargetsSheet";
@@ -171,6 +171,7 @@ function GoalCard({ g, onEdit, canEdit }: { g: DisplayGoal; onEdit: (goalId: num
   );
 }
 
+/** The goals sections of the plan hub: general targets and personal goals (no page chrome). */
 export default function Goals() {
   const version = useDataVersion();
   const overlay = useGoalsOverlay();
@@ -181,7 +182,7 @@ export default function Goals() {
   const [goalEditorTarget, setGoalEditorTarget] = useState<GoalEditorTarget | null>(null);
 
   return (
-    <Page title="יעדים" wide>
+    <>
       <Section
         title="יעדים כללים"
         action={
@@ -239,6 +240,6 @@ export default function Goals() {
 
       <TargetsSheet open={targetSheet} onClose={() => setTargetSheet(false)} />
       <GoalEditorSheet goal={goalEditorTarget} onClose={() => setGoalEditorTarget(null)} />
-    </Page>
+    </>
   );
 }

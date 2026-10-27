@@ -101,7 +101,8 @@ export interface SectionBlock {
   groups: GroupBlock[];
 }
 
-const OTHER_GROUP = "אחר";
+/** The group of a row with no category group: the "לא משויך" card. */
+export const OTHER_GROUP = "אחר";
 
 /** ₪ a spending row counts for after paybacks (קיזוז). */
 export const net = (t: SpendingTransaction) => t.amount - (t.offset ?? 0);
@@ -452,19 +453,15 @@ export function buildCards(sections: SectionBlock[]): SpendCard[] {
     .sort((a, b) => size(b) - size(a));
 }
 
-/** Merchant totals of the month's (overlaid) transactions, biggest first. */
-export function byMerchant(m: SpendingMonth | undefined) {
-  const map = new Map<
-    string,
-    { name: string; amount: number; count: number }
-  >();
-  for (const t of m?.transactions ?? []) {
-    const e = map.get(t.merchant) ?? { name: t.merchant, amount: 0, count: 0 };
-    e.amount += net(t);
-    e.count += 1;
-    map.set(t.merchant, e);
-  }
-  return [...map.values()].sort((a, b) => b.amount - a.amount);
+/** The month's spending rows with no category group (newest first), loans and savings aside. */
+export function unassignedTransactions(m: SpendingMonth | undefined) {
+  return (m?.transactions ?? [])
+    .filter(
+      (t) =>
+        (t.group ?? OTHER_GROUP) === OTHER_GROUP &&
+        sectionOf(t) !== "debt_savings",
+    )
+    .sort((a, b) => b.date.localeCompare(a.date));
 }
 
 /** The line a `?category=` deep link names (budget line first, then a category or charge). */
@@ -484,3 +481,4 @@ export function findLine(
     null
   );
 }
+
