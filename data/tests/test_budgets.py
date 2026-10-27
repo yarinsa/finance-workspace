@@ -22,7 +22,7 @@ def doc(envs, start_day=1, month="2026-10"):
 
 def row(day, description, amount, category, kind="variable", group=None, merchant=None, **kw):
     """A stamped ledger row (finance/categories.stamp output)."""
-    groups = {"דלק": "תחבורה", "רכב": "תחבורה", "תיירות": "פנאי", "עציצים": "בית",
+    groups = {"דלק": "תחבורה", "רכב": "תחבורה", "תיירות": "פנאי", "עציצים": "עציצים",
               "כלכלה": "אוכל", "בריאות": "בריאות וטיפוח", "דיגיטל": "מנויים", "משכורת": "הכנסות וחיסכון",
               "הלוואה": "פיננסים", "שכר דירה": "דיור"}
     t = {"date": day, "description": description, "amount": amount, "category": category,
