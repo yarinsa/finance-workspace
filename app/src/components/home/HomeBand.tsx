@@ -11,7 +11,7 @@ import {
 import { cn } from "@/lib/utils";
 import { cashflow, daysSince, shekel, snapshot } from "@/lib/data";
 import { useInboxCount } from "@/lib/inbox";
-import { cashLens, defaultLens, LENS_KEY, spendLens, type Lens, type LensKey } from "@/lib/lenses";
+import { cashLens, debtLens, defaultLens, LENS_KEY, spendLens, type Lens, type LensKey } from "@/lib/lenses";
 import LensChart from "./LensChart";
 import Signal from "./Signal";
 
@@ -23,9 +23,9 @@ function storage(): Storage | undefined {
   }
 }
 
-/** The lenses this build has data for, in tab order. Net worth, savings and debt join in Phase 3. */
+/** The lenses this build has data for, in tab order. Net worth and savings join once positions are recorded. */
 function buildLenses(): Lens[] {
-  return [spendLens(cashflow.pace), cashLens(cashflow.history, cashflow.runway)].filter((l): l is Lens => l != null);
+  return [spendLens(cashflow.pace), cashLens(cashflow.history, cashflow.runway), debtLens(cashflow.history)].filter((l): l is Lens => l != null);
 }
 
 function freshness(): string {

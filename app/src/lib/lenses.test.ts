@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { History, Pace, Runway } from "./data";
-import { cashLens, defaultLens, readSignalMode, signalValue, spendLens } from "./lenses";
+import { cashLens, debtLens, defaultLens, readSignalMode, signalValue, spendLens } from "./lenses";
 
 // The 2026-10-27 digest: Discount + Leumi checking, Discount's chain measured from 10-05.
 const HISTORY: History = {
@@ -97,5 +97,22 @@ describe("default lens", () => {
     expect(defaultLens(["spend", "cash"], { property_value: 2_400_000 }, null)).toBe("cash");
     expect(defaultLens(["spend", "cash"], undefined, "spend")).toBe("spend");
     expect(defaultLens(["spend", "cash"], undefined, "debt")).toBe("cash");   // pinned but not shipped yet
+  });
+});
+
+describe("debt lens", () => {
+  it("draws the past as estimated, today as the bank's balance, and the schedule ahead", () => {
+    const debt = [
+      { month: "2026-09", mortgage: 1420900, consumer: 116900, total: 1537800, kind: "estimated" },
+      { month: "2026-10", mortgage: 1418853.49, consumer: 114240.14, total: 1533093.63, kind: "actual" },
+      { month: "2026-11", mortgage: 1416800, consumer: 111500, total: 1528300, kind: "projected" },
+    ] as History["debt"];
+    const l = debtLens({ ...HISTORY, debt })!;
+    expect(l.value).toBe(1533093.63);
+    expect(l.delta).toBeNull();
+    expect(l.todayIndex).toBe(1);
+    expect(l.series[1]).toMatchObject({ actual: 1533093.63, projected: 1533093.63 });
+    expect(l.series[0].estimated).toBe(true);
+    expect(debtLens(undefined)).toBeNull();
   });
 });

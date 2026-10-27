@@ -230,7 +230,7 @@ move to `/metrics`, debt % also as a footer on the חובות lens), `home/Hero`
       growth index and debt-repayment % were already on `/metrics`.
 
 ### Phase 3 — remaining lenses
-- [ ] חובות lens (`history.debt`). (Property card + `PropertyEditorSheet` shipped in 2b.)
+- [x] חובות lens (`history.debt`, `debtLens`). (Property card + `PropertyEditorSheet` shipped in 2b.)
 - [ ] חיסכון and שווי נקי lenses on `history.json`, projection placeholder until ≥14
       points. Default-lens rule from decision 4.
 
