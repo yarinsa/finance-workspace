@@ -24,6 +24,42 @@ today only and `cashflow.projection` is forward-only, while the concept's chart 
    apartment is a misleading first number). ⋮ lets the user pin another default
    (also `localStorage`).
 5. Bottom tab bar unchanged. Lenses become the way into the detail pages.
+6. **Palette: "Holst"** (sage greens on warm cream), replacing mint + navy app-wide.
+   See the Palette section below.
+
+## Palette ("Holst")
+
+Seven palette colours: `#314C3B` `#4C6B55` `#6D8C73` `#92AA97` `#BDC9B8` `#E2DED2` `#F7F3EA`.
+The palette has no red or amber, so `bad`/`warn` use a muted terracotta and ochre
+picked to sit with it. Contrast (WCAG) checked; all text pairs ≥ 4.5 unless noted.
+
+| Token (`styles.css`) | Light | Dark | Notes |
+|---|---|---|---|
+| `--lg-bg` | `#F7F3EA` | `#18201B` | dark = palette deepened |
+| `--lg-panel` | `#FFFDF8` | `#222D26` | |
+| `--lg-panel-2` | `#EFEADF` | `#2B3830` | |
+| `--lg-line` | `#E2DED2` | `#344538` | |
+| `--lg-text` | `#1F2A23` | `#F7F3EA` | 13.4 / 15.0 |
+| `--lg-muted` | `#5E6B60` | `#BDC9B8` | 5.1 / 8.3 (`#6D8C73` is only 3.4 on cream: never small text) |
+| `--lg-accent` | `#4C6B55` | `#92AA97` | 5.4 / 6.7 |
+| `--lg-on-accent` | `#F7F3EA` | `#18201B` | |
+| `--lg-good` | `#4C6B55` | `#A9C7A4` | |
+| `--lg-bad` | `#B4533C` | `#E08B74` | terracotta, 4.9 / 5.5 |
+| `--lg-warn` | `#9A6B12` | `#D9B26A` | ochre, 4.6 / 7.2 |
+| `--hero-bg` (band) | `#4C6B55` → `#314C3B` gradient | `#314C3B` → `#22362A` | |
+| `--hero-text` | `#F7F3EA` | `#F7F3EA` | 5.4 on `#4C6B55` |
+| `--hero-muted` | `#E2DED2` | `#BDC9B8` | 4.4 on `#4C6B55`: ≥ 14px only |
+| `--hero-chart` (area) | `#92AA97` line, `#BDC9B8` fill 40% | same | Today dot: `#F7F3EA` ring on `#92AA97` |
+| `--shadow` | `0 6px 24px rgba(49,76,59,.08)` | `rgba(0,0,0,.35)` | |
+
+- Charts (`chartTheme.ts`, `--chart-1..5`): the green ramp `#314C3B` `#4C6B55`
+  `#6D8C73` `#92AA97` `#BDC9B8` (reverse order in dark). Category charts with more
+  than 5 series add terracotta/ochre tints rather than more greens.
+- shadcn tokens in `index.css` (`--background`, `--primary`, `--border`, `--ring`,
+  `--sidebar-*`, …) map onto the `--lg-*` values instead of the neutral greys, so the
+  sidebar, sheets and popovers match.
+- `index.html` `theme-color` and the PWA manifest colours: `#F7F3EA` / `#18201B`.
+- Remove the old `--hero-1/2` navy and `--hero-accent` mint once nothing reads them.
 
 ## Layout (mobile, RTL)
 
@@ -96,6 +132,9 @@ move to `/metrics`, debt % also as a footer on the חובות lens), `home/Hero`
       {success, asset}`. An update signals the ledger rebuild (the totals change).
 
 ### Phase 2 — shell (ships with מזומן + הוצאות)
+- [ ] Holst palette first (tokens above): `styles.css`, the shadcn mapping in
+      `index.css`, `chartTheme.ts`, `theme-color`/manifest. Screenshot every route light
+      + dark to catch hardcoded colours (`grep -rn '#[0-9a-fA-F]\{6\}' app/src`).
 - [ ] `components/home/HomeBand.tsx`: header (signal, bell, ＋), tabs, scroll-snap
       carousel, dots, הרחב, ⋮ (pin default lens).
 - [ ] `components/home/Signal.tsx`: spent/income % ⇄ safe to spend, persisted.
