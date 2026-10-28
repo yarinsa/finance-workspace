@@ -146,13 +146,17 @@ def sync_taxonomy(cur):
     Upserts groups by key and categories by name (group, default kind, usage_based,
     position; source becomes "builtin", so a same-named "user" or "riseup" row is
     adopted). A legacy row whose name is now an alias (e.g. "עמלת דמי כרטיס - בנקים"
-    -> עמלות) has its overrides and merchant rules moved to the target, then goes;
+    -> עמלות, or a dropped builtin like רכב -> תחבורה) has its overrides and merchant rules
+    moved to the target, then goes;
     an alias to nothing ("תשלומים") goes only when nothing human points at it."""
     cur.executemany(
         "INSERT INTO category_groups (key, name, position) VALUES (%s, %s, %s) "
         "ON CONFLICT (key) DO UPDATE SET name = EXCLUDED.name, position = EXCLUDED.position",
         [(k, n, i) for i, (k, n) in enumerate(taxonomy.GROUPS)])
     groups = dict(cur.execute("SELECT key, id FROM category_groups").fetchall())
+    # a builtin category dropped from the taxonomy (רכב, folded into תחבורה) is a legacy row now
+    cur.execute("UPDATE categories SET source = 'riseup' WHERE source = 'builtin' AND NOT (name = ANY(%s))",
+                ([n for n, _, _ in taxonomy.CATEGORIES],))
     cur.executemany(
         "INSERT INTO categories (name, source, group_id, kind, usage_based, position) "
         "VALUES (%s, 'builtin', %s, %s, %s, %s) ON CONFLICT (name) DO UPDATE SET source = 'builtin', "

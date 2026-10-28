@@ -33,7 +33,6 @@ import {
   buildCards,
   buildMonthList,
   unassignedTransactions,
-  OTHER_GROUP,
   chargeHint,
   findLine,
   lineTransactions,
@@ -63,7 +62,16 @@ function amountTone(pct: number, over: boolean): string {
 }
 
 /** A fixed charge: status (✓ paid / due day / overdue), flags from the "what can I cut?" review. */
-function ChargeRow({ c, onOpen }: { c: ChargeItem; onOpen: () => void }) {
+function ChargeRow({
+  c,
+  onOpen,
+  withCategory = false,
+}: {
+  c: ChargeItem;
+  onOpen: () => void;
+  /** Say its category: only outside a category card (the loans list). */
+  withCategory?: boolean;
+}) {
   const paid = c.status === "paid";
   const overdue = c.status === "overdue";
   const hint = chargeHint(c);
@@ -84,7 +92,7 @@ function ChargeRow({ c, onOpen }: { c: ChargeItem; onOpen: () => void }) {
           {c.name}
         </span>
         <span className="flex flex-wrap gap-x-2 text-xs text-muted-foreground">
-          {c.category && <span>{c.category}</span>}
+          {withCategory && c.category && <span>{c.category}</span>}
           {overdue && <StatusPill tone="warn">עוד לא חויב</StatusPill>}
           {c.status === "upcoming" && (
             <span>
@@ -187,9 +195,17 @@ function CategoryRow({ l, onOpen }: { l: Line; onOpen: () => void }) {
   );
 }
 
-function LineRow({ l, onOpen }: { l: Line; onOpen: () => void }) {
+function LineRow({
+  l,
+  onOpen,
+  withCategory,
+}: {
+  l: Line;
+  onOpen: () => void;
+  withCategory?: boolean;
+}) {
   return l.charge ? (
-    <ChargeRow c={l.charge} onOpen={onOpen} />
+    <ChargeRow c={l.charge} onOpen={onOpen} withCategory={withCategory} />
   ) : (
     <CategoryRow l={l} onOpen={onOpen} />
   );
@@ -370,7 +386,7 @@ export default function MonthList({
   );
 
   const cards = useMemo(
-    () => buildCards(sections).filter((c) => c.name !== OTHER_GROUP),
+    () => buildCards(sections),
     [sections],
   );
   const spendTotal = cards.reduce((t, c) => t + c.actual, 0);
@@ -418,9 +434,7 @@ export default function MonthList({
     if (!hit) return;
     setOpen((prev) =>
       new Set(prev).add(
-        hit.section === "debt_savings"
-          ? `${hit.section}|${hit.group}`
-          : `card|${hit.group}`,
+        `card|${hit.line.category ?? hit.line.name}`,
       ),
     );
     openLine(hit.line);
@@ -544,54 +558,19 @@ export default function MonthList({
               <div key={s.key} id={`sec-${s.key}`} className="scroll-mt-20">
                 <Section title={`${s.label} · ${shekel(s.total)}`}>
                   <Card className="!py-1">
-                    <ul className="divide-y divide-line">
-                      {s.groups.map((g) => {
-                        const key = `${s.key}|${g.name}`;
-                        const expanded = isOpen(key, g.alert);
-                        return (
-                          <li key={key}>
-                            <button
-                              type="button"
-                              aria-expanded={expanded}
-                              onClick={() => toggle(key)}
-                              className="flex w-full items-center gap-2 py-2.5 text-start"
-                            >
-                              <ChevronDown
-                                className={cn(
-                                  "size-4 shrink-0 text-muted-foreground transition-transform",
-                                  !expanded && "rotate-90",
-                                )}
-                              />
-                              <span className="min-w-0 flex-1 truncate font-semibold">
-                                {g.name}
-                              </span>
-                              {g.alert && (
-                                <StatusPill
-                                  tone="warn"
-                                  className="whitespace-nowrap"
-                                >
-                                  כדאי לבדוק
-                                </StatusPill>
-                              )}
-                              <strong className="shrink-0 tabular-nums">
-                                {shekel(g.total)}
-                              </strong>
-                            </button>
-                            {expanded && (
-                              <div className="divide-y divide-line pb-1 ps-6">
-                                {g.lines.map((l) => (
-                                  <LineRow
-                                    key={l.key}
-                                    l={l}
-                                    onOpen={() => openLine(l)}
-                                  />
-                                ))}
-                              </div>
-                            )}
-                          </li>
-                        );
-                      })}
-                    </ul>
+                    <div className="divide-y divide-line">
+                      {s.groups
+                        .flatMap((g) => g.lines)
+                        .sort((x, y) => y.amount - x.amount)
+                        .map((l) => (
+                          <LineRow
+                            key={l.key}
+                            l={l}
+                            withCategory
+                            onOpen={() => openLine(l)}
+                          />
+                        ))}
+                    </div>
                   </Card>
                 </Section>
               </div>

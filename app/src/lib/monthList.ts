@@ -368,12 +368,12 @@ export function buildMonthList({
 }
 
 /**
- * One card per category group across קבוע and משתנה (תחבורה holds Metro Motor's
- * installments and the fuel): what it spent, what was planned and how much of it is fixed.
+ * One card per category across קבוע and משתנה (תחבורה holds Metro Motor's installments
+ * and the fuel): what it spent, what was planned and how much of it is fixed.
  */
 export interface SpendCard {
   name: string;
-  /** A top-level category (its own plan), not a group's roll-up: it can be merged into another. */
+  /** A real category (not a charge without one): it can be merged into another. */
   category: boolean;
   fixedLines: Line[];
   variableLines: Line[];
@@ -397,26 +397,11 @@ const isPending = (l: Line) =>
   l.charge != null && l.charge.status !== "paid";
 
 /**
- * The top-level categories: the household's own budget lines (a category with a plan,
- * e.g. כלכלה, אלכוהול, עציצים). Everything else rolls up into its group's card.
- */
-export function topLevelCategories(sections: SectionBlock[]): Set<string> {
-  const top = new Set<string>();
-  for (const s of sections)
-    for (const g of s.groups)
-      for (const l of g.lines)
-        if (l.budget && l.scope === "category" && l.budget.source !== "unplanned")
-          top.add(l.budget.name);
-  return top;
-}
-
-/**
- * Merge the fixed and variable sections into one card per top-level category (a planned
- * category, `topLevelCategories`) or, for the rest, per group; biggest first. A group card
- * and a category card of the same name (פנאי) are one card.
+ * Merge the fixed and variable sections into one card per category (the flat list: the
+ * household's own division), biggest first. Rows with no category group are the
+ * "לא משויך" card's (`unassignedTransactions`), not a card here.
  */
 export function buildCards(sections: SectionBlock[]): SpendCard[] {
-  const top = topLevelCategories(sections);
   const cards = new Map<string, SpendCard>();
   const card = (name: string, category: boolean) => {
     const c = cards.get(name) ?? {
@@ -442,8 +427,8 @@ export function buildCards(sections: SectionBlock[]): SpendCard[] {
     if (s.key === "debt_savings") continue;
     for (const g of s.groups) {
       for (const l of g.lines) {
-        const own = l.category != null && top.has(l.category);
-        const c = card(own ? l.category! : g.name, own);
+        if (l.group === OTHER_GROUP) continue;
+        const c = card(l.category ?? l.name, l.category != null);
         if (
           l.budget?.over ||
           l.charge?.status === "overdue" ||

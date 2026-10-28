@@ -2,8 +2,9 @@
 
 Every expense row carries two independent properties:
 
-    category   what it is — one of CATEGORIES, grouped under a GROUP
-               (תחבורה → רכב / דלק / תחבורה ציבורית)
+    category   what it is — one of CATEGORIES, a flat list: the household's own
+               division (RiseUp's, where they sorted by hand), the budget's unit.
+               A GROUP is only an internal tag (non-spending, the cut-lever), never shown
     kind       how it behaves — ``fixed`` (קבוע: same or almost the same amount on a
                schedule: rent, loans, Metro Motor) or ``variable`` (משתנה: needed but
                usage-driven, so estimated: fuel, groceries, electricity)
@@ -83,9 +84,7 @@ CATEGORIES = [
     ("תמי 4", "bills", FIXED),
     ("דיגיטל", "subscriptions", FIXED),
     ("RiseUp", "subscriptions", FIXED),
-    ("רכב", "transport", VARIABLE),
-    ("דלק", "transport", VARIABLE),
-    ("תחבורה ציבורית", "transport", VARIABLE),
+    ("תחבורה", "transport", VARIABLE),       # one envelope, as RiseUp: Metro Motor, fuel, rides
     ("כלכלה", "food", VARIABLE),
     ("אוכל בחוץ", "food", VARIABLE),
     ("קפה בחוץ", "food", VARIABLE),
@@ -146,34 +145,37 @@ SOURCE_ALIASES = {
     "עיצוב הבית": "דברים לבית",
     "עמלות תעריפון": "עמלות",
     "פנאי, בידור וספורט": "פנאי",
-    "רכב ותחבורה": "רכב",
+    "רכב ותחבורה": "תחבורה",
+    # categories folded into תחבורה (2026-10-28): their edits move with them
+    "רכב": "תחבורה",
+    "דלק": "תחבורה",
+    "תחבורה ציבורית": "תחבורה",
     "תקשורת ומחשבים": "תקשורת",
 }
 
 # RiseUp tracking-envelope name -> category. None = too broad to say what it is.
 TRACKING_ALIASES = {
     "__saving-hidden-category__": None,
-    "תחבורה": None,
     "חופשה ✈️": "תיירות",
 }
 
 # (needle, category, kind) — needle is a prefix of the space-normalized description,
 # or anywhere in it when it starts with "*". kind None = decided by the usual rules.
 MERCHANTS = [
-    ("מטרו", "רכב", None),                  # Metro Motor: the motorcycle; its installments recur
-    ("איתוראן", "רכב", FIXED),
-    ("פז ", "דלק", None),                   # "פז " not "פזגז": that is the gas bill
-    ("דור אלון", "דלק", None),
-    ("סונול", "דלק", None),
-    ("דלק ", "דלק", None),
-    ("טן ", "דלק", None),
-    ("אלון כביש", "דלק", None),
+    ("מטרו", "תחבורה", None),               # Metro Motor: the motorcycle; its installments recur
+    ("איתוראן", "תחבורה", FIXED),
+    ("פז ", "תחבורה", VARIABLE),            # fuel; "פז " not "פזגז": that is the gas bill
+    ("דור אלון", "תחבורה", VARIABLE),
+    ("סונול", "תחבורה", VARIABLE),
+    ("דלק ", "תחבורה", VARIABLE),
+    ("טן ", "תחבורה", VARIABLE),
+    ("אלון כביש", "תחבורה", VARIABLE),
     ("*ניהול נכסי", "שכר דירה", FIXED),
     ("*שטראוס מים", "תמי 4", FIXED),
     ("גורביץ מרק", "ספר", FIXED),           # the barber, monthly
     ("ליברה", "ביטוח", FIXED),
     ("ישיר-ביטוח", "ביטוח", None),
-    ("הפול", "רכב", None),                  # compulsory car insurance (ביטוח חובה)
+    ("הפול", "תחבורה", None),                  # compulsory car insurance (ביטוח חובה)
     ("הפניקס", "ביטוח", FIXED),
     ("קרן הוכשטיין", "הלוואה", FIXED),
     ("בן חיים אד", "הוצאות עסק", FIXED),     # the business's accountant
@@ -202,7 +204,7 @@ MERCHANTS = [
 ]
 
 # Amount follows usage: only a merchant default, a rule or a manual edit makes these fixed.
-USAGE_BASED = {"חשמל", "מים", "גז", "דלק", "כלכלה", "אוכל בחוץ", "קפה בחוץ", "אוכל בעבודה",
+USAGE_BASED = {"חשמל", "מים", "גז", "כלכלה", "אוכל בחוץ", "קפה בחוץ", "אוכל בעבודה",
                "אלכוהול", "מזומן"}
 
 CATEGORY_KIND = {name: kind for name, _, kind in CATEGORIES}

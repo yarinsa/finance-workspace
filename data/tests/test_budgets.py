@@ -22,7 +22,7 @@ def doc(envs, start_day=1, month="2026-10"):
 
 def row(day, description, amount, category, kind="variable", group=None, merchant=None, **kw):
     """A stamped ledger row (finance/categories.stamp output)."""
-    groups = {"דלק": "תחבורה", "רכב": "תחבורה", "תיירות": "פנאי", "עציצים": "עציצים",
+    groups = {"תחבורה": "תחבורה", "תיירות": "פנאי", "עציצים": "עציצים",
               "כלכלה": "אוכל", "בריאות": "בריאות וטיפוח", "דיגיטל": "מנויים", "משכורת": "הכנסות וחיסכון",
               "הלוואה": "פיננסים", "שכר דירה": "דיור"}
     t = {"date": day, "description": description, "amount": amount, "category": category,
@@ -41,12 +41,12 @@ def build(envs, ledger=(), as_of=date(2026, 10, 16), **kw):
                                  list(ledger), as_of, **kw)
 
 
-# October 2026, group תחבורה: one פז fill-up and a Gett ride are the budget; Metro
+# October 2026, תחבורה: one פז fill-up and a Gett ride are the budget; Metro
 # Motor's installment is fixed, so it is the fixed block's, not this line's.
 TRANSPORT = [
-    row("2026-10-05", "פז אפליקצית-YELLOW", -36.88, "דלק", budget_category="תחבורה"),
-    row("2026-10-16", "Gett", -6.8, "רכב"),
-    row("2026-10-02", "מטרו מוטור שווק (1981)בעמ", -500.0, "רכב", kind="fixed", recurring=True),
+    row("2026-10-05", "פז אפליקצית-YELLOW", -36.88, "תחבורה", budget_category="תחבורה"),
+    row("2026-10-16", "Gett", -6.8, "תחבורה"),
+    row("2026-10-02", "מטרו מוטור שווק (1981)בעמ", -500.0, "תחבורה", kind="fixed", recurring=True),
 ]
 # October 2026 trip, in RiseUp's "חופשה ✈️" envelope: RiseUp counted ₪1,110.06 too.
 TRIP = [
@@ -58,9 +58,11 @@ TRIP = [
 
 
 class TestCategoryMath:
-    def test_group_line_counts_variable_rows_only(self):
+    def test_transport_line_counts_variable_rows_only(self):
+        """תחבורה is one category (as RiseUp's envelope): fuel and a ride count, Metro Motor's
+        fixed installment does not."""
         c = cat(build([env("תחבורה", 200)], TRANSPORT), "תחבורה")
-        assert c["scope"] == "group" and c["group"] == "תחבורה"
+        assert c["scope"] == "category"
         assert c["spent"] == 43.68 and c["left"] == 156.32
         assert c["pct"] == 21.8 and not c["over"] and c["source"] == "riseup"
 
@@ -80,7 +82,7 @@ class TestCategoryMath:
 
     def test_refund_subtracts_but_never_below_zero(self):
         # Sept 2026: the ₪1,096 הפול ביטוח חובה refund, with no transport spend that cycle
-        refund = row("2026-10-02", "הפול ביטוח חובה", 1096.0, "רכב", kind=None, is_income=True)
+        refund = row("2026-10-02", "הפול ביטוח חובה", 1096.0, "תחבורה", kind=None, is_income=True)
         assert cat(build([env("תחבורה", 200)], [refund]), "תחבורה")["spent"] == 0
         c = cat(build([env("תחבורה", 200)], [*TRANSPORT, {**refund, "amount": 20.0}]), "תחבורה")
         assert c["spent"] == 23.68
@@ -143,26 +145,26 @@ class TestCycle:
 class TestHistory:
     # July 2026: the הפול ביטוח חובה policy bought (₪1,512 + ₪1,673 + 2 × ₪207) and
     # partly refunded (₪1,512 + ₪207) — the line's July spend is the ₪1,880 net.
-    JULY = [row("2026-07-09", "הפול בטוח חובה", -207.0, "רכב"),
-            row("2026-07-19", "הפול בטוח חובה", -207.0, "רכב"),
-            row("2026-07-26", "הפול בטוח חובה", -1512.0, "רכב"),
-            row("2026-07-26", "הפול בטוח חובה", -1673.0, "רכב"),
-            row("2026-07-27", "הפול ביטוח חובה", 1512.0, "רכב", kind=None, is_income=True),
-            row("2026-07-28", "הפול ביטוח חובה", 207.0, "רכב", kind=None, is_income=True)]
+    JULY = [row("2026-07-09", "הפול בטוח חובה", -207.0, "תחבורה"),
+            row("2026-07-19", "הפול בטוח חובה", -207.0, "תחבורה"),
+            row("2026-07-26", "הפול בטוח חובה", -1512.0, "תחבורה"),
+            row("2026-07-26", "הפול בטוח חובה", -1673.0, "תחבורה"),
+            row("2026-07-27", "הפול ביטוח חובה", 1512.0, "תחבורה", kind=None, is_income=True),
+            row("2026-07-28", "הפול ביטוח חובה", 207.0, "תחבורה", kind=None, is_income=True)]
 
     def test_last_four_covered_cycles_oldest_first(self):
-        ledger = [row(f"2026-{m:02d}-05", "פז אפליקצית-YELLOW", -100.0 * m, "דלק") for m in range(3, 10)]
+        ledger = [row(f"2026-{m:02d}-05", "פז אפליקצית-YELLOW", -100.0 * m, "תחבורה") for m in range(3, 10)]
         c = cat(build([env("תחבורה", 200)], ledger + self.JULY), "תחבורה")
         assert c["history"] == [{"cycle": "2026-06", "spent": 600}, {"cycle": "2026-07", "spent": 2580},
                                 {"cycle": "2026-08", "spent": 800}, {"cycle": "2026-09", "spent": 900}]
 
     def test_estimate_is_the_median_of_six_cycles(self):
-        ledger = [row(f"2026-{m:02d}-05", "פז אפליקצית-YELLOW", -100.0 * m, "דלק") for m in range(3, 10)]
+        ledger = [row(f"2026-{m:02d}-05", "פז אפליקצית-YELLOW", -100.0 * m, "תחבורה") for m in range(3, 10)]
         # cycles 04..09 spend 400..900 -> median 650
         assert cat(build([env("תחבורה", 200)], ledger), "תחבורה")["estimate"] == 650
 
     def test_too_little_history_gives_no_estimate(self):
-        ledger = [row("2026-09-05", "פז אפליקצית-YELLOW", -100.0, "דלק")]
+        ledger = [row("2026-09-05", "פז אפליקצית-YELLOW", -100.0, "תחבורה")]
         c = cat(build([env("תחבורה", 200)], ledger), "תחבורה")
         assert c["estimate"] is None and c["history"] == [{"cycle": "2026-09", "spent": 100}]
 
@@ -296,7 +298,7 @@ class TestPlanBaseline:
 
     def test_a_group_line_covers_its_categories(self):
         """The תחבורה line covers דלק, so דלק is not listed again as unplanned."""
-        ledger = [row(f"2026-{m:02d}-05", "פז אפליקצית-YELLOW", -36.0, "דלק") for m in range(5, 11)]
+        ledger = [row(f"2026-{m:02d}-05", "פז אפליקצית-YELLOW", -36.0, "תחבורה") for m in range(5, 11)]
         names = [c["name"] for c in build([env("תחבורה", 200)], ledger)["categories"]]
         assert names == ["תחבורה"]
 

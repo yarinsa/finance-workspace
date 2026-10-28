@@ -96,7 +96,20 @@ def test_taxonomy_seeds_the_table_and_rows_are_assigned_by_id(conn):
     assert set(ids) == set(taxonomy.CATEGORY_GROUP)
     assert [r.get("category_id") for r in out] == [ids["קניות"], ids["משכורת"], None]
     assert conn.execute("SELECT g.name FROM categories c JOIN category_groups g ON g.id = c.group_id "
-                        "WHERE c.name = 'דלק'").fetchone()[0] == "תחבורה"
+                        "WHERE c.name = 'תחבורה'").fetchone()[0] == "תחבורה"
+
+
+def test_a_dropped_category_folds_into_its_alias_with_its_edits(conn):
+    # As the household, my fuel edit made under the old "דלק" category follows it into תחבורה
+    # when דלק stops being a category of its own (2026-10-28).
+    rows = stamped([FUEL])
+    ledger.load(conn, rows)
+    conn.execute("INSERT INTO categories (name, source) VALUES ('דלק', 'builtin') ON CONFLICT DO NOTHING")
+    conn.execute("INSERT INTO transaction_overrides (txn_date, abs_amount, category_id) "
+                 "SELECT %s, %s, id FROM categories WHERE name = 'דלק'", k(rows[0]))
+    out = ledger.sync(conn, rows)
+    assert out[0]["category"] == "תחבורה"
+    assert conn.execute("SELECT count(*) FROM categories WHERE name = 'דלק'").fetchone()[0] == 0
 
 
 def test_a_card_sector_label_is_mapped_for_a_row_riseup_never_saw(conn):
@@ -123,7 +136,7 @@ METRO = {"date": "2026-10-02", "amount": -500.0, "description": "מטרו מוט
          "category": "תשלומים", "origin": "cal", "is_income": False, "sources": ["cal", "riseup"],
          "budget_type": "fixed"}   # RiseUp's fixed envelope "מטרו מוטור"
 FUEL = {"date": "2026-10-05", "amount": -36.88, "description": "פז אפליקצית-YELLOW",
-        "category": "רכב", "origin": "amex", "is_income": False, "sources": ["amex", "riseup"]}
+        "category": "תחבורה", "origin": "amex", "is_income": False, "sources": ["amex", "riseup"]}
 SPOTIFY = [{"date": f"2026-{m:02d}-09", "amount": -43.9, "description": "SpotifyIL", "category": "דיגיטל",
             "origin": "cal", "is_income": False, "sources": ["riseup"]} for m in (7, 8, 9)]
 
@@ -140,7 +153,7 @@ def test_digest_stamped_rows_round_trip_unchanged(conn):
     out = ledger.sync(conn, rows)
     assert [{f: v for f, v in r.items() if f not in ("category_id", "horizon_id")} for r in out] == rows
     assert [(r["category"], r.get("kind"), r.get("kind_source")) for r in out[:3]] == [
-        ("רכב", "fixed", "riseup"), ("דלק", "variable", "category"), ("דיגיטל", "fixed", "recurring")]
+        ("תחבורה", "fixed", "riseup"), ("תחבורה", "variable", "merchant"), ("דיגיטל", "fixed", "recurring")]
 
 
 def test_kind_override_beats_the_default_and_survives_reimport(conn):
@@ -159,13 +172,13 @@ def test_merchant_rule_applies_to_every_row_of_the_merchant(conn):
     second = {**FUEL, "date": "2026-09-05", "amount": -34.27}
     rows = stamped([FUEL, second])
     ledger.load(conn, rows)
-    overrides.set_merchant_rule(conn, rows[0]["merchant"], {"kind": "fixed", "category": "רכב"}, "test")
+    overrides.set_merchant_rule(conn, rows[0]["merchant"], {"kind": "fixed", "category": "תחבורה"}, "test")
     edit.set_field(conn, k(second), "kind", "variable")
     out = ledger.materialize(conn)
     assert [(r["category"], r["kind"], r["kind_source"]) for r in out] == [
-        ("רכב", "fixed", "rule"), ("רכב", "variable", "manual")]
+        ("תחבורה", "fixed", "rule"), ("תחבורה", "variable", "manual")]
     audit = conn.execute("SELECT field, new FROM override_audit WHERE txn_date IS NULL ORDER BY id").fetchall()
-    assert audit == [(f"merchant_rule.category:{rows[0]['merchant']}", "רכב"),
+    assert audit == [(f"merchant_rule.category:{rows[0]['merchant']}", "תחבורה"),
                      (f"merchant_rule.kind:{rows[0]['merchant']}", "fixed")]
 
 
