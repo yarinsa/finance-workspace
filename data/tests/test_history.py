@@ -130,3 +130,14 @@ def test_backfill_skips_published_days_whose_totals_cover_different_accounts():
 
 def test_snapshot_day_is_the_local_date():
     assert history.snapshot_day({"generated_at": "2026-10-24T22:49:00+00:00"}) == date(2026, 10, 25)
+
+
+def test_positions_recorded_before_the_card_debt_switch_have_no_comparable_net_worth():
+    """The 10-27 row was recorded with RiseUp's ₪4,092 of card debt; from 10-28 it is the issuers'
+    ₪11,263. Net worth across that switch would show a ₪7k dip that never happened."""
+    rows = [{"date": "2026-10-27", "cash": 3584.68, "card_debt": 4092.23, "savings": 639880.88, "net_worth": 1292953.67},
+            {"date": "2026-10-28", "cash": 3500.0, "card_debt": 11263.4, "savings": 639880.88, "net_worth": 1286000.0}]
+    old, new = history.comparable(rows)
+    assert old["card_debt"] is None and old["net_worth"] is None
+    assert old["savings"] == 639880.88 and old["cash"] == 3584.68          # unaffected components stay
+    assert new == rows[1]

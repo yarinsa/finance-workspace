@@ -198,9 +198,13 @@ const ISSUER: Record<string, string> = {
   amex: "אמריקן אקספרס",
 };
 
-/** כרטיסי אשראי: what each card will charge, largest first, then the month's spending. */
+const dayMonth = (iso: string) => `${Number(iso.slice(8, 10))}.${Number(iso.slice(5, 7))}`;
+
+/** כרטיסי אשראי: what each card will charge, soonest first, with the day it is billed. */
 function CardsCard({ total }: { total: number }) {
-  const cards = [...(snapshot.credit_cards ?? [])].sort((a, b) => b.owed - a.owed);
+  const cards = [...(snapshot.credit_cards ?? [])].sort(
+    (a, b) => (a.next_charge_date ?? "9").localeCompare(b.next_charge_date ?? "9") || b.owed - a.owed,
+  );
   return (
     <CollapsibleCard label="כרטיסי אשראי" sub="החיוב הבא" value={-total}>
       <Group title={null}>
@@ -212,7 +216,7 @@ function CardsCard({ total }: { total: number }) {
             <Line
               key={`${c.issuer}-${c.last4}`}
               title={title}
-              sub={[title !== issuer && issuer, `•••• ${c.last4}`]}
+              sub={[title !== issuer && issuer, `כרטיס ${c.last4}`, c.next_charge_date && `חיוב ב-${dayMonth(c.next_charge_date)}`]}
               value={-c.owed}
             />
           );

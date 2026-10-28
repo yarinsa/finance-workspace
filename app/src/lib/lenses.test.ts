@@ -135,6 +135,12 @@ describe("net worth lens", () => {
     expect(Math.round(l.delta!.amount)).toBe(4428);   // no ₪2.2M jump on the day it was entered
   });
 
+  it("skips days whose net worth is unknown (recorded before card debt changed source)", () => {
+    const masked = POSITIONS.map((p, i) => (i < 2 ? { ...p, card_debt: null, net_worth: null } : p));
+    expect(networthLens({ ...HISTORY, positions: masked })).toBeNull();           // one comparable day
+    expect(savingsLens({ ...HISTORY, positions: masked })!.series).toHaveLength(3);   // savings is unaffected
+  });
+
   it("needs two recorded days", () => {
     expect(networthLens({ ...HISTORY, positions: POSITIONS.slice(-1) })).toBeNull();
     expect(networthLens(undefined)).toBeNull();

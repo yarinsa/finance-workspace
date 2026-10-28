@@ -113,6 +113,11 @@ records, then the fix.
 - **`data/digested/snapshot.json` / `snapshot.md`** — headline position: bank
   balances, credit-card debt, loans/mortgage, detected salary, totals, and a
   `spending` summary. Query this for net-worth/debt questions.
+  Card debt is each card's **next charge from the issuers' own rows** (`digest.next_card_charges`:
+  every CAL/AMEX/Max card row carries `billing_date`, the day its card is charged; the earliest
+  one that has not posted, Fri/Sat rolled to Sunday, summed per card). RiseUp's balance is only the
+  fallback for a card no issuer dump covers (e.g. the business card). Before 2026-10-28 it was
+  RiseUp's, so `history.positions` reads those days' net worth as unknown (`history.comparable`).
 
 ### Transactions database (Postgres)
 

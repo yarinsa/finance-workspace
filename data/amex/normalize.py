@@ -44,10 +44,15 @@ def iso(dmy):
 # ---- credit cards ----
 cards = []
 card_name = {}                                   # suffix -> display name
+billing_day = {}                                 # suffix -> day of the month the card is charged
 cl = json.load(open(RAW / "cardList.json", encoding="utf-8"))["data"]
 for c in cl.get("cardsList", []):
     suffix = c["cardSuffix"]
     card_name[suffix] = c["cardName"]
+    for k in ("cardChargeNext", "cardChargeLast"):        # '10/11/2026' -> the card bills on the 10th
+        day = ((c.get(k) or {}).get("billingDate") or "")[:2]
+        if day.isdigit() and suffix not in billing_day:
+            billing_day[suffix] = int(day)
     cards.append({
         "issuer": "amex",
         "holder": f"{c.get('firstName','').strip()} {c.get('lastName','').strip()}".strip(),
@@ -76,9 +81,22 @@ def vouchers_of(data):
             yield t, billed
 
 
+def statement_date(suffix, month_file):
+    """The day a card's statement of `transactions_<suffix>_<MM>-<YYYY>.json` is charged: the
+    pull of month M is the statement billed in M, on the card's billing day (None when unknown)."""
+    m = re.match(r"transactions_\w+?_(\d{2})-(\d{4})\.json$", month_file)
+    day = billing_day.get(suffix)
+    if not m or not day:
+        return None
+    month, year = int(m.group(1)), int(m.group(2))
+    last = (datetime.date(year + month // 12, month % 12 + 1, 1) - datetime.timedelta(days=1)).day
+    return datetime.date(year, month, min(day, last)).isoformat()
+
+
 txns = {}                                         # voucher id -> record
 for fp in sorted(glob.glob(str(RAW / "transactions_*.json"))):
     suffix = Path(fp).name.split("_")[1]          # transactions_<suffix>_<month>.json
+    stmt_date = statement_date(suffix, Path(fp).name)
     data = json.load(open(fp, encoding="utf-8")).get("data") or {}
     for t, billed in vouchers_of(data):
         # stable id; fall back to a composite when missing
@@ -91,7 +109,7 @@ for fp in sorted(glob.glob(str(RAW / "transactions_*.json"))):
             "card_last4": suffix,
             "card_name": card_name.get(suffix),
             "date": iso(t.get("purchaseDate")),
-            "billing_date": iso(billed) if billed else None,
+            "billing_date": iso(billed) if billed else stmt_date,
             "amount": round(-ils, 2),             # charge = money out
             "currency": "ILS",
             "original_amount": t.get("originalAmount"),

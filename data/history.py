@@ -183,6 +183,18 @@ def position_of(snapshot):
                           else t["net_position_with_savings"])}
 
 
+# Card debt switched from RiseUp's balance to the issuers' own next charge on this day (about
+# ₪7k more on the day it did). Rows recorded before are kept, but their card debt and net worth
+# are not comparable, so they are read back as unknown rather than drawn as money that moved.
+CARD_DEBT_COMPARABLE_FROM = "2026-10-28"
+
+
+def comparable(rows):
+    """``position_snapshots`` rows as the lenses should see them (see CARD_DEBT_COMPARABLE_FROM)."""
+    return [{**r, "card_debt": None, "net_worth": None} if r["date"] < CARD_DEBT_COMPARABLE_FROM else r
+            for r in rows]
+
+
 def positions(snapshot, as_of):
     """Record today's position, return every recorded day (oldest first).
 
@@ -199,7 +211,7 @@ def positions(snapshot, as_of):
         from ledger import connect
         with connect(url) as conn:
             position_store.record(conn, as_of, **position_of(snapshot))
-            return position_store.series(conn)
+            return comparable(position_store.series(conn))
     except Exception as e:   # noqa: BLE001 — a dead DB must not stop the digest
         print(f"history: database unavailable ({e})", file=sys.stderr)
         return []

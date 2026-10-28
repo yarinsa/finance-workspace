@@ -84,3 +84,30 @@ def test_immediate_voucher_repeated_in_two_pulls_is_one_record(tmp_path):
     months = {**MONTHS, "transactions_7696_11-2026.json": _month([], [(CASH, "04/10/2026")], 0)}
     recs = _normalize(tmp_path, months)
     assert [r["description"] for r in recs].count("משיכת מזומנים") == 1
+
+
+def test_statement_vouchers_carry_the_cards_charge_date(tmp_path):
+    """As the household, when AMEX says card 7696 is next charged ₪4,506.30 on 10/11/2026 (it bills
+    on the 10th), the vouchers of the 11-2026 statement must be dated 2026-11-10, so the snapshot can
+    say what each card will charge. Before this, only immediate vouchers had a billing_date."""
+    raw = tmp_path / "raw"
+    raw.mkdir()
+    (raw / "cardList.json").write_text(json.dumps({"data": {"cardsList": [
+        {"cardSuffix": "7696", "cardName": "AMEX PLATINUM", "isActive": True,
+         "cardChargeNext": {"billingDate": "10/11/2026", "billingSumSekel": "4506.30"},
+         "cardChargeLast": {"billingDate": "10/10/2026", "billingSumSekel": "8339.89"}},
+        {"cardSuffix": "6417", "cardName": "AMEX PLATINUM", "isActive": True,
+         "cardChargeNext": {"billingDate": "02/11/2026", "billingSumSekel": "973.47"}}]}}))
+    for name, v in {"transactions_7696_10-2026.json": KING, "transactions_7696_11-2026.json":
+                    _voucher("22/10/2026", "פז", 4506.30, "V11"),
+                    "transactions_6417_11-2026.json": _voucher("20/10/2026", "הוט", 973.47, "V6417")}.items():
+        (raw / name).write_text(json.dumps(_month([v], [], v["billingAmount"]), ensure_ascii=False))
+    src = Path(__file__).resolve().parents[1] / "amex" / "normalize.py"
+    mod = importlib.util.module_from_spec(importlib.util.spec_from_loader("amex_normalize", loader=None))
+    exec(compile(src.read_text().replace('HERE = Path(__file__).resolve().parent', f'HERE = Path(r"{tmp_path}")'),
+                 str(src), "exec"), mod.__dict__)
+    recs = json.loads((tmp_path / "normalized" / "transactions.json").read_text())["records"]
+    by = {r["id"]: r["billing_date"] for r in recs}
+    assert by["071400853"] == "2026-10-10"      # the 10-2026 statement of 7696
+    assert by["V11"] == "2026-11-10"
+    assert by["V6417"] == "2026-11-02"          # a card billed on the 2nd
