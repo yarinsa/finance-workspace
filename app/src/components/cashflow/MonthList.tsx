@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useSearchParams } from "react-router-dom";
 import { ChevronDown } from "lucide-react";
 import {
@@ -213,7 +213,8 @@ function LineRow({
 
 /**
  * A category group's card: actual of planned with a bar split into its fixed and
- * variable parts; tapping it lists the fixed charges and the variable lines. An alert
+ * variable parts; tapping it lists the fixed charges and the variable transactions (swipe to
+ * re-assign or offset), with its plan one tap away. An alert
  * card starts open and its rows say what to check, so the card itself carries no pill.
  */
 function SpendCardView({
@@ -222,24 +223,22 @@ function SpendCardView({
   onToggle,
   onOpen,
   onMerge,
+  transactions,
 }: {
   c: SpendCard;
   expanded: boolean;
   onToggle: () => void;
   onOpen: (l: Line) => void;
+  /** The card's variable transactions as swipeable rows (re-assign / קיזוז), or null. */
+  transactions: ReactNode;
   /** A top-level category: merge it into another one. */
   onMerge?: () => void;
 }) {
   const plan = c.planned;
   const pct = plan ? (c.actual / plan) * 100 : c.actual > 0 ? 100 : 0;
-  const both = c.fixedLines.length > 0 && c.variableLines.length > 0;
-  // A category card that is just its own budget line: the card already is that line.
-  const self =
-    c.fixedLines.length === 0 &&
-    c.variableLines.length === 1 &&
-    c.variableLines[0].category === c.name
-      ? c.variableLines[0]
-      : null;
+  // The variable side's budget line (plan sheet, usual month) and a utility's bill status.
+  const planLine = c.variableLines.find((l) => l.budget);
+  const bill = c.variableLines.find((l) => l.bill)?.bill;
   const parts = [
     c.fixed + c.fixedPending > 0 &&
       `קבוע ${shekel(c.fixed)}${c.fixedPending > 0.005 ? ` + ${shekel(c.fixedPending)} צפוי` : ""}`,
@@ -295,24 +294,11 @@ function SpendCardView({
       {expanded && c.lever && (
         <div className="mt-2 text-xs text-muted-foreground">{c.lever}</div>
       )}
-      {expanded && self && (
-        <button
-          type="button"
-          onClick={() => onOpen(self)}
-          className="mt-2 flex w-full items-baseline justify-between text-xs text-muted-foreground tabular-nums"
-        >
-          <span>
-            {self.budget?.estimate != null &&
-              `בחודש רגיל ${shekel(self.budget.estimate)}`}
-          </span>
-          <span className="font-semibold text-brand">תנועות ותכנון ›</span>
-        </button>
-      )}
       {expanded && (
         <div className="mt-1">
-          {!self && c.fixedLines.length > 0 && (
+          {c.fixedLines.length > 0 && (
             <>
-              {both && <SectionLabel className="mt-2">קבוע</SectionLabel>}
+              {transactions && <SectionLabel className="mt-2">קבוע</SectionLabel>}
               <div className="divide-y divide-line">
                 {c.fixedLines.map((l) => (
                   <LineRow key={l.key} l={l} onOpen={() => onOpen(l)} />
@@ -320,15 +306,27 @@ function SpendCardView({
               </div>
             </>
           )}
-          {!self && c.variableLines.length > 0 && (
+          {bill && <BillStatus c={bill} />}
+          {transactions && (
             <>
-              {both && <SectionLabel className="mt-2">משתנה</SectionLabel>}
-              <div className="divide-y divide-line">
-                {c.variableLines.map((l) => (
-                  <LineRow key={l.key} l={l} onOpen={() => onOpen(l)} />
-                ))}
-              </div>
+              {c.fixedLines.length > 0 && (
+                <SectionLabel className="mt-2">משתנה</SectionLabel>
+              )}
+              {transactions}
             </>
+          )}
+          {planLine && (
+            <button
+              type="button"
+              onClick={() => onOpen(planLine)}
+              className="mt-2 flex w-full items-baseline justify-between text-xs text-muted-foreground tabular-nums"
+            >
+              <span>
+                {planLine.budget?.estimate != null &&
+                  `בחודש רגיל ${shekel(planLine.budget.estimate)}`}
+              </span>
+              <span className="font-semibold text-brand">תכנון ›</span>
+            </button>
           )}
           {onMerge && (
             <button
@@ -468,6 +466,19 @@ export default function MonthList({
     />
   );
 
+  // An opened card lists its variable transactions, swipeable like every transaction row.
+  const cardTransactions = (category: string) => {
+    const txns = lineTransactions(m, {
+      section: "variable",
+      category,
+      scope: "category",
+      group: "",
+    });
+    return txns.length ? (
+      <TransactionList>{txns.map((t, i) => txRow(t, i, false))}</TransactionList>
+    ) : null;
+  };
+
   // Rows with no category group (an unmapped label or none): triage them into a
   // category from the edit sheet, or leave them as they are.
   const unassigned = unassignedTransactions(m);
@@ -545,6 +556,7 @@ export default function MonthList({
                         onMerge={
                           c.category ? () => setMerging(c.name) : undefined
                         }
+                        transactions={cardTransactions(c.name)}
                       />
                     );
                   })}
