@@ -156,9 +156,9 @@ move to `/metrics`, debt % also as a footer on the חובות lens), `home/Hero`
 |---|---|---|---|---|
 | הוצאות | Spent this month | Cumulative this month vs last month | `/spending` | `pace` + daily cumulative (small addition) |
 | מזומן | Checking balance | 30 days actual + 45-day runway dashed; low point, ₪0, overdraft lines | `/monthly?view=forecast` | future ✅ runway; past **new** (running balances) |
-| שווי נקי | Net worth incl. property | History to היום; projection placeholder until ≥14 points | `/networth` | **new** daily snapshots |
+| שווי נקי | Net worth incl. property | History to היום, no projection | — (the home cards are the detail) | **new** daily snapshots |
 | חיסכון | Long-term savings | Monthly points | the home savings card, opened (`?holdings=1`; `/portfolio` redirects there) | **new** daily snapshots (monthly sources) |
-| חובות | Total debt | Paid-down line, past + future | `/networth` | ✅ amortization schedules in the dumps |
+| חובות | Total debt | Paid-down line, past + future | — (the הלוואות / משכנתא cards) | ✅ amortization schedules in the dumps |
 
 ## Interaction rules
 
@@ -248,8 +248,15 @@ move to `/metrics`, debt % also as a footer on the חובות lens), `home/Hero`
       `LoanDetails` (logic in `lib/loans.ts`): effective average rate, monthly payment, payoff;
       the fixed/variable mix; each loan or track with its rate and a bar of how much is paid off
       (principal when the original amount explains the balance, else payments made). A loan the
-      bank names "ללא ריבית" counts at 0%. /networth lost its assets, liabilities and mortgage
-      cards, which live on the home now.
+      bank names "ללא ריבית" counts at 0%. /networth is gone (redirects to the net
+      worth lens): the home band and cards carry all of it.
+- [x] The apartment card is collapsible too: opened, its value, the mortgage and the equity
+      (value − mortgage), with עדכון השווי / הוספת שווי opening `PropertyEditorSheet`.
+- [x] כרטיסי אשראי is collapsible: each card's charge (snapshot `credit_cards[].owed`, which
+      sums to the card's total), then a link to /monthly. Every home card now opens in place.
+      Open question: `owed` is RiseUp's figure; CAL's direct dump already dates each purchase to
+      its charge (billing_date), AMEX and Max mostly don't — a direct next-charge per card would
+      need the pipeline.
 
 ### Phase 4 — polish
 - [ ] Scrub readout, view transitions into detail pages, desktop layout.

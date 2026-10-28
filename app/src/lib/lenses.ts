@@ -25,8 +25,8 @@ export interface Lens {
   delta: { amount: number; text: string; good: boolean } | null;
   series: LensPoint[];
   todayIndex: number;
-  /** "הרחב" target. */
-  to: string;
+  /** "הרחב" target; none when the home's own cards are the detail (net worth, debt). */
+  to?: string;
   /** A quiet line under the chart: what the series is, or what is still missing. */
   note?: string;
 }
@@ -164,7 +164,6 @@ export function debtLens(history: History | undefined): Lens | null {
     delta: null,
     series,
     todayIndex: i,
-    to: "/networth",
     note: "קרן ההלוואות והמשכנתא · לפני היום משוער, אחרי לפי לוח הסילוקין",
   };
 }
@@ -206,7 +205,7 @@ function recordedLens(
         : { amount: change, text: `מאז ${dayMonth(first.date)}`, good: change > 0 },
     series: days.map((d) => ({ x: d.date, actual: d.value })),
     todayIndex: days.length - 1,
-    to: key === "savings" ? "/overview?lens=savings&holdings=1" : "/networth",
+    to: key === "savings" ? "/overview?lens=savings&holdings=1" : undefined,
     note,
   };
 }

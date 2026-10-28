@@ -327,23 +327,6 @@ export interface Loan {
   [k: string]: unknown;
 }
 
-/** Balance-weighted summary of a loan group (digest.loan_profile). */
-export interface LoanProfile {
-  balance: number;
-  monthly_payment: number;
-  /** Nominal, balance-weighted. Interest refunds the bank pays back are not visible. */
-  avg_rate_pct: number;
-  /** Shares of balance, 0–1. index_linked overlaps fixed/variable. */
-  rate_mix: {
-    fixed: number;
-    variable: number;
-    index_linked: number;
-    zero_rate: number;
-  };
-  tracks: number;
-  final_date: string | null;
-  payments_remaining: number;
-}
 
 /**
  * A long-term savings vehicle (pension / study fund). These are assets, not
@@ -351,6 +334,17 @@ export interface LoanProfile {
  * `management_fee` / `yield_ytd` are null until the per-policy detail is
  * captured (see the harel-refresh skill's "known gap").
  */
+/** A debt-bearing card in the snapshot (RiseUp's, with the issuers' roster names by last4). */
+export interface CreditCard {
+  issuer: string;
+  last4: string;
+  name?: string | null;
+  holder?: string | null;
+  /** What the card owes now: its next charge as RiseUp last saw it. */
+  owed: number;
+  currency: string;
+}
+
 /** A checking account in the snapshot (direct scrape wins over RiseUp's copy). */
 export interface BankAccount {
   institution: string;
@@ -418,13 +412,8 @@ export interface Snapshot {
   /** Hand-typed assets (the apartment); null/absent without the database. */
   assets?: SnapshotAsset[] | null;
   bank_accounts: BankAccount[];
-  credit_cards: unknown[];
+  credit_cards: CreditCard[];
   loans: Loan[];
-  debt_profile?: {
-    mortgage: LoanProfile | null;
-    consumer: LoanProfile | null;
-    all_loans: LoanProfile | null;
-  };
   savings?: Savings[];
   income?: unknown;
   transactions_count?: number;
