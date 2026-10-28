@@ -311,24 +311,24 @@ describe("buildCards", () => {
     ...OCT,
     transactions: [
       ...OCT.transactions,
-      { date: "2026-10-02", merchant: "מטרו מוטור שווק (1981)בעמ", amount: 500, category: "רכב", group: "תחבורה", kind: "fixed", block: "fixed" },
-      { date: "2026-10-09", merchant: "פז אפליקציה", amount: 36.88, category: "דלק", group: "תחבורה", kind: "variable", block: "variable" },
-      { date: "2026-10-12", merchant: "פנגו", amount: 6.8, category: "רכב", group: "תחבורה", kind: "variable", block: "variable" },
+      { date: "2026-10-02", merchant: "מטרו מוטור שווק (1981)בעמ", amount: 500, category: "תחבורה", group: "תחבורה", kind: "fixed", block: "fixed" },
+      { date: "2026-10-09", merchant: "פז אפליקציה", amount: 36.88, category: "תחבורה", group: "תחבורה", kind: "variable", block: "variable" },
+      { date: "2026-10-12", merchant: "פנגו", amount: 6.8, category: "תחבורה", group: "תחבורה", kind: "variable", block: "variable" },
     ],
   };
   const budgets = {
     ...BUDGETS,
     categories: [
       ...BUDGETS.categories,
-      { name: "תחבורה", scope: "group", group: "תחבורה", planned: 200, spent: 43.68, left: 156.32, pct: 21.8, over: false, source: "override", estimate: 447.94 },
+      { name: "תחבורה", scope: "category", group: "תחבורה", planned: 200, spent: 43.68, left: 156.32, pct: 21.8, over: false, source: "override", estimate: 447.94 },
     ],
   } as unknown as Budgets;
   const bills = {
     ...BILLS,
     items: [
       ...BILLS.items,
-      { name: "מטרו מוטור שווק (1981)בעמ", category: "רכב", group: "תחבורה", kind: "bill", amount: 500, due_day: 2, due_date: "2026-10-02", status: "paid", paid_on: "2026-10-02" },
-      { name: "PRO", category: "רכב", group: "תחבורה", kind: "bill", amount: 60.84, due_day: 18, due_date: "2026-10-18", status: "overdue", paid_on: null },
+      { name: "מטרו מוטור שווק (1981)בעמ", category: "תחבורה", group: "תחבורה", kind: "bill", amount: 500, due_day: 2, due_date: "2026-10-02", status: "paid", paid_on: "2026-10-02" },
+      { name: "PRO", category: "תחבורה", group: "תחבורה", kind: "bill", amount: 60.84, due_day: 18, due_date: "2026-10-18", status: "overdue", paid_on: null },
     ],
   } as unknown as Bills;
   const cards = buildCards(buildMonthList({ month, budgets, bills }));
@@ -344,13 +344,8 @@ describe("buildCards", () => {
     expect(t.alert).toBe(true); // PRO not charged yet
   });
 
-  it("the group-scope line names the categories it covers, not the group again", () => {
-    const t = cards.find((c) => c.name === "תחבורה")!;
-    expect(t.variableLines.map((l) => l.parts)).toEqual([["דלק", "רכב"]]);
-  });
-
   it("unplanned spending puts a card over its plan; debt stays out", () => {
-    const home = cards.find((c) => c.name === "בית")!;
+    const home = cards.find((c) => c.name === "גינה")!;
     expect([home.planned, home.over]).toEqual([0, true]);
     expect(cards.some((c) => c.name === "פיננסים")).toBe(false);
   });
@@ -358,8 +353,8 @@ describe("buildCards", () => {
   it("past month: no plan, just the fixed/variable split", () => {
     const past = buildCards(buildMonthList({ month: OCT }));
     expect(past.map((c) => [c.name, c.fixed, c.variable, c.planned])).toEqual([
-      ["דיור", 6800, 0, null],
-      ["אוכל", 0, 250, null],
+      ["שכר דירה", 6800, 0, null],
+      ["כלכלה", 0, 250, null],
     ]);
   });
 });
@@ -379,8 +374,8 @@ describe("unassignedTransactions", () => {
   });
 });
 
-describe("top-level categories", () => {
-  it("a planned category is its own card; unplanned ones roll into their group", () => {
+describe("flat categories", () => {
+  it("every category is its own card; no group roll-up", () => {
     const month: SpendingMonth = {
       ...OCT,
       transactions: [
@@ -389,19 +384,10 @@ describe("top-level categories", () => {
         { date: "2026-10-18", merchant: "ארומה", amount: 30, category: "קפה בחוץ", group: "אוכל", kind: "variable", block: "variable" },
       ],
     };
-    const budgets = {
-      ...BUDGETS,
-      categories: [
-        ...BUDGETS.categories,
-        { name: "אלכוהול", scope: "category", group: "אוכל", planned: 255.7, spent: 153.4, left: 102.3, pct: 60, over: false, source: "override", estimate: 245.32 },
-      ],
-    } as unknown as Budgets;
-    const cards = buildCards(buildMonthList({ month, budgets }));
-    const names = cards.map((c) => [c.name, c.category]);
-    expect(names).toContainEqual(["כלכלה", true]);
-    expect(names).toContainEqual(["אלכוהול", true]);
-    // קפה בחוץ has no plan: it sits in the אוכל card; גינה (unplanned) in בית
-    expect(cards.find((c) => c.name === "אוכל")?.variableLines.map((l) => l.name)).toEqual(["קפה בחוץ"]);
-    expect(cards.find((c) => c.name === "בית")?.category).toBe(false);
+    const cards = buildCards(buildMonthList({ month, budgets: BUDGETS }));
+    expect(cards.map((c) => c.name).sort()).toEqual(
+      ["אלכוהול", "גינה", "כלכלה", "קפה בחוץ", "שכר דירה"].sort(),
+    );
+    expect(cards.some((c) => c.name === "אוכל")).toBe(false);
   });
 });

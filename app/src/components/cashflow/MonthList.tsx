@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useSearchParams } from "react-router-dom";
 import { ChevronDown } from "lucide-react";
 import {
@@ -33,7 +33,6 @@ import {
   buildCards,
   buildMonthList,
   unassignedTransactions,
-  OTHER_GROUP,
   chargeHint,
   findLine,
   lineTransactions,
@@ -63,7 +62,16 @@ function amountTone(pct: number, over: boolean): string {
 }
 
 /** A fixed charge: status (✓ paid / due day / overdue), flags from the "what can I cut?" review. */
-function ChargeRow({ c, onOpen }: { c: ChargeItem; onOpen: () => void }) {
+function ChargeRow({
+  c,
+  onOpen,
+  withCategory = false,
+}: {
+  c: ChargeItem;
+  onOpen: () => void;
+  /** Say its category: only outside a category card (the loans list). */
+  withCategory?: boolean;
+}) {
   const paid = c.status === "paid";
   const overdue = c.status === "overdue";
   const hint = chargeHint(c);
@@ -84,7 +92,7 @@ function ChargeRow({ c, onOpen }: { c: ChargeItem; onOpen: () => void }) {
           {c.name}
         </span>
         <span className="flex flex-wrap gap-x-2 text-xs text-muted-foreground">
-          {c.category && <span>{c.category}</span>}
+          {withCategory && c.category && <span>{c.category}</span>}
           {overdue && <StatusPill tone="warn">עוד לא חויב</StatusPill>}
           {c.status === "upcoming" && (
             <span>
@@ -187,9 +195,17 @@ function CategoryRow({ l, onOpen }: { l: Line; onOpen: () => void }) {
   );
 }
 
-function LineRow({ l, onOpen }: { l: Line; onOpen: () => void }) {
+function LineRow({
+  l,
+  onOpen,
+  withCategory,
+}: {
+  l: Line;
+  onOpen: () => void;
+  withCategory?: boolean;
+}) {
   return l.charge ? (
-    <ChargeRow c={l.charge} onOpen={onOpen} />
+    <ChargeRow c={l.charge} onOpen={onOpen} withCategory={withCategory} />
   ) : (
     <CategoryRow l={l} onOpen={onOpen} />
   );
@@ -197,7 +213,8 @@ function LineRow({ l, onOpen }: { l: Line; onOpen: () => void }) {
 
 /**
  * A category group's card: actual of planned with a bar split into its fixed and
- * variable parts; tapping it lists the fixed charges and the variable lines. An alert
+ * variable parts; tapping it lists the fixed charges and the variable transactions (swipe to
+ * re-assign or offset), with its plan one tap away. An alert
  * card starts open and its rows say what to check, so the card itself carries no pill.
  */
 function SpendCardView({
@@ -206,24 +223,22 @@ function SpendCardView({
   onToggle,
   onOpen,
   onMerge,
+  transactions,
 }: {
   c: SpendCard;
   expanded: boolean;
   onToggle: () => void;
   onOpen: (l: Line) => void;
+  /** The card's variable transactions as swipeable rows (re-assign / קיזוז), or null. */
+  transactions: ReactNode;
   /** A top-level category: merge it into another one. */
   onMerge?: () => void;
 }) {
   const plan = c.planned;
   const pct = plan ? (c.actual / plan) * 100 : c.actual > 0 ? 100 : 0;
-  const both = c.fixedLines.length > 0 && c.variableLines.length > 0;
-  // A category card that is just its own budget line: the card already is that line.
-  const self =
-    c.fixedLines.length === 0 &&
-    c.variableLines.length === 1 &&
-    c.variableLines[0].category === c.name
-      ? c.variableLines[0]
-      : null;
+  // The variable side's budget line (plan sheet, usual month) and a utility's bill status.
+  const planLine = c.variableLines.find((l) => l.budget);
+  const bill = c.variableLines.find((l) => l.bill)?.bill;
   const parts = [
     c.fixed + c.fixedPending > 0 &&
       `קבוע ${shekel(c.fixed)}${c.fixedPending > 0.005 ? ` + ${shekel(c.fixedPending)} צפוי` : ""}`,
@@ -279,24 +294,11 @@ function SpendCardView({
       {expanded && c.lever && (
         <div className="mt-2 text-xs text-muted-foreground">{c.lever}</div>
       )}
-      {expanded && self && (
-        <button
-          type="button"
-          onClick={() => onOpen(self)}
-          className="mt-2 flex w-full items-baseline justify-between text-xs text-muted-foreground tabular-nums"
-        >
-          <span>
-            {self.budget?.estimate != null &&
-              `בחודש רגיל ${shekel(self.budget.estimate)}`}
-          </span>
-          <span className="font-semibold text-brand">תנועות ותכנון ›</span>
-        </button>
-      )}
       {expanded && (
         <div className="mt-1">
-          {!self && c.fixedLines.length > 0 && (
+          {c.fixedLines.length > 0 && (
             <>
-              {both && <SectionLabel className="mt-2">קבוע</SectionLabel>}
+              {transactions && <SectionLabel className="mt-2">קבוע</SectionLabel>}
               <div className="divide-y divide-line">
                 {c.fixedLines.map((l) => (
                   <LineRow key={l.key} l={l} onOpen={() => onOpen(l)} />
@@ -304,15 +306,27 @@ function SpendCardView({
               </div>
             </>
           )}
-          {!self && c.variableLines.length > 0 && (
+          {bill && <BillStatus c={bill} />}
+          {transactions && (
             <>
-              {both && <SectionLabel className="mt-2">משתנה</SectionLabel>}
-              <div className="divide-y divide-line">
-                {c.variableLines.map((l) => (
-                  <LineRow key={l.key} l={l} onOpen={() => onOpen(l)} />
-                ))}
-              </div>
+              {c.fixedLines.length > 0 && (
+                <SectionLabel className="mt-2">משתנה</SectionLabel>
+              )}
+              {transactions}
             </>
+          )}
+          {planLine && (
+            <button
+              type="button"
+              onClick={() => onOpen(planLine)}
+              className="mt-2 flex w-full items-baseline justify-between text-xs text-muted-foreground tabular-nums"
+            >
+              <span>
+                {planLine.budget?.estimate != null &&
+                  `בחודש רגיל ${shekel(planLine.budget.estimate)}`}
+              </span>
+              <span className="font-semibold text-brand">תכנון ›</span>
+            </button>
           )}
           {onMerge && (
             <button
@@ -370,7 +384,7 @@ export default function MonthList({
   );
 
   const cards = useMemo(
-    () => buildCards(sections).filter((c) => c.name !== OTHER_GROUP),
+    () => buildCards(sections),
     [sections],
   );
   const spendTotal = cards.reduce((t, c) => t + c.actual, 0);
@@ -418,9 +432,7 @@ export default function MonthList({
     if (!hit) return;
     setOpen((prev) =>
       new Set(prev).add(
-        hit.section === "debt_savings"
-          ? `${hit.section}|${hit.group}`
-          : `card|${hit.group}`,
+        `card|${hit.line.category ?? hit.line.name}`,
       ),
     );
     openLine(hit.line);
@@ -453,6 +465,19 @@ export default function MonthList({
       {...swipeProps(t, -t.amount)}
     />
   );
+
+  // An opened card lists its variable transactions, swipeable like every transaction row.
+  const cardTransactions = (category: string) => {
+    const txns = lineTransactions(m, {
+      section: "variable",
+      category,
+      scope: "category",
+      group: "",
+    });
+    return txns.length ? (
+      <TransactionList>{txns.map((t, i) => txRow(t, i, false))}</TransactionList>
+    ) : null;
+  };
 
   // Rows with no category group (an unmapped label or none): triage them into a
   // category from the edit sheet, or leave them as they are.
@@ -531,6 +556,7 @@ export default function MonthList({
                         onMerge={
                           c.category ? () => setMerging(c.name) : undefined
                         }
+                        transactions={cardTransactions(c.name)}
                       />
                     );
                   })}
@@ -544,54 +570,19 @@ export default function MonthList({
               <div key={s.key} id={`sec-${s.key}`} className="scroll-mt-20">
                 <Section title={`${s.label} · ${shekel(s.total)}`}>
                   <Card className="!py-1">
-                    <ul className="divide-y divide-line">
-                      {s.groups.map((g) => {
-                        const key = `${s.key}|${g.name}`;
-                        const expanded = isOpen(key, g.alert);
-                        return (
-                          <li key={key}>
-                            <button
-                              type="button"
-                              aria-expanded={expanded}
-                              onClick={() => toggle(key)}
-                              className="flex w-full items-center gap-2 py-2.5 text-start"
-                            >
-                              <ChevronDown
-                                className={cn(
-                                  "size-4 shrink-0 text-muted-foreground transition-transform",
-                                  !expanded && "rotate-90",
-                                )}
-                              />
-                              <span className="min-w-0 flex-1 truncate font-semibold">
-                                {g.name}
-                              </span>
-                              {g.alert && (
-                                <StatusPill
-                                  tone="warn"
-                                  className="whitespace-nowrap"
-                                >
-                                  כדאי לבדוק
-                                </StatusPill>
-                              )}
-                              <strong className="shrink-0 tabular-nums">
-                                {shekel(g.total)}
-                              </strong>
-                            </button>
-                            {expanded && (
-                              <div className="divide-y divide-line pb-1 ps-6">
-                                {g.lines.map((l) => (
-                                  <LineRow
-                                    key={l.key}
-                                    l={l}
-                                    onOpen={() => openLine(l)}
-                                  />
-                                ))}
-                              </div>
-                            )}
-                          </li>
-                        );
-                      })}
-                    </ul>
+                    <div className="divide-y divide-line">
+                      {s.groups
+                        .flatMap((g) => g.lines)
+                        .sort((x, y) => y.amount - x.amount)
+                        .map((l) => (
+                          <LineRow
+                            key={l.key}
+                            l={l}
+                            withCategory
+                            onOpen={() => openLine(l)}
+                          />
+                        ))}
+                    </div>
                   </Card>
                 </Section>
               </div>

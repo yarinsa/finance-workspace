@@ -24,7 +24,7 @@ def test_metro_motor_is_transport_not_installments():
                      sources=["cal", "riseup"])
     cat.stamp(ledger)
     t = ledger[-1]
-    assert (t["category_group"], t["category"], t["kind"], t["kind_source"]) == ("תחבורה", "רכב", "fixed", "recurring")
+    assert (t["category_group"], t["category"], t["kind"], t["kind_source"]) == ("תחבורה", "תחבורה", "fixed", "recurring")
     assert t["source_category"] == "תשלומים"
 
 
@@ -33,7 +33,7 @@ def test_fuel_is_transport_and_variable():
     tracking envelope "תחבורה" is too broad to name it, so the merchant decides."""
     ledger = [row("2026-10-05", -36.88, "פז אפליקצית-YELLOW", category="רכב", budget_category="תחבורה")]
     cat.stamp(ledger)
-    assert (ledger[0]["category_group"], ledger[0]["category"], ledger[0]["kind"]) == ("תחבורה", "דלק", "variable")
+    assert (ledger[0]["category_group"], ledger[0]["category"], ledger[0]["kind"]) == ("תחבורה", "תחבורה", "variable")
 
 
 def test_gas_bill_is_not_fuel():
@@ -196,7 +196,7 @@ def test_levers_follow_the_taxonomy():
     assert cat.lever("תקשורת")[0] == "bills"            # פרטנר ₪135.14
     assert cat.lever("שכר דירה")[0] == "committed"      # rent ₪6,800
     assert cat.lever("הלוואה", "תשלומים")[0] == "committed"
-    assert cat.lever("רכב", "תשלומים")[0] == "installments"   # Metro Motor ₪500
+    assert cat.lever("תחבורה", "תשלומים")[0] == "installments"   # Metro Motor ₪500
     assert cat.lever("ביטוח", "תשלומים")[0] == "bills"        # ליברה premium ₪30
     assert cat.lever("הוצאות עסק")[0] == "other"        # the accountant ₪354
     assert [key for key, *_ in cat.LEVERS][-1] == "other"

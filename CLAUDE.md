@@ -300,10 +300,9 @@ upcoming card bills, duplicate services, stale syncs) from those blocks, with pe
 **The month screen is one screen: `/monthly`** (there is no `/budgets`, `/spending` or `/fixed`).
 בפועל: free money (`budgets.summary.left`) and income / קבוע / משתנה on top (a figure scrolls to its
 section; past months show their net and `months_view` actuals instead), then the month's spending
-as **one card per top-level category** across קבוע and משתנה (`buildCards` in `app/src/lib/monthList.ts`):
-a category with its own plan line (the household's manual split: כלכלה, אוכל בחוץ, אלכוהול, עציצים…)
-is its own card, every other category rolls up into its group's card (תחבורה holds Metro Motor's
-installments and the fuel). Each card shows actual of planned (fixed paid + fixed still
+as **one card per category** across קבוע and משתנה (`buildCards` in `app/src/lib/monthList.ts`;
+categories are flat, no group level: תחבורה holds Metro Motor's installments and the fuel).
+Each card shows actual of planned (fixed paid + fixed still
 expected + the variable plan) on a `StackedBar` split into fixed (dark) and variable (light). Inside:
 the fixed charges (`fixed_expenses` items merged with `bills` by name: status, due day) with one
 quiet saving hint each when there is one (`chargeHint`: duplicate service, not charged in 70+ days,
@@ -441,8 +440,10 @@ fixed − variable. Non-spending rows (income, card bills, own transfers, saving
   ±5% on about the same day, ≥3 months) > one-off (the merchant recurs, this charge
   doesn't: a ₪52k loan payoff) > RiseUp fixed envelope > category default. `kind_source`
   says which one decided.
-- **Top level = budgeting.** A category with a plan is a top-level category (its own card on
-  `/monthly`); the rest roll up into their group. Finer labels are for sorting and analysis.
+- **Categories are flat = the budget's unit**, the household's own division (RiseUp's, sorted
+  by hand: כלכלה, אוכל בחוץ, תחבורה…). `category_group` is only an internal tag (non-spending,
+  the cut-lever), never shown. Tags are for filtering and analysis. A dropped category becomes
+  an alias (רכב / דלק / תחבורה ציבורית → תחבורה, 2026-10-28): `sync_taxonomy` moves its edits.
   A category can be **merged** into another from the app (a category card → "מיזוג לקטגוריה
   אחרת"; GraphQL `categoryMerge` / `categoryUnmerge`, `db/overrides.merge_category`,
   `categories.merged_into_id`, one level): `transaction_kinds` counts its rows as the target,
