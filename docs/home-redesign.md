@@ -251,8 +251,12 @@ move to `/metrics`, debt % also as a footer on the חובות lens), `home/Hero`
       bank names "ללא ריבית" counts at 0%. /networth is gone (redirects to the net
       worth lens): the home band and cards carry all of it.
 - [x] The apartment card is collapsible too: opened, its value, the mortgage and the equity
-      (value − mortgage), with עדכון השווי / הוספת שווי opening `PropertyEditorSheet`. Only the
-      credit-card card still links out.
+      (value − mortgage), with עדכון השווי / הוספת שווי opening `PropertyEditorSheet`.
+- [x] כרטיסי אשראי is collapsible: each card's charge (snapshot `credit_cards[].owed`, which
+      sums to the card's total), then a link to /monthly. Every home card now opens in place.
+      Open question: `owed` is RiseUp's figure; CAL's direct dump already dates each purchase to
+      its charge (billing_date), AMEX and Max mostly don't — a direct next-charge per card would
+      need the pipeline.
 
 ### Phase 4 — polish
 - [ ] Scrub readout, view transitions into detail pages, desktop layout.

@@ -334,6 +334,17 @@ export interface Loan {
  * `management_fee` / `yield_ytd` are null until the per-policy detail is
  * captured (see the harel-refresh skill's "known gap").
  */
+/** A debt-bearing card in the snapshot (RiseUp's, with the issuers' roster names by last4). */
+export interface CreditCard {
+  issuer: string;
+  last4: string;
+  name?: string | null;
+  holder?: string | null;
+  /** What the card owes now: its next charge as RiseUp last saw it. */
+  owed: number;
+  currency: string;
+}
+
 /** A checking account in the snapshot (direct scrape wins over RiseUp's copy). */
 export interface BankAccount {
   institution: string;
@@ -401,7 +412,7 @@ export interface Snapshot {
   /** Hand-typed assets (the apartment); null/absent without the database. */
   assets?: SnapshotAsset[] | null;
   bank_accounts: BankAccount[];
-  credit_cards: unknown[];
+  credit_cards: CreditCard[];
   loans: Loan[];
   savings?: Savings[];
   income?: unknown;
