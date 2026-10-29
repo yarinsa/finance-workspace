@@ -61,6 +61,22 @@ function amountTone(pct: number, over: boolean): string {
   return over ? "text-bad" : pct >= 90 ? "text-warn" : "";
 }
 
+/** The row's kind, said on the row itself: קבוע / משתנה. */
+function KindChip({ kind }: { kind: "fixed" | "variable" }) {
+  return (
+    <span
+      className={cn(
+        "rounded-full px-1.5 py-px text-[10px] font-semibold",
+        kind === "fixed"
+          ? "bg-[var(--holst-1)] text-[var(--lg-on-accent)]"
+          : "bg-line text-muted-foreground",
+      )}
+    >
+      {kind === "fixed" ? "קבוע" : "משתנה"}
+    </span>
+  );
+}
+
 /** A fixed charge: status (✓ paid / due day / overdue), flags from the "what can I cut?" review. */
 function ChargeRow({
   c,
@@ -92,6 +108,7 @@ function ChargeRow({
           {c.name}
         </span>
         <span className="flex flex-wrap gap-x-2 text-xs text-muted-foreground">
+          <KindChip kind="fixed" />
           {withCategory && c.category && <span>{c.category}</span>}
           {overdue && <StatusPill tone="warn">עוד לא חויב</StatusPill>}
           {c.status === "upcoming" && (
@@ -296,25 +313,13 @@ function SpendCardView({
       )}
       {expanded && (
         <div className="mt-1">
-          {c.fixedLines.length > 0 && (
-            <>
-              {transactions && <SectionLabel className="mt-2">קבוע</SectionLabel>}
-              <div className="divide-y divide-line">
-                {c.fixedLines.map((l) => (
-                  <LineRow key={l.key} l={l} onOpen={() => onOpen(l)} />
-                ))}
-              </div>
-            </>
-          )}
+          <div className="divide-y divide-line">
+            {c.fixedLines.map((l) => (
+              <LineRow key={l.key} l={l} onOpen={() => onOpen(l)} />
+            ))}
+          </div>
           {bill && <BillStatus c={bill} />}
-          {transactions && (
-            <>
-              {c.fixedLines.length > 0 && (
-                <SectionLabel className="mt-2">משתנה</SectionLabel>
-              )}
-              {transactions}
-            </>
-          )}
+          {transactions}
           {planLine && (
             <button
               type="button"
@@ -457,6 +462,11 @@ export default function MonthList({
       merchant={t.merchant}
       amount={-t.amount}
       date={t.date}
+      meta={
+        t.kind === "fixed" || t.kind === "variable" ? (
+          <KindChip kind={t.kind} />
+        ) : undefined
+      }
       category={withCategory ? t.category : undefined}
       tags={t.tags}
       edited={t.overridden || overlayFor(overlay, t)?.overridden}
