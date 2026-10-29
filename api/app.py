@@ -177,7 +177,7 @@ def create_app(settings=None, pool=None, rebuilder=None, verifier=None, broadcas
 
     def signal_rebuild(request):
         # The edit is already committed; a Temporal problem must not turn it into an error.
-        request.app.state.rebuilder.signal_edited()
+        request.app.state.rebuilder.signal_edited(request.state.tenant.tenant_id)
 
     def found(row):
         if row is None:
@@ -485,7 +485,7 @@ def create_app(settings=None, pool=None, rebuilder=None, verifier=None, broadcas
 
     @app.get("/api/rebuild")
     def rebuild_status(request: Request, user=Depends(current_user)):
-        return request.app.state.rebuilder.status()
+        return request.app.state.rebuilder.status(request.state.tenant.tenant_id)
 
     return app
 

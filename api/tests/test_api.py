@@ -396,6 +396,22 @@ def test_signal_with_start_targets_the_contract_names(monkeypatch):
     assert Rebuilder("temporal:7233").signal_edited() is True
     assert (calls["workflow"], calls["id"], calls["task_queue"], calls["start_signal"]) == \
         ("LedgerRebuildWorkflow", "ledger-rebuild", "finance-sync", "edited")
+    assert calls["arg"] is None   # the master tenant starts it exactly as before tenants
+
+
+def test_another_tenants_rebuild_is_its_own_workflow_carrying_the_tenant(monkeypatch):
+    calls = {}
+
+    class FakeClient:
+        async def start_workflow(self, workflow, **kw):
+            calls.update(kw)
+
+    async def connect(address):
+        return FakeClient()
+    monkeypatch.setattr("api.rebuild.Client.connect", connect)
+    t = "aaaaaaaa-0000-4000-8000-00000000000a"
+    assert Rebuilder("temporal:7233").signal_edited(t) is True
+    assert calls["id"] == f"ledger-rebuild-{t}" and calls["arg"] == {"tenant_id": t}
 
 
 # --- least privilege --------------------------------------------------------------------

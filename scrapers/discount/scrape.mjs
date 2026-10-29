@@ -4,8 +4,9 @@
 // files as .claude/skills/discount-account-refresh/scripts/dump.sh. Credentials come from <repo>/.env only.
 import path from 'node:path';
 import { repo, opt, requireLoginEnv, createDumper, runScrape, Exit, GATEWAY } from './lib.mjs';
+import { dataDir } from '../tenant.mjs';
 
-const outDir = path.resolve(opt('--out', path.join(repo, 'data/discount/raw')));
+const outDir = path.resolve(opt('--out', dataDir(repo, 'discount/raw')));
 const cliAccount = opt('--account', '');
 const numTx = opt('--num-tx', '500');
 if (!/^\d+$/.test(numTx) || Number(numTx) <= 0) {

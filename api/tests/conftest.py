@@ -120,11 +120,12 @@ class FakeRebuilder:
         self.logins, self.codes, self.retries = [], [], []
         self.state = {"state": "idle", "last_published_at": None, "last_error": None}
 
-    def signal_edited(self):
+    def signal_edited(self, tenant_id=None):
         self.signals += 1
+        self.tenants = [*getattr(self, "tenants", []), tenant_id]
         return True
 
-    def status(self):
+    def status(self, tenant_id=None):
         return self.state
 
     def ping(self):

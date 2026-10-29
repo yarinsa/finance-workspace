@@ -8,9 +8,10 @@
 // logged in through LOGIN_PAGE_SME (the personal session cannot open the SME app).
 import path from 'node:path';
 import { repo, opt, requireLoginEnv, createDumper, runScrape, Exit, GATEWAY } from './lib.mjs';
+import { dataDir } from '../tenant.mjs';
 
 const DEFAULT_ACCOUNT = '0216859524'; // dump.sh's default business account
-const outDir = path.resolve(opt('--out', path.join(repo, 'data/discount-business/raw')));
+const outDir = path.resolve(opt('--out', dataDir(repo, 'discount-business/raw')));
 const account = opt('--account', DEFAULT_ACCOUNT);
 const numTx = opt('--num-tx', '500');
 if (!/^\d+$/.test(numTx)) {

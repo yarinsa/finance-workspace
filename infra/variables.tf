@@ -44,3 +44,9 @@ variable "api_origin_domain" {
   type        = string
   default     = ""
 }
+
+variable "enforce_tenant_data" {
+  description = "Require the master tenant's Cognito group (tenant-00000000-0000-4000-8000-000000000001) for /data/*.json. Keep false until infra/tenant-groups.sh has put every current user in it, then set true BEFORE onboarding a second tenant: until then any signed-in user can read the master tenant's files."
+  type        = bool
+  default     = false
+}

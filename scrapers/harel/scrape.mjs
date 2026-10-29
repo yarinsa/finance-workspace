@@ -24,10 +24,11 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { loadEnv, dataDir } from '../tenant.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const repo = path.resolve(here, '../..');
-dotenv.config({ path: path.join(repo, '.env'), quiet: true });
+loadEnv(repo, dotenv);
 
 const PORT = 9227;
 const PROFILE = path.join(os.homedir(), '.chrome-cdp-harel');
@@ -54,7 +55,7 @@ function opt(name, def) {
 const checkOnly = args.includes('--check');
 const doLogin = args.includes('--login');
 const otpFile = opt('--otp-file', '');
-const outDir = path.resolve(opt('--out', path.join(repo, 'data/harel/raw')));
+const outDir = path.resolve(opt('--out', dataDir(repo, 'harel/raw')));
 const OTP_WAIT_MS = 8 * 60_000;  // inside the sync's 10-minute scrape timeout
 const DEBUG_DIR = path.join(os.tmpdir(), 'harel-login-debug');
 if (doLogin) {

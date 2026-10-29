@@ -6,10 +6,11 @@ import dotenv from 'dotenv';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { loadEnv } from '../tenant.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 export const repo = path.resolve(here, '../..');
-dotenv.config({ path: path.join(repo, '.env'), quiet: true });
+loadEnv(repo, dotenv);
 
 export const BASE_URL = 'https://start.telebank.co.il';
 export const GATEWAY = '/Titan/gatewayAPI';

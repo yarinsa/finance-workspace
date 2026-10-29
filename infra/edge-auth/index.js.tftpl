@@ -219,6 +219,28 @@ function rewriteSpaRoute(request) {
   if (!last.includes(".")) request.uri = "/index.html";
 }
 
+/**
+ * Tenant gate for the published data. A tenant's files live under /data/t/<tenant_id>/ and
+ * are served only to a session whose Cognito groups include "tenant-<tenant_id>" (the group
+ * mirrors the membership; infra/tenant-groups.sh keeps it in step). The master tenant's
+ * files keep the old /data/<file>.json paths; they are gated the same way once
+ * CONFIG.enforce_tenant_data is on (it is off until the groups exist, so the household is
+ * never locked out of its own data during the rollout). The check uses the signed id
+ * token only: this function has no database.
+ */
+const TENANT_DATA = /^\/data\/t\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\/[A-Za-z0-9_-]+\.json$/;   // one flat file: no ".." or nested paths
+
+function tenantAllowed(uri, claims) {
+  const groups = Array.isArray(claims["cognito:groups"]) ? claims["cognito:groups"] : [];
+  const m = TENANT_DATA.exec(uri);
+  if (m) return groups.includes(`tenant-$${m[1]}`);
+  if (uri.startsWith("/data/t/")) return false; // anything else under the tenant prefix is malformed: refuse
+  if (uri.startsWith("/data/") && CONFIG.enforce_tenant_data) {
+    return groups.includes(`tenant-$${CONFIG.default_tenant_id}`);
+  }
+  return true;
+}
+
 function denied(reason) {
   return {
     status: "403",
@@ -379,6 +401,9 @@ exports.handler = async (event) => {
 
   // Signed-in only: enrolling a passkey is a privileged action.
   if (request.uri === "/_passkey") return redirectToPasskeyEnrolment();
+
+  // Another tenant's (or, once enforced, the master tenant's) data needs that tenant's group.
+  if (!tenantAllowed(request.uri, claims)) return denied("not a member of this tenant");
 
   // Authenticated: serve the app shell for client-side routes, else pass
   // through to S3 untouched.

@@ -4,6 +4,9 @@
 #   deploy.sh              build + upload the app bundle AND the digested data
 #   deploy.sh --app-only   bundle only (what CI runs on merge to master)
 #   deploy.sh --data-only  digested JSON only (run after a refresh/digest)
+#   deploy.sh --data-only --tenant ID  that tenant's digested JSON, to data/t/ID/ (the master
+#                          tenant, 00000000-0000-4000-8000-000000000001, is the default and
+#                          keeps data/*.json; the edge gate serves data/t/ID/ only to ID's group)
 #
 # The bundle carries no financial data — the app fetches /data/*.json at
 # runtime — so CI can ship code without ever seeing the data. The data is
@@ -15,13 +18,21 @@
 # state); otherwise they are read from terraform outputs.
 set -euo pipefail
 
+MASTER=00000000-0000-4000-8000-000000000001
 MODE=all
-case "${1:-}" in
-  "") ;;
-  --app-only) MODE=app ;;
-  --data-only) MODE=data ;;
-  *) echo "usage: $0 [--app-only|--data-only]" >&2; exit 2 ;;
-esac
+TENANT=$MASTER
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --app-only) MODE=app ;;
+    --data-only) MODE=data ;;
+    --tenant) TENANT=${2:?--tenant needs an id}; shift ;;
+    *) echo "usage: $0 [--app-only|--data-only] [--tenant ID]" >&2; exit 2 ;;
+  esac
+  shift
+done
+# a tenant id is a lower-case uuid, nothing else (it becomes a path)
+[[ $TENANT =~ ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$ ]] || { echo "error: bad tenant id" >&2; exit 2; }
+if [[ $MODE == app && $TENANT != "$MASTER" ]]; then echo "error: --tenant only applies to data" >&2; exit 2; fi
 
 cd "$(dirname "$0")"
 REPO=$(cd .. && pwd)
@@ -69,10 +80,15 @@ fi
 
 if [[ $MODE != app ]]; then
   echo "==> uploading digested data"
+  if [[ $TENANT == "$MASTER" ]]; then
+    SRC_DIR="${FINANCE_DATA_DIR:-$REPO/data}/digested"; DEST="data"
+  else
+    SRC_DIR="${FINANCE_DATA_DIR:-$REPO/data}/tenants/$TENANT/digested"; DEST="data/t/$TENANT"
+  fi
   for f in cashflow snapshot transactions goals forecast validation; do
-    src="$REPO/data/digested/$f.json"
+    src="$SRC_DIR/$f.json"
     if [[ -f "$src" ]]; then
-      aws s3 cp "$src" "s3://$BUCKET/data/$f.json" \
+      aws s3 cp "$src" "s3://$BUCKET/$DEST/$f.json" \
         --cache-control "no-cache,no-store,must-revalidate" \
         --content-type "application/json; charset=utf-8"
     else

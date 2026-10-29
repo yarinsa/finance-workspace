@@ -17,10 +17,11 @@ import dotenv from 'dotenv';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { loadEnv, dataDir } from '../tenant.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const repo = path.resolve(here, '../..');
-dotenv.config({ path: path.join(repo, '.env'), quiet: true });
+loadEnv(repo, dotenv);
 
 const LOGIN_URL = 'https://he.americanexpress.co.il/personalarea/login/';
 const WEB = 'https://web.americanexpress.co.il';
@@ -47,7 +48,7 @@ function opt(name, def) {
   return i >= 0 && args[i + 1] ? args[i + 1] : def;
 }
 
-const outDir = path.resolve(opt('--out', path.join(repo, 'data/amex/raw')));
+const outDir = path.resolve(opt('--out', dataDir(repo, 'amex/raw')));
 const months = opt('--months', '2'); // dump.sh pulls the current + previous billing month
 if (!/^\d+$/.test(months) || Number(months) <= 0) {
   console.error('--months must be a positive integer');

@@ -376,6 +376,10 @@ locals {
     hosted_domain = local.auth_domain
     site_domain   = var.domain_name
     cookie_name   = "plangram_session"
+    // Per-tenant data (docs/tenancy.md): /data/t/<tenant>/ needs the "tenant-<id>" Cognito group;
+    // /data/*.json (the master tenant) does too once enforce_tenant_data is true.
+    default_tenant_id   = "00000000-0000-4000-8000-000000000001"
+    enforce_tenant_data = var.enforce_tenant_data
     // Lifetime of the refresh-token cookie; matches the client's refresh_token_validity (days).
     refresh_max_age = aws_cognito_user_pool_client.web.refresh_token_validity * 86400
   }

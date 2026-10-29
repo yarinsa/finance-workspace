@@ -8,8 +8,9 @@
 // visits it, and the stub guard still rejects it if it ever appears.
 import path from 'node:path';
 import { repo, opt, requireLoginEnv, createDumper, runScrape, Exit, GATEWAY } from './lib.mjs';
+import { dataDir } from '../tenant.mjs';
 
-const outDir = path.resolve(opt('--out', path.join(repo, 'data/discount-mortgage/raw')));
+const outDir = path.resolve(opt('--out', dataDir(repo, 'discount-mortgage/raw')));
 const cliAccount = opt('--account', '');
 requireLoginEnv();
 

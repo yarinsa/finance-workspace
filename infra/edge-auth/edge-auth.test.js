@@ -22,6 +22,8 @@ const CONFIG = {
   site_domain: "app.example.test",
   cookie_name: "plangram_session",
   refresh_max_age: 86400,
+  default_tenant_id: "00000000-0000-4000-8000-000000000001",
+  enforce_tenant_data: false,
 };
 const ISSUER = `https://cognito-idp.${CONFIG.region}.amazonaws.com/${CONFIG.user_pool_id}`;
 
@@ -48,9 +50,9 @@ function makeToken(claims = {}) {
 let tokenReply = null;
 const tokenCalls = [];
 
-function loadHandler() {
+function loadHandler(config = CONFIG) {
   const tpl = fs.readFileSync(path.join(__dirname, "index.js.tftpl"), "utf8");
-  const src = tpl.replace("${config_json}", () => JSON.stringify(CONFIG)).replace(/\$\$\{/g, "${");
+  const src = tpl.replace("${config_json}", () => JSON.stringify(config)).replace(/\$\$\{/g, "${");
   const fakeHttps = {
     get(url, cb) {
       assert.ok(url.endsWith("/.well-known/jwks.json"), `unexpected GET ${url}`);
@@ -188,4 +190,47 @@ test("/_logout clears both cookies", async () => {
   const set = res.headers["set-cookie"].map((c) => c.value);
   assert.ok(set.some((v) => v.startsWith("plangram_session=;") && v.endsWith("Max-Age=0")));
   assert.ok(set.some((v) => v.startsWith("plangram_session_rt=;") && v.endsWith("Max-Age=0")));
+});
+
+// --- tenant data ------------------------------------------------------------------
+
+const TENANT_A = "aaaaaaaa-0000-4000-8000-00000000000a";
+const TENANT_B = "bbbbbbbb-0000-4000-8000-00000000000b";
+const asMember = (...ids) => `${CONFIG.cookie_name}=${makeToken({ "cognito:groups": ids.map((i) => `tenant-${i}`) })}`;
+
+test("a tenant's data needs that tenant's group", async () => {
+  const h = loadHandler();
+  const own = await h(event(`/data/t/${TENANT_A}/transactions.json`, { cookie: asMember(TENANT_A) }));
+  assert.equal(own.status, undefined);
+  assert.equal(own.uri, `/data/t/${TENANT_A}/transactions.json`);
+  const other = await h(event(`/data/t/${TENANT_B}/transactions.json`, { cookie: asMember(TENANT_A) }));
+  assert.equal(other.status, "403");
+  const none = await h(event(`/data/t/${TENANT_A}/snapshot.json`, { cookie: session() }));
+  assert.equal(none.status, "403");
+});
+
+test("a member of two tenants reads both", async () => {
+  const h = loadHandler();
+  for (const t of [TENANT_A, TENANT_B]) {
+    const r = await h(event(`/data/t/${t}/cashflow.json`, { cookie: asMember(TENANT_A, TENANT_B) }));
+    assert.equal(r.status, undefined);
+  }
+});
+
+test("path tricks do not reach another tenant's files", async () => {
+  const h = loadHandler();
+  for (const uri of [`/data/t/${TENANT_B.toUpperCase()}/x.json`, `/data/t/${TENANT_A}/../${TENANT_B}/x.json`,
+                     `/data/t/${TENANT_A}x/x.json`, `/data/t//x.json`]) {
+    const r = await h(event(uri, { cookie: asMember(TENANT_A) }));
+    assert.equal(r.status, "403", uri);
+  }
+});
+
+test("master tenant data is open to any session until enforcement is on, then needs its group", async () => {
+  const open = await loadHandler()(event("/data/snapshot.json", { cookie: session() }));
+  assert.equal(open.status, undefined);
+  const h = loadHandler({ ...CONFIG, enforce_tenant_data: true });
+  assert.equal((await h(event("/data/snapshot.json", { cookie: asMember(TENANT_A) }))).status, "403");
+  const ok = await h(event("/data/snapshot.json", { cookie: asMember(CONFIG.default_tenant_id) }));
+  assert.equal(ok.status, undefined);
 });

@@ -12,10 +12,11 @@ import dotenv from 'dotenv';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { loadEnv, dataDir } from '../tenant.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const repo = path.resolve(here, '../..');
-dotenv.config({ path: path.join(repo, '.env'), quiet: true });
+loadEnv(repo, dotenv);
 
 const HOST = 'https://hb2.bankleumi.co.il';
 const BROKER = `${HOST}/ChannelWCF/Broker.svc/ProcessRequest`;
@@ -34,7 +35,7 @@ function opt(name, def) {
   return i >= 0 && args[i + 1] ? args[i + 1] : def;
 }
 
-const outDir = path.resolve(opt('--out', path.join(repo, 'data/leumi/raw')));
+const outDir = path.resolve(opt('--out', dataDir(repo, 'leumi/raw')));
 const accountIndex = Number(opt('--account-index', '1'));
 const numTx = Number(opt('--num-tx', '500'));
 // This customer's two loans (dump-loans.sh's default); re-read #ddlLoans if the loan set changes.

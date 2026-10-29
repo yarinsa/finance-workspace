@@ -11,6 +11,8 @@ from temporalio.api.workflowservice.v1 import GetSystemInfoRequest
 from temporalio.client import Client
 from temporalio.common import WorkflowIDConflictPolicy
 
+from finance.tenancy import DEFAULT_TENANT_ID
+
 log = logging.getLogger("finance_api")
 
 WORKFLOW = "LedgerRebuildWorkflow"
@@ -25,6 +27,12 @@ TIMEOUT = 3.0
 SYNC_WORKFLOW = "FinanceSyncWorkflow"
 OTP_SOURCES = frozenset({"harel"})
 OTP_SIGNAL = "submit_otp"
+
+
+def rebuild_workflow_id(tenant_id=None):
+    """One debounced rebuild per tenant; the master tenant keeps the original id."""
+    tid = str(tenant_id or DEFAULT_TENANT_ID)
+    return WORKFLOW_ID if tid == str(DEFAULT_TENANT_ID) else f"{WORKFLOW_ID}-{tid}"
 
 
 def login_workflow_id(source):
@@ -66,11 +74,15 @@ class Rebuilder:
             return await asyncio.wait_for(coro_fn(client), TIMEOUT)
         return asyncio.run(go())
 
-    def signal_edited(self):
-        """Signal-with-start: starts the workflow if idle, else tells the running one. Never raises."""
+    def signal_edited(self, tenant_id=None):
+        """Signal-with-start this tenant's rebuild: starts it if idle, else tells the running one.
+        Never raises."""
+        tid = str(tenant_id or DEFAULT_TENANT_ID)
+        opts = None if tid == str(DEFAULT_TENANT_ID) else {"tenant_id": tid}
+
         async def go(client):
             await client.start_workflow(
-                WORKFLOW, id=WORKFLOW_ID, task_queue=TASK_QUEUE, start_signal=SIGNAL,
+                WORKFLOW, arg=opts, id=rebuild_workflow_id(tid), task_queue=TASK_QUEUE, start_signal=SIGNAL,
                 id_conflict_policy=WorkflowIDConflictPolicy.USE_EXISTING)
         try:
             self._run(go)
@@ -79,10 +91,10 @@ class Rebuilder:
             log.exception("could not signal %s; the edit is saved and will publish with the next rebuild", WORKFLOW)
             return False
 
-    def status(self):
-        """The workflow's `status` query, or idle if there is no workflow or Temporal is down."""
+    def status(self, tenant_id=None):
+        """This tenant's rebuild `status` query, or idle if there is no workflow or Temporal is down."""
         async def go(client):
-            return await client.get_workflow_handle(WORKFLOW_ID).query(QUERY)
+            return await client.get_workflow_handle(rebuild_workflow_id(tenant_id)).query(QUERY)
         try:
             result = self._run(go)
             return {**IDLE, **{k: result.get(k) for k in IDLE if k in result}}

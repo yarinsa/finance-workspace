@@ -47,6 +47,7 @@ class Fake:
         self.digest_error = digest_error
         self.digest_delay = digest_delay  # real seconds the digest activity takes
         self.digest_args = []  # the `normalize` flag of each digest call
+        self.tenants = []  # (activity, tenant_id) for every activity that is told a tenant
         self.status_error = status_error
         self.calls = []
         self.otp_code = "123456"  # the code scrape_login accepts
@@ -87,8 +88,9 @@ class Fake:
             return seq.pop(0) if len(seq) > 1 else seq[0]
 
         @activity.defn(name="scrape")
-        async def scrape(source: str) -> str:
+        async def scrape(source: str, tenant_id: str | None = None) -> str:
             self.calls.append(("scrape", source))
+            self.tenants.append(("scrape", tenant_id))
             if source in self.scrape_errors:
                 raise self.scrape_errors[source]
             return "ok"
@@ -112,14 +114,16 @@ class Fake:
             self.otp_delivered.append(code)
 
         @activity.defn(name="validate_dump")
-        async def validate_dump(source: str):
+        async def validate_dump(source: str, tenant_id: str | None = None):
+            self.tenants.append(("validate", tenant_id))
             self.calls.append(("validate", source))
             if source in self.validate_errors:
                 raise self.validate_errors[source]
             return {"gate": "ok", **self.counts[source]} if source in self.counts else "ok"
 
         @activity.defn(name="digest")
-        async def digest(normalize: bool = True) -> dict:
+        async def digest(normalize: bool = True, tenant_id: str | None = None) -> dict:
+            self.tenants.append(("digest", tenant_id))
             self.calls.append(("digest",))
             self.digest_args.append(normalize)
             if self.digest_delay:
@@ -129,7 +133,8 @@ class Fake:
             return {"transactions": 42}
 
         @activity.defn(name="publish_data")
-        async def publish_data() -> str:
+        async def publish_data(tenant_id: str | None = None) -> str:
+            self.tenants.append(("publish", tenant_id))
             self.calls.append(("publish",))
             return "published"
 
@@ -139,24 +144,24 @@ class Fake:
             self.pushes.extend(pushes or [])
 
         @activity.defn(name="publish_status")
-        async def publish_status(source: str, entry: dict) -> str:
+        async def publish_status(source: str, entry: dict, tenant_id: str | None = None) -> str:
             self.statuses.append((source, entry))
             if self.status_error:
                 raise RuntimeError("bucket unreachable")
             return "local"
 
         @activity.defn(name="push_event")
-        async def push_event(payload: dict) -> str:
+        async def push_event(payload: dict, tenant_id: str | None = None) -> str:
             self.pushes.append(payload)
             return "1 delivered"
 
         @activity.defn(name="push_new_actions")
-        async def push_new_actions() -> str:
+        async def push_new_actions(tenant_id: str | None = None) -> str:
             self.action_pushes += 1
             return "0 new"
 
         @activity.defn(name="push_daily_summary")
-        async def push_daily_summary(started_at: str) -> str:
+        async def push_daily_summary(started_at: str, tenant_id: str | None = None) -> str:
             self.summary_calls.append(started_at)
             return "skipped"
 

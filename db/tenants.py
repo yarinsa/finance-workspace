@@ -6,6 +6,7 @@
     tenants.py member add EMAIL [TENANT_SLUG] [--role owner|admin|member]   (default tenant, owner)
     tenants.py member remove EMAIL [TENANT_SLUG]
     tenants.py suspend|activate TENANT_SLUG
+    tenants.py memberships                 "tenant_id<TAB>email" per membership (infra/tenant-groups.sh sync)
 
 Users are global; the API reads memberships to decide which tenants an email may act in
 (docs/tenancy.md). A tenant's categories are seeded by its first ledger import.
@@ -52,6 +53,10 @@ def main(argv):
                     "SELECT t.slug, t.name, t.status, count(m.id) FROM tenants t "
                     "LEFT JOIN memberships m ON m.tenant_id = t.id GROUP BY t.id ORDER BY t.created_at"):
                 print(f"{slug}\t{name}\t{status}\t{n} members")
+        elif cmd == "memberships":
+            for tid, email in conn.execute("SELECT m.tenant_id, u.email FROM memberships m "
+                                           "JOIN users u ON u.id = m.user_id ORDER BY m.created_at"):
+                print(f"{tid}\t{email}")
         elif cmd == "create" and len(a) == 2:
             print(create(conn, *a))
         elif cmd == "member" and a[:1] == ["add"] and len(a) >= 2:

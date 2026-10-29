@@ -71,6 +71,18 @@ def unbind(conn):
     conn.execute("SELECT set_config('app.tenant_id', '', false)")
 
 
+def scope_connection(conn, tenant_id):
+    """Drop a privileged psycopg connection to the RLS-bound role `finance_app` and pin it to
+    `tenant_id` for the whole session. Committed, so a later rollback cannot undo it. Every
+    host-side connection to customer data goes through this (db/ledger.py `connect`,
+    finance/push.py)."""
+    tenant_id = uuid.UUID(str(tenant_id))
+    conn.execute("SET ROLE finance_app")
+    conn.execute("SELECT set_config('app.tenant_id', %s, false)", (str(tenant_id),))
+    conn.commit()
+    return conn
+
+
 def resolve_tenant_id(tenant_id=None):
     """The tenant for a host-side data access: the argument, else the bound context, else the
     FINANCE_TENANT_ID environment variable a parent job passed down. Raises

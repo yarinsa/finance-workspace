@@ -24,7 +24,7 @@ from psycopg.types.json import Jsonb
 
 from finance import categories as taxonomy
 from finance.models import LedgerTransaction
-from finance.tenancy import resolve_tenant_id, use_cli_tenant
+from finance.tenancy import resolve_tenant_id, scope_connection, use_cli_tenant
 
 REPO = Path(__file__).resolve().parent.parent
 ALEMBIC_INI = Path(__file__).resolve().parent / "alembic.ini"
@@ -113,11 +113,7 @@ def scope(conn, tenant_id):
 
     The owner role bypasses RLS, so a host job takes `finance_app` (no BYPASSRLS, owns nothing)
     right after connecting. Committed here, so a later rollback cannot undo it."""
-    tenant_id = uuid.UUID(str(tenant_id))
-    conn.execute("SET ROLE finance_app")
-    conn.execute("SELECT set_config('app.tenant_id', %s, false)", (str(tenant_id),))
-    conn.commit()
-    return conn
+    return scope_connection(conn, tenant_id)
 
 
 def connect(url=None, tenant_id=None):

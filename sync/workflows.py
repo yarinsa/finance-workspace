@@ -146,6 +146,7 @@ class _FinanceSync:
         self._pushed_failures: set = set()  # (source, status) already pushed, one push each per run
         self._requested: set = set()  # sources named when the run was started (empty: scheduled run)
         self._otp_waiting: str | None = None  # the source whose dump is waiting for a code
+        self._tenant: str | None = None  # opts["tenant_id"]; None = the master tenant (docs/tenancy.md)
 
     async def submit_otp(self, source: str, code: str) -> None:
         """The human typed a code in the app. Ignored unless that source's login is waiting for one."""
@@ -199,7 +200,7 @@ class _FinanceSync:
             "log": list(log),
         }
         try:
-            await workflow.execute_activity("publish_status", args=[source, entry], **STATUS)
+            await workflow.execute_activity("publish_status", args=[source, entry, self._tenant], **STATUS)
         except ActivityError:
             pass
         if status in (FAILED, REJECTED) and (source, status) not in self._pushed_failures:
@@ -213,7 +214,7 @@ class _FinanceSync:
     async def _push(self, activity_name: str, *args) -> None:
         """A best-effort Web Push activity: one attempt, any failure is swallowed."""
         try:
-            await workflow.execute_activity(activity_name, args=list(args), **NOTIFY)
+            await workflow.execute_activity(activity_name, args=[*args, self._tenant], **NOTIFY)
         except ActivityError:
             pass
 
@@ -262,7 +263,7 @@ class _FinanceSync:
                     self._otp_waiting = None
             else:
                 await self._set(source, "scraping")
-                await workflow.execute_activity("scrape", source, **SCRAPE)
+                await workflow.execute_activity("scrape", args=[source, self._tenant], **SCRAPE)
         except ActivityError as e:
             kind, _ = _cause(e)
             if kind == "SessionExpired":
@@ -279,7 +280,7 @@ class _FinanceSync:
         self._res(source, "validating")
         await self._set(source, "validating")
         try:
-            gate = await workflow.execute_activity("validate_dump", source, **VALIDATE)
+            gate = await workflow.execute_activity("validate_dump", args=[source, self._tenant], **VALIDATE)
             if isinstance(gate, dict):  # older workers returned a bare "ok"
                 self._counts[source] = gate
                 gate = gate.get("gate", "ok")
@@ -303,10 +304,19 @@ class _FinanceSync:
             raise
 
     async def _run(self, requested=None, opts=None) -> dict:
+        self._tenant = (opts or {}).get("tenant_id") or None
         try:
             order = sources.ordered(requested)
         except ValueError as e:
             raise ApplicationError(str(e), non_retryable=True)
+        if self._tenant:
+            # Another household has no Chrome logged in here: only the headless self-login scrapers
+            # (their credentials come from that tenant's own secrets file) can run for it.
+            if requested and any(sources.get(s).check != sources.SELF for s in order):
+                raise ApplicationError("a tenant can only sync self-login sources "
+                                       f"({', '.join(s for s in order if sources.get(s).check != sources.SELF)})",
+                                       non_retryable=True)
+            order = [s for s in order if sources.get(s).check == sources.SELF]
         self._results = {s: {"status": PENDING, "detail": ""} for s in order}
         self._requested = set(order) if requested else set()
         if (opts or {}).get("resume") == "digest":
@@ -377,14 +387,14 @@ class _FinanceSync:
                 self._phase = "digesting"
                 for s in scraped:
                     await self._set(s, "digesting")
-                summary = await workflow.execute_activity("digest", **DIGEST)
+                summary = await workflow.execute_activity("digest", args=[True, self._tenant], **DIGEST)
                 if rejected:
                     published = f"withheld (rejected: {', '.join(rejected)})"
                 else:
                     self._phase = "publishing"
                     for s in scraped:
                         await self._set(s, "publishing")
-                    published = await workflow.execute_activity("publish_data", **PUBLISH)
+                    published = await workflow.execute_activity("publish_data", args=[self._tenant], **PUBLISH)
             except ActivityError:
                 self._phase = "failed"
                 await self._say("Finance sync", "Digest/publish failed - see Temporal UI (localhost:8233)")
@@ -495,6 +505,7 @@ class LedgerRebuildWorkflow:
         self._state = "idle"
         self._last_published_at: str | None = None
         self._last_error: str | None = None
+        self._tenant: str | None = None  # opts["tenant_id"]; each tenant has its own workflow id
 
     @workflow.signal
     def edited(self) -> None:
@@ -523,8 +534,8 @@ class LedgerRebuildWorkflow:
         self._state = "running"
         self._handled = self._signals
         try:
-            await workflow.execute_activity("digest", args=[False], **DIGEST)
-            await workflow.execute_activity("publish_data", **PUBLISH)
+            await workflow.execute_activity("digest", args=[False, self._tenant], **DIGEST)
+            await workflow.execute_activity("publish_data", args=[self._tenant], **PUBLISH)
             self._last_published_at = workflow.now().isoformat()
             self._last_error = None
         except ActivityError as e:
@@ -545,6 +556,7 @@ class LedgerRebuildWorkflow:
         max_passes = opts.get("max_passes", REBUILD_MAX_PASSES)
         self._last_published_at = opts.get("last_published_at")
         self._last_error = opts.get("last_error")
+        self._tenant = opts.get("tenant_id") or None
         passes = 0
 
         while True:

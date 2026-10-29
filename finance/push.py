@@ -89,7 +89,7 @@ def send(payloads, *, conn=None, sender=None, env=env_value):
             if not url:
                 out["error"] = "DATABASE_URL not set"
                 return out
-            conn = psycopg.connect(url, connect_timeout=5)
+            conn = _scoped(psycopg.connect(url, connect_timeout=5))
         try:
             rows = conn.execute("SELECT id, endpoint, p256dh, auth FROM push_subscriptions ORDER BY id").fetchall()
             out["subscriptions"] = len(rows)
@@ -222,7 +222,19 @@ def _connect(env):
     url = env("DATABASE_URL")
     if not url:
         raise RuntimeError("DATABASE_URL not set")
-    return psycopg.connect(url, connect_timeout=5)
+    return _scoped(psycopg.connect(url, connect_timeout=5))
+
+
+def _scoped(conn):
+    """Scope a new owner connection to the tenant bound for this push (finance/tenancy.py): a
+    push reads one tenant's subscriptions and inbox, never everyone's. No tenant bound = error
+    (callers catch it and report; push never raises)."""
+    from finance.tenancy import resolve_tenant_id, scope_connection
+    try:
+        return scope_connection(conn, resolve_tenant_id())
+    except BaseException:
+        conn.close()
+        raise
 
 
 def push_new_actions(*, conn=None, now=None, sent_file=LEGACY_SENT_FILE, **kw):

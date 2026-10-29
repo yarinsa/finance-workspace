@@ -19,6 +19,7 @@ import re
 import subprocess
 import sys
 import tempfile
+import uuid
 import urllib.request
 from pathlib import Path
 
@@ -28,6 +29,22 @@ from temporalio.exceptions import ApplicationError
 import sources
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+from finance import tenancy  # noqa: E402
+from finance.paths import data_root  # noqa: E402
+from finance.tenancy import DEFAULT_TENANT_ID  # noqa: E402
+
+
+def _tid(tenant_id=None):
+    """The tenant an activity works for. Activities receive it explicitly from the workflow;
+    none means the master tenant, the single household this ran for before tenants."""
+    return uuid.UUID(str(tenant_id)) if tenant_id else DEFAULT_TENANT_ID
+
+
+def _tenant_env(tenant_id=None):
+    """Environment that makes a child process (scraper, digest step, deploy) work for one tenant."""
+    return {"FINANCE_TENANT_ID": str(_tid(tenant_id))}
 SKILLS = REPO_ROOT / ".claude" / "skills"
 REFRESH_ALL = SKILLS / "refresh-all" / "scripts"
 AMEX_CHECK = SKILLS / "amex-refresh" / "scripts" / "check_session.sh"
@@ -342,7 +359,7 @@ async def check_session(source: str) -> str:
 
 
 @activity.defn
-async def scrape(source: str) -> str:
+async def scrape(source: str, tenant_id: str | None = None) -> str:
     """Run the source's dump script(s) in order (each one re-guards against stubs and
     keeps the previous dump on failure). Every failure is non-retryable: retrying cannot
     fix a dead session or a moved endpoint, and the workflow must not hammer the bank."""
@@ -357,7 +374,7 @@ async def scrape(source: str) -> str:
     tail = ""
     for dump in src.dumps:
         argv = [str(SKILLS / dump[0])] + [a.format(session=src.pw_session, port=src.port) for a in dump[1:]]
-        rc, tail = await run_cmd(argv)
+        rc, tail = await run_cmd(argv, env=_tenant_env(tenant_id))
         if rc != 0:
             if looks_expired(tail):
                 raise ApplicationError(f"{source} session expired", tail, type=SESSION_EXPIRED, non_retryable=True)
@@ -407,7 +424,7 @@ async def deliver_otp(source: str, code: str) -> None:
 
 
 @activity.defn
-async def validate_dump(source: str) -> dict:
+async def validate_dump(source: str, tenant_id: str | None = None) -> dict:
     """Gate a fresh dump: `python3 data/validate.py dump <source> --json` (exit 0 = good).
     Returns {"gate": "ok" | "skipped", "records", "records_before", "latest_txn"} (the counts
     are None when the validator printed none, or does not exist yet). A rejection raises
@@ -415,7 +432,8 @@ async def validate_dump(source: str) -> dict:
     sources.get(source)
     if not VALIDATOR.exists():
         return {"gate": "skipped", "records": None, "records_before": None, "latest_txn": None}
-    rc, tail = await run_cmd([sys.executable, str(VALIDATOR), "dump", source, "--json"], timeout=VALIDATE_TIMEOUT)
+    rc, tail = await run_cmd([sys.executable, str(VALIDATOR), "dump", source, "--json"], timeout=VALIDATE_TIMEOUT,
+                          env=_tenant_env(tenant_id))
     if rc != 0:
         human = "\n".join(l for l in tail.splitlines() if not l.startswith("DUMP_JSON "))
         raise ApplicationError(f"validate.py rejected the {source} dump (rc={rc}):\n{human}",
@@ -467,21 +485,22 @@ async def digest_lock(path: Path = DIGEST_LOCK, poll: float = 0.2):
 
 
 @activity.defn
-async def digest(normalize: bool = True) -> dict:
+async def digest(normalize: bool = True, tenant_id: str | None = None) -> dict:
     """digest -> validate -> forecast -> cashflow -> goals, under the digest file lock. Stops at
     the first failure so a half-rebuilt set is never published. `normalize=False` passes
     `--no-normalize` to digest.py (override-only edits don't need a re-normalize)."""
-    async with digest_lock():
+    tid = _tid(tenant_id)
+    async with digest_lock(data_root(tid) / "digested" / ".lock"):
         for step in DIGEST_STEPS:
             cmd = [sys.executable, str(REPO_ROOT / "data" / step)]
             if step == "digest.py" and not normalize:
                 cmd.append("--no-normalize")
-            rc, tail = await run_cmd(cmd)
+            rc, tail = await run_cmd(cmd, env=_tenant_env(tid))
             if rc != 0:
                 raise ApplicationError(f"{step} failed (rc={rc}):\n{tail}")
         summary = {"steps": DIGEST_STEPS}
         try:
-            tx = json.loads((REPO_ROOT / "data" / "digested" / "transactions.json").read_text())
+            tx = json.loads((data_root(tid) / "digested" / "transactions.json").read_text())
             summary["transactions"] = len(tx["transactions"])
         except Exception:
             pass
@@ -489,11 +508,13 @@ async def digest(normalize: bool = True) -> dict:
 
 
 @activity.defn
-async def publish_data() -> str:
+async def publish_data(tenant_id: str | None = None) -> str:
     """infra/deploy.sh --data-only, only when SYNC_PUBLISH=1. Returns "published" or "skipped"."""
     if os.environ.get("SYNC_PUBLISH") != "1":
         return "skipped"
-    rc, tail = await run_cmd([str(REPO_ROOT / "infra" / "deploy.sh"), "--data-only"])
+    tid = _tid(tenant_id)
+    argv = [str(REPO_ROOT / "infra" / "deploy.sh"), "--data-only", "--tenant", str(tid)]
+    rc, tail = await run_cmd(argv, env=_tenant_env(tid))
     if rc != 0:
         raise ApplicationError(f"deploy.sh --data-only failed (rc={rc}):\n{tail}")
     return "published"
@@ -528,9 +549,10 @@ def _push_module():
     return push
 
 
-async def _push(payloads) -> dict | None:
+async def _push(payloads, tenant_id=None) -> dict | None:
     """Send Web Push payloads from a thread (psycopg/pywebpush block). Never raises."""
     try:
+        tenancy.set_context(tenancy.TenantContext(None, _tid(tenant_id)))   # copied into the thread
         return await asyncio.wait_for(asyncio.to_thread(_push_module().send, payloads), timeout=PUSH_TIMEOUT)
     except BaseException as e:
         if isinstance(e, asyncio.CancelledError):
@@ -539,26 +561,28 @@ async def _push(payloads) -> dict | None:
 
 
 @activity.defn
-async def push_event(payload: dict) -> str:
+async def push_event(payload: dict, tenant_id: str | None = None) -> str:
     """Web Push one {title, body, url, tag}: a source failed or its dump was rejected. Never raises."""
-    res = await _push(payload)
+    res = await _push(payload, tenant_id)
     return f"{res['sent']} delivered" if res else "push unavailable"
 
 
 @activity.defn
-async def push_new_actions() -> str:
+async def push_new_actions(tenant_id: str | None = None) -> str:
     """Push the PROBLEM / WARNING inbox items not pushed before (notifications.pushed_at). Never raises."""
     try:
+        tenancy.set_context(tenancy.TenantContext(None, _tid(tenant_id)))
         return await asyncio.wait_for(asyncio.to_thread(_push_module().push_new_actions), timeout=PUSH_TIMEOUT)
     except Exception as e:
         return f"error: {e}"[:200]
 
 
 @activity.defn
-async def push_daily_summary(started_at: str) -> str:
+async def push_daily_summary(started_at: str, tenant_id: str | None = None) -> str:
     """After the evening run only (decided here from the workflow's start time, not in workflow
     code): balance, spent today and safe-to-spend. Never raises."""
     try:
+        tenancy.set_context(tenancy.TenantContext(None, _tid(tenant_id)))
         push = _push_module()
         if not push.is_evening_run(started_at):
             return "skipped (not the evening run)"
@@ -682,7 +706,7 @@ async def _bucket() -> str | None:
 
 
 @activity.defn
-async def publish_status(source: str, entry: dict) -> str:
+async def publish_status(source: str, entry: dict, tenant_id: str | None = None) -> str:
     """Write the live status of one source to data/digested/sync-status.json, upsert
     it into Postgres `sync_status` (NOTIFY -> API SSE) when DATABASE_URL is set and,
     with SYNC_PUBLISH=1, copy it to s3://<bucket>/data/sync-status.json.
@@ -691,6 +715,8 @@ async def publish_status(source: str, entry: dict) -> str:
     bucket or a network blip can never fail the sync. Returns "published",
     "local" or "error: ...".
     """
+    if _tid(tenant_id) != DEFAULT_TENANT_ID:
+        return "skipped (status is the master tenant's; follow other tenants in the Temporal UI)"
     try:
         doc = _write_status(source, entry)
         await _push_status_db(source, doc["sources"][source])
