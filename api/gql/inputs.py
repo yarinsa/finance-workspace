@@ -4,6 +4,7 @@ These mirror the input types and argument lists in api/schema; the SDL stays the
 source of truth (a later step can generate this file from it).
 """
 import datetime as dt
+from typing import Literal
 from decimal import Decimal
 from enum import Enum
 
@@ -288,3 +289,25 @@ class SnoozeAllNotificationsInput(BulkNotificationInput):
 
 class SyncSourceRetryInput(MutationInput):
     id: node_id_of("SyncSource")
+
+
+class TenantCreateInput(MutationInput):
+    slug: str = Field(pattern=r"^[a-z0-9]+(-[a-z0-9]+)*$", max_length=40)
+    name: str = Field(min_length=1, max_length=80)
+    owner_email: str = Field(max_length=200, pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
+
+class TenantMemberSetInput(MutationInput):
+    id: node_id_of("Tenant")
+    email: str = Field(max_length=200, pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+    role: Literal["owner", "admin", "member"]
+
+
+class TenantMemberRemoveInput(MutationInput):
+    id: node_id_of("Tenant")
+    email: str = Field(max_length=200)
+
+
+class TenantSetStatusInput(MutationInput):
+    id: node_id_of("Tenant")
+    status: Literal["active", "suspended"]

@@ -31,11 +31,13 @@ from api.schema_bindings import load_schema, snake
 
 from .inputs import (CategoryMergeInput, CategoryUnmergeInput, AssetCreateInput, AssetUpdateInput, BulkNotificationInput, ClearTransactionOverrideInput, GoalCreateInput, GoalDeleteInput, DeleteTagInput, GroupArgs,
                      GroupOrder, LinkOffsetInput, NotificationArgs, NotificationIdInput, ResetOffsetsInput,
-                     SetTransactionTagsInput, SnoozeAllNotificationsInput, SyncSourceRetryInput, TransactionArgs, TransactionOrder,
+                     SetTransactionTagsInput, SnoozeAllNotificationsInput, SyncSourceRetryInput, TenantCreateInput, TenantMemberRemoveInput, TenantMemberSetInput, TenantSetStatusInput, TransactionArgs, TransactionOrder,
                      UnlinkOffsetInput, UnreadCountArgs, GoalUpdateInput, UpdateNotificationInput, PlanTargetsUpdateInput, UpdateTagInput,
                      UpdateTransactionInput)
 from .inbox import TYPENAMES, Notification
 from .sync import SyncSource
+from . import tenants as tenant_store
+from finance import tenancy
 from .ledger import CENT, Ledger, Merchant, Txn, offset_candidates, totals
 from .relay import ConnectionArgs, GlobalId, paginate, to_global_id, validated
 
@@ -717,6 +719,79 @@ class SyncSourceResolver(NodeResolver[SyncSource]):
             value.value = name.lower()
 
 
+class TenantResolver(NodeResolver[dict]):
+    """`Query.tenants` and the tenant mutations, for platform admins only: the registry of
+    tenants and members. They change no ledger data, so they never signal a rebuild, and
+    `node(id)` does not serve tenants (not in NODES)."""
+    type_name = "Tenant"
+    rebuilds = False
+
+    @staticmethod
+    def admin(info):
+        if not tenancy.is_platform_admin(info.context["user"]):
+            raise GraphQLError("only a platform admin can manage tenants")
+
+    def key(self, t):
+        return str(t["id"])
+
+    def fetch(self, lg, key):
+        return tenant_store.get(lg.conn, key)
+
+    def mutations(self):
+        return {"tenantCreate": (TenantCreateInput, self.create), "tenantMemberSet": (TenantMemberSetInput, self.member_set),
+                "tenantMemberRemove": (TenantMemberRemoveInput, self.member_remove),
+                "tenantSetStatus": (TenantSetStatusInput, self.set_status)}
+
+    def _run(self, info, tenant_id, fn, *args):
+        conn = ledger(info).conn
+        try:
+            fn(conn, tenant_id, *args)
+        except ValueError as e:
+            raise GraphQLError(str(e)) from None
+        return lambda: {"tenant": tenant_store.get(conn, tenant_id)}
+
+    def create(self, inp, info):
+        self.admin(info)
+        conn = ledger(info).conn
+        caller_tenant = info.context["tenant_id"]
+        try:
+            tid, horizons = tenant_store.create(conn, inp.slug, inp.name.strip())
+            tenant_store.set_member(conn, tid, inp.owner_email, "owner")
+            tenant_store.seed_horizons(conn, tid, horizons)
+        except ValueError as e:
+            raise GraphQLError(str(e)) from None
+        finally:
+            tenancy.bind(conn, caller_tenant, local=False)   # back to the caller's own tenant
+        return lambda: {"tenant": tenant_store.get(conn, tid)}
+
+    def member_set(self, inp, info):
+        self.admin(info)
+        t = self.require(info, inp.id)
+        return self._run(info, t["id"], tenant_store.set_member, inp.email, inp.role)
+
+    def member_remove(self, inp, info):
+        self.admin(info)
+        t = self.require(info, inp.id)
+        return self._run(info, t["id"], tenant_store.remove_member, inp.email)
+
+    def set_status(self, inp, info):
+        self.admin(info)
+        t = self.require(info, inp.id)
+        return self._run(info, t["id"], tenant_store.set_status, inp.status)
+
+    def resolve_all(self, _, info):
+        self.admin(info)
+        return tenant_store.all_tenants(ledger(info).conn)
+
+    def bind(self, schema):
+        super().bind(schema)
+        schema.query_type.fields["tenants"].resolve = self.resolve_all
+        for name, value in schema.type_map["TenantRole"].values.items():
+            value.value = name.lower()
+        for name, value in schema.type_map["TenantStatus"].values.items():
+            value.value = name.lower()
+
+
 GOALS = GoalResolver()
 ENTITIES: list[GroupResolver] = [MerchantResolver(), CategoryResolver(), TagResolver(), HorizonResolver(GOALS), GOALS]
 TRANSACTIONS = TransactionResolver(GOALS)
@@ -724,6 +799,7 @@ NOTIFICATIONS = NotificationResolver()
 SYNC_SOURCES = SyncSourceResolver()
 PLAN_TARGETS = PlanTargetsResolver()
 ASSETS = AssetResolver()
+TENANTS = TenantResolver()
 NODES: dict[str, NodeResolver] = {r.type_name: r for r in [TRANSACTIONS, *ENTITIES, NOTIFICATIONS, SYNC_SOURCES,
                                                            ASSETS]}
 
@@ -798,6 +874,7 @@ def build():
     SYNC_SOURCES.bind(schema)
     PLAN_TARGETS.bind(schema)
     ASSETS.bind(schema)
+    TENANTS.bind(schema)
     for entity in ENTITIES:
         entity.bind(schema, ENTITIES)
     return schema

@@ -62,7 +62,7 @@ def _error(e: GraphQLError):
     return e.formatted
 
 
-def run(body: bytes, conn, user, allow_introspection=False, rebuilder=None):
+def run(body: bytes, conn, user, allow_introspection=False, rebuilder=None, tenant_id=None):
     """(status, response dict, writes) for a GraphQL request body.
 
     `writes` counts mutations that changed the ledger; the caller signals a rebuild
@@ -86,7 +86,8 @@ def run(body: bytes, conn, user, allow_introspection=False, rebuilder=None):
     op = next((d for d in ops if req.operation_name in (None, d.name and d.name.value)), None)
     if op is not None and op.operation == OperationType.SUBSCRIPTION:
         return 400, {"errors": [{"message": "subscriptions are not served"}]}, 0
-    context = {"ledger": Ledger(conn), "user": user, "writes": 0, "rebuilder": rebuilder}
+    context = {"ledger": Ledger(conn), "user": user, "writes": 0, "rebuilder": rebuilder,
+               "tenant_id": tenant_id}
     result = execute(SCHEMA, doc, variable_values=req.variables, operation_name=req.operation_name,
                      context_value=context, field_resolver=default_resolver)
     if not isinstance(result, ExecutionResult):

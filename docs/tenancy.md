@@ -33,7 +33,18 @@ member`). Isolation is enforced by Postgres, not by per-query filters.
 - **Natural keys** (`(txn_date, abs_amount)`, `plan_targets.key`, …) include `tenant_id`; uniques
   (`name`, `slug`, `merchant`, …) are per tenant. `ON CONFLICT` targets must list `tenant_id`.
 
-## Admin
+## Platform admin (the master tenant)
+
+`finance.tenancy.PLATFORM_ADMIN_EMAILS` (hard-coded: `yarinsasson2@gmail.com`) may manage the tenant
+registry through GraphQL: `tenants`, `tenantCreate(input: {slug, name, ownerEmail})`,
+`tenantMemberSet(id, input: {email, role})`, `tenantMemberRemove`, `tenantSetStatus`. Every field errors
+for anyone else; the check is on the verified session email. The `default` tenant is the master: it
+cannot be suspended, and no tenant can lose its last owner. Being a platform admin gives **no access to
+another tenant's data**: reading it still needs a membership (the admin is deliberately not made a member
+of tenants they create, so their own app keeps working without `X-Tenant-Id`). Migration 0019 gives
+`finance_api` the few writes this needs (tenants, users, memberships, a new tenant's horizons).
+
+## Admin (CLI)
 
 `poetry run python db/tenants.py create SLUG NAME`, `member add EMAIL [TENANT] [--role …]`,
 `suspend|activate`, `list`. The migration makes everyone in `FINANCE_API_ALLOWED_EMAILS` an owner of

@@ -1,0 +1,56 @@
+# Tenant management, for platform admins only (finance.tenancy.PLATFORM_ADMIN_EMAILS). Every
+# field here errors for anyone else. It manages the registry (tenants, who belongs, status);
+# it never gives access to another tenant's data.
+
+enum TenantRole {
+  OWNER
+  ADMIN
+  MEMBER
+}
+
+enum TenantStatus {
+  ACTIVE
+  """Every member gets 403 until it is active again."""
+  SUSPENDED
+}
+
+type TenantMember {
+  email: String!
+  role: TenantRole!
+}
+
+type Tenant {   # not a Node: node(id) never serves the registry
+  id: ID!
+  slug: String!
+  name: String!
+  status: TenantStatus!
+  createdAt: DateTime!
+  members: [TenantMember!]!
+}
+
+type TenantPayload {
+  success: Boolean!
+  tenant: Tenant
+}
+
+input TenantCreateInput {
+  """Lower-case letters, digits and dashes."""
+  slug: String!
+  name: String!
+  """The tenant's first owner (created by email if new). The platform admin is not made a member."""
+  ownerEmail: String!
+}
+
+"""Add the user (created on first use, by email) or change their role."""
+input TenantMemberSetInput {
+  email: String!
+  role: TenantRole!
+}
+
+input TenantMemberRemoveInput {
+  email: String!
+}
+
+input TenantSetStatusInput {
+  status: TenantStatus!
+}

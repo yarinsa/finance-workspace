@@ -111,6 +111,7 @@ STRUCTURAL = frozenset({
     "Offset", "OffsetPayload", "ResetOffsetsPayload",
     "NotificationAction", "NotificationConnection", "NotificationEdge", "NotificationPayload",
     "BulkNotificationPayload",
+    "Tenant", "TenantMember", "TenantPayload",
     "SyncSource", "SyncSourceConnection", "SyncSourceEdge", "SyncSourcePayload",   # a sync_status JSON entry
 })
 

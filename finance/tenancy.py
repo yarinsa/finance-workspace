@@ -13,6 +13,16 @@ from dataclasses import dataclass
 DEFAULT_TENANT_ID = uuid.UUID("00000000-0000-4000-8000-000000000001")
 ROLES = ("owner", "admin", "member")
 
+# Platform admins manage tenants (create, members, suspend). Hard-coded on purpose: it is not
+# a role anyone can be granted through the API. The check is made against the email of the
+# verified session token. Being one gives no access to another tenant's data, only to the
+# tenant registry (docs/tenancy.md).
+PLATFORM_ADMIN_EMAILS = frozenset({"yarinsasson2@gmail.com"})
+
+
+def is_platform_admin(email):
+    return str(email or "").strip().lower() in PLATFORM_ADMIN_EMAILS
+
 
 class TenantContextMissing(RuntimeError):
     """A data access ran with no tenant bound."""

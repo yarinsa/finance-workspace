@@ -27,6 +27,7 @@ def two_tenants(test_url):
     admin = ledger.connect_admin(test_url)
     # horizons keep the default tenant's seeded buckets (other tests rely on them)
     admin.execute(f"TRUNCATE {', '.join(t for t in OWNED if t != 'horizons')}, memberships, users")
+    admin.execute("DELETE FROM horizons WHERE tenant_id <> %s", (DEFAULT_TENANT_ID,))
     admin.execute("DELETE FROM tenants WHERE id <> %s", (DEFAULT_TENANT_ID,))
     for t, slug in ((A, "a"), (B, "b")):
         admin.execute("INSERT INTO tenants (id, name, slug) VALUES (%s, %s, %s)", (t, slug.upper(), slug))

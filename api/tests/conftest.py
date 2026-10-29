@@ -85,6 +85,7 @@ def owner(test_url):
     The user ME is an owner of the default tenant, the household as it was before tenants."""
     admin = ledger.connect_admin(test_url)
     admin.execute(f"TRUNCATE {', '.join(OWNED)}, memberships, users, category_groups CASCADE")
+    admin.execute("DELETE FROM horizons WHERE tenant_id <> %s", (DEFAULT_TENANT_ID,))
     admin.execute("DELETE FROM tenants WHERE id <> %s", (DEFAULT_TENANT_ID,))
     make_member(admin, ME, DEFAULT_TENANT_ID)
     admin.commit()
