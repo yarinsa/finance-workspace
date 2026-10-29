@@ -297,7 +297,7 @@ upcoming card bills, duplicate services, stale syncs) from those blocks, with pe
 section; past months show their net and `months_view` actuals instead), then the month's spending
 as **one card per category** across קבוע and משתנה (`buildCards` in `app/src/lib/monthList.ts`;
 categories are flat, no group level: תחבורה holds Metro Motor's installments and the fuel).
-Each card shows actual of planned (fixed paid + fixed still
+Each card is one list, every row marked קבוע or משתנה on the row itself (no sub-sections). Each card shows actual of planned (fixed paid + fixed still
 expected + the variable plan) on a `StackedBar` split into fixed (dark) and variable (light). Inside:
 the fixed charges (`fixed_expenses` items merged with `bills` by name: status, due day) with one
 quiet saving hint each when there is one (`chargeHint`: duplicate service, not charged in 70+ days,
