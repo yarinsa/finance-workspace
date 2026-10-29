@@ -50,3 +50,72 @@ def test_no_property_recorded_leaves_the_property_totals_empty():
     t = snap([DISCOUNT_DIRECT])["totals"]
     assert t["property_value"] is None
     assert t["net_worth_with_property"] is None
+
+
+# ---- credit cards: the issuers' next charge, not RiseUp's balance --------------------------
+import datetime
+
+RISEUP_CARDS = [   # RiseUp's 2026-10-16 view: stale, and it never saw card 6417 or Max 3819
+    {"issuer": "cal", "last4": "9947", "holder": "ירין ששון", "owed": 1798.13, "_source": "riseup"},
+    {"issuer": "americanexpress", "last4": "7696", "holder": "אמריקן", "owed": 1779.85, "_source": "riseup"},
+    {"issuer": "isracard", "last4": "6250", "holder": "הוט", "owed": 100.0, "_source": "riseup"},
+    {"issuer": "leumicard", "last4": "9613", "holder": "ירין ששון", "owed": 414.25, "_source": "riseup"},
+]
+ROSTER = [{"issuer": "cal", "last4": "9947", "name": "דיינרס מסטרקארד משולב", "_source": "cal"},
+          {"issuer": "amex", "last4": "7696", "name": "AMEX PLATINUM", "_source": "amex"},
+          {"issuer": "amex", "last4": "6417", "name": "AMEX PLATINUM", "_source": "amex"},
+          {"issuer": "max", "last4": "3819", "name": "מקס 3819", "_source": "max"}]
+
+
+def _row(source, last4, billing, amount):
+    return {"_source": source, "card_last4": last4, "billing_date": billing, "amount": amount,
+            "date": "2026-10-20", "description": "x"}
+
+
+TXNS = [   # the 2026-10-28 dumps: each card's rows grouped by the day its card is charged
+    _row("cal", "9947", "2026-10-10", -7393.89),             # already debited
+    _row("cal", "9947", "2026-11-10", -2000.0), _row("cal", "9947", "2026-11-10", -1144.32),
+    _row("amex", "7696", "2026-11-10", -4506.30),            # = AMEX's own cardChargeNext
+    _row("amex", "6250", "2026-11-10", -1985.06),
+    _row("amex", "6417", "2026-11-02", -973.47),
+    _row("max", "9613", "2026-10-11", -1639.25), _row("max", "9613", "2026-11-10", -414.25),
+    _row("max", "3819", "2026-11-10", -240.0),
+]
+
+
+def cards_snap(as_of, txns=TXNS, riseup=RISEUP_CARDS):
+    e = {"accounts": [], "credit_cards": [dict(c) for c in riseup + ROSTER], "income": [], "savings": [],
+         "loans": [], "transactions": [dict(t) for t in txns]}
+    return digest.build_snapshot(e, as_of=as_of)
+
+
+def test_each_card_owes_the_issuers_next_charge_not_riseups_stale_balance():
+    """As the household, when CAL's own rows say Diners 9947 will charge ₪3,144.32 on 10.11 and AMEX
+    says 7696 ₪4,506.30, the home must not show RiseUp's 16-October ₪1,798.13 / ₪1,779.85, and it
+    must list the cards RiseUp never saw (6417, billed on the 2nd; Max 3819)."""
+    s = cards_snap(datetime.date(2026, 10, 28))
+    owed = {c["last4"]: (c["owed"], c["next_charge_date"]) for c in s["credit_cards"]}
+    assert owed == {"9947": (3144.32, "2026-11-10"), "7696": (4506.30, "2026-11-10"),
+                    "6250": (1985.06, "2026-11-10"), "9613": (414.25, "2026-11-10"),
+                    "6417": (973.47, "2026-11-02"), "3819": (240.0, "2026-11-10")}
+    assert s["totals"]["credit_card_debt"] == 11263.40
+    assert {c["last4"]: c["issuer"] for c in s["credit_cards"]}["7696"] == "americanexpress"   # RiseUp's label kept
+
+
+def test_a_charge_posts_on_its_billing_day_rolled_to_sunday():
+    """A charge on Friday 2026-10-30 posts Sunday 11-01: still owed on Saturday, in the bank by Sunday."""
+    txns = [_row("amex", "7696", "2026-10-30", -500.0)]
+    assert cards_snap(datetime.date(2026, 10, 31), txns, [])["totals"]["credit_card_debt"] == 500.0
+    assert cards_snap(datetime.date(2026, 11, 1), txns, [])["totals"]["credit_card_debt"] == 0
+
+
+def test_a_card_the_direct_sources_never_saw_keeps_riseups_figure():
+    """The business card (discount-business) has no direct card dump: its `owed` stays."""
+    biz = {"issuer": "discount-business", "last4": "5555", "owed": 321.0, "_source": "discount-business"}
+    s = cards_snap(datetime.date(2026, 10, 28), riseup=RISEUP_CARDS + [biz])
+    assert {c["last4"]: c["owed"] for c in s["credit_cards"]}["5555"] == 321.0
+    assert s["totals"]["credit_card_debt"] == 11263.40 + 321.0
+
+
+def test_without_card_rows_riseup_is_still_the_answer():
+    assert cards_snap(datetime.date(2026, 10, 28), txns=[])["totals"]["credit_card_debt"] == 4092.23

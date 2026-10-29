@@ -178,7 +178,7 @@ function positionDays(history: History | undefined) {
     latest,
     days: pts.map((p) => ({
       ...p,
-      net_worth: p.property == null && latest != null ? p.net_worth + latest : p.net_worth,
+      net_worth: p.net_worth != null && p.property == null && latest != null ? p.net_worth + latest : p.net_worth,
     })),
   };
 }
@@ -220,7 +220,7 @@ export function networthLens(history: History | undefined): Lens | null {
   return recordedLens(
     "networth",
     "שווי נקי",
-    days.map((d) => ({ date: d.date, value: d.net_worth })),
+    days.flatMap((d) => (d.net_worth == null ? [] : [{ date: d.date, value: d.net_worth }])),
     latest == null
       ? "בלי שווי הדירה · יום אחד לכל עדכון נתונים"
       : "כולל הדירה לפי ההערכה האחרונה · יום אחד לכל עדכון נתונים",

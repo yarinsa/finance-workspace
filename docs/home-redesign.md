@@ -254,9 +254,9 @@ move to `/metrics`, debt % also as a footer on the חובות lens), `home/Hero`
       (value − mortgage), with עדכון השווי / הוספת שווי opening `PropertyEditorSheet`.
 - [x] כרטיסי אשראי is collapsible: each card's charge (snapshot `credit_cards[].owed`, which
       sums to the card's total), then a link to /monthly. Every home card now opens in place.
-      Open question: `owed` is RiseUp's figure; CAL's direct dump already dates each purchase to
-      its charge (billing_date), AMEX and Max mostly don't — a direct next-charge per card would
-      need the pipeline.
+      Each card's charge and its billing day come from the issuers' own rows (CAL/Max
+      `billing_date`; AMEX statement vouchers dated by the card's billing day), not RiseUp's
+      stale balance: ₪4,092 became ₪11,263 across six cards, two of which RiseUp never saw.
 
 ### Phase 4 — polish
 - [ ] Scrub readout, view transitions into detail pages, desktop layout.

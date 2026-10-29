@@ -221,12 +221,13 @@ export interface DebtPoint {
 export interface PositionPoint {
   date: string;
   cash: number;
-  card_debt: number;
+  /** null before 2026-10-28: those days used another source for card debt (history.py). */
+  card_debt: number | null;
   consumer_loans: number;
   mortgage: number;
   savings: number;
   property: number | null;
-  net_worth: number;
+  net_worth: number | null;
 }
 
 export interface History {
@@ -340,8 +341,11 @@ export interface CreditCard {
   last4: string;
   name?: string | null;
   holder?: string | null;
-  /** What the card owes now: its next charge as RiseUp last saw it. */
+  /** What the card will charge next, from the issuer's own rows (RiseUp's balance only for a card
+   *  no issuer dump covers). */
   owed: number;
+  /** The day that charge is billed, ISO; absent for a RiseUp-only card. */
+  next_charge_date?: string | null;
   currency: string;
 }
 

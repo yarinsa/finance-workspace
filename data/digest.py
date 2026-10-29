@@ -14,6 +14,7 @@ from pathlib import Path
 
 import freshness
 import horizons
+import runway
 from finance import categories, offsets
 
 ROOT = Path(__file__).resolve().parent          # .../Finance/data
@@ -469,9 +470,39 @@ def loan_profile(loans):
     }
 
 
-def build_snapshot(e, assets=None):
+CARD_SOURCES = {"cal", "amex", "max"}           # the issuers we scrape directly
+
+
+def next_card_charges(txns, as_of):
+    """What each card will charge next, from the issuers' own rows: ``({last4: {date, owed}}, covered)``.
+
+    Every direct card row carries the day its card is charged (``billing_date``). A card's next
+    charge is the earliest such day that has not posted yet, summed (refunds subtract). A charge
+    posts on its billing day, rolled to Sunday when that is a Friday or Saturday, so on the day
+    itself it is already in the bank balance and no longer owed. ``covered`` is every last4 the
+    direct sources know, so a card with nothing due is distinguishable from one they never saw."""
+    due, covered = {}, set()
+    for t in txns:
+        if t.get("_source") not in CARD_SOURCES or not t.get("card_last4"):
+            continue
+        covered.add(t["card_last4"])
+        bd = t.get("billing_date")
+        if not bd:
+            continue
+        day = datetime.date.fromisoformat(str(bd)[:10])
+        if runway.posting_date(day) > as_of:
+            due.setdefault(t["card_last4"], {}).setdefault(day.isoformat(), []).append(-t["amount"])
+    out = {}
+    for last4, by_day in due.items():
+        day = min(by_day)
+        out[last4] = {"date": day, "owed": round(sum(by_day[day]), 2)}
+    return out, covered
+
+
+def build_snapshot(e, assets=None, as_of=None):
     """The headline position. `assets` are the household's hand-typed assets
     (db/asset_store.py: the apartment), None when there is no database."""
+    as_of = as_of or datetime.date.today()
     accounts = e.get("accounts", [])
     cards = e.get("credit_cards", [])
     loans = e.get("loans", [])
@@ -515,7 +546,20 @@ def build_snapshot(e, assets=None):
         info = roster.get(c.get("last4"))
         if info and not c.get("name"):
             c["name"] = info.get("name")
-    cards = debt_cards
+    # What each card owes is the issuer's own next charge. RiseUp's figure is only a fallback for a
+    # card no direct source has seen (it can be days stale, and missed whole cards).
+    charges, covered = next_card_charges(txns, as_of)
+    cards = [{**c, "owed": charges[c["last4"]]["owed"], "next_charge_date": charges[c["last4"]]["date"]}
+             for c in debt_cards if c.get("last4") in charges]
+    cards += [c for c in debt_cards if c.get("last4") not in covered]            # not scraped directly
+    known = {c.get("last4") for c in debt_cards}
+    for last4, ch in charges.items():            # a card RiseUp does not list at all
+        if last4 not in known:
+            r = roster.get(last4, {})
+            cards.append({"issuer": r.get("issuer", "amex"), "last4": last4, "name": r.get("name"),
+                          "holder": r.get("holder"), "owed": ch["owed"], "next_charge_date": ch["date"],
+                          "currency": "ILS"})
+    cards = [c for c in cards if c["owed"]]
     cc_total = round(sum(c["owed"] for c in cards), 2)
     bank_sum = round(sum(a["balance"] for a in accounts), 2)
     mortgage = [l for l in loans if l["category"] == "mortgage"]
@@ -641,10 +685,10 @@ def write_markdown(s):
                   f"{l['rate_type']} | {'yes' if l['index_linked'] else 'no'} | "
                   f"{l['payments_remaining']} | {ils(l['monthly_payment'])} |")
     md.append("\n## Credit cards\n")
-    md.append("| Card | Owed |")
-    md.append("|---|--:|")
+    md.append("| Card | Next charge | Owed |")
+    md.append("|---|---|--:|")
     for c in s["credit_cards"]:
-        md.append(f"| {c['issuer']} ····{c['last4']} | {ils(c['owed'])} |")
+        md.append(f"| {c['issuer']} ····{c['last4']} | {c.get('next_charge_date') or '—'} | {ils(c['owed'])} |")
     if s.get("savings"):
         md.append("\n## Long-term savings\n")
         md.append("| Fund | Kind | Policies | Balance |")
