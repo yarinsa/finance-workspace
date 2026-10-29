@@ -8,10 +8,11 @@ and these classes disagree. Columns pulled out of a ledger row are typed from
 The `transactions`, `transaction_kinds`, `orphaned_overrides`, `orphaned_tags` and `orphaned_offsets` views are plain SQL in the migrations.
 """
 import datetime as dt
+import uuid
 from decimal import Decimal
 
-from sqlalchemy import ARRAY, BigInteger, CheckConstraint, Column, ForeignKey, Integer, Numeric, Text, UniqueConstraint, text
-from sqlalchemy.dialects.postgresql import JSONB, TIMESTAMP
+from sqlalchemy import ARRAY, BigInteger, CheckConstraint, Column, ForeignKey, Index, Integer, Numeric, Text, UniqueConstraint, text
+from sqlalchemy.dialects.postgresql import JSONB, TIMESTAMP, UUID
 from sqlmodel import Field, Relationship, SQLModel
 
 Money = Numeric(12, 2)
@@ -19,6 +20,13 @@ Money = Numeric(12, 2)
 
 def _now():
     return Column(TIMESTAMP(timezone=True), nullable=False, server_default=text("now()"))
+
+
+def _tenant(primary_key=False, index=False):
+    """The owning tenant. The default reads `app.tenant_id` (finance/tenancy.py `bind`), so an
+    insert lands in the bound tenant and fails when none is bound. RLS (migration 0017) filters on it."""
+    return Column(UUID(as_uuid=True), ForeignKey("tenants.id"), primary_key=primary_key, index=index,
+                  nullable=False, server_default=text("current_setting('app.tenant_id')::uuid"))
 
 
 def _category_fk():
@@ -29,15 +37,61 @@ def _fk(table):
     return Column(Integer, ForeignKey(f"{table}.id", ondelete="SET NULL"), nullable=True, index=True)
 
 
+class User(SQLModel, table=True):
+    """A person who can sign in (global: one user can belong to several tenants). Keyed by the
+    verified, lower-cased Cognito email."""
+    __tablename__ = "users"
+    __table_args__ = (CheckConstraint("email = lower(email)", name="users_email_lower"),
+                      UniqueConstraint("email", name="users_email_key"))
+
+    id: uuid.UUID | None = Field(default=None, sa_column=Column(
+        UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")))
+    email: str = Field(sa_type=Text)
+    created_at: dt.datetime | None = Field(default=None, sa_column=_now())
+
+
+class Tenant(SQLModel, table=True):
+    """One household / customer. Every customer-data row belongs to exactly one."""
+    __tablename__ = "tenants"
+    __table_args__ = (CheckConstraint("status IN ('active', 'suspended')", name="tenants_status_check"),
+                      UniqueConstraint("slug", name="tenants_slug_key"))
+
+    id: uuid.UUID | None = Field(default=None, sa_column=Column(
+        UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")))
+    name: str = Field(sa_type=Text)
+    slug: str = Field(sa_type=Text)
+    status: str = Field(default="active", sa_column=Column(Text, nullable=False, server_default="active"))
+    created_at: dt.datetime | None = Field(default=None, sa_column=_now())
+    updated_at: dt.datetime | None = Field(default=None, sa_column=_now())
+
+
+class Membership(SQLModel, table=True):
+    """A user's role in a tenant (owner | admin | member)."""
+    __tablename__ = "memberships"
+    __table_args__ = (CheckConstraint("role IN ('owner', 'admin', 'member')", name="memberships_role_check"),
+                      UniqueConstraint("tenant_id", "user_id", name="memberships_tenant_user_key"))
+
+    id: uuid.UUID | None = Field(default=None, sa_column=Column(
+        UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")))
+    tenant_id: uuid.UUID = Field(sa_column=Column(UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"),
+                                                  nullable=False))
+    user_id: uuid.UUID = Field(sa_column=Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"),
+                                                nullable=False, index=True))
+    role: str = Field(sa_type=Text)
+    created_at: dt.datetime | None = Field(default=None, sa_column=_now())
+
+
 class Horizon(SQLModel, table=True):
     """Who a shekel out is for: current me, near-future me, future me (data/horizons.py).
 
     A fixed list seeded by migration 0006; `key` is the stable code the ledger and API
     use, `name` the label and `target_pct` the share of net income aimed for."""
     __tablename__ = "horizons"
+    __table_args__ = (UniqueConstraint("tenant_id", "key", name="horizons_key_key"),)
 
+    tenant_id: uuid.UUID = Field(sa_column=_tenant())
     id: int | None = Field(default=None, primary_key=True)
-    key: str = Field(sa_column=Column(Text, nullable=False, unique=True))
+    key: str = Field(sa_column=Column(Text, nullable=False))
     name: str = Field(sa_type=Text)
     target_pct: Decimal = Field(sa_type=Numeric(5, 2))
     position: int = Field(default=0)
@@ -53,9 +107,11 @@ class Goal(SQLModel, table=True):
 
     Was data/goals/goals.json's `goals` list; `slug` keeps that store's string id."""
     __tablename__ = "goals"
+    __table_args__ = (UniqueConstraint("tenant_id", "slug", name="goals_slug_key"),)
 
+    tenant_id: uuid.UUID = Field(sa_column=_tenant())
     id: int | None = Field(default=None, primary_key=True)
-    slug: str = Field(sa_column=Column(Text, nullable=False, unique=True))
+    slug: str = Field(sa_column=Column(Text, nullable=False))
     description: str = Field(sa_type=Text)
     amount: Decimal = Field(sa_type=Money)
     start_date: dt.date | None = None
@@ -81,6 +137,7 @@ class PlanTarget(SQLModel, table=True):
     __table_args__ = (CheckConstraint("key IN ('emergency_fund', 'inheritance', 'retirement')",
                                       name="plan_targets_key_check"),)
 
+    tenant_id: uuid.UUID = Field(sa_column=_tenant(primary_key=True))
     key: str = Field(sa_column=Column(Text, primary_key=True))
     amount: Decimal = Field(sa_type=Money)
     updated_at: dt.datetime | None = Field(default=None, sa_column=_now())
@@ -112,11 +169,12 @@ class Category(SQLModel, table=True):
     yet is kept as a `riseup` row (no group); a name first typed by hand is `user`.
     `merged_into_id` folds it into another category (`transaction_kinds` resolves it)."""
     __tablename__ = "categories"
-    __table_args__ = (CheckConstraint("source IN ('builtin', 'riseup', 'user')", name="categories_source_check"),
+    __table_args__ = (UniqueConstraint("tenant_id", "name", name="categories_name_key"), CheckConstraint("source IN ('builtin', 'riseup', 'user')", name="categories_source_check"),
                       CheckConstraint(KIND_CHECK, name="categories_kind_check"))
 
+    tenant_id: uuid.UUID = Field(sa_column=_tenant())
     id: int | None = Field(default=None, primary_key=True)
-    name: str = Field(sa_column=Column(Text, nullable=False, unique=True))
+    name: str = Field(sa_column=Column(Text, nullable=False))
     source: str = Field(sa_column=Column(Text, nullable=False, server_default="user"))
     created_at: dt.datetime | None = Field(default=None, sa_column=_now())
     group_id: int | None = Field(default=None, sa_column=_fk("category_groups"))
@@ -137,10 +195,11 @@ class MerchantRule(SQLModel, table=True):
     key, the ledger row's `merchant`) gets this category and/or kind, unless that
     transaction has its own override. Kept forever, like transaction_overrides."""
     __tablename__ = "merchant_rules"
-    __table_args__ = (CheckConstraint(KIND_CHECK, name="merchant_rules_kind_check"),)
+    __table_args__ = (UniqueConstraint("tenant_id", "merchant", name="merchant_rules_merchant_key"), CheckConstraint(KIND_CHECK, name="merchant_rules_kind_check"),)
 
+    tenant_id: uuid.UUID = Field(sa_column=_tenant())
     id: int | None = Field(default=None, primary_key=True)
-    merchant: str = Field(sa_column=Column(Text, nullable=False, unique=True))
+    merchant: str = Field(sa_column=Column(Text, nullable=False))
     category_id: int | None = Field(default=None, sa_column=_category_fk())
     kind: str | None = Field(default=None, sa_type=Text)
     created_at: dt.datetime | None = Field(default=None, sa_column=_now())
@@ -152,7 +211,9 @@ class MerchantRule(SQLModel, table=True):
 class ScrapedTransaction(SQLModel, table=True):
     """Machine layer: the digested ledger, replaced in full on each import."""
     __tablename__ = "scraped_transactions"
+    __table_args__ = (Index("ix_scraped_transactions_tenant_date", "tenant_id", "txn_date"),)
 
+    tenant_id: uuid.UUID = Field(sa_column=_tenant(primary_key=True))
     txn_date: dt.date = Field(primary_key=True)
     abs_amount: Decimal = Field(primary_key=True, sa_type=Money)
     amount: Decimal = Field(sa_type=Money)
@@ -170,7 +231,8 @@ class ScrapedTransaction(SQLModel, table=True):
     horizon_ref: Horizon | None = Relationship(back_populates="scraped_transactions")
     tags: list["Tag"] = Relationship(sa_relationship_kwargs={
         "secondary": "transaction_tags", "viewonly": True, "order_by": "Tag.name",
-        "primaryjoin": "and_(ScrapedTransaction.txn_date == foreign(TransactionTag.txn_date), "
+        "primaryjoin": "and_(ScrapedTransaction.tenant_id == foreign(TransactionTag.tenant_id), "
+                       "ScrapedTransaction.txn_date == foreign(TransactionTag.txn_date), "
                        "ScrapedTransaction.abs_amount == foreign(TransactionTag.abs_amount))",
         "secondaryjoin": "Tag.id == foreign(TransactionTag.tag_id)"})
 
@@ -183,6 +245,7 @@ class TransactionOverride(SQLModel, table=True):
         CheckConstraint(KIND_CHECK, name="transaction_overrides_kind_check"),
     )
 
+    tenant_id: uuid.UUID = Field(sa_column=_tenant(primary_key=True))
     txn_date: dt.date = Field(primary_key=True)
     abs_amount: Decimal = Field(primary_key=True, sa_type=Money)
     category_id: int | None = Field(default=None, sa_column=_category_fk())
@@ -206,6 +269,7 @@ class OverrideAudit(SQLModel, table=True):
     per field that was set. Written by db/overrides.py for both the CLI and the API."""
     __tablename__ = "override_audit"
 
+    tenant_id: uuid.UUID = Field(sa_column=_tenant(index=True))
     id: int | None = Field(default=None, sa_column=Column(BigInteger, primary_key=True, autoincrement=True))
     at: dt.datetime | None = Field(default=None, sa_column=_now())
     actor: str = Field(sa_type=Text)
@@ -221,9 +285,11 @@ class Tag(SQLModel, table=True):
 
     Free-form and many-to-many, unlike a category: a transaction can carry several."""
     __tablename__ = "tags"
+    __table_args__ = (UniqueConstraint("tenant_id", "name", name="tags_name_key"),)
 
+    tenant_id: uuid.UUID = Field(sa_column=_tenant())
     id: int | None = Field(default=None, primary_key=True)
-    name: str = Field(sa_column=Column(Text, nullable=False, unique=True))
+    name: str = Field(sa_column=Column(Text, nullable=False))
     color: str | None = Field(default=None, sa_type=Text)   # "#rrggbb", or null for the default
     created_at: dt.datetime | None = Field(default=None, sa_column=_now())
 
@@ -239,6 +305,7 @@ class TransactionTag(SQLModel, table=True):
     __tablename__ = "transaction_tags"
     __table_args__ = (CheckConstraint("abs_amount >= 0", name="transaction_tags_abs_amount_check"),)
 
+    tenant_id: uuid.UUID = Field(sa_column=_tenant(primary_key=True))
     txn_date: dt.date = Field(primary_key=True)
     abs_amount: Decimal = Field(primary_key=True, sa_type=Money)
     tag_id: int = Field(sa_column=Column(Integer, ForeignKey("tags.id", ondelete="CASCADE"),
@@ -248,7 +315,8 @@ class TransactionTag(SQLModel, table=True):
     tag_ref: Tag = Relationship(back_populates="links")
     transaction: ScrapedTransaction | None = Relationship(sa_relationship_kwargs={
         "viewonly": True,
-        "primaryjoin": "and_(foreign(TransactionTag.txn_date) == ScrapedTransaction.txn_date, "
+        "primaryjoin": "and_(foreign(TransactionTag.tenant_id) == ScrapedTransaction.tenant_id, "
+                       "foreign(TransactionTag.txn_date) == ScrapedTransaction.txn_date, "
                        "foreign(TransactionTag.abs_amount) == ScrapedTransaction.abs_amount)"})
 
 
@@ -266,10 +334,11 @@ class TransactionOffset(SQLModel, table=True):
                         "AND (expense_date IS NULL) = (amount IS NULL)",
                         name="transaction_offsets_expense_check"),
         CheckConstraint("amount > 0", name="transaction_offsets_amount_check"),
-        UniqueConstraint("payback_date", "payback_abs_amount", "expense_date", "expense_abs_amount",
+        UniqueConstraint("tenant_id", "payback_date", "payback_abs_amount", "expense_date", "expense_abs_amount",
                          name="transaction_offsets_link_key"),
     )
 
+    tenant_id: uuid.UUID = Field(sa_column=_tenant())
     id: int | None = Field(default=None, primary_key=True)
     payback_date: dt.date = Field(index=True)
     payback_abs_amount: Decimal = Field(sa_type=Money)
@@ -297,9 +366,11 @@ class PushSubscription(SQLModel, table=True):
     The API role may only insert and delete these; the sender on the Mac (sync/push.py) reads
     them with the owner connection, stamps `last_success_at` and prunes dead endpoints."""
     __tablename__ = "push_subscriptions"
+    __table_args__ = (UniqueConstraint("tenant_id", "endpoint", name="push_subscriptions_endpoint_key"),)
 
+    tenant_id: uuid.UUID = Field(sa_column=_tenant())
     id: int | None = Field(default=None, primary_key=True)
-    endpoint: str = Field(sa_column=Column(Text, nullable=False, unique=True))
+    endpoint: str = Field(sa_column=Column(Text, nullable=False))
     p256dh: str = Field(sa_column=Column(Text, nullable=False))
     auth: str = Field(sa_column=Column(Text, nullable=False))
     email: str = Field(sa_column=Column(Text, nullable=False))
@@ -327,6 +398,7 @@ class Notification(SQLModel, table=True):
         CheckConstraint("severity IN ('critical', 'high', 'medium', 'low')", name="notifications_severity_check"),
     )
 
+    tenant_id: uuid.UUID = Field(sa_column=_tenant(primary_key=True))
     id: str = Field(sa_column=Column(Text, primary_key=True))
     type: str = Field(sa_type=Text)                 # camelCase event: limitBreach, budgetOver, ...
     category: str = Field(sa_type=Text)
@@ -358,6 +430,7 @@ class Asset(SQLModel, table=True):
         CheckConstraint("valuation_source IN ('manual', 'estimate')", name="assets_valuation_source_check"),
     )
 
+    tenant_id: uuid.UUID = Field(sa_column=_tenant(index=True))
     id: int | None = Field(default=None, primary_key=True)
     kind: str = Field(sa_type=Text)
     label: str = Field(sa_type=Text)
@@ -375,6 +448,7 @@ class PositionSnapshot(SQLModel, table=True):
     record of how net worth moved over time: scraped sources only know today."""
     __tablename__ = "position_snapshots"
 
+    tenant_id: uuid.UUID = Field(sa_column=_tenant(primary_key=True))
     date: dt.date = Field(primary_key=True)
     cash: Decimal = Field(sa_type=Money)              # bank_balances_sum
     card_debt: Decimal = Field(sa_type=Money)

@@ -120,6 +120,8 @@ def rebuild():
 
 
 def main(argv):
+    from finance.tenancy import use_cli_tenant
+    use_cli_tenant()
     no_rebuild = "--no-rebuild" in argv
     argv = [a for a in argv if a != "--no-rebuild"]
     if not argv:

@@ -52,7 +52,7 @@ def sync(conn, actions, now=None):
                        (id, type, category, severity, title, detail, amount, cta, subject, created_at, updated_at)
                    VALUES (%(id)s, %(type)s, %(category)s, %(severity)s, %(title)s, %(detail)s, %(amount)s,
                            %(cta)s, %(subject)s, %(now)s, %(now)s)
-                   ON CONFLICT (id) DO UPDATE SET
+                   ON CONFLICT (tenant_id, id) DO UPDATE SET
                        type = EXCLUDED.type, category = EXCLUDED.category, severity = EXCLUDED.severity,
                        title = EXCLUDED.title, detail = EXCLUDED.detail, amount = EXCLUDED.amount,
                        cta = EXCLUDED.cta, subject = EXCLUDED.subject, updated_at = EXCLUDED.updated_at,
@@ -195,6 +195,8 @@ def snooze_all(conn, until, category=None, now=None):
 # --- CLI -----------------------------------------------------------------------------------
 
 def main():
+    from finance.tenancy import use_cli_tenant
+    use_cli_tenant()
     if sys.argv[1:] != ["sync"]:
         raise SystemExit("usage: inbox.py sync  < actions.json")
     from ledger import connect

@@ -4,6 +4,8 @@ No database: the app gets a fake broadcaster. A stream's lifetime is shortened s
 response ends by itself and the test client can read it to the end.
 """
 import asyncio
+
+from finance.tenancy import DEFAULT_TENANT_ID
 import json
 
 import pytest
@@ -45,10 +47,10 @@ class FakeBroadcaster:
 
 
 @pytest.fixture
-def make_client(key_pair, make_token):
+def make_client(key_pair, make_token, pool, owner):
     def make(broadcaster, **state):
         s = settings()
-        app = create_app(s, pool=object(), rebuilder=object(), broadcaster=broadcaster,
+        app = create_app(s, pool=pool, rebuilder=object(), broadcaster=broadcaster,
                          verifier=TokenVerifier(s, jwk_client=FakeJwks(key_pair)))
         app.state.sse_lifetime = 0.3
         app.state.sse_tick = 0.05
@@ -214,9 +216,10 @@ def test_inbox_notify_reaches_a_subscriber_as_a_notification_event(test_url):
             sub = b.subscribe()
             try:
                 await asyncio.sleep(0.5)   # let LISTEN start
-                admin.execute("INSERT INTO notifications (id, type, category, severity, title) "
-                              "VALUES ('sse-test', 'staleData', 'REMINDER', 'low', 't')")
-                assert await asyncio.wait_for(sub.get(), 5) == Event("notification", {"id": "sse-test"})
+                admin.execute("INSERT INTO notifications (tenant_id, id, type, category, severity, title) "
+                              "VALUES (%s, 'sse-test', 'staleData', 'REMINDER', 'low', 't')", (DEFAULT_TENANT_ID,))
+                assert await asyncio.wait_for(sub.get(), 5) == Event(
+                    "notification", {"id": "sse-test"}, tenant=str(DEFAULT_TENANT_ID))
             finally:
                 await b.stop()
         try:

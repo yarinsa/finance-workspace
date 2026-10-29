@@ -22,7 +22,7 @@ def _row(p):
 def record(conn, day, **values):
     """Upsert the position of `day` (a later digest the same day overwrites it)."""
     with orm_session(conn) as s:
-        p = s.get(PositionSnapshot, day) or PositionSnapshot(date=day, **{k: Decimal(0) for k in FIELDS})
+        p = s.exec(select(PositionSnapshot).where(PositionSnapshot.date == day)).first() or PositionSnapshot(date=day, **{k: Decimal(0) for k in FIELDS})
         for k in FIELDS:
             v = values.get(k)
             setattr(p, k, None if v is None else Decimal(str(round(v, 2))))

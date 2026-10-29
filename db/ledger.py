@@ -11,6 +11,7 @@ back on stdout in the same order. Rows are keyed on the ledger's dedup key,
 (date, abs(amount)).
 """
 import json
+import uuid
 import os
 import re
 import sys
@@ -23,6 +24,7 @@ from psycopg.types.json import Jsonb
 
 from finance import categories as taxonomy
 from finance.models import LedgerTransaction
+from finance.tenancy import resolve_tenant_id, use_cli_tenant
 
 REPO = Path(__file__).resolve().parent.parent
 ALEMBIC_INI = Path(__file__).resolve().parent / "alembic.ini"
@@ -90,8 +92,11 @@ def migrate(url):
     command.upgrade(cfg, "head")
 
 
-def connect(url=None):
-    """Open a connection and make sure the schema is migrated to head."""
+def connect_admin(url=None):
+    """Open a privileged connection (owner role, bypasses RLS) and migrate the schema to head.
+
+    Only for migrations and `db/tenants.py`. Everything that reads or writes customer data
+    uses `connect`, which is tenant-scoped."""
     url = url or database_url()
     if not url:
         raise SystemExit("DATABASE_URL is not set (env or .env)")
@@ -101,6 +106,27 @@ def connect(url=None):
     if password:
         set_api_role_password(conn, password)
     return conn
+
+
+def scope(conn, tenant_id):
+    """Drop `conn` to the RLS-bound role `finance_app` and pin it to `tenant_id` for the session.
+
+    The owner role bypasses RLS, so a host job takes `finance_app` (no BYPASSRLS, owns nothing)
+    right after connecting. Committed here, so a later rollback cannot undo it."""
+    tenant_id = uuid.UUID(str(tenant_id))
+    conn.execute("SET ROLE finance_app")
+    conn.execute("SELECT set_config('app.tenant_id', %s, false)", (str(tenant_id),))
+    conn.commit()
+    return conn
+
+
+def connect(url=None, tenant_id=None):
+    """A connection scoped to one tenant (finance/tenancy.py `resolve_tenant_id`), schema at head.
+
+    Row-Level Security applies: queries see and write only that tenant's rows. Raises
+    TenantContextMissing when no tenant is given or bound."""
+    tenant_id = resolve_tenant_id(tenant_id)
+    return scope(connect_admin(url), tenant_id)
 
 
 def key(date, amount):
@@ -118,7 +144,7 @@ def load(conn, ledger):
     with conn.transaction(), conn.cursor() as cur:
         ids = seed_categories(cur, ledger)
         horizon_ids = dict(cur.execute("SELECT key, id FROM horizons").fetchall())
-        cur.execute("TRUNCATE scraped_transactions")
+        cur.execute("DELETE FROM scraped_transactions")   # RLS: this tenant's rows only
         cur.executemany(
             """INSERT INTO scraped_transactions
                    (txn_date, abs_amount, amount, description, category, category_id, origin,
@@ -136,7 +162,7 @@ def seed_categories(cur, ledger):
     sync_taxonomy(cur)
     names = sorted({c for t in ledger if (c := t.get("category"))} - set(taxonomy.CATEGORY_GROUP))
     cur.executemany("INSERT INTO categories (name, source) VALUES (%s, 'riseup') "
-                    "ON CONFLICT (name) DO NOTHING", [(n,) for n in names])
+                    "ON CONFLICT (tenant_id, name) DO NOTHING", [(n,) for n in names])
     return dict(cur.execute("SELECT name, id FROM categories").fetchall())
 
 
@@ -159,7 +185,7 @@ def sync_taxonomy(cur):
                 ([n for n, _, _ in taxonomy.CATEGORIES],))
     cur.executemany(
         "INSERT INTO categories (name, source, group_id, kind, usage_based, position) "
-        "VALUES (%s, 'builtin', %s, %s, %s, %s) ON CONFLICT (name) DO UPDATE SET source = 'builtin', "
+        "VALUES (%s, 'builtin', %s, %s, %s, %s) ON CONFLICT (tenant_id, name) DO UPDATE SET source = 'builtin', "
         "group_id = EXCLUDED.group_id, kind = EXCLUDED.kind, usage_based = EXCLUDED.usage_based, "
         "position = EXCLUDED.position",
         [(n, groups[g], k, n in taxonomy.USAGE_BASED, i) for i, (n, g, k) in enumerate(taxonomy.CATEGORIES)])
@@ -216,8 +242,9 @@ def sync(conn, ledger):
 
 
 def main():
+    use_cli_tenant()
     if sys.argv[1:] == ["migrate"]:
-        connect().close()   # upgrade head, and set the finance_api login password if configured
+        connect_admin().close()   # upgrade head, and set the finance_api login password if configured
         print("db: schema is at head", file=sys.stderr)
         return
     if sys.argv[1:] == ["merges"]:

@@ -11,7 +11,8 @@ from api.app import create_app
 from api.auth import COOKIE
 from api.config import ConfigError, Settings
 from api.rebuild import Rebuilder
-from api.tests.conftest import CARD_BILL, ME, PURCHASE, SALARY, PURCHASE_URL, SECRET, WRITE, settings
+from finance.tenancy import DEFAULT_TENANT_ID
+from api.tests.conftest import CARD_BILL, ME, make_member, PURCHASE, SALARY, PURCHASE_URL, SECRET, WRITE, settings
 
 SALARY_URL = "/api/transactions/2026-01-10/1000.00"
 
@@ -111,14 +112,18 @@ def test_email_match_ignores_case(client, make_token):
     assert client.get("/api/transactions").status_code == 200
 
 
-def test_dev_user_skips_jwt_but_not_the_origin_secret(build):
+def test_dev_user_skips_jwt_but_not_the_origin_secret(build, owner, admin):
+    make_member(admin, "dev@example.com", DEFAULT_TENANT_ID)   # the dev user still needs a membership
+    admin.commit()
     c = TestClient(build(dev_user="dev@example.com", allowed_emails=frozenset()))
     assert c.get("/api/transactions", headers={"X-Origin-Secret": SECRET}).status_code == 200
     assert c.get("/api/transactions").status_code == 403
     assert c.get("/api/health", headers={"X-Origin-Secret": SECRET}).json()["dev"] is True
 
 
-def test_dev_user_is_the_audit_actor(build, owner):
+def test_dev_user_is_the_audit_actor(build, owner, admin):
+    make_member(admin, "dev@example.com", DEFAULT_TENANT_ID)
+    admin.commit()
     c = TestClient(build(dev_user="dev@example.com"))
     c.patch(PURCHASE_URL, json={"note": "x"}, headers={**WRITE, "X-Origin-Secret": SECRET})
     assert owner.execute("SELECT actor FROM override_audit").fetchone()[0] == "dev@example.com"
@@ -399,6 +404,8 @@ def test_signal_with_start_targets_the_contract_names(monkeypatch):
 def as_api(test_url, owner):
     c = psycopg.connect(test_url)
     c.execute("SET ROLE finance_api")
+    c.execute("SELECT set_config('app.tenant_id', %s, false)", (str(DEFAULT_TENANT_ID),))
+    c.commit()
     yield c
     c.rollback()
     c.close()

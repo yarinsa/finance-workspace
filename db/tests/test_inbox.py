@@ -9,6 +9,8 @@ import json
 import psycopg
 import pytest
 
+from finance.tenancy import DEFAULT_TENANT_ID
+
 import inbox
 
 UTC = dt.timezone.utc
@@ -167,7 +169,7 @@ def test_every_write_notifies_with_the_id(conn, test_url):
         inbox.update(conn, LIMIT["id"], {"read_at": T0}, now=T0)
         conn.commit()
         notes = [(n.channel, n.payload) for n in listener.notifies(timeout=2, stop_after=2)]
-    assert notes == [("notifications", LIMIT["id"])] * 2
+    assert notes == [("notifications", f"{DEFAULT_TENANT_ID}:{LIMIT['id']}")] * 2   # 0018: tenant first
 
 
 def test_finance_api_changes_only_the_households_columns(conn):

@@ -29,6 +29,9 @@ import tags  # noqa: E402
 
 from .auth import TokenVerifier, check_csrf, check_origin, current_user  # noqa: E402
 from .config import Settings  # noqa: E402
+from finance import tenancy  # noqa: E402
+from finance.tenancy import TenantContextMissing  # noqa: E402
+
 from .errors import ApiError  # noqa: E402
 
 from .inputs import GoalEdit, Patch, PushSubscribe, PushUnsubscribe, TagEdit, TagSet  # noqa: E402
@@ -67,12 +70,34 @@ def parse_key(day, abs_amount):
 
 
 @contextmanager
-def db(request: Request):
-    """A pooled connection; committed on a clean exit, rolled back on error."""
+def db(request: Request, scoped=True):
+    """A pooled connection; committed on a clean exit, rolled back on error.
+
+    Scoped to the request's tenant (`tenancy.bind`, cleared again on the way out, so a pooled
+    connection never carries it to the next request). A request with no resolved tenant
+    raises instead of running unscoped; only `scoped=False` (health) skips the binding."""
     pool = request.app.state.pool
+    ctx = getattr(request.state, "tenant", None)
+    if scoped and ctx is None:
+        raise TenantContextMissing("database access with no tenant resolved for this request")
     try:
         with pool.connection() as conn:
-            yield conn
+            if scoped:
+                tenancy.bind(conn, ctx.tenant_id, local=False)
+            try:
+                yield conn
+                conn.commit()
+            except BaseException:
+                conn.rollback()
+                raise
+            finally:
+                if scoped and not conn.closed:   # back to the pool with no tenant on it
+                    try:
+                        tenancy.unbind(conn)
+                        conn.commit()
+                    except Exception:
+                        log.warning("could not clear the tenant; discarding the connection")
+                        conn.close()
     except ApiError:
         raise
     except Exception as e:
@@ -162,7 +187,7 @@ def create_app(settings=None, pool=None, rebuilder=None, verifier=None, broadcas
     @app.get("/api/health")
     def health(request: Request):
         try:
-            with db(request) as conn:
+            with db(request, scoped=False) as conn:
                 conn.execute("SELECT 1")
             db_ok = True
         except ApiError:
@@ -367,6 +392,7 @@ def create_app(settings=None, pool=None, rebuilder=None, verifier=None, broadcas
     async def sync_events(request: Request, user=Depends(current_user)):
         """Live sync status: a `snapshot` event, then a `source` event per change, pings in between."""
         st = request.app.state
+        tenant = request.state.tenant
         if st.sse_streams >= st.sse_max_streams:
             raise ApiError(503, "too_many_streams", "too many open status streams")
         st.sse_streams += 1
@@ -411,6 +437,8 @@ def create_app(settings=None, pool=None, rebuilder=None, verifier=None, broadcas
                         continue
                     if item is END:
                         return
+                    if isinstance(item, Event) and item.tenant and item.tenant != str(tenant.tenant_id):
+                        continue   # another tenant's inbox changed
                     yield sse(item.name, item.data) if isinstance(item, Event) else sse("source", item)
             finally:
                 release(sub)
@@ -436,7 +464,7 @@ def create_app(settings=None, pool=None, rebuilder=None, verifier=None, broadcas
             with db(request) as conn:
                 conn.execute(
                     "INSERT INTO push_subscriptions (endpoint, p256dh, auth, email, user_agent) "
-                    "VALUES (%s, %s, %s, %s, %s) ON CONFLICT (endpoint) DO UPDATE "
+                    "VALUES (%s, %s, %s, %s, %s) ON CONFLICT (tenant_id, endpoint) DO UPDATE "
                     "SET p256dh = EXCLUDED.p256dh, auth = EXCLUDED.auth, "
                     "email = EXCLUDED.email, user_agent = EXCLUDED.user_agent",
                     (body.endpoint, body.keys.p256dh, body.keys.auth, user, agent))

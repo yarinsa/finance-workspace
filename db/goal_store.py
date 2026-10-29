@@ -167,7 +167,7 @@ def set_targets(conn, **fields):
     with orm_session(conn) as s:
         for k, v in fields.items():
             key, amount = k.removesuffix("_target"), Decimal(str(v or 0))
-            row = s.get(PlanTarget, key)
+            row = s.exec(select(PlanTarget).where(PlanTarget.key == key)).first()   # RLS: this tenant's row
             if row:
                 row.amount, row.updated_at = amount, dt.datetime.now(dt.timezone.utc)
             else:
@@ -203,6 +203,8 @@ def import_json(conn, path=STORE):
 
 def main(argv):
     from ledger import connect
+    from finance.tenancy import use_cli_tenant
+    use_cli_tenant()
     cmd, *rest = argv or ["list"]
     with connect() as conn:
         if cmd == "list":

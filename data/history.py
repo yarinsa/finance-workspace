@@ -291,6 +291,8 @@ def build(snapshot, as_of, root=None, record=True):
 
 
 if __name__ == "__main__":
+    from finance.tenancy import use_cli_tenant
+    use_cli_tenant()
     if sys.argv[1:2] == ["backfill"]:
         # poetry run python data/history.py backfill SNAPSHOT.json ...  (see the docstring of backfill)
         backfill(sys.argv[2:])

@@ -124,7 +124,7 @@ def patch(conn, k, changes, actor):
                 """INSERT INTO transaction_overrides
                        (txn_date, abs_amount, category_id, note, excluded, horizon_id, goal_id, kind)
                    VALUES (%s, %s, %s, %s, %s, (SELECT id FROM horizons WHERE key = %s), %s, %s)
-                   ON CONFLICT (txn_date, abs_amount)
+                   ON CONFLICT (tenant_id, txn_date, abs_amount)
                    DO UPDATE SET category_id = EXCLUDED.category_id, note = EXCLUDED.note,
                                  excluded = EXCLUDED.excluded, horizon_id = EXCLUDED.horizon_id,
                                  goal_id = EXCLUDED.goal_id, kind = EXCLUDED.kind, updated_at = now()""",
@@ -159,7 +159,7 @@ def category_id(conn, name):
     """The id of category `name`, adding it as a "user" category if new. None for None."""
     if name is None:
         return None
-    conn.execute("INSERT INTO categories (name, source) VALUES (%s, 'user') ON CONFLICT (name) DO NOTHING",
+    conn.execute("INSERT INTO categories (name, source) VALUES (%s, 'user') ON CONFLICT (tenant_id, name) DO NOTHING",
                  (name,))
     return conn.execute("SELECT id FROM categories WHERE name = %s", (name,)).fetchone()[0]
 
@@ -249,7 +249,7 @@ def set_merchant_rule(conn, merchant, changes, actor):
         if diff:
             conn.execute(
                 "INSERT INTO merchant_rules (merchant, category_id, kind) VALUES (%s, %s, %s) "
-                "ON CONFLICT (merchant) DO UPDATE SET category_id = EXCLUDED.category_id, "
+                "ON CONFLICT (tenant_id, merchant) DO UPDATE SET category_id = EXCLUDED.category_id, "
                 "kind = EXCLUDED.kind, updated_at = now()",
                 (merchant, category_id(conn, after["category"]), after["kind"]))
             for field in diff:

@@ -14,6 +14,7 @@ import psycopg  # noqa: E402
 from psycopg.conninfo import conninfo_to_dict, make_conninfo  # noqa: E402
 
 import ledger  # noqa: E402
+from finance.tenancy import DEFAULT_TENANT_ID  # noqa: E402
 
 TEST_DB = os.environ.get("FINANCE_TEST_DB", "finance_test")   # a branch with other migrations uses its own
 
@@ -35,8 +36,10 @@ def test_url():
 
 @pytest.fixture
 def conn(test_url):
-    c = ledger.connect(test_url)
-    c.execute("TRUNCATE scraped_transactions, transaction_overrides, merchant_rules, categories, category_groups, transaction_tags, tags, override_audit, goals, plan_targets, transaction_offsets, notifications, assets, position_snapshots")
-    c.commit()
+    admin = ledger.connect_admin(test_url)
+    admin.execute("TRUNCATE scraped_transactions, transaction_overrides, merchant_rules, categories, category_groups, transaction_tags, tags, override_audit, goals, plan_targets, transaction_offsets, notifications, assets, position_snapshots")
+    admin.commit()
+    admin.close()
+    c = ledger.connect(test_url, tenant_id=DEFAULT_TENANT_ID)
     yield c
     c.close()

@@ -12,7 +12,7 @@ SUB = {"endpoint": ENDPOINT, "expirationTime": None,
 
 @pytest.fixture(autouse=True)
 def clean(owner):
-    owner.execute("TRUNCATE push_subscriptions")
+    owner.execute("DELETE FROM push_subscriptions")
     owner.commit()
 
 

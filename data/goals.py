@@ -371,6 +371,8 @@ def targets_from_db():
 
 
 def main():
+    from finance.tenancy import use_cli_tenant
+    use_cli_tenant()
     store = load(STORE)
     targets = targets_from_db()
     if targets is not None:   # a stored row wins over the JSON store; keys with no row keep the JSON value

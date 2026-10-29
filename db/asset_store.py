@@ -85,6 +85,8 @@ def update_asset(conn, asset_id, **fields):
 
 def main(argv):
     from ledger import connect
+    from finance.tenancy import use_cli_tenant
+    use_cli_tenant()
     with connect() as conn:
         if argv[:1] == ["list"]:
             for a in all_assets(conn):

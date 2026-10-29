@@ -16,7 +16,7 @@ UPSERT = ("INSERT INTO sync_status (source, entry) VALUES (%s, %s::jsonb) "
 
 @pytest.fixture
 def status_conn(test_url):
-    c = ledger.connect(test_url)
+    c = ledger.connect_admin(test_url)   # sync_status is global (no tenant)
     c.execute("TRUNCATE sync_status")
     c.commit()
     yield c

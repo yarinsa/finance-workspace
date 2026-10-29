@@ -34,6 +34,11 @@ class Binding:
     hidden: frozenset[str] = frozenset()                    # model fields deliberately not exposed
     never_null: frozenset[str] = frozenset()                # optional model fields the resolver fills in
 
+    def __post_init__(self):
+        # The tenant of a row is the request's, never a field the API shows or accepts.
+        if "tenant_id" in getattr(self.model, "model_fields", {}):
+            object.__setattr__(self, "hidden", self.hidden | {"tenant_id"})
+
 
 def _notification(*extra):
     """Every notification subtype reads the one `notifications` row; `extra` are its subject's fields."""

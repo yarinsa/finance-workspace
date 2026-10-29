@@ -34,6 +34,7 @@ class Event(NamedTuple):
     """A queued item that names its own SSE event; a bare dict is a `source` change."""
     name: str
     data: Any
+    tenant: str | None = None   # only this tenant's streams get it; None = every stream
 
 
 class Subscription:
@@ -138,7 +139,8 @@ class SyncBroadcaster:
                     first = False
                     async for note in conn.notifies():
                         if note.channel == INBOX_CHANNEL:
-                            self.publish(Event("notification", {"id": note.payload}))
+                            tenant, _, nid = note.payload.partition(":")   # 0018: "<tenant_id>:<id>"
+                            self.publish(Event("notification", {"id": nid}, tenant=tenant))
                         else:
                             await self._on_notify(note.payload)
                 raise psycopg.OperationalError("listen connection closed")

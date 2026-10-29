@@ -15,6 +15,7 @@ import jwt
 from fastapi import Request
 
 from .errors import ApiError
+from .tenancy import resolve_request
 
 log = logging.getLogger("finance_api")
 
@@ -57,9 +58,11 @@ def check_origin(request: Request):
 
 
 def current_user(request: Request):
-    """The signed-in, allow-listed user's email (the audit actor)."""
+    """The signed-in, allow-listed user's email (the audit actor). Also binds the request's tenant
+    (`request.state.tenant`, see api/tenancy.py): every route that needs a user has a tenant."""
     settings = request.app.state.settings
     if settings.dev_user:
+        resolve_request(request, settings.dev_user)
         return settings.dev_user
     token = request.cookies.get(COOKIE)
     if not token:
@@ -67,6 +70,7 @@ def current_user(request: Request):
     email = request.app.state.verifier.email(token)
     if email not in settings.allowed_emails:
         raise ApiError(403, "forbidden", "this account may not use the ledger API")
+    resolve_request(request, email)   # 403 unless a member of the requested (or only) tenant
     return email
 
 

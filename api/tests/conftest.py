@@ -25,6 +25,7 @@ from psycopg.conninfo import conninfo_to_dict, make_conninfo  # noqa: E402
 from psycopg_pool import ConnectionPool  # noqa: E402
 
 import ledger  # noqa: E402
+from finance.tenancy import DEFAULT_TENANT_ID  # noqa: E402
 from api.app import create_app  # noqa: E402
 from api.auth import COOKIE, TokenVerifier  # noqa: E402
 from api.config import Settings  # noqa: E402
@@ -63,13 +64,41 @@ def test_url():
     return make_conninfo(**{**conninfo_to_dict(url), "dbname": TEST_DB})
 
 
+OWNED = ["scraped_transactions", "transaction_overrides", "override_audit", "transaction_tags",
+         "transaction_offsets", "tags", "categories", "merchant_rules", "goals", "plan_targets",
+         "notifications", "assets", "position_snapshots", "push_subscriptions"]   # horizons keep their seed
+
+
+def make_member(admin, email, tenant_id, role="owner"):
+    """Create the user (if new) and a membership in `tenant_id`; returns the user id."""
+    admin.execute("INSERT INTO users (email) VALUES (%s) ON CONFLICT DO NOTHING", (email,))
+    uid = admin.execute("SELECT id FROM users WHERE email = %s", (email,)).fetchone()[0]
+    admin.execute("INSERT INTO memberships (tenant_id, user_id, role) VALUES (%s, %s, %s) "
+                  "ON CONFLICT DO NOTHING", (tenant_id, uid, role))
+    return uid
+
+
 @pytest.fixture
 def owner(test_url):
-    """The schema owner: migrates, seeds, and checks what the API wrote."""
-    c = ledger.connect(test_url)
-    c.execute("TRUNCATE scraped_transactions, transaction_overrides, merchant_rules, categories, category_groups, transaction_tags, tags, override_audit, goals, plan_targets, transaction_offsets, notifications, assets, position_snapshots")
-    c.commit()
+    """Tenant-scoped connection to the default tenant (RLS applies, as in the host jobs).
+
+    The user ME is an owner of the default tenant, the household as it was before tenants."""
+    admin = ledger.connect_admin(test_url)
+    admin.execute(f"TRUNCATE {', '.join(OWNED)}, memberships, users, category_groups CASCADE")
+    admin.execute("DELETE FROM tenants WHERE id <> %s", (DEFAULT_TENANT_ID,))
+    make_member(admin, ME, DEFAULT_TENANT_ID)
+    admin.commit()
+    admin.close()
+    c = ledger.connect(test_url, tenant_id=DEFAULT_TENANT_ID)
     ledger.load(c, LEDGER)
+    yield c
+    c.close()
+
+
+@pytest.fixture
+def admin(test_url):
+    """The privileged owner role: creates tenants and users (the API role may not)."""
+    c = ledger.connect_admin(test_url)
     yield c
     c.close()
 

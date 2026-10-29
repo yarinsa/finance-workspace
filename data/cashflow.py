@@ -847,6 +847,8 @@ def sync_inbox(model):
 
 
 if __name__ == "__main__":
+    from finance.tenancy import use_cli_tenant
+    use_cli_tenant()
     m = build()
     sync_inbox(m)
     print(f"cashflow.json written — current month {m['current_month']}, "

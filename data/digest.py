@@ -777,6 +777,8 @@ def source_syncs(root=ROOT):
 
 
 def main():
+    from finance.tenancy import use_cli_tenant
+    use_cli_tenant()
     if "--no-normalize" not in sys.argv:
         run_normalizers()
     entities = load_entities()
