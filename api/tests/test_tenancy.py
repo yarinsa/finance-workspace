@@ -141,3 +141,20 @@ def test_a_pooled_connection_goes_back_without_a_tenant(as_user, pool):
     assert as_user(USER_A).get("/api/transactions").status_code == 200
     with pool.connection() as conn:
         assert conn.execute("SELECT current_setting('app.tenant_id', true)").fetchone()[0] in ("", None)
+
+
+def test_me_lists_the_tenants_a_user_can_switch_between_without_choosing_one(as_user):
+    r = as_user(BOTH).get("/api/me")   # two tenants and no header: every other route says 400
+    assert r.status_code == 200
+    body = r.json()
+    assert body["email"] == BOTH and body["platform_admin"] is False
+    assert {(t["slug"], t["role"]) for t in body["tenants"]} == {("a", "member"), ("b", "admin")}
+    assert as_user(USER_A).get("/api/me").json()["tenants"][0]["id"] == str(A)
+
+
+def test_the_live_stream_names_its_tenant_in_the_query_and_is_still_checked(as_user):
+    c = as_user(USER_A)
+    assert c.get(f"/api/sync/events?tenant={B}").status_code == 403    # not a member of B
+    assert as_user(BOTH).get("/api/sync/events").status_code == 400    # several tenants, none named
+    assert c.get(f"/api/transactions?tenant={B}").status_code == 200   # other routes ignore the query string
+    assert amounts(c) == [11.11]

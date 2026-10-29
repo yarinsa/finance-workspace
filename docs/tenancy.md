@@ -61,9 +61,39 @@ the `default` tenant (`00000000-0000-4000-8000-000000000001`) holding all pre-ex
 5. Views over it: `WITH (security_invoker = true)` and join on `tenant_id`.
 6. A cross-tenant test: A cannot list, read, update or delete B's rows.
 
-## Not done yet
+## Per-tenant files, publishing and sync
 
-Stages 5 and 6 of the plan: per-tenant data directories, digests, S3 prefixes and the edge-auth
-Lambda rewrite, per-tenant scraper credentials and sync fan-out, the Temporal rebuild signal and
-`finance/push.py` (they still run for the default tenant only), the frontend tenantId in query
-keys, and log tagging. `sync_status` and `category_groups` stay global.
+- **Files.** `finance/paths.py`: the master tenant keeps `data/<source>/…` and `data/digested/`; any other
+  tenant lives in `data/tenants/<id>/` with the same tree. The tenant is chosen per process by
+  `FINANCE_TENANT_ID` (the sync activities set it on every child process).
+- **Published data.** `infra/deploy.sh --data-only --tenant ID` uploads to `data/t/<id>/`. The edge-auth
+  Lambda serves `/data/t/<id>/<file>.json` only to a session whose Cognito groups include `tenant-<id>`
+  (it has no database, so the group mirrors the membership: `infra/tenant-groups.sh add|remove|sync`).
+  With `enforce_tenant_data = true` the master tenant's `/data/*.json` needs `tenant-0000…0001` too.
+- **Scrapers.** `scrapers/tenant.mjs`: another tenant reads only `~/.finance-tenants/<id>.env` (0600) and
+  writes to its own tree; it never loads the repo `.env`, so a missing credential stops the run instead of
+  logging in as another household. Only self-login sources (`discount*`, `leumi`, `cal`, `amex`, `max`) can run for
+  another tenant; Chrome-driven ones (harel, more, analyst, riseup) stay master-only.
+- **Sync.** `FinanceSyncWorkflow` takes `opts.tenant_id`; every activity receives it. Schedules:
+  `python3 sync/schedule.py --tenant ID` (`finance-sync-<ID>`, 06:50 and 22:30). Rebuild after an edit is one
+  `LedgerRebuildWorkflow` per tenant (`ledger-rebuild-<ID>`; the master keeps `ledger-rebuild`).
+  `sync_status` and its live screen stay the master tenant's; other tenants are followed in the Temporal UI.
+- **Push.** `finance/push.py` scopes its connection to the bound tenant: subscriptions and inbox of one tenant.
+- **App.** `GET /api/me` lists the user's tenants without needing one chosen. With several, the sidebar
+  switcher stores the choice, sends `X-Tenant-Id` (and `?tenant=` on the live stream), reads
+  `/data/t/<id>/…` and reloads, so nothing of the previous tenant stays in memory.
+
+## Onboarding a second tenant (in this order)
+
+1. `terraform apply` with the Lambda change (`enforce_tenant_data` still false), then `infra/tenant-groups.sh sync`
+   so every current member is in their tenant group; sign out and in once. Then set `enforce_tenant_data = true`
+   and apply. **Do this before step 2**: until then any signed-in user can read the master tenant's files.
+2. As platform admin: `tenantCreate(slug, name, ownerEmail)`; `infra/tenant-groups.sh add <tenant-id> <owner-email>`.
+3. The owner's bank logins go in `~/.finance-tenants/<tenant-id>.env` (mode 600) on the Mac, typed by that household.
+4. `poetry run python sync/schedule.py --tenant <tenant-id>`, then `--trigger`.
+5. The owner signs in again (the group is in the id token) and sees their own data.
+
+## Not done
+
+Live sync status per tenant (`sync_status` is global), log tagging, a tenant-switcher design review, composite
+foreign keys, invites. Chrome-driven sources for a second tenant.

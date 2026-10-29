@@ -8,6 +8,7 @@
 import { useSyncExternalStore } from "react";
 import { setAppStatus } from "./appStatus";
 import { FRESH_HEADER } from "./swRoutes";
+import { dataUrl } from "./tenant";
 import {
   SessionExpiredError,
   isExpiredNetworkError,
@@ -536,7 +537,7 @@ export const dataMeta: {
 async function loadDigested<T>(name: string, fresh = false): Promise<T> {
   let res: Response;
   try {
-    res = await fetch(`/data/${name}.json`, {
+    res = await fetch(dataUrl(name), {
       cache: "no-store",
       headers: fresh ? { [FRESH_HEADER]: "1" } : undefined,
     });

@@ -2,6 +2,7 @@
 // behind the same CloudFront host as the app (`/api/*`), so every call is
 // same-origin and the Cognito session cookie rides along automatically.
 import { setAppStatus } from "./appStatus";
+import { tenantHeaders } from "./tenant";
 
 /** One ledger transaction as the API returns it (effective values + scraped baseline). */
 export interface Row {
@@ -169,7 +170,7 @@ export function keyId(key: LedgerKey): string {
  * `X-Requested-With`). `body` is sent as-is, so callers decide which fields exist.
  */
 export async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
-  const headers: Record<string, string> = { Accept: "application/json" };
+  const headers: Record<string, string> = { Accept: "application/json", ...tenantHeaders() };
   const init: RequestInit = { method, credentials: "same-origin", headers, cache: "no-store" };
   if (method !== "GET") {
     headers["Content-Type"] = "application/json";

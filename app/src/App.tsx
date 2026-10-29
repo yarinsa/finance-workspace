@@ -25,6 +25,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { MobileTabBar } from "@/components/MobileTabBar";
 import { PwaStatus } from "@/components/PwaStatus";
 import { Toaster } from "@/components/Toaster";
+import { TenantSwitcher } from "@/components/TenantSwitcher";
 
 /**
  * "Updated N days ago" — tap-able so the stale warning works on touch. The dot
@@ -72,6 +73,7 @@ function AppSidebar({ days }: { days: number }) {
     <Sidebar side="right">
       <SidebarHeader>
         <div className="px-2 py-1 text-lg font-semibold">תמונת מצב</div>
+        <TenantSwitcher />
       </SidebarHeader>
       <SidebarContent>
         {groups.map((g) => (

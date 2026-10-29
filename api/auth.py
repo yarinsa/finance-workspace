@@ -57,12 +57,11 @@ def check_origin(request: Request):
         raise ApiError(403, "forbidden", "missing or wrong origin secret")
 
 
-def current_user(request: Request):
-    """The signed-in, allow-listed user's email (the audit actor). Also binds the request's tenant
-    (`request.state.tenant`, see api/tenancy.py): every route that needs a user has a tenant."""
+def verified_email(request: Request):
+    """The signed-in, allow-listed user's email, with no tenant resolved. Only for routes that
+    must work before a tenant is chosen (`GET /api/me`, the tenant switcher's list)."""
     settings = request.app.state.settings
     if settings.dev_user:
-        resolve_request(request, settings.dev_user)
         return settings.dev_user
     token = request.cookies.get(COOKIE)
     if not token:
@@ -70,6 +69,13 @@ def current_user(request: Request):
     email = request.app.state.verifier.email(token)
     if email not in settings.allowed_emails:
         raise ApiError(403, "forbidden", "this account may not use the ledger API")
+    return email
+
+
+def current_user(request: Request):
+    """The signed-in, allow-listed user's email (the audit actor). Also binds the request's tenant
+    (`request.state.tenant`, see api/tenancy.py): every route that needs a user has a tenant."""
+    email = verified_email(request)
     resolve_request(request, email)   # 403 unless a member of the requested (or only) tenant
     return email
 

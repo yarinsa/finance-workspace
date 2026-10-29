@@ -1,3 +1,4 @@
+import { tenantQuery } from "./tenant";
 import { useSyncExternalStore } from "react";
 import type { HomeAction } from "./data";
 
@@ -294,7 +295,8 @@ function openStream() {
   closeStream();
   errors = 0;
   if (typeof EventSource === "undefined") return fallBack();
-  const es = new EventSource(EVENTS_URL, { withCredentials: true });
+  const q = tenantQuery();   // EventSource cannot set X-Tenant-Id
+  const es = new EventSource(q ? `${EVENTS_URL}?${q}` : EVENTS_URL, { withCredentials: true });
   stream = es;
   es.addEventListener("snapshot", onSnapshot as EventListener);
   es.addEventListener("source", onSource as EventListener);

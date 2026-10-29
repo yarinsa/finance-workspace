@@ -27,7 +27,7 @@ import overrides  # noqa: E402
 import goal_store as goals  # noqa: E402
 import tags  # noqa: E402
 
-from .auth import TokenVerifier, check_csrf, check_origin, current_user  # noqa: E402
+from .auth import TokenVerifier, check_csrf, check_origin, current_user, verified_email  # noqa: E402
 from .config import Settings  # noqa: E402
 from finance import tenancy  # noqa: E402
 from finance.tenancy import TenantContextMissing  # noqa: E402
@@ -196,6 +196,14 @@ def create_app(settings=None, pool=None, rebuilder=None, verifier=None, broadcas
         if settings.dev_user:
             out["dev"] = True
         return out
+
+    @app.get("/api/me")
+    def me(request: Request, user=Depends(verified_email)):
+        """Who is signed in and which tenants they can switch between. Needs no tenant: the app
+        calls it first, to know whether to send `X-Tenant-Id` at all."""
+        from .tenancy import my_tenants
+        return {"email": user, "platform_admin": tenancy.is_platform_admin(user),
+                "tenants": my_tenants(request.app.state.pool, user)}
 
     @app.get("/api/transactions")
     def list_transactions(request: Request, user=Depends(current_user),

@@ -4,6 +4,7 @@
 // screens handle "the home computer is off" the same way for REST and GraphQL.
 import { Environment, Network, RecordSource, Store, type FetchFunction } from "relay-runtime";
 import { ApiError, ApiOffline, unauthenticated } from "./api";
+import { tenantHeaders } from "./tenant";
 import { isEditMutation, showToast } from "./toast";
 
 const OFFLINE_STATUSES = new Set([502, 503, 504]);
@@ -21,7 +22,7 @@ async function postGraphQL(text: string | null | undefined, variables: unknown, 
       method: "POST",
       credentials: "same-origin",
       cache: "no-store",
-      headers: { "Content-Type": "application/json", "X-Requested-With": "finance-app", Accept: "application/json" },
+      headers: { "Content-Type": "application/json", "X-Requested-With": "finance-app", Accept: "application/json", ...tenantHeaders() },
       body: JSON.stringify({ query: text, variables, operationName }),
     });
   } catch (err) {

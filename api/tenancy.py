@@ -49,8 +49,26 @@ def resolve(pool, email, header):
     return TenantContext(user_id=user_id, tenant_id=tenant_id, role=role)
 
 
+# EventSource cannot set headers, so the live sync stream names its tenant in the query string.
+# It goes through the same membership check as the header.
+QUERY_PARAM_PATHS = frozenset({"/api/sync/events"})
+
+
+def my_tenants(pool, email):
+    """[{id, slug, name, role}] of the active tenants `email` belongs to (the switcher's list)."""
+    with pool.connection() as conn:
+        rows = conn.execute(
+            "SELECT t.id, t.slug, t.name, m.role FROM users u JOIN memberships m ON m.user_id = u.id "
+            "JOIN tenants t ON t.id = m.tenant_id WHERE u.email = %s AND t.status = 'active' "
+            "ORDER BY m.created_at, t.slug", (email,)).fetchall()
+    return [{"id": str(i), "slug": s, "name": n, "role": r} for i, s, n, r in rows]
+
+
 def resolve_request(request: Request, email):
     """Resolve and remember the tenant of this request."""
-    ctx = resolve(request.app.state.pool, email, request.headers.get(HEADER))
+    wanted = request.headers.get(HEADER)
+    if not wanted and request.url.path in QUERY_PARAM_PATHS:
+        wanted = request.query_params.get("tenant")
+    ctx = resolve(request.app.state.pool, email, wanted)
     request.state.tenant = ctx
     return ctx
