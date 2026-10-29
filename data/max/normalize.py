@@ -38,9 +38,12 @@ import json, datetime, glob, re, calendar
 from finance.models import write_envelope
 from pathlib import Path
 
+from finance.paths import source_dir  # noqa: E402
+
 HERE = Path(__file__).resolve().parent          # .../data/max
-RAW = HERE / "raw"
-OUT = HERE / "normalized"
+SRC = source_dir(HERE)       # this tenant's copy of the source (finance/paths.py)
+RAW = SRC / "raw"
+OUT = SRC / "normalized"
 SOURCE = "max"
 ACTIVE_MONTHS = 3                               # card seen in the newest N billing files
 INSTALLMENT_RE = re.compile(r"(\d+)\s*מתוך\s*(\d+)")
@@ -143,7 +146,7 @@ def normalize(raw=RAW):
 
 
 def main():
-    OUT.mkdir(exist_ok=True)
+    OUT.mkdir(parents=True, exist_ok=True)
     now = datetime.datetime.now().astimezone().isoformat(timespec="seconds")
     cards, txns = normalize()
     write_envelope(OUT, SOURCE, "credit_cards", now, cards)

@@ -23,6 +23,7 @@ from collections import defaultdict
 from datetime import date, datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
+from finance.paths import data_root
 
 HERE = Path(__file__).resolve().parent
 CASH_DAYS = 90
@@ -31,7 +32,7 @@ DEBT_MONTHS_AHEAD = 36
 
 
 def data_dir():
-    return Path(os.environ.get("FINANCE_DATA_DIR") or HERE)
+    return data_root()
 
 
 # ---- cash ------------------------------------------------------------------

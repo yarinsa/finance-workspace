@@ -35,8 +35,9 @@ from statistics import median
 from finance import categories
 from finance.merchants import merchant_name
 from runway import posting_date
+from finance.paths import data_root
 
-HERE = os.path.dirname(os.path.abspath(__file__))
+HERE = str(data_root())   # the tenant's data directory
 BUDGET = os.path.join(HERE, "riseup", "raw", "budget_current.json")
 
 SERIES_TOLERANCE = 0.15   # same series: within ±15% of the series' median amount

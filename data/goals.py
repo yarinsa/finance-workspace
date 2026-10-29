@@ -41,8 +41,10 @@ import json
 import sys
 from datetime import date, datetime
 from pathlib import Path
+from finance.paths import data_root
 
-ROOT = Path(__file__).resolve().parent
+CODE = Path(__file__).resolve().parent
+ROOT = data_root()
 STORE = ROOT / "goals" / "goals.json"
 SNAPSHOT = ROOT / "digested" / "snapshot.json"
 CASHFLOW = ROOT / "digested" / "cashflow.json"
@@ -340,7 +342,7 @@ def _from_db(read):
     url = database_url()
     if not url:
         return None
-    db = str(ROOT.parent / "db")
+    db = str(CODE.parent / "db")
     sys.path.insert(0, db)
     try:
         import goal_store
@@ -402,7 +404,7 @@ def main():
             lines.append(f"- {g['description']} — ₪{g['amount']:,.0f} ({prog}, {track})")
     OUT_MD.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
-    print(f"wrote {OUT_JSON.relative_to(ROOT.parent)} and {OUT_MD.relative_to(ROOT.parent)}")
+    print(f"wrote {OUT_JSON.relative_to(ROOT)} and {OUT_MD.relative_to(ROOT)}")
 
 
 def cli(argv=None):

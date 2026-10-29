@@ -41,10 +41,11 @@ from pathlib import Path
 
 import digest
 import runway
+from finance.paths import data_root
 
 CODE_ROOT = Path(__file__).resolve().parent
-DEFAULT_DATA_DIR = Path(os.environ.get("FINANCE_DATA_DIR") or CODE_ROOT)
-DEFAULT_OUT_DIR = Path(os.environ.get("VALIDATE_OUT_DIR") or CODE_ROOT / "digested")
+DEFAULT_DATA_DIR = data_root()
+DEFAULT_OUT_DIR = Path(os.environ.get("VALIDATE_OUT_DIR") or DEFAULT_DATA_DIR / "digested")
 
 BANK_SOURCES = tuple(sorted(digest.BANK_ORIGINS))   # discount, discount-business, leumi
 STATUSES = ("pass", "warn", "fail", "skip")

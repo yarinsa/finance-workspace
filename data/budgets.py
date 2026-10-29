@@ -55,8 +55,10 @@ from statistics import median
 
 from finance import categories
 from finance.categories import FIXED, VARIABLE
+from finance.paths import data_root
 
-ROOT = Path(__file__).resolve().parent
+CODE = Path(__file__).resolve().parent
+ROOT = data_root()
 BUDGET = ROOT / "riseup" / "raw" / "budget_current.json"
 OVERRIDES = ROOT / "budgets" / "budgets.json"
 RAW = ROOT / "riseup" / "raw"
@@ -386,7 +388,7 @@ def unset_override(overrides, category):
 
 def _rebuild():
     """Regenerate cashflow.json so the app picks up the change."""
-    subprocess.run([sys.executable, str(ROOT / "cashflow.py")], check=True)
+    subprocess.run([sys.executable, str(CODE / "cashflow.py")], check=True)
 
 
 def _ledger():

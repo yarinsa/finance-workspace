@@ -16,13 +16,15 @@ import freshness
 import horizons
 import runway
 from finance import categories, offsets
+from finance.paths import data_root
 
-ROOT = Path(__file__).resolve().parent          # .../Finance/data
+CODE = Path(__file__).resolve().parent          # .../Finance/data (the scripts)
+ROOT = data_root()                              # this tenant's files
 OUT = ROOT / "digested"
-OUT.mkdir(exist_ok=True)
+OUT.mkdir(parents=True, exist_ok=True)
 
 
-def database_url(env_file=ROOT.parent / ".env"):
+def database_url(env_file=CODE.parent / ".env"):
     """DATABASE_URL from the environment, else from .env (read literally)."""
     if os.environ.get("DATABASE_URL"):
         return os.environ["DATABASE_URL"]
@@ -43,7 +45,7 @@ def apply_overrides(ledger):
     """
     if "--no-db" in sys.argv or not database_url():
         return ledger
-    res = subprocess.run([sys.executable, str(ROOT.parent / "db" / "ledger.py"), "sync"],
+    res = subprocess.run([sys.executable, str(CODE.parent / "db" / "ledger.py"), "sync"],
                          input=json.dumps(ledger, ensure_ascii=False),
                          capture_output=True, text=True)
     sys.stderr.write(res.stderr)
@@ -58,13 +60,13 @@ def category_merges():
     {} without one. budgets.py folds a merged category's plan into its target with it."""
     if "--no-db" in sys.argv or not database_url():
         return {}
-    res = subprocess.run([sys.executable, str(ROOT.parent / "db" / "ledger.py"), "merges"],
+    res = subprocess.run([sys.executable, str(CODE.parent / "db" / "ledger.py"), "merges"],
                          capture_output=True, text=True)
     return json.loads(res.stdout) if res.returncode == 0 and res.stdout.strip() else {}
 
 
 def run_normalizers():
-    for script in sorted(ROOT.glob("*/normalize.py")):
+    for script in sorted(CODE.glob("*/normalize.py")):
         print(f"normalizing {script.parent.name}…")
         subprocess.run([sys.executable, str(script)], check=True)
 
@@ -642,7 +644,7 @@ def load_assets():
     url = database_url()
     if not url or "--no-db" in sys.argv:
         return None
-    db = str(ROOT.parent / "db")
+    db = str(CODE.parent / "db")
     sys.path.insert(0, db)
     try:
         import asset_store

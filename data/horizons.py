@@ -19,8 +19,9 @@ Pure and stdlib-only. Running it directly prints the split of the real ledger.
 import json
 import os
 from collections import defaultdict
+from finance.paths import data_root
 
-HERE = os.path.dirname(os.path.abspath(__file__))
+HERE = str(data_root())   # the tenant's data directory
 TRANSACTIONS = os.path.join(HERE, "digested", "transactions.json")
 
 HORIZONS = ("current", "near", "future")

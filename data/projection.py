@@ -38,8 +38,9 @@ Importable: ``projection.build(snapshot) -> dict``.
 import json
 import os
 from datetime import date
+from finance.paths import data_root
 
-HERE = os.path.dirname(os.path.abspath(__file__))
+HERE = str(data_root())   # the tenant's data directory
 SNAPSHOT = os.path.join(HERE, "digested", "snapshot.json")
 FORECAST = os.path.join(HERE, "digested", "forecast.json")
 

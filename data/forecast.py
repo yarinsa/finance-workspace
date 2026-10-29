@@ -36,8 +36,9 @@ from datetime import date
 from pathlib import Path
 
 from finance import categories
+from finance.paths import data_root
 
-ROOT = Path(__file__).resolve().parent
+ROOT = data_root()
 BUDGET = ROOT / "riseup" / "raw" / "budget_current.json"
 LEDGER = ROOT / "digested" / "transactions.json"
 CAL_BIG = ROOT / "cal" / "raw" / "bigNumberAndDetails.json"

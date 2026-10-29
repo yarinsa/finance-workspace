@@ -19,10 +19,13 @@ import json, datetime
 from finance.models import write_envelope
 from pathlib import Path
 
+from finance.paths import source_dir  # noqa: E402
+
 HERE = Path(__file__).resolve().parent          # .../data/analyst
-RAW = HERE / "raw"
-OUT = HERE / "normalized"
-OUT.mkdir(exist_ok=True)
+SRC = source_dir(HERE)       # this tenant's copy of the source (finance/paths.py)
+RAW = SRC / "raw"
+OUT = SRC / "normalized"
+OUT.mkdir(parents=True, exist_ok=True)
 SOURCE = "analyst"
 NOW = datetime.datetime.now().astimezone().isoformat(timespec="seconds")
 TODAY = datetime.date.today().isoformat()

@@ -28,8 +28,9 @@ import json
 import os
 from datetime import datetime, timedelta
 from pathlib import Path
+from finance.paths import data_root
 
-ROOT = Path(os.environ.get("FINANCE_DATA_DIR") or Path(__file__).resolve().parent)
+ROOT = data_root()
 
 HOUR, DAY = timedelta(hours=1), timedelta(days=1)
 

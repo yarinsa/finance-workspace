@@ -25,8 +25,9 @@ from datetime import date
 
 from finance.categories import DEBT_CATEGORIES
 from finance.merchants import merchant_name
+from finance.paths import data_root
 
-HERE = os.path.dirname(os.path.abspath(__file__))
+HERE = str(data_root())   # the tenant's data directory
 TRANSACTIONS = os.path.join(HERE, "digested", "transactions.json")
 
 MONTHS = 6

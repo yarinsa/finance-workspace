@@ -87,8 +87,9 @@ import json
 import sys
 from datetime import date
 from pathlib import Path
+from finance.paths import data_root
 
-ROOT = Path(__file__).resolve().parent
+ROOT = data_root()
 MORTGAGE = ROOT / "discount-mortgage" / "raw" / "mortgage_details.json"
 FREEZE = ROOT / "freeze.json"
 

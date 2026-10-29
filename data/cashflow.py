@@ -22,9 +22,10 @@ from datetime import datetime, timezone, timedelta
 
 from finance import categories, offsets
 from finance.merchants import merchant_name
+from finance.paths import data_root
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-DIGESTED = os.path.join(HERE, "digested")
+DIGESTED = os.path.join(str(data_root()), "digested")
 TRANSACTIONS = os.path.join(DIGESTED, "transactions.json")
 SNAPSHOT = os.path.join(DIGESTED, "snapshot.json")
 FORECAST = os.path.join(DIGESTED, "forecast.json")
