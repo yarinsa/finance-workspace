@@ -123,7 +123,12 @@ types, and a `<Type><Field>Args` model per field with arguments) is generated fr
 must not be edited by hand. `api/gql/inputs.py` subclasses those models and adds only
 behaviour: limits, node-id types, validators, helpers.
 
+`api/gql/generated/resolvers.py` is the resolver contract (a Protocol per type listing only the
+fields that need a resolver). `api/gql/binding.py` `bind_all` attaches `resolve_<snake_field>` methods
+by name, validating arguments through the Args models, and the API fails to start if a required field
+has none.
+
 Workflow: edit the SDL, run `poetry run python -m api.codegen.generate`, commit both.
-`--check` exits 1 if the file is stale; `api/tests/test_codegen.py` runs it, so CI fails on drift.
+`--check` exits 1 if either generated file is stale; `api/tests/test_codegen.py` runs it, so CI fails on drift.
 
 For the full SDL-first workflow (bindings, resolvers, drift-test fixes) see the `graphql-schema` skill.

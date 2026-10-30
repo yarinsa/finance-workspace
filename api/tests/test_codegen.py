@@ -5,12 +5,20 @@ import pytest
 from api.codegen import generate
 
 
-def test_generated_inputs_are_current():
-    assert generate.main(["--check"]) == 0, "api/gql/generated/inputs.py is stale"
+def test_generated_files_are_current():
+    assert generate.main(["--check"]) == 0, "api/gql/generated/ is stale: rerun the generator"
 
 
 def test_generation_is_deterministic():
     assert generate.generate() == generate.generate()
+    assert generate.generate_resolvers() == generate.generate_resolvers()
+
+
+def test_check_covers_the_resolver_contracts(tmp_path, monkeypatch):
+    stale = tmp_path / "resolvers.py"
+    stale.write_text("# old\n")
+    monkeypatch.setattr(generate, "OUT_RESOLVERS", stale)
+    assert generate.main(["--check"]) == 1
 
 
 def test_check_flags_a_stale_file(tmp_path, monkeypatch):

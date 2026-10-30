@@ -15,7 +15,8 @@ hand-edit `api/gql/generated/`.
 | Enums, inputs, `<Type><Field>Args` | `api/gql/generated/inputs.py` (generated) | `api/tests/test_codegen.py` (`--check`) |
 | Validation rules on inputs | `api/gql/inputs.py` (subclasses the generated bases) | `api/tests/test_graphql*.py` |
 | Object type ⇄ data model | `api/schema_bindings.py` `BINDINGS` | `api/tests/test_graphql_schema.py` |
-| Resolvers | `api/gql/resolvers.py` | `api/tests/test_graphql*.py` |
+| Resolver contracts | `api/gql/generated/resolvers.py` (generated) | `api/tests/test_codegen.py` (`--check`) |
+| Resolvers, bound by name | `api/gql/resolvers.py` + `api/gql/binding.py` (`bind_all`) | startup, `api/tests/test_graphql_binding.py` |
 
 ## Workflow
 
@@ -29,8 +30,14 @@ hand-edit `api/gql/generated/`.
 4. **Rules, not shape, go in `api/gql/inputs.py`:** subclass the generated model and add only
    validators, `node_id_of("Type")` id narrowing, length/range limits, `Patch` semantics. If a
    hand model must differ from the SDL, say why in one comment.
-5. **Resolvers** only for `resolved` fields, fields with arguments, and mutations: add them to
-   the entity's resolver class (`mutations()` → `{field: (InputModel, method)}`).
+5. **Resolvers** for exactly the fields the generated contract (`generated/resolvers.py`, one
+   Protocol per type) lists: all Query/Mutation fields, fields with arguments, global `id`s and
+   `resolved` fields. Add a method `resolve_<snake_field>` to the owning class in `resolvers.py`
+   (`(self, obj, info[, args: Model])`; a mutation is `(self, inp: InputModel, info)` returning the
+   payload thunk) and register the class in `RESOLVERS`. A required field read straight off the
+   parent row (no logic) goes in `ATTRIBUTES` instead. `bind_all` fails `build()` at startup
+   listing every required field with neither. Annotating `args` with a hand subclass (e.g.
+   `TransactionArgs`) validates through it; without one the generated `<Type><Field>Args` is used.
 6. **Data model changed too?** Use the `schema-change` skill (models.py / tables.py / Alembic).
 7. **Test:** `poetry run pytest api` (DB tests skip without `DATABASE_URL`; never point them at
    the live DB). Commit the SDL, the generated file and the code together.
@@ -62,11 +69,11 @@ Pure function of `load_schema()`; output must be deterministic (sorted, dependen
 Scalars: `Date`→`dt.date`, `DateTime`→`dt.datetime`, `Money`→`Decimal`, `ID`→`GlobalId`,
 `JSON`→`Any`; a new custom scalar needs a mapping there. Nullable args with an SDL default are
 emitted non-null with that default (`relay.validated` treats explicit null as "use default").
-After changing the generator, regenerate and diff `generated/inputs.py`; behaviour of the hand
+After changing the generator, regenerate and diff `generated/`; behaviour of the hand
 subclasses must not change.
 
 ## Roadmap
 
-Phase 2 will generate resolver contracts and bind them by name (replacing manual
-`fields[...].resolve =`); Phase 3 adds `@graphql-codegen/cli` in `app/` for client types.
-Update this skill when each lands.
+Phase 1 (generated inputs) and Phase 2 (generated resolver contracts + `bind_all`, replacing the
+manual `fields[...].resolve =` wiring) have landed. Phase 3 adds `@graphql-codegen/cli` in `app/`
+for client types. Update this skill when it lands.

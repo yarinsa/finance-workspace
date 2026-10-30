@@ -126,3 +126,43 @@ def model_field(binding, sdl_field):
     if sdl_field in binding.resolved:
         return None
     return binding.renames.get(sdl_field, snake(sdl_field))
+
+
+def resolver_name(sdl_field):
+    """The method a resolver class provides for an SDL field: `resolve_<snake_field>`."""
+    return f"resolve_{snake(sdl_field)}"
+
+
+def args_model_name(type_name, sdl_field):
+    """The generated field-argument model: Query.transactionByKey -> QueryTransactionByKeyArgs."""
+    return f"{type_name}{sdl_field[0].upper()}{sdl_field[1:]}Args"
+
+
+def mutation_input_name(sdl_field, field):
+    """The hand-written input model (api/gql/inputs.py) of a mutation: the SDL input type, or
+    `<Field>Input` for a Linear-style mutation that takes only an `id`."""
+    arg = field.args.get("input")
+    if arg is not None:
+        t = arg.type
+        while hasattr(t, "of_type"):
+            t = t.of_type
+        return t.name
+    return f"{sdl_field[0].upper()}{sdl_field[1:]}Input"
+
+
+def required_fields(schema):
+    """{object type: {SDL field: GraphQLField}} for the fields that need a resolver rather than
+    the default one: every Query and Mutation field, fields with arguments, an `id` (a global
+    id), and the `resolved` fields of a bound type. Interfaces are skipped (their resolvers
+    never run)."""
+    from graphql import GraphQLObjectType
+    out = {}
+    for name, t in schema.type_map.items():
+        if name.startswith("__") or not isinstance(t, GraphQLObjectType):
+            continue
+        binding = BINDINGS.get(name)
+        fields = {fn: f for fn, f in t.fields.items()
+                  if name in ("Query", "Mutation") or f.args or fn == "id" or (binding and fn in binding.resolved)}
+        if fields:
+            out[name] = fields
+    return out

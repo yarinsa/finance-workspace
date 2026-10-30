@@ -1,21 +1,25 @@
-"""Resolvers for api/schema: one class per entity, wired onto the schema built from the SDL.
+"""Resolvers for api/schema: one class per entity, bound to the schema by name (api/gql/binding.py).
 
     NodeResolver          global `id` and `Query.node` refetch
     └─ GroupResolver      a set of transactions with a name (merchant, category, tag):
                           `<entity>.transactions`, the root `Query.<plural>` connection with
                           edge totals, and an M:M connection to every other group entity
+                          (`resolve_<other.plural>`, made up on demand by `__getattr__`)
     TransactionResolver   the ledger row itself
     NotificationResolver  the inbox (db/inbox.py): not ledger data, so its mutations never signal a rebuild
+    QueryResolver         the root fields, delegating to the entity that owns the data
 
-Mutations live on the entity they change: a resolver lists them in `mutations()` as
-{field: (input model, method)}, and `NodeResolver.bind` wraps each one (validate the
-input with nulls kept, record the write for the rebuild signal, refresh the ledger,
-echo `clientMutationId`).
+A resolver is a method named `resolve_<snake_field>` (the contract is generated in
+api/gql/generated/resolvers.py). A field with arguments takes them validated as its last
+parameter, `args: Model`; a mutation takes `inp: InputModel` and returns a thunk building the
+payload, which `bind_all` wraps (validate the input with nulls kept, record the write for the
+rebuild signal, refresh the ledger, echo `clientMutationId`). `RESOLVERS` maps each SDL type to
+its provider(s) and `ATTRIBUTES` lists the required fields read straight off the parent; a
+required field with neither makes `build()` fail at startup.
 
 A new grouped resource is one GroupResolver subclass in ENTITIES plus its SDL; the
 cross-entity fields (`Merchant.categories`, `Tag.merchants`, …) come for free.
-Every resolver validates its arguments through a Pydantic model (api/gql/inputs.py)
-and reads the per-request `Ledger` from the context. Fields with no resolver read the
+Every resolver reads the per-request `Ledger` from the context. Fields with no resolver read the
 parent's attribute or key in snake_case (`absAmount` -> `abs_amount`).
 """
 import datetime as dt
@@ -34,12 +38,14 @@ from .inputs import (CategoryMergeInput, CategoryUnmergeInput, AssetCreateInput,
                      SetTransactionTagsInput, SnoozeAllNotificationsInput, SyncSourceRetryInput, TenantCreateInput, TenantMemberRemoveInput, TenantMemberSetInput, TenantSetStatusInput, TransactionArgs, TransactionOrder,
                      UnlinkOffsetInput, UnreadCountArgs, GoalUpdateInput, UpdateNotificationInput, PlanTargetsUpdateInput, UpdateTagInput,
                      UpdateTransactionInput)
+from .binding import bind_all
+from .generated.inputs import Direction, QueryNodeArgs, QueryTransactionByKeyArgs
 from .inbox import TYPENAMES, Notification
 from .sync import SyncSource
 from . import tenants as tenant_store
 from finance import tenancy
 from .ledger import CENT, Ledger, Merchant, Txn, offset_candidates, totals
-from .relay import ConnectionArgs, GlobalId, paginate, to_global_id, validated
+from .relay import ConnectionArgs, paginate, to_global_id, validated
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "db"))   # the shared write paths
 import asset_store  # noqa: E402
@@ -110,33 +116,12 @@ class NodeResolver(Generic[T]):
             raise GraphQLError(f"no such {self.type_name.lower()}")
         return obj
 
-    def mutations(self) -> dict:
-        """{Mutation field: (input model, method(input, info) -> payload dict)}."""
-        return {}
-
-    def _mutation(self, model, method):
-        """The resolver of a mutation field. Linear-style fields take `id` as its own argument
-        (merged into the input), Relay-style ones carry it in `input`."""
-        def resolve(_, info, input=None, id=None):
-            args = {**(input or {}), **({} if id is None else {"id": id})}
-            inp = validated(model, args, keep_null=True)
-            payload = method(inp, info)
-            if self.rebuilds:
-                info.context["writes"] += 1
-                ledger(info).invalidate()
-            return {"client_mutation_id": inp.client_mutation_id, "success": True, **payload()}
-        return resolve
-
-    def bind(self, schema):
-        schema.type_map[self.type_name].fields["id"].resolve = self.resolve_id
-        for field, (model, method) in self.mutations().items():
-            schema.mutation_type.fields[field].resolve = self._mutation(model, method)
-
 
 class GroupResolver(NodeResolver[T]):
     """A named set of transactions; see the module docstring for what it provides."""
     plural: ClassVar[str]          # field name of the root connection and of M:M fields: "categories"
     keep_empty: ClassVar[bool] = False   # list members with no transactions at the root
+    siblings: ClassVar[dict[str, "GroupResolver"]] = {}   # plural -> entity, set below ENTITIES
 
     def groups_of(self, t: Txn) -> list[T]:
         """The groups of this entity that transaction `t` belongs to."""
@@ -192,29 +177,26 @@ class GroupResolver(NodeResolver[T]):
 
     # -- field resolvers ------------------------------------------------------------------
 
-    def resolve_root(self, _, info, **args):
+    def root(self, info, args: GroupArgs):
+        """`Query.<plural>`."""
         lg = ledger(info)
-        return self.connection(lg.rows, validated(GroupArgs, args), self.all(lg) if self.keep_empty else None)
+        return self.connection(lg.rows, args, self.all(lg) if self.keep_empty else None)
 
-    def resolve_transactions(self, obj, info, **args):
+    def resolve_transactions(self, obj, info, args: TransactionArgs):
         inside = self.contains(obj)
-        return transaction_connection([t for t in ledger(info).rows if inside(t)], validated(TransactionArgs, args))
+        return transaction_connection([t for t in ledger(info).rows if inside(t)], args)
 
-    def related(self, other: "GroupResolver"):
-        """`<this>.<other.plural>`: the other entity's members among this one's transactions."""
-        def resolve(obj, info, **args):
+    def __getattr__(self, name):
+        """`resolve_<other.plural>`: the other entity's members among this one's transactions
+        (`Merchant.categories`, `Tag.merchants`, …), generated for every sibling in ENTITIES."""
+        other = self.siblings.get(name.removeprefix("resolve_")) if name.startswith("resolve_") else None
+        if other is None or other is self:
+            raise AttributeError(name)
+
+        def resolve(obj, info, args: GroupArgs):
             inside = self.contains(obj)
-            return other.connection([t for t in ledger(info).rows if inside(t)], validated(GroupArgs, args))
+            return other.connection([t for t in ledger(info).rows if inside(t)], args)
         return resolve
-
-    def bind(self, schema, others=()):
-        super().bind(schema)
-        fields = schema.type_map[self.type_name].fields
-        fields["transactions"].resolve = self.resolve_transactions
-        schema.query_type.fields[self.plural].resolve = self.resolve_root
-        for other in others:
-            if other is not self and other.plural in fields:
-                fields[other.plural].resolve = self.related(other)
 
 
 class MerchantResolver(GroupResolver[Merchant]):
@@ -245,10 +227,6 @@ class CategoryResolver(GroupResolver):
     def all(self, lg):
         return list(lg.categories.values())
 
-    def mutations(self):
-        return {"categoryMerge": (CategoryMergeInput, self.merge),
-                "categoryUnmerge": (CategoryUnmergeInput, self.unmerge)}
-
     def _set(self, info, cat, into):
         lg = ledger(info)
         try:
@@ -257,16 +235,14 @@ class CategoryResolver(GroupResolver):
             raise GraphQLError(str(e)) from None
         return lambda: {"category": self.fetch(ledger(info), str(cat.id))}
 
-    def merge(self, inp, info):
+    def resolve_category_merge(self, inp: CategoryMergeInput, info):
         return self._set(info, self.require(info, inp.id), self.require(info, inp.into_id))
 
-    def unmerge(self, inp, info):
+    def resolve_category_unmerge(self, inp: CategoryUnmergeInput, info):
         return self._set(info, self.require(info, inp.id), None)
 
-    def bind(self, schema, others=()):
-        super().bind(schema, others)
-        schema.type_map[self.type_name].fields["mergedInto"].resolve = (
-            lambda c, info: ledger(info).categories.get(c.merged_into_id) if c.merged_into_id else None)
+    def resolve_merged_into(self, c, info):
+        return ledger(info).categories.get(c.merged_into_id) if c.merged_into_id else None
 
 
 class TagResolver(GroupResolver):
@@ -284,10 +260,7 @@ class TagResolver(GroupResolver):
     def all(self, lg):
         return list(lg.tags.values())
 
-    def mutations(self):
-        return {"updateTag": (UpdateTagInput, self.update), "deleteTag": (DeleteTagInput, self.delete)}
-
-    def update(self, inp, info):
+    def resolve_update_tag(self, inp: UpdateTagInput, info):
         tag = self.require(info, inp.id)
         conn = ledger(info).conn
         if inp.name and tag_store.tag_name_taken(conn, inp.name, tag.id):
@@ -296,7 +269,7 @@ class TagResolver(GroupResolver):
         tag_store.update_tag(conn, tag.id, **changes)
         return lambda: {"tag": self.fetch(ledger(info), str(tag.id))}
 
-    def delete(self, inp, info):
+    def resolve_delete_tag(self, inp: DeleteTagInput, info):
         tag = self.require(info, inp.id)
         tag_store.delete_tag(ledger(info).conn, tag.id)
         return lambda: {"deleted_tag_id": to_global_id(self.type_name, str(tag.id))}
@@ -323,16 +296,11 @@ class HorizonResolver(GroupResolver):
     def natural_order(self, h):
         return (h.position, h.id)
 
-    def resolve_goals(self, h, info, **args):
+    def resolve_goals(self, h, info, args: GroupArgs):
         """The goals assigned to `h` (not derived from transactions), with each goal's totals."""
         lg = ledger(info)
         mine = [g for g in lg.goals.values() if g.horizon == h]
-        return self.goal_resolver.connection(lg.rows, validated(GroupArgs, args), mine)
-
-    def bind(self, schema, others=()):
-        super().bind(schema, others)
-        schema.type_map[self.type_name].fields["goals"].resolve = self.resolve_goals
-
+        return self.goal_resolver.connection(lg.rows, args, mine)
 
 class GoalResolver(GroupResolver):
     type_name, plural, keep_empty = "Goal", "goals", True
@@ -352,18 +320,14 @@ class GoalResolver(GroupResolver):
     def label(self, g):
         return g.description
 
-    def mutations(self):
-        return {"goalCreate": (GoalCreateInput, self.create), "goalUpdate": (GoalUpdateInput, self.update),
-                "goalDelete": (GoalDeleteInput, self.delete)}
-
     def _refetched(self, info, goal_id):
         return lambda: {"goal": self.fetch(ledger(info), str(goal_id))}
 
-    def create(self, inp, info):
+    def resolve_goal_create(self, inp: GoalCreateInput, info):
         g = goal_store.create_goal(ledger(info).conn, inp.description.strip(), inp.amount, **inp.fields())
         return self._refetched(info, g["id"])
 
-    def update(self, inp, info):
+    def resolve_goal_update(self, inp: GoalUpdateInput, info):
         g = self.require(info, inp.id)
         changes = inp.changes()
         if not changes:
@@ -371,7 +335,7 @@ class GoalResolver(GroupResolver):
         goal_store.update_goal(ledger(info).conn, g.id, **changes)
         return self._refetched(info, g.id)
 
-    def delete(self, inp, info):
+    def resolve_goal_delete(self, inp: GoalDeleteInput, info):
         g = self.require(info, inp.id)
         goal_store.delete_goal(ledger(info).conn, g.id)
         return lambda: {"entity_id": to_global_id(self.type_name, str(g.id))}
@@ -393,18 +357,10 @@ class TransactionResolver(NodeResolver[Txn]):
         except (ValueError, InvalidOperation):
             return None
 
-    def mutations(self):
-        return {"updateTransaction": (UpdateTransactionInput, self.update),
-                "clearTransactionOverride": (ClearTransactionOverrideInput, self.clear),
-                "setTransactionTags": (SetTransactionTagsInput, self.set_tags),
-                "linkOffset": (LinkOffsetInput, self.link_offset),
-                "unlinkOffset": (UnlinkOffsetInput, self.unlink_offset),
-                "resetOffsets": (ResetOffsetsInput, self.reset_offsets)}
-
     def _refetched(self, info, t):
         return lambda: {"transaction": ledger(info).by_key[t.key]}
 
-    def update(self, inp, info):
+    def resolve_update_transaction(self, inp: UpdateTransactionInput, info):
         t = self.require(info, inp.id)
         if inp.goal_id is not None:
             self.goal_resolver.require(info, inp.goal_id)
@@ -414,12 +370,12 @@ class TransactionResolver(NodeResolver[Txn]):
         overrides.patch(ledger(info).conn, t.key, changes, info.context["user"])
         return self._refetched(info, t)
 
-    def clear(self, inp, info):
+    def resolve_clear_transaction_override(self, inp: ClearTransactionOverrideInput, info):
         t = self.require(info, inp.id)
         overrides.reset(ledger(info).conn, t.key, info.context["user"])
         return self._refetched(info, t)
 
-    def set_tags(self, inp, info):
+    def resolve_set_transaction_tags(self, inp: SetTransactionTagsInput, info):
         t = self.require(info, inp.id)
         tag_store.set_tags(ledger(info).conn, t.key, inp.tags, info.context["user"])
         return self._refetched(info, t)
@@ -441,7 +397,7 @@ class TransactionResolver(NodeResolver[Txn]):
     def _offset_payload(self, info, p, e):
         return lambda: {"payback": ledger(info).by_key[p.key], "expense": ledger(info).by_key[e.key]}
 
-    def link_offset(self, inp, info):
+    def resolve_link_offset(self, inp: LinkOffsetInput, info):
         p, e = self._pair(inp, info)
         current = {o.key: a for o, a, _ in p.offset_links}.get(e.key, Decimal("0.00"))
         p_free = p.abs_amount - p.offset_amount + current
@@ -455,14 +411,14 @@ class TransactionResolver(NodeResolver[Txn]):
                                  info.context["user"])
         return self._offset_payload(info, p, e)
 
-    def unlink_offset(self, inp, info):
+    def resolve_unlink_offset(self, inp: UnlinkOffsetInput, info):
         p, e = self.require(info, inp.payback_id), self.require(info, inp.expense_id)
         if not any(o.key == e.key for o, _, _ in p.offset_links):
             raise GraphQLError("these two are not offset against each other")
         offset_store.set_offsets(ledger(info).conn, p.key, self._links_without(p, e), info.context["user"])
         return self._offset_payload(info, p, e)
 
-    def reset_offsets(self, inp, info):
+    def resolve_reset_offsets(self, inp: ResetOffsetsInput, info):
         p = self.require(info, inp.payback_id)
         offset_store.reset_offsets(ledger(info).conn, p.key, info.context["user"])
         return lambda: {"payback": ledger(info).by_key[p.key]}
@@ -470,51 +426,27 @@ class TransactionResolver(NodeResolver[Txn]):
     def resolve_offsets(self, t, info):
         return [{"transaction": o, "amount": amount, "kind": kind} for o, amount, kind in t.offset_links]
 
-    def resolve_offset_candidates(self, t, info, **args):
+    def resolve_offset_candidates(self, t, info, args: ConnectionArgs):
         """Ranked (same merchant, then nearest date), so the edge order is the rank."""
-        a = validated(ConnectionArgs, args)
         rows = offset_candidates(ledger(info), t, 50)
         rank = {r.key: i for i, r in enumerate(rows)}
-        conn = paginate([{"node": r} for r in rows], lambda e: (rank[e["node"].key],), a)
+        conn = paginate([{"node": r} for r in rows], lambda e: (rank[e["node"].key],), args)
         return {"edges": conn.edges, "page_info": conn.page_info, "total_count": conn.total_count,
                 "sum": totals(rows)["sum"]}
 
-    def resolve_by_key(self, _, info, date, absAmount):
-        return ledger(info).by_key.get((date, Decimal(absAmount).quantize(CENT)))
-
-    def resolve_list(self, direction=None):
-        """`Query.transactions` / `expenses` / `incomes`."""
-        def resolve(_, info, **args):
-            if direction:
-                args = {**args, "filter": {**(args.get("filter") or {}), "direction": direction}}
-            return transaction_connection(ledger(info).rows, validated(TransactionArgs, args))
-        return resolve
-
-    def resolve_tags(self, t, info, **args):
+    def resolve_tags(self, t, info, args: ConnectionArgs):
         """Edge totals are scoped to this one transaction; `taggedAt` is when the link was made."""
-        a = validated(ConnectionArgs, args)
         edges = [{"node": tag, "totals": totals([t]), "tagged_at": at} for tag, at in t.tag_links]
         key = lambda e: (e["node"].name.casefold(), e["node"].id)  # noqa: E731
-        return paginate(sorted(edges, key=key), key, a)
+        return paginate(sorted(edges, key=key), key, args)
 
-    def resolve_audit_log(self, t, info, **args):
-        a = validated(ConnectionArgs, args)
+    def resolve_audit_log(self, t, info, args: ConnectionArgs):
         edges = [{"node": {"at": at, "actor": actor, "field": f, "old": old, "new": new}, "id": i}
                  for i, at, actor, f, old, new in ledger(info).audit(t)]
-        return paginate(edges, lambda e: (-e["id"],), a)
+        return paginate(edges, lambda e: (-e["id"],), args)
 
-    def bind(self, schema):
-        super().bind(schema)
-        q, fields = schema.query_type.fields, schema.type_map[self.type_name].fields
-        q["transactionByKey"].resolve = self.resolve_by_key
-        q["transactions"].resolve = self.resolve_list()
-        q["expenses"].resolve = self.resolve_list("EXPENSE")
-        q["incomes"].resolve = self.resolve_list("INCOME")
-        fields["tags"].resolve = self.resolve_tags
-        fields["auditLog"].resolve = self.resolve_audit_log
-        fields["offsets"].resolve = self.resolve_offsets
-        fields["offsetCandidates"].resolve = self.resolve_offset_candidates
-        fields["offsetsManual"].resolve = lambda t, info: t.manual_offsets is not None
+    def resolve_offsets_manual(self, t, info):
+        return t.manual_offsets is not None
 
 
 def _now():
@@ -534,69 +466,52 @@ class NotificationResolver(NodeResolver[Notification]):
         row = inbox.get(lg.conn, key)
         return Notification.from_row(row) if row else None
 
-    def mutations(self):
-        return {"updateNotification": (UpdateNotificationInput, self.update),
-                "archiveNotification": (NotificationIdInput, self.archive),
-                "unarchiveNotification": (NotificationIdInput, self.unarchive),
-                "markAllNotificationsRead": (BulkNotificationInput, self.read_all),
-                "archiveAllNotifications": (BulkNotificationInput, self.archive_all),
-                "snoozeAllNotifications": (SnoozeAllNotificationsInput, self.snooze_all)}
-
     def _set(self, info, ref, changes):
         n = self.require(info, ref)
         row = inbox.update(ledger(info).conn, n.id, changes, now=_now())
         return lambda: {"notification": Notification.from_row(row)}
 
-    def update(self, inp, info):
+    def resolve_update_notification(self, inp: UpdateNotificationInput, info):
         changes = inp.changes(_now())
         if not changes:
             raise GraphQLError("send read and/or snoozedUntilAt")
         return self._set(info, inp.id, changes)
 
-    def archive(self, inp, info):
+    def resolve_archive_notification(self, inp: NotificationIdInput, info):
         return self._set(info, inp.id, {"archived_at": _now()})
 
-    def unarchive(self, inp, info):
+    def resolve_unarchive_notification(self, inp: NotificationIdInput, info):
         return self._set(info, inp.id, {"archived_at": None})
 
     def _bulk(self, info, run):
         count = run(ledger(info).conn)
         return lambda: {"count": count}
 
-    def read_all(self, inp, info):
+    def resolve_mark_all_notifications_read(self, inp: BulkNotificationInput, info):
         return self._bulk(info, lambda conn: inbox.mark_all_read(conn, inp.categories()))
 
-    def archive_all(self, inp, info):
+    def resolve_archive_all_notifications(self, inp: BulkNotificationInput, info):
         return self._bulk(info, lambda conn: inbox.archive_all(conn, inp.categories()))
 
-    def snooze_all(self, inp, info):
+    def resolve_snooze_all_notifications(self, inp: SnoozeAllNotificationsInput, info):
         return self._bulk(info, lambda conn: inbox.snooze_all(conn, inp.snoozed_until_at, inp.categories()))
 
-    def resolve_list(self, _, info, **args):
-        a = validated(NotificationArgs, args)
-        f = a.filter
+    def listing(self, info, args: NotificationArgs):
+        """`Query.notifications`."""
+        f = args.filter
         rows = inbox.select(ledger(info).conn, [c.value for c in f.category] if f.category is not None else None,
                             f.unread, f.include_archived, f.include_resolved, f.include_snoozed)
         edges = sorted(({"node": Notification.from_row(r)} for r in rows), key=lambda e: e["node"].sort_key)
-        return paginate(edges, lambda e: e["node"].sort_key, a)
+        return paginate(edges, lambda e: e["node"].sort_key, args)
 
-    def resolve_unread_count(self, _, info, **args):
-        categories = validated(UnreadCountArgs, args).category
+    def unread_count(self, info, args: UnreadCountArgs):
+        """`Query.notificationsUnreadCount`."""
+        categories = args.category
         return inbox.unread_count(ledger(info).conn, [c.value for c in categories] if categories is not None else None)
 
     def resolve_transaction(self, n, info):
         key = n.transaction_key
         return ledger(info).by_key.get(key) if key else None
-
-    def bind(self, schema):
-        for name in TYPENAMES:   # `id` is a field of every subtype (an interface's resolver is never run)
-            schema.type_map[name].fields["id"].resolve = self.resolve_id
-        for field, (model, method) in self.mutations().items():
-            schema.mutation_type.fields[field].resolve = self._mutation(model, method)
-        schema.type_map["Notification"].resolve_type = lambda obj, *_: obj.TYPENAME
-        schema.query_type.fields["notifications"].resolve = self.resolve_list
-        schema.query_type.fields["notificationsUnreadCount"].resolve = self.resolve_unread_count
-        schema.type_map["TransactionNotification"].fields["transaction"].resolve = self.resolve_transaction
 
 
 class PlanTargetsResolver(NodeResolver):
@@ -609,24 +524,16 @@ class PlanTargetsResolver(NodeResolver):
         return {"emergency_fund": t["emergency_fund_target"], "inheritance": t["inheritance_target"],
                 "retirement": t["retirement_target"]}
 
-    def resolve_query(self, _, info):
+    def query(self, info):
+        """`Query.planTargets`."""
         return self.read(ledger(info).conn)
 
-    def mutations(self):
-        return {"planTargetsUpdate": (PlanTargetsUpdateInput, self.update)}
-
-    def update(self, inp, info):
+    def resolve_plan_targets_update(self, inp: PlanTargetsUpdateInput, info):
         changes = inp.changes()
         if not changes:
             raise GraphQLError("send at least one target")
         goal_store.set_targets(ledger(info).conn, **changes)
         return lambda: {"plan_targets": self.read(ledger(info).conn)}
-
-    def bind(self, schema):
-        schema.query_type.fields["planTargets"].resolve = self.resolve_query
-        for field, (model, method) in self.mutations().items():
-            schema.mutation_type.fields[field].resolve = self._mutation(model, method)
-
 
 class AssetResolver(NodeResolver[dict]):
     """`Query.assets`, `assetCreate`, `assetUpdate` (db/asset_store.py). A new value changes
@@ -646,15 +553,12 @@ class AssetResolver(NodeResolver[dict]):
         a = asset_store.get_asset(lg.conn, int(key)) if key.isdigit() else None
         return self._typed(a) if a else None
 
-    def resolve_all(self, _, info, **args):
-        a = validated(ConnectionArgs, args)
+    def listing(self, info, args: ConnectionArgs):
+        """`Query.assets`."""
         rows = [self._typed(x) for x in asset_store.all_assets(ledger(info).conn)]   # oldest first
-        return paginate([{"node": x} for x in rows], lambda e: (e["node"]["id"],), a)
+        return paginate([{"node": x} for x in rows], lambda e: (e["node"]["id"],), args)
 
-    def mutations(self):
-        return {"assetCreate": (AssetCreateInput, self.create), "assetUpdate": (AssetUpdateInput, self.update)}
-
-    def create(self, inp, info):
+    def resolve_asset_create(self, inp: AssetCreateInput, info):
         try:
             a = asset_store.create_asset(ledger(info).conn, inp.kind.value, inp.label.strip(), inp.value,
                                          inp.valued_at)
@@ -662,7 +566,7 @@ class AssetResolver(NodeResolver[dict]):
             raise GraphQLError(str(e)) from None
         return lambda: {"asset": self._typed(a)}
 
-    def update(self, inp, info):
+    def resolve_asset_update(self, inp: AssetUpdateInput, info):
         a = self.require(info, inp.id)
         changes = inp.changes()
         if not changes:
@@ -674,14 +578,6 @@ class AssetResolver(NodeResolver[dict]):
         except ValueError as e:
             raise GraphQLError(str(e)) from None
         return lambda: {"asset": self._typed(out)}
-
-    def bind(self, schema):
-        super().bind(schema)
-        schema.query_type.fields["assets"].resolve = self.resolve_all
-        for enum in ("AssetKind", "ValuationSource"):
-            for name, value in schema.type_map[enum].values.items():
-                value.value = name.lower()
-
 
 class SyncSourceResolver(NodeResolver[SyncSource]):
     """Each source's latest run (sync_status). Retrying starts a sync on the Mac and changes no
@@ -695,10 +591,7 @@ class SyncSourceResolver(NodeResolver[SyncSource]):
     def fetch(self, lg, key):
         return SyncSource.get(lg.conn, key)
 
-    def mutations(self):
-        return {"syncSourceRetry": (SyncSourceRetryInput, self.retry)}
-
-    def retry(self, inp, info):
+    def resolve_sync_source_retry(self, inp: SyncSourceRetryInput, info):
         s = self.require(info, inp.id)
         if not s.retry_from:
             raise GraphQLError("the last sync of this source did not fail")
@@ -707,17 +600,10 @@ class SyncSourceResolver(NodeResolver[SyncSource]):
             raise GraphQLError("the sync worker is not reachable")
         return lambda: {"sync_source": s}
 
-    def resolve_all(self, _, info, **args):
-        a = validated(ConnectionArgs, args)
+    def listing(self, info, args: ConnectionArgs):
+        """`Query.syncSources`."""
         rows = SyncSource.all(ledger(info).conn)   # ordered by source
-        return paginate([{"node": s} for s in rows], lambda e: (e["node"].source,), a)
-
-    def bind(self, schema):
-        super().bind(schema)
-        schema.query_type.fields["syncSources"].resolve = self.resolve_all
-        for name, value in schema.type_map["SyncRetryPoint"].values.items():
-            value.value = name.lower()
-
+        return paginate([{"node": s} for s in rows], lambda e: (e["node"].source,), args)
 
 class TenantResolver(NodeResolver[dict]):
     """`Query.tenants` and the tenant mutations, for platform admins only: the registry of
@@ -737,11 +623,6 @@ class TenantResolver(NodeResolver[dict]):
     def fetch(self, lg, key):
         return tenant_store.get(lg.conn, key)
 
-    def mutations(self):
-        return {"tenantCreate": (TenantCreateInput, self.create), "tenantMemberSet": (TenantMemberSetInput, self.member_set),
-                "tenantMemberRemove": (TenantMemberRemoveInput, self.member_remove),
-                "tenantSetStatus": (TenantSetStatusInput, self.set_status)}
-
     def _run(self, info, tenant_id, fn, *args):
         conn = ledger(info).conn
         try:
@@ -750,7 +631,7 @@ class TenantResolver(NodeResolver[dict]):
             raise GraphQLError(str(e)) from None
         return lambda: {"tenant": tenant_store.get(conn, tenant_id)}
 
-    def create(self, inp, info):
+    def resolve_tenant_create(self, inp: TenantCreateInput, info):
         self.admin(info)
         conn = ledger(info).conn
         caller_tenant = info.context["tenant_id"]
@@ -764,36 +645,30 @@ class TenantResolver(NodeResolver[dict]):
             tenancy.bind(conn, caller_tenant, local=False)   # back to the caller's own tenant
         return lambda: {"tenant": tenant_store.get(conn, tid)}
 
-    def member_set(self, inp, info):
+    def resolve_tenant_member_set(self, inp: TenantMemberSetInput, info):
         self.admin(info)
         t = self.require(info, inp.id)
         return self._run(info, t["id"], tenant_store.set_member, inp.email, inp.role)
 
-    def member_remove(self, inp, info):
+    def resolve_tenant_member_remove(self, inp: TenantMemberRemoveInput, info):
         self.admin(info)
         t = self.require(info, inp.id)
         return self._run(info, t["id"], tenant_store.remove_member, inp.email)
 
-    def set_status(self, inp, info):
+    def resolve_tenant_set_status(self, inp: TenantSetStatusInput, info):
         self.admin(info)
         t = self.require(info, inp.id)
         return self._run(info, t["id"], tenant_store.set_status, inp.status)
 
-    def resolve_all(self, _, info):
+    def listing(self, info):
+        """`Query.tenants`."""
         self.admin(info)
         return tenant_store.all_tenants(ledger(info).conn)
 
-    def bind(self, schema):
-        super().bind(schema)
-        schema.query_type.fields["tenants"].resolve = self.resolve_all
-        for name, value in schema.type_map["TenantRole"].values.items():
-            value.value = name.lower()
-        for name, value in schema.type_map["TenantStatus"].values.items():
-            value.value = name.lower()
-
-
 GOALS = GoalResolver()
-ENTITIES: list[GroupResolver] = [MerchantResolver(), CategoryResolver(), TagResolver(), HorizonResolver(GOALS), GOALS]
+MERCHANTS, CATEGORIES, TAGS, HORIZONS = MerchantResolver(), CategoryResolver(), TagResolver(), HorizonResolver(GOALS)
+ENTITIES: list[GroupResolver] = [MERCHANTS, CATEGORIES, TAGS, HORIZONS, GOALS]
+GroupResolver.siblings = {e.plural: e for e in ENTITIES}
 TRANSACTIONS = TransactionResolver(GOALS)
 NOTIFICATIONS = NotificationResolver()
 SYNC_SOURCES = SyncSourceResolver()
@@ -802,20 +677,87 @@ ASSETS = AssetResolver()
 TENANTS = TenantResolver()
 NODES: dict[str, NodeResolver] = {r.type_name: r for r in [TRANSACTIONS, *ENTITIES, NOTIFICATIONS, SYNC_SOURCES,
                                                            ASSETS]}
+class QueryResolver:
+    """The root fields: each hands its validated arguments to the entity that owns the data."""
+
+    def resolve_node(self, _, info, args: QueryNodeArgs):
+        r = NODES.get(args.id.type_name)
+        return r.fetch(ledger(info), args.id.key) if r else None
+
+    def resolve_snapshot(self, _, info):
+        raise GraphQLError("snapshot is not served by the API yet")
+
+    def resolve_transaction_by_key(self, _, info, args: QueryTransactionByKeyArgs):
+        return ledger(info).by_key.get((args.date, Decimal(args.abs_amount).quantize(CENT)))
+
+    def _transactions(self, info, args: TransactionArgs, direction=None):
+        if direction:   # `expenses` / `incomes` are `transactions` with the direction filter set
+            args = args.model_copy(update={"filter": args.filter.model_copy(update={"direction": direction})})
+        return transaction_connection(ledger(info).rows, args)
+
+    def resolve_transactions(self, _, info, args: TransactionArgs):
+        return self._transactions(info, args)
+
+    def resolve_expenses(self, _, info, args: TransactionArgs):
+        return self._transactions(info, args, Direction.EXPENSE)
+
+    def resolve_incomes(self, _, info, args: TransactionArgs):
+        return self._transactions(info, args, Direction.INCOME)
+
+    def resolve_merchants(self, _, info, args: GroupArgs):
+        return MERCHANTS.root(info, args)
+
+    def resolve_categories(self, _, info, args: GroupArgs):
+        return CATEGORIES.root(info, args)
+
+    def resolve_tags(self, _, info, args: GroupArgs):
+        return TAGS.root(info, args)
+
+    def resolve_horizons(self, _, info, args: GroupArgs):
+        return HORIZONS.root(info, args)
+
+    def resolve_goals(self, _, info, args: GroupArgs):
+        return GOALS.root(info, args)
+
+    def resolve_plan_targets(self, _, info):
+        return PLAN_TARGETS.query(info)
+
+    def resolve_tenants(self, _, info):
+        return TENANTS.listing(info)
+
+    def resolve_assets(self, _, info, args: ConnectionArgs):
+        return ASSETS.listing(info, args)
+
+    def resolve_sync_sources(self, _, info, args: ConnectionArgs):
+        return SYNC_SOURCES.listing(info, args)
+
+    def resolve_notifications(self, _, info, args: NotificationArgs):
+        return NOTIFICATIONS.listing(info, args)
+
+    def resolve_notifications_unread_count(self, _, info, args: UnreadCountArgs):
+        return NOTIFICATIONS.unread_count(info, args)
 
 
-class _NodeArgs(BaseModel):
-    id: GlobalId
-
-
-def resolve_node(_, info, **args):
-    ref = validated(_NodeArgs, args).id
-    r = NODES.get(ref.type_name)
-    return r.fetch(ledger(info), ref.key) if r else None
-
-
-def resolve_snapshot(*_):
-    raise GraphQLError("snapshot is not served by the API yet")
+RESOLVERS: dict[str, object] = {
+    "Query": QueryResolver(),
+    "Mutation": [TRANSACTIONS, CATEGORIES, TAGS, GOALS, NOTIFICATIONS, SYNC_SOURCES, PLAN_TARGETS, ASSETS, TENANTS],
+    "Transaction": TRANSACTIONS, "Asset": ASSETS, "SyncSource": SYNC_SOURCES, "Tenant": TENANTS,
+    **{e.type_name: e for e in ENTITIES},
+    **{name: NOTIFICATIONS for name in TYPENAMES},   # `id` is a field of every subtype
+}
+# Required fields read straight off the parent row (a Txn attribute, a notification's subject, a
+# stored column) by the default resolver. bind_all rejects an entry that is not such a field.
+ATTRIBUTES: dict[str, frozenset[str]] = {
+    "Asset": frozenset({"kind", "valuationSource"}),
+    "Transaction": frozenset({"absAmount", "direction", "merchant", "category", "kind", "kindSource", "excluded",
+                              "horizon", "goal", "netAmount", "raw"}),
+    "Category": frozenset({"source", "group", "kind"}),
+    "Horizon": frozenset({"key"}), "Goal": frozenset({"interval", "horizon"}),
+    "CashflowNotification": frozenset({"date"}),
+    "BudgetNotification": frozenset({"budgetCategories", "cycleStart"}),
+    "BillNotification": frozenset({"billName", "dueDate"}),
+    "ServiceNotification": frozenset({"services"}), "SyncNotification": frozenset({"sources"}),
+}
 
 
 # --- scalars and enums -------------------------------------------------------------------
@@ -858,7 +800,8 @@ def build():
     t["DateTime"].parse_value = _parse_datetime
     t["JSON"].serialize = lambda v: v
     t["Money"].parse_value = _parse_money
-    for enum in ("HorizonKey", "CategorySource", "GoalInterval", "OffsetKind", "ExpenseKind", "KindSource"):
+    for enum in ("HorizonKey", "CategorySource", "GoalInterval", "OffsetKind", "ExpenseKind", "KindSource",
+                 "AssetKind", "ValuationSource", "SyncRetryPoint", "TenantRole", "TenantStatus"):
         for name, value in t[enum].values.items():
             value.value = name.lower()
     for name in t["NotificationCategory"].values:
@@ -867,14 +810,6 @@ def build():
         value.value = name.lower()
     t["Node"].resolve_type = lambda obj, *_: obj.TYPENAME
 
-    schema.query_type.fields["node"].resolve = resolve_node
-    schema.query_type.fields["snapshot"].resolve = resolve_snapshot
-    TRANSACTIONS.bind(schema)
-    NOTIFICATIONS.bind(schema)
-    SYNC_SOURCES.bind(schema)
-    PLAN_TARGETS.bind(schema)
-    ASSETS.bind(schema)
-    TENANTS.bind(schema)
-    for entity in ENTITIES:
-        entity.bind(schema, ENTITIES)
+    t["Notification"].resolve_type = lambda obj, *_: obj.TYPENAME
+    bind_all(schema, RESOLVERS, ATTRIBUTES)
     return schema
