@@ -1,7 +1,9 @@
 """GraphQL arguments as Pydantic models: each resolver validates its args through one.
 
-These mirror the input types and argument lists in api/schema; the SDL stays the
-source of truth (a later step can generate this file from it).
+The structure (names, types, nullability, defaults, aliases) is generated from the SDL into
+generated/inputs.py (`poetry run python -m api.codegen.generate`). The classes here subclass
+those and add only what the SDL cannot say: length/range limits, node-id types, validators,
+and the helpers resolvers call. A field is redeclared only to tighten its type.
 """
 import datetime as dt
 from typing import Literal
@@ -12,40 +14,12 @@ from pydantic import Field, field_validator, model_validator
 
 from api.inputs import GoalEdit, Patch, TagEdit, TagSet
 
+from .generated import inputs as g
+from .generated.inputs import Direction, GroupOrder, NotificationCategory, TransactionOrder  # noqa: F401  (re-exported)
 from .relay import ConnectionArgs, _GraphQLModel, node_id_of
 
 
-class Direction(str, Enum):
-    EXPENSE = "EXPENSE"
-    INCOME = "INCOME"
-
-
-class TransactionOrder(str, Enum):
-    DATE_DESC = "DATE_DESC"
-    DATE_ASC = "DATE_ASC"
-    AMOUNT_DESC = "AMOUNT_DESC"
-    AMOUNT_ASC = "AMOUNT_ASC"
-
-
-class GroupOrder(str, Enum):
-    NAME_ASC = "NAME_ASC"
-    COUNT_DESC = "COUNT_DESC"
-    TOTAL_DESC = "TOTAL_DESC"
-    TOTAL_ASC = "TOTAL_ASC"
-
-
-class NotificationCategory(str, Enum):
-    PROBLEM = "PROBLEM"
-    WARNING = "WARNING"
-    REMINDER = "REMINDER"
-    SUGGESTION = "SUGGESTION"
-    INFO = "INFO"
-
-
-class DateRange(_GraphQLModel):
-    from_: dt.date | None = Field(default=None, alias="from")
-    to: dt.date | None = None
-
+class DateRange(g.DateRange):
     @model_validator(mode="after")
     def ordered(self):
         if self.from_ and self.to and self.from_ > self.to:
@@ -56,8 +30,7 @@ class DateRange(_GraphQLModel):
         return (self.from_ is None or d >= self.from_) and (self.to is None or d <= self.to)
 
 
-class TransactionFilter(_GraphQLModel):
-    direction: Direction | None = None
+class TransactionFilter(g.TransactionFilter):
     date_range: DateRange | None = None
     category_ids: list[node_id_of("Category")] | None = None
     tag_ids: list[node_id_of("Tag")] | None = None
@@ -65,8 +38,6 @@ class TransactionFilter(_GraphQLModel):
     horizon_ids: list[node_id_of("Horizon")] | None = None
     goal_ids: list[node_id_of("Goal")] | None = None
     search: str | None = Field(default=None, max_length=100)
-    include_excluded: bool = False
-    include_transfers: bool = False
 
     @field_validator("search")
     @classmethod
@@ -98,32 +69,24 @@ class TransactionFilter(_GraphQLModel):
         return True
 
 
-class TransactionArgs(ConnectionArgs):
-    filter: TransactionFilter = TransactionFilter()
-    order_by: TransactionOrder = TransactionOrder.DATE_DESC
+class TransactionArgs(ConnectionArgs, g.QueryTransactionsArgs):   # ConnectionArgs first: its bounds on first/last win
+    filter: TransactionFilter = TransactionFilter()   # never null: no filter means an empty one
 
 
-class NotificationFilter(_GraphQLModel):
-    category: list[NotificationCategory] | None = None
-    unread: bool | None = None
-    include_archived: bool = False
-    include_resolved: bool = False
-    include_snoozed: bool = False
+NotificationFilter = g.NotificationFilter
 
 
-class NotificationArgs(ConnectionArgs):
-    filter: NotificationFilter = NotificationFilter()
+class NotificationArgs(ConnectionArgs, g.QueryNotificationsArgs):
+    filter: NotificationFilter = NotificationFilter()   # never null
 
 
-class UnreadCountArgs(_GraphQLModel):
-    category: list[NotificationCategory] | None = None
+UnreadCountArgs = g.QueryNotificationsUnreadCountArgs
 
 
-class GroupArgs(ConnectionArgs):
+class GroupArgs(ConnectionArgs, g.QueryMerchantsArgs):
     """Arguments of a merchants/categories/tags connection."""
     search: str | None = Field(default=None, max_length=100)
     date_range: DateRange | None = None
-    order_by: GroupOrder = GroupOrder.TOTAL_DESC
 
     @field_validator("search")
     @classmethod
@@ -136,10 +99,10 @@ class GroupArgs(ConnectionArgs):
 # (`model_fields_set` tells them apart).
 
 class MutationInput(_GraphQLModel):
-    client_mutation_id: str | None = Field(default=None, max_length=100)
+    client_mutation_id: str | None = Field(default=None, max_length=100)   # SDL has it plain; capped here
 
 
-class UpdateTransactionInput(MutationInput, Patch):
+class UpdateTransactionInput(MutationInput, Patch, g.UpdateTransactionInput):
     id: node_id_of("Transaction")
     goal_id: node_id_of("Goal") | None = None   # a Goal's global id here, an int in the REST body
 
@@ -150,38 +113,38 @@ class UpdateTransactionInput(MutationInput, Patch):
         return out
 
 
-class ClearTransactionOverrideInput(MutationInput):
+class ClearTransactionOverrideInput(MutationInput, g.ClearTransactionOverrideInput):
     id: node_id_of("Transaction")
 
 
-class SetTransactionTagsInput(MutationInput, TagSet):
+class SetTransactionTagsInput(MutationInput, TagSet, g.SetTransactionTagsInput):
     id: node_id_of("Transaction")
 
 
-class LinkOffsetInput(MutationInput):
+class LinkOffsetInput(MutationInput, g.LinkOffsetInput):
     payback_id: node_id_of("Transaction")
     expense_id: node_id_of("Transaction")
     amount: Decimal | None = Field(default=None, gt=0, max_digits=12, decimal_places=2)
 
 
-class UnlinkOffsetInput(MutationInput):
+class UnlinkOffsetInput(MutationInput, g.UnlinkOffsetInput):
     payback_id: node_id_of("Transaction")
     expense_id: node_id_of("Transaction")
 
 
-class ResetOffsetsInput(MutationInput):
+class ResetOffsetsInput(MutationInput, g.ResetOffsetsInput):
     payback_id: node_id_of("Transaction")
 
 
-class UpdateTagInput(MutationInput, TagEdit):
+class UpdateTagInput(MutationInput, TagEdit, g.UpdateTagInput):
     id: node_id_of("Tag")
 
 
-class DeleteTagInput(MutationInput):
+class DeleteTagInput(MutationInput, g.DeleteTagInput):
     id: node_id_of("Tag")
 
 
-class GoalCreateInput(MutationInput, GoalEdit):
+class GoalCreateInput(MutationInput, GoalEdit, g.GoalCreateInput):
     description: str = Field(min_length=1, max_length=80)
     amount: float = Field(ge=0, le=100_000_000)
 
@@ -191,7 +154,7 @@ class GoalCreateInput(MutationInput, GoalEdit):
                 if f not in ("description", "amount")}
 
 
-class GoalUpdateInput(MutationInput, GoalEdit):
+class GoalUpdateInput(MutationInput, GoalEdit, g.GoalUpdateInput):
     id: node_id_of("Goal")
 
     @model_validator(mode="after")
@@ -208,7 +171,7 @@ class GoalDeleteInput(MutationInput):
     id: node_id_of("Goal")
 
 
-class CategoryMergeInput(MutationInput):
+class CategoryMergeInput(MutationInput, g.CategoryMergeInput):
     id: node_id_of("Category")
     into_id: node_id_of("Category")
 
@@ -217,7 +180,7 @@ class CategoryUnmergeInput(MutationInput):
     id: node_id_of("Category")
 
 
-class PlanTargetsUpdateInput(MutationInput):
+class PlanTargetsUpdateInput(MutationInput, g.PlanTargetsUpdateInput):
     """Any of the three targets; null or 0 unsets, negative is rejected, an omitted one is untouched."""
     emergency_fund: Decimal | None = Field(default=None, ge=0, le=1_000_000_000, max_digits=12, decimal_places=2)
     inheritance: Decimal | None = Field(default=None, ge=0, le=1_000_000_000, max_digits=12, decimal_places=2)
@@ -233,14 +196,14 @@ class AssetKind(str, Enum):
     PROPERTY = "property"
 
 
-class AssetCreateInput(MutationInput):
+class AssetCreateInput(MutationInput, g.AssetCreateInput):
     kind: AssetKind
     label: str = Field(min_length=1, max_length=80)
     value: Decimal = Field(ge=0, le=1_000_000_000, max_digits=12, decimal_places=2)
     valued_at: dt.date | None = None
 
 
-class AssetUpdateInput(MutationInput):
+class AssetUpdateInput(MutationInput, g.AssetUpdateInput):
     id: node_id_of("Asset")
     label: str | None = Field(default=None, min_length=1, max_length=80)
     value: Decimal | None = Field(default=None, ge=0, le=1_000_000_000, max_digits=12, decimal_places=2)
@@ -257,10 +220,8 @@ class AssetUpdateInput(MutationInput):
         return {f: getattr(self, f) for f in ("label", "value", "valued_at") if f in self.model_fields_set}
 
 
-class UpdateNotificationInput(MutationInput):
+class UpdateNotificationInput(MutationInput, g.UpdateNotificationInput):
     id: node_id_of("Notification")
-    read: bool | None = None
-    snoozed_until_at: dt.datetime | None = None   # null clears the snooze
 
     def changes(self, now):
         """The inbox columns to set: `read` stamps or clears `read_at`; a sent `snoozedUntilAt` replaces the snooze."""
@@ -272,42 +233,40 @@ class UpdateNotificationInput(MutationInput):
         return out
 
 
-class NotificationIdInput(MutationInput):
+class NotificationIdInput(MutationInput, g.NotificationIdInput):
     id: node_id_of("Notification")
 
 
-class BulkNotificationInput(MutationInput):
-    category: list[NotificationCategory] | None = None
-
+class BulkNotificationInput(MutationInput, g.BulkNotificationInput):
     def categories(self):
         return [c.value for c in self.category] if self.category is not None else None
 
 
-class SnoozeAllNotificationsInput(BulkNotificationInput):
-    snoozed_until_at: dt.datetime
+class SnoozeAllNotificationsInput(BulkNotificationInput, g.SnoozeAllNotificationsInput):
+    pass
 
 
 class SyncSourceRetryInput(MutationInput):
     id: node_id_of("SyncSource")
 
 
-class TenantCreateInput(MutationInput):
+class TenantCreateInput(MutationInput, g.TenantCreateInput):
     slug: str = Field(pattern=r"^[a-z0-9]+(-[a-z0-9]+)*$", max_length=40)
     name: str = Field(min_length=1, max_length=80)
     owner_email: str = Field(max_length=200, pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
 
-class TenantMemberSetInput(MutationInput):
+class TenantMemberSetInput(MutationInput, g.TenantMemberSetInput):
     id: node_id_of("Tenant")
     email: str = Field(max_length=200, pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
     role: Literal["owner", "admin", "member"]
 
 
-class TenantMemberRemoveInput(MutationInput):
+class TenantMemberRemoveInput(MutationInput, g.TenantMemberRemoveInput):
     id: node_id_of("Tenant")
     email: str = Field(max_length=200)
 
 
-class TenantSetStatusInput(MutationInput):
+class TenantSetStatusInput(MutationInput, g.TenantSetStatusInput):
     id: node_id_of("Tenant")
     status: Literal["active", "suspended"]

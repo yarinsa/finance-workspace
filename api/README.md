@@ -115,3 +115,13 @@ poetry run pytest api/tests    # needs Postgres up; uses the finance_test databa
 
 They use a generated RSA key and a fake JWKS (nothing calls AWS), a fake rebuild client, and made-up
 transactions. The pool runs `SET ROLE finance_api`, so the tests exercise the real grants.
+
+## Generated GraphQL inputs
+
+`api/schema/*.graphql` is the source of truth. `api/gql/generated/inputs.py` (enums, input
+types, and a `<Type><Field>Args` model per field with arguments) is generated from it and
+must not be edited by hand. `api/gql/inputs.py` subclasses those models and adds only
+behaviour: limits, node-id types, validators, helpers.
+
+Workflow: edit the SDL, run `poetry run python -m api.codegen.generate`, commit both.
+`--check` exits 1 if the file is stale; `api/tests/test_codegen.py` runs it, so CI fails on drift.
