@@ -15,7 +15,7 @@ from pathlib import Path
 import freshness
 import horizons
 import runway
-from finance import categories, offsets
+from finance import categories, manifest, offsets
 from finance.paths import data_root
 
 CODE = Path(__file__).resolve().parent          # .../Finance/data (the scripts)
@@ -745,6 +745,15 @@ def spending_summary(ledger):
     }
 
 
+def _manifest_fields(name):
+    """The source's self-declared label, account types and capabilities (empty if it has no manifest)."""
+    try:
+        m = manifest.load(name)
+    except OSError:
+        return {}
+    return {"label": m.label, "account_types": list(m.account_types), "capabilities": list(m.capabilities)}
+
+
 def source_syncs(root=ROOT):
     """Per-source data freshness for the dashboard's Syncs page.
 
@@ -770,6 +779,7 @@ def source_syncs(root=ROOT):
                     latest_txn = max([latest_txn or "", *dates])
         out.append({
             "source": raw.parent.name,
+            **_manifest_fields(raw.parent.name),
             "last_synced": datetime.datetime.fromtimestamp(newest).astimezone().isoformat(timespec="seconds"),
             "raw_files": len(files),
             "entities": entities,
@@ -809,6 +819,7 @@ def main():
     snapshot = build_snapshot(entities, load_assets())
     snapshot["spending"] = summary
     snapshot["syncs"] = source_syncs()
+    snapshot["source_manifests"] = {n: m.model_dump(mode="json") for n, m in manifest.load_all().items()}
     snapshot["freshness"] = freshness.status()
     (OUT / "snapshot.json").write_text(json.dumps(snapshot, ensure_ascii=False, indent=2))
     write_markdown(snapshot)

@@ -17,6 +17,7 @@ login/session, so business's rebinding cannot touch it. Mortgage runs before che
 If a headless login is refused (INVALID_PASSWORD / CHANGE_PASSWORD) the later self-login
 sources are skipped as needs_login (they share the .env credentials, see Source.group).
 """
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -30,6 +31,9 @@ from pathlib import Path
 VERDICT, SESSIONS, TABS, SELF, HEADLESS = "verdict", "sessions", "tabs", "self", "headless"
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+from finance import manifest as _manifest  # noqa: E402
 
 
 @dataclass(frozen=True)
@@ -48,6 +52,15 @@ class Source:
     app_url: str = ""         # page opened at SCRAPE time when no tab is on the app itself (Discount business)
     playwright: bool = True   # False: the dump talks raw CDP (more, analyst), no playwright-cli session
     otp: bool = False         # the dump can log in with a code the human types in the app (`<dump> --login`)
+
+    @property
+    def manifest(self) -> "_manifest.SourceManifest":
+        """What the source declares about itself (data/<name>/manifest.json)."""
+        return _manifest.load(self.name)
+
+    @property
+    def label(self) -> str:
+        return self.manifest.label
 
     @property
     def group(self) -> str:
@@ -136,19 +149,8 @@ _ALL = [
 # (0600, read once and deleted by the dump).
 OTP_DIR = Path.home() / ".finance-otp"
 
-# Hebrew names for the dashboard (the same labels app/src/routes/Syncs.tsx uses).
-LABEL_HE = {
-    "discount": "דיסקונט — עו״ש",
-    "discount-mortgage": "דיסקונט — משכנתא",
-    "discount-business": "דיסקונט — עסקי",
-    "leumi": "לאומי",
-    "cal": "כאל",
-    "amex": "אמריקן אקספרס",
-    "max": "מקס",
-    "harel": "הראל",
-    "more": "מור",
-    "analyst": "אנליסט",
-}
+# Hebrew names for the dashboard, from each source's manifest.
+LABEL_HE = {s.name: s.label for s in _ALL}
 
 SOURCES = {s.name: s for s in _ALL}
 SYNC_ORDER = tuple(SOURCES)

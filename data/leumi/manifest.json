@@ -1,0 +1,6 @@
+{
+  "name": "leumi",
+  "label": "לאומי",
+  "account_types": ["checking", "loan"],
+  "capabilities": ["accounts", "loans", "transactions"]
+}

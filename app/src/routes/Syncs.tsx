@@ -12,7 +12,7 @@ import {
   readPushEnv,
   type PushState,
 } from "@/lib/push";
-import { daysSince, snapshot, type SourceSync } from "@/lib/data";
+import { daysSince, snapshot, sourceLabel, type SourceSync } from "@/lib/data";
 import { fmt, toTime } from "@/lib/dates";
 import {
   displayState,
@@ -27,20 +27,6 @@ import {
 } from "@/lib/syncStatus";
 import { useLedgerApi } from "@/lib/useLedgerApi";
 import { cn } from "@/lib/utils";
-
-const SOURCE_LABEL: Record<string, string> = {
-  discount: "דיסקונט — עו״ש",
-  "discount-business": "דיסקונט — עסקי",
-  "discount-mortgage": "דיסקונט — משכנתא",
-  leumi: "לאומי",
-  cal: "כאל",
-  amex: "אמריקן אקספרס",
-  max: "מקס",
-  riseup: "RiseUp",
-  harel: "הראל",
-  more: "מור",
-  analyst: "אנליסט",
-};
 
 const ENTITY_LABEL: Record<string, string> = {
   transactions: "עסקאות",
@@ -459,7 +445,7 @@ function SyncItem({ it }: { it: Item }) {
           </span>
           <span className="flex min-w-0 flex-col">
             <span>
-              {SOURCE_LABEL[it.source] ?? it.source}
+              {sourceLabel(it.source)}
               <span className="sync-mode">{live ? "אוטומטי" : "ידני"}</span>
             </span>
             {sub && (

@@ -1,0 +1,6 @@
+{
+  "name": "harel",
+  "label": "הראל",
+  "account_types": ["pension", "study_fund"],
+  "capabilities": ["savings"]
+}

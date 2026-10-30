@@ -1,0 +1,6 @@
+{
+  "name": "more",
+  "label": "מור",
+  "account_types": ["study_fund", "provident_fund"],
+  "capabilities": ["savings"]
+}

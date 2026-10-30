@@ -1,0 +1,6 @@
+{
+  "name": "discount-business",
+  "label": "דיסקונט — עסקי",
+  "account_types": ["business_checking"],
+  "capabilities": ["accounts", "credit_cards", "transactions"]
+}

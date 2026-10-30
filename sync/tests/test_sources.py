@@ -407,3 +407,9 @@ def test_deliver_otp_writes_a_private_file_and_refuses_non_codes(tmp_path, monke
             run(activities.deliver_otp("harel", bad))
     with pytest.raises(ApplicationError):
         run(activities.deliver_otp("cal", "123456"))
+
+
+def test_labels_come_from_the_manifests():
+    assert sources.LABEL_HE["discount"] == "דיסקונט — עו״ש"
+    assert set(sources.LABEL_HE) == set(sources.SOURCES)
+    assert sources.get("harel").manifest.account_types == ("pension", "study_fund")

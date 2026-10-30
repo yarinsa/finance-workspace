@@ -1,0 +1,6 @@
+{
+  "name": "max",
+  "label": "מקס",
+  "account_types": ["credit_card"],
+  "capabilities": ["credit_cards", "transactions"]
+}

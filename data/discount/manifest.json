@@ -1,0 +1,6 @@
+{
+  "name": "discount",
+  "label": "דיסקונט — עו״ש",
+  "account_types": ["checking"],
+  "capabilities": ["accounts", "transactions"]
+}

@@ -1,0 +1,6 @@
+{
+  "name": "amex",
+  "label": "אמריקן אקספרס",
+  "account_types": ["credit_card"],
+  "capabilities": ["credit_cards", "transactions"]
+}

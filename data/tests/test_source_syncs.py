@@ -35,3 +35,10 @@ def test_savings_source_has_no_txn_date_and_empty_raw_is_skipped(tmp_path):
     rows = digest.source_syncs(tmp_path)
     assert [r["source"] for r in rows] == ["harel"]
     assert rows[0]["latest_txn_date"] is None
+
+
+def test_rows_carry_the_sources_manifest(tmp_path):
+    _source(tmp_path, "harel", 1791957840)
+    [row] = digest.source_syncs(tmp_path)
+    assert row["label"] == "הראל" and row["account_types"] == ["pension", "study_fund"]
+    assert row["capabilities"] == ["savings"]

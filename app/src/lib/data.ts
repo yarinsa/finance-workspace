@@ -425,11 +425,29 @@ export interface Snapshot {
   totals: SnapshotTotals;
   spending?: unknown;
   syncs?: SourceSync[];
+  /** Each sync source's self-declaration (data/<source>/manifest.json). */
+  source_manifests?: Record<string, SourceManifest>;
+}
+
+/** What a source says about itself: its label, the kinds of account it holds, the entities it provides. */
+export interface SourceManifest {
+  name: string;
+  label: string;
+  account_types: string[];
+  capabilities: string[];
+}
+
+/** A source's Hebrew label from its manifest; the id itself when it has none (e.g. RiseUp). */
+export function sourceLabel(source: string): string {
+  return snapshot.source_manifests?.[source]?.label ?? source;
 }
 
 /** Per-source data freshness (digest.source_syncs). */
 export interface SourceSync {
   source: string;
+  label?: string;
+  account_types?: string[];
+  capabilities?: string[];
   /** Newest raw-dump mtime — when the scraper last wrote, not when digest ran. */
   last_synced: string;
   raw_files: number;

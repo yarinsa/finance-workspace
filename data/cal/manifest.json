@@ -1,0 +1,6 @@
+{
+  "name": "cal",
+  "label": "כאל",
+  "account_types": ["credit_card"],
+  "capabilities": ["credit_cards", "transactions"]
+}

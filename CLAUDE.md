@@ -512,6 +512,16 @@ are the category-tagged copies used for dedup priority above. amex/cal emit a fu
 card roster (last4, name, active) without a balance — `digest.py` uses RiseUp's
 debt-bearing cards for totals and enriches them with the roster names by last4.
 
+### Source manifests
+
+Each source declares itself in `data/<source>/manifest.json`: `name`, Hebrew `label`,
+`account_types` (checking, credit_card, pension, …) and `capabilities` (the normalized
+entities it provides). Model and loader: `finance/manifest.py`. The sync registry
+(`Source.label`/`.manifest`, `LABEL_HE`), `digest.source_syncs` and `snapshot.source_manifests`
+read it, and the app takes labels from the snapshot (`sourceLabel` in `app/src/lib/data.ts`).
+A new source adds its manifest (a test enforces it). Planned: a JSON Schema for the
+connection form per source, rendered with react-jsonschema-form.
+
 ## Conventions
 
 - **Money out is negative**, income/refunds positive, across all normalized output.

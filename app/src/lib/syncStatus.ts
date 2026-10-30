@@ -1,6 +1,6 @@
 import { tenantQuery } from "./tenant";
 import { useSyncExternalStore } from "react";
-import type { HomeAction } from "./data";
+import { sourceLabel, type HomeAction } from "./data";
 
 /**
  * Live state of the automated (Temporal) sync.
@@ -120,26 +120,13 @@ export function headline(doc: SyncStatusDoc | null, now = Date.now()): "attentio
   return null;
 }
 
-const LOGIN_LABEL: Record<string, string> = {
-  discount: "דיסקונט — עו״ש",
-  "discount-mortgage": "דיסקונט — משכנתא",
-  "discount-business": "דיסקונט — עסקי",
-  leumi: "לאומי",
-  cal: "כאל",
-  amex: "אמריקן אקספרס",
-  max: "מקס",
-  harel: "הראל",
-  more: "מור",
-  analyst: "אנליסט",
-};
-
 /** Home "לטיפול" items: one per source that is waiting for (or gave up on) a login, or failed. */
 export function syncActions(doc: SyncStatusDoc | null, now = Date.now()): HomeAction[] {
   if (!doc) return [];
   const out: HomeAction[] = [];
   for (const [source, s] of Object.entries(doc.sources)) {
     const d = displayState(s, now);
-    const name = LOGIN_LABEL[source] ?? source;
+    const name = sourceLabel(source);
     // Keyed by run so dismissing one run's alert doesn't hide the next run's.
     const id = `sync-${source}-${d}-${s.run_id}`;
     const cta = { label: "לסנכרונים", to: "/syncs" };

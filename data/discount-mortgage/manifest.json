@@ -1,0 +1,6 @@
+{
+  "name": "discount-mortgage",
+  "label": "דיסקונט — משכנתא",
+  "account_types": ["mortgage", "loan"],
+  "capabilities": ["loans"]
+}

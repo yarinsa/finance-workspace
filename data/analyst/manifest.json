@@ -1,0 +1,6 @@
+{
+  "name": "analyst",
+  "label": "אנליסט",
+  "account_types": ["provident_fund"],
+  "capabilities": ["savings"]
+}
