@@ -98,9 +98,11 @@ type Mutation {
   tenantMemberRemove(id: ID!, input: TenantMemberRemoveInput!): TenantPayload!
   tenantSetStatus(id: ID!, input: TenantSetStatusInput!): TenantPayload!
   """
-  Make `email`'s Cognito group for this tenant match the database: members are added, anyone else
-  removed. The API holds no AWS credentials, so the Mac's sync worker runs it (the app waits up to
-  ~40 s). Until it has run, a new member's sign-in does not carry access to the tenant's files.
+  Provision or deprovision `email` in Cognito from what the database says: a member of an active
+  tenant gets an account (Cognito emails the invitation when it is new) and the tenant's group;
+  anyone else is taken out of the group, and an account with no access left anywhere is disabled
+  (reversible). The API holds no AWS credentials, so the Mac's sync worker runs it (the app waits up
+  to ~40 s). Until it has run, a new member cannot sign in or see the tenant's files.
   """
   tenantAccessSync(id: ID!, input: TenantAccessSyncInput!): TenantAccessPayload!
 

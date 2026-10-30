@@ -35,7 +35,8 @@ input TenantAccessSyncInput {
 
 type TenantAccessPayload {
   success: Boolean!
-  """"added" (a member was put in the tenant's Cognito group) or "removed" (a non-member was taken out)."""
+  """The steps that ran, comma separated: "invited" (account created, Cognito emailed the invitation),
+  "added" / "removed" (tenant Cognito group), "disabled" (no access left anywhere), or "unchanged"."""
   message: String!
 }
 

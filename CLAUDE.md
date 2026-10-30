@@ -168,6 +168,17 @@ columns `finance_api` can update); `pushed_at` is stamped only by `finance/push.
 snoozed; snoozing marks unread. GraphQL: `api/schema/inbox.graphql`; inbox mutations do **not** signal a
 ledger rebuild. Live changes arrive as `event: notification` on `/api/sync/events`. Details: `api/README.md`.
 
+### Tenants and the back office
+
+Every row of customer data belongs to one tenant; Postgres RLS enforces it (design, onboarding order and the
+checklist for a new tenant-owned table: **docs/tenancy.md**). The household's original data is the master
+tenant `default`. **Tenant and user operations (create or suspend a household, add or remove a member,
+provision or deprovision their Cognito account, audit access) are the `backoffice` agent's job**, using
+`poetry run python sync/backoffice.py …` from the main checkout and the `backoffice-tenants|members|access`
+skills; the `tenant-mgmt` skill is for changing the code. The platform admin is hard-coded in
+`finance/tenancy.py`; the `/tenants` screen does the same through the Mac's worker, because the API holds no AWS
+credentials. Never apply Terraform or a live migration without the user's go-ahead on a shown plan.
+
 ### Automated sync (Temporal) — POC
 
 **Proof of concept** (dev server, no persistence guarantees); see

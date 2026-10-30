@@ -777,20 +777,31 @@ TENANT_GROUPS = REPO_ROOT / "infra" / "tenant-groups.sh"
 _EMAIL = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
 
-def group_action(is_member: bool) -> str:
-    """What the Cognito group needs so it mirrors the database: members are in it, nobody else."""
-    return "add" if is_member else "remove"
+def access_plan(*, is_member: bool, tenant_active: bool, has_access: bool) -> list[str]:
+    """The Cognito steps that make one person's account and group match the database.
+
+    `is_member`: a membership in this tenant. `tenant_active`: this tenant is not suspended.
+    `has_access`: they belong to at least one active tenant, or are the platform admin (who is
+    never disabled). A member of an active tenant gets an account (invited by email if new,
+    re-enabled if disabled) and the tenant's group; anyone else is taken out of the group, and an
+    account with no access left anywhere is disabled (reversible, never deleted)."""
+    steps = ["ensure-user"] if has_access else []
+    steps.append("add" if is_member and tenant_active else "remove")
+    if not has_access:
+        steps.append("disable-user")
+    return steps
 
 
 @activity.defn
-async def sync_tenant_group(tenant_id: str, email: str) -> str:
-    """Make `email`'s membership of Cognito group `tenant-<tenant_id>` match Postgres.
+async def sync_tenant_access(tenant_id: str, email: str) -> str:
+    """Provision or deprovision `email` in Cognito for `tenant_id`, from what Postgres says.
 
-    Run from the app's tenant screen (platform admin only, checked by the API). The API holds no
-    AWS credentials, so it only asks; this runs on the Mac with `infra/tenant-groups.sh`. The
-    database decides the action (a member is added, a non-member removed), so a request can never
-    put an arbitrary address in a group. Returns "added" / "removed"; a failure raises with the
-    script's output (e.g. the person has no Cognito account yet)."""
+    Run when the platform admin adds or removes a member, creates a tenant, or suspends or
+    reactivates one (the app's /tenants screen; the API has no AWS credentials, so it asks, and
+    this runs on the Mac through `infra/tenant-groups.sh`). The database decides, not the request,
+    so it can never put an arbitrary address in a group or disable the wrong account. Idempotent.
+    Returns the steps that ran, e.g. "invited,added" or "removed,disabled"; a failure raises with
+    the script's output."""
     try:
         tid = str(uuid.UUID(tenant_id))
     except ValueError:
@@ -802,19 +813,31 @@ async def sync_tenant_group(tenant_id: str, email: str) -> str:
     if not url:
         raise ApplicationError("DATABASE_URL is not set on the worker", non_retryable=True)
 
-    def is_member() -> bool:
+    def state() -> dict:
         import psycopg
         with psycopg.connect(url, connect_timeout=5) as conn:
-            return conn.execute(
+            row = conn.execute(
+                "SELECT m.id IS NOT NULL, t.status = 'active' FROM tenants t "
+                "LEFT JOIN (SELECT m.id, m.tenant_id FROM memberships m JOIN users u ON u.id = m.user_id "
+                "          WHERE u.email = %s) m ON m.tenant_id = t.id WHERE t.id = %s", (email, tid)).fetchone()
+            if row is None:
+                raise ApplicationError("no such tenant", non_retryable=True)
+            elsewhere = conn.execute(
                 "SELECT 1 FROM memberships m JOIN users u ON u.id = m.user_id JOIN tenants t ON t.id = m.tenant_id "
-                "WHERE m.tenant_id = %s AND u.email = %s", (tid, email)).fetchone() is not None
+                "WHERE u.email = %s AND t.status = 'active'", (email,)).fetchone() is not None
+        return {"is_member": row[0], "tenant_active": row[1],
+                "has_access": elsewhere or tenancy.is_platform_admin(email)}
 
-    action = group_action(await asyncio.to_thread(is_member))
-    rc, tail = await run_cmd([str(TENANT_GROUPS), action, tid, email], timeout=120)
-    if rc != 0:
-        raise ApplicationError(f"tenant-groups.sh {action} failed: {tail.strip()[-300:]}", non_retryable=True)
-    return "added" if action == "add" else "removed"
+    ran = []
+    for step in access_plan(**await asyncio.to_thread(state)):
+        argv = [str(TENANT_GROUPS), step] + ([tid, email] if step in ("add", "remove") else [email])
+        rc, tail = await run_cmd(argv, timeout=120)
+        if rc != 0:
+            raise ApplicationError(f"tenant-groups.sh {step} failed: {tail.strip()[-300:]}", non_retryable=True)
+        ran.append({"ensure-user": "invited" if tail.strip().startswith("invited") else "ready",
+                    "add": "added", "remove": "removed", "disable-user": "disabled"}[step])
+    return ",".join(r for r in ran if r != "ready") or "unchanged"
 
 
 ALL_ACTIVITIES = [ensure_chrome, check_session, scrape, scrape_login, deliver_otp, validate_dump, digest, publish_data, notify, publish_status, failure_streak,
-                  push_event, push_new_actions, push_daily_summary, sync_tenant_group]
+                  push_event, push_new_actions, push_daily_summary, sync_tenant_access]

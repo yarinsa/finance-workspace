@@ -42,15 +42,46 @@ def test_a_tenants_rebuild_digests_and_publishes_for_that_tenant():
     assert ("digest", T) in fake.tenants and ("publish", T) in fake.tenants
 
 
-# --- Cognito group sync (the app's "grant access" button) ---------------------------
+# --- Cognito provisioning (the /tenants screen) -------------------------------------
 
-def test_group_follows_the_database_not_the_request():
-    from activities import group_action
-    assert group_action(True) == "add"      # a member is put in the group
-    assert group_action(False) == "remove"  # anyone else is taken out, whatever was asked
+def plan(**kw):
+    from activities import access_plan
+    return access_plan(**kw)
 
 
-def test_group_sync_refuses_malformed_input_before_touching_aws(monkeypatch):
+def test_a_new_member_of_an_active_tenant_gets_an_account_then_the_group():
+    assert plan(is_member=True, tenant_active=True, has_access=True) == ["ensure-user", "add"]
+
+
+def test_removing_someones_last_membership_takes_them_out_and_disables_the_account():
+    assert plan(is_member=False, tenant_active=True, has_access=False) == ["remove", "disable-user"]
+
+
+def test_removing_someone_who_still_belongs_elsewhere_keeps_their_account():
+    assert plan(is_member=False, tenant_active=True, has_access=True) == ["ensure-user", "remove"]
+
+
+def test_a_suspended_tenant_loses_its_group_but_members_keep_other_tenants():
+    assert plan(is_member=True, tenant_active=False, has_access=True) == ["ensure-user", "remove"]
+    assert plan(is_member=True, tenant_active=False, has_access=False) == ["remove", "disable-user"]
+
+
+def test_nobody_is_added_to_a_group_without_an_account_first():
+    for member in (True, False):
+        steps = plan(is_member=member, tenant_active=True, has_access=member)
+        if "add" in steps:
+            assert steps.index("ensure-user") < steps.index("add")
+
+
+def test_the_platform_admin_is_never_disabled(monkeypatch):
+    import activities
+    from finance import tenancy
+    assert tenancy.is_platform_admin("yarinsasson2@gmail.com")
+    # has_access is forced true for them in the activity, so the plan never contains disable-user
+    assert "disable-user" not in plan(is_member=False, tenant_active=True, has_access=True)
+
+
+def test_access_sync_refuses_malformed_input_before_touching_aws(monkeypatch):
     import asyncio
     import activities
     from temporalio.exceptions import ApplicationError
@@ -63,6 +94,5 @@ def test_group_sync_refuses_malformed_input_before_touching_aws(monkeypatch):
     monkeypatch.setattr(activities, "run_cmd", fake_run_cmd)
     for tenant, email in [("not-a-uuid", "a@b.cc"), (T, "no-at-sign"), (T, "a b@c.dd"), (T, "x" * 300 + "@b.cc")]:
         with pytest.raises(ApplicationError):
-            asyncio.run(activities.sync_tenant_group.__wrapped__(tenant, email) if hasattr(activities.sync_tenant_group, "__wrapped__")
-                        else activities.sync_tenant_group(tenant, email))
+            asyncio.run(activities.sync_tenant_access(tenant, email))
     assert ran == []

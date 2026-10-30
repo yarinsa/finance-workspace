@@ -589,11 +589,11 @@ class LedgerRebuildWorkflow:
 
 @workflow.defn(name="TenantAccessWorkflow")
 class TenantAccessWorkflow:
-    """Make one person's Cognito group for one tenant match the database (activity
-    `sync_tenant_group`). Started and awaited by the API on the platform admin's button press."""
+    """Provision or deprovision one person's Cognito account and tenant group from the database
+    (activity `sync_tenant_access`). Started and awaited by the API for the platform admin."""
 
     @workflow.run
     async def run(self, tenant_id: str, email: str) -> str:
         return await workflow.execute_activity(
-            "sync_tenant_group", args=[tenant_id, email],
+            "sync_tenant_access", args=[tenant_id, email],
             start_to_close_timeout=timedelta(minutes=3), retry_policy=RetryPolicy(maximum_attempts=1))

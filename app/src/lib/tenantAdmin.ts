@@ -88,11 +88,13 @@ export async function setStatus(id: string, status: TenantStatus): Promise<Admin
 }
 
 /**
- * Make `email`'s Cognito access to the tenant's published files match their membership: a member is
- * added to the tenant's group, anyone else removed. The Mac's sync worker runs it (the API has no AWS
- * credentials), so this can take a few seconds. Returns "added" or "removed"; throws with the reason.
+ * Provision or deprovision `email` in Cognito from the database: a member of an active tenant gets an
+ * account (emailed an invitation when new) and the tenant's group; anyone else is taken out, and an
+ * account with no access left is disabled. The Mac's sync worker runs it (the API has no AWS
+ * credentials), so this can take a few seconds. Returns the steps that ran, comma separated
+ * ("invited,added", "removed,disabled", "unchanged"); throws with the reason.
  */
-export async function syncAccess(id: string, email: string): Promise<"added" | "removed"> {
+export async function syncAccess(id: string, email: string): Promise<string> {
   const d = await graphqlRequest<tenantAdminAccessSyncMutation>(ACCESS_SYNC, { id, input: { email } });
-  return d.tenantAccessSync!.message as "added" | "removed";
+  return d.tenantAccessSync!.message;
 }

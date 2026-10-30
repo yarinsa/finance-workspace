@@ -201,9 +201,18 @@ resource "aws_cognito_user_pool" "users" {
     temporary_password_validity_days = 1
   }
 
-  // No self-signup: this pool has exactly one intended human.
+  // No self-signup: people are created by the platform admin (the /tenants screen asks the
+  // Mac's worker, infra/tenant-groups.sh ensure-user), and Cognito emails them this invitation.
+  // The default invitation has no link, so it says where to sign in. The temporary password
+  // is valid for one day (password_policy above); after that the admin invites again.
   admin_create_user_config {
     allow_admin_create_user_only = true
+
+    invite_message_template {
+      email_subject = "הזמנה ל-${var.domain_name}"
+      email_message = "הוזמנת להצטרף. כתובת: https://${var.domain_name} — שם המשתמש: {username} — סיסמה זמנית (תקפה ליום אחד): {####}. בכניסה הראשונה תתבקש/י לבחור סיסמה חדשה."
+      sms_message   = "{username} {####}"
+    }
   }
 
   tags = local.tags

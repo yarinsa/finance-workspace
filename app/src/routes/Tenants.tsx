@@ -10,45 +10,62 @@ import {
 } from "@/lib/tenantAdmin";
 
 const ROLE_LABEL: Record<TenantRole, string> = { OWNER: "בעלים", ADMIN: "מנהל", MEMBER: "חבר" };
-
-/** A membership change whose Cognito group still has to follow (grant after an add, revoke after a remove). */
-interface Pending {
-  tenantId: string; // GraphQL global id
-  email: string;
-  kind: "grant" | "revoke";
-}
-const pendingKey = (p: Pending) => `${p.tenantId}|${p.email}`;
+const STEP_LABEL: Record<string, string> = {
+  invited: "הוזמן במייל",
+  added: "נוסף לגישה",
+  removed: "הגישה בוטלה",
+  disabled: "החשבון הושבת",
+  unchanged: "ללא שינוי",
+};
 
 function errorText(e: unknown): string {
   return e instanceof Error && e.message ? e.message : "הפעולה נכשלה";
 }
 
+/** One person whose Cognito account or group has to follow a membership change. */
+interface Access {
+  tenantId: string; // GraphQL global id
+  email: string;
+  state: "running" | "failed";
+  error?: string;
+}
+const accessKey = (a: Pick<Access, "tenantId" | "email">) => `${a.tenantId}|${a.email}`;
+
 /** One tenant: its status, its members, and a form to add one. */
-function TenantCard({ t, onChange, onPending }: { t: AdminTenant; onChange: (t: AdminTenant) => void; onPending: (p: Pending) => void }) {
+function TenantCard({
+  t, onChange, provision,
+}: {
+  t: AdminTenant;
+  onChange: (t: AdminTenant) => void;
+  provision: (tenantId: string, email: string) => Promise<void>;
+}) {
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<TenantRole>("MEMBER");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const master = tenantUuid(t.id) === MASTER_TENANT_ID;
 
-  async function run(fn: () => Promise<AdminTenant>, pending?: Pending) {
+  /** Change the registry, then (when `follow` lists people) provision or deprovision them in Cognito. */
+  async function run(fn: () => Promise<AdminTenant>, follow: string[] = []) {
     setBusy(true);
     setError(null);
     try {
       onChange(await fn());
-      if (pending) onPending(pending);
     } catch (e) {
       setError(errorText(e));
-    } finally {
       setBusy(false);
+      return;
     }
+    setBusy(false);
+    for (const who of follow) await provision(t.id, who);
   }
 
   function add(e: FormEvent) {
     e.preventDefault();
     const address = email.trim().toLowerCase();
     if (!address) return;
-    void run(() => setMember(t.id, address, role), { tenantId: t.id, email: address, kind: "grant" }).then(() => setEmail(""));
+    setEmail("");
+    void run(() => setMember(t.id, address, role), [address]);
   }
 
   return (
@@ -71,7 +88,7 @@ function TenantCard({ t, onChange, onPending }: { t: AdminTenant; onChange: (t: 
               <span className="text-xs text-muted-foreground">{ROLE_LABEL[m.role]}</span>
               <Button
                 type="button" variant="ghost" size="sm" disabled={busy}
-                onClick={() => void run(() => removeMember(t.id, m.email), { tenantId: t.id, email: m.email, kind: "revoke" })}
+                onClick={() => void run(() => removeMember(t.id, m.email), [m.email])}
               >
                 הסרה
               </Button>
@@ -98,7 +115,9 @@ function TenantCard({ t, onChange, onPending }: { t: AdminTenant; onChange: (t: 
         <div className="mt-3">
           <Button
             type="button" variant="outline" size="sm" disabled={busy}
-            onClick={() => void run(() => setStatus(t.id, t.status === "ACTIVE" ? "SUSPENDED" : "ACTIVE"))}
+            onClick={() =>
+              void run(() => setStatus(t.id, t.status === "ACTIVE" ? "SUSPENDED" : "ACTIVE"), t.members.map((m) => m.email))
+            }
           >
             {t.status === "ACTIVE" ? "השעיה" : "הפעלה מחדש"}
           </Button>
@@ -109,56 +128,18 @@ function TenantCard({ t, onChange, onPending }: { t: AdminTenant; onChange: (t: 
   );
 }
 
-/** One membership change waiting for its Cognito group, with the button that applies it. */
-function PendingRow({ p, tenant, onDone }: { p: Pending; tenant: AdminTenant | undefined; onDone: () => void }) {
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  async function apply() {
-    setBusy(true);
-    setError(null);
-    try {
-      await syncAccess(p.tenantId, p.email);
-      onDone();
-    } catch (e) {
-      setError(errorText(e));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <li className="flex flex-col gap-1">
-      <div className="flex items-center justify-between gap-2 text-sm">
-        <span className="min-w-0">
-          <span className="block truncate" dir="ltr">{p.email}</span>
-          <span className="text-xs text-muted-foreground">{tenant?.name ?? "—"}</span>
-        </span>
-        <Button type="button" size="sm" disabled={busy} onClick={() => void apply()}>
-          {busy ? "מבצע…" : p.kind === "grant" ? "הענקת גישה" : "ביטול גישה"}
-        </Button>
-      </div>
-      {error && (
-        <p role="alert" className="text-xs text-bad">
-          {error}
-          <br />
-          <span className="text-muted-foreground">אפשר גם ידנית: </span>
-          <code dir="ltr">{groupCommand({ id: p.tenantId }, p.email).replace(" add ", p.kind === "grant" ? " add " : " remove ")}</code>
-        </p>
-      )}
-    </li>
-  );
-}
-
 /**
  * Tenant management, for the platform admin only (the API refuses anyone else; this screen also
- * hides itself). The registry changes here are immediate; a member sees a tenant's published files
- * only after the Mac adds them to its Cognito group, so each change shows the command to run.
+ * hides itself). Every membership change is followed by a Cognito sync on the Mac (the API has no
+ * AWS credentials): a new member is invited by email and put in the tenant's group, a removed one
+ * is taken out, and an account with no access left is disabled. A sync that fails stays in the
+ * list with a retry button and the manual command.
  */
 export default function Tenants() {
   const [admin, setAdmin] = useState<boolean | null>(null);
   const [tenants, setTenants] = useState<AdminTenant[]>([]);
-  const [pending, setPending] = useState<Pending[]>([]);
+  const [access, setAccess] = useState<Access[]>([]);
+  const [done, setDone] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [slug, setSlug] = useState("");
   const [name, setName] = useState("");
@@ -178,22 +159,34 @@ export default function Tenants() {
   }, []);
 
   const replace = (t: AdminTenant) => setTenants((all) => all.map((x) => (x.id === t.id ? t : x)));
-  const addPending = (p: Pending) =>
-    setPending((all) => [p, ...all.filter((x) => pendingKey(x) !== pendingKey(p))]);
-  const donePending = (p: Pending) => setPending((all) => all.filter((x) => pendingKey(x) !== pendingKey(p)));
+  const upsert = (a: Access) =>
+    setAccess((all) => [a, ...all.filter((x) => accessKey(x) !== accessKey(a))]);
+
+  /** Sync one person's Cognito state with the database; a failure stays listed to retry. */
+  async function provision(tenantId: string, email: string) {
+    upsert({ tenantId, email, state: "running" });
+    try {
+      const steps = (await syncAccess(tenantId, email)).split(",").map((s) => STEP_LABEL[s] ?? s);
+      setAccess((all) => all.filter((x) => accessKey(x) !== accessKey({ tenantId, email })));
+      setDone((d) => [`${email} — ${steps.join(" · ")}`, ...d].slice(0, 5));
+    } catch (e) {
+      upsert({ tenantId, email, state: "failed", error: errorText(e) });
+    }
+  }
 
   async function create(e: FormEvent) {
     e.preventDefault();
     setBusy(true);
     setError(null);
+    const ownerEmail = owner.trim().toLowerCase();
     try {
-      const t = await createTenant(slug.trim(), name.trim(), owner.trim().toLowerCase());
+      const t = await createTenant(slug.trim(), name.trim(), ownerEmail);
       setTenants((all) => [...all, t]);
-      addPending({ tenantId: t.id, email: owner.trim().toLowerCase(), kind: "grant" });
       setSlug(""); setName(""); setOwner("");
+      setBusy(false);
+      await provision(t.id, ownerEmail);
     } catch (err) {
       setError(errorText(err));
-    } finally {
       setBusy(false);
     }
   }
@@ -216,21 +209,45 @@ export default function Tenants() {
         {error && <p role="alert" className="mt-2 text-sm text-bad">{error}</p>}
       </Card>
 
-      {pending.length > 0 && (
+      {(access.length > 0 || done.length > 0) && (
         <Card>
-          <CardLabel>גישה לנתונים</CardLabel>
+          <CardLabel>חשבונות וגישה</CardLabel>
           <p className="mt-1 text-xs text-muted-foreground">
-            חבר רואה את נתוני המשק רק אחרי שהוא נוסף לקבוצת ה-Cognito שלו (ואז הוא מתחבר מחדש). הכפתור מבצע זאת דרך ה-Mac.
+            כל שינוי בחברים מעדכן את חשבון ה-Cognito דרך ה-Mac: חבר חדש מוזמן במייל, מי שהוסר מאבד גישה,
+            וחשבון בלי אף משק פעיל מושבת.
           </p>
           <ul className="mt-2 flex flex-col gap-2">
-            {pending.map((p) => (
-              <PendingRow key={pendingKey(p)} p={p} tenant={tenants.find((t) => t.id === p.tenantId)} onDone={() => donePending(p)} />
+            {done.map((d) => <li key={d} className="text-sm text-good" dir="auto">✓ {d}</li>)}
+            {access.map((a) => (
+              <li key={accessKey(a)} className="flex flex-col gap-1">
+                <div className="flex items-center justify-between gap-2 text-sm">
+                  <span className="min-w-0">
+                    <span className="block truncate" dir="ltr">{a.email}</span>
+                    <span className="text-xs text-muted-foreground">
+                      {tenants.find((t) => t.id === a.tenantId)?.name ?? "—"}
+                    </span>
+                  </span>
+                  {a.state === "running" ? (
+                    <span className="text-xs text-muted-foreground">מעדכן…</span>
+                  ) : (
+                    <Button type="button" size="sm" onClick={() => void provision(a.tenantId, a.email)}>נסה שוב</Button>
+                  )}
+                </div>
+                {a.state === "failed" && (
+                  <p role="alert" className="text-xs text-bad">
+                    {a.error}
+                    <br />
+                    <span className="text-muted-foreground">ידנית: </span>
+                    <code dir="ltr">{groupCommand({ id: a.tenantId }, a.email)}</code>
+                  </p>
+                )}
+              </li>
             ))}
           </ul>
         </Card>
       )}
 
-      {tenants.map((t) => <TenantCard key={t.id} t={t} onChange={replace} onPending={addPending} />)}
+      {tenants.map((t) => <TenantCard key={t.id} t={t} onChange={replace} provision={provision} />)}
     </Page>
   );
 }
