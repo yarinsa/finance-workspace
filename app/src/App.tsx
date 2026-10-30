@@ -26,6 +26,7 @@ import { MobileTabBar } from "@/components/MobileTabBar";
 import { PwaStatus } from "@/components/PwaStatus";
 import { Toaster } from "@/components/Toaster";
 import { TenantSwitcher } from "@/components/TenantSwitcher";
+import Tenants from "@/routes/Tenants";
 
 /**
  * "Updated N days ago" — tap-able so the stale warning works on touch. The dot
@@ -148,6 +149,7 @@ export default function App() {
               {routes.map((r) => (
                 <Route key={r.path} path={r.path} element={<r.Component />} />
               ))}
+              <Route path="/tenants" element={<Tenants />} />
               {redirects.map((r) => (
                 <Route key={r.from} path={r.from} element={<Navigate to={r.to} replace />} />
               ))}

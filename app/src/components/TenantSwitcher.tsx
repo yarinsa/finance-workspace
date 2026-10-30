@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { NavLink } from "react-router-dom";
 import { request } from "@/lib/api";
 import { activeTenantId, clearTenant, currentTenant, switchTenant, type Me } from "@/lib/tenant";
 
@@ -25,9 +26,18 @@ export function TenantSwitcher() {
     };
   }, []);
 
-  if (!me || me.tenants.length < 2) return null;
+  if (!me) return null;
+  // the registry screen, for the platform admin only (the API enforces it too)
+  const admin = me.platform_admin && (
+    <NavLink to="/tenants" className="px-2 pb-1 text-xs text-muted-foreground underline-offset-2 hover:underline">
+      ניהול משקי בית
+    </NavLink>
+  );
+  if (me.tenants.length < 2) return <>{admin}</>;
   const current = currentTenant(me);
   return (
+    <>
+    {admin}
     <label className="flex items-center gap-2 px-2 pb-1 text-xs text-muted-foreground">
       <span>משק בית</span>
       <select
@@ -42,5 +52,6 @@ export function TenantSwitcher() {
         ))}
       </select>
     </label>
+    </>
   );
 }
