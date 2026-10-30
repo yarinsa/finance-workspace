@@ -267,6 +267,11 @@ class TenantMemberRemoveInput(MutationInput, g.TenantMemberRemoveInput):
     email: str = Field(max_length=200)
 
 
+class TenantAccessSyncInput(MutationInput, g.TenantAccessSyncInput):
+    id: node_id_of("Tenant")
+    email: str = Field(max_length=200, pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
+
 class TenantSetStatusInput(MutationInput, g.TenantSetStatusInput):
     id: node_id_of("Tenant")
     status: Literal["active", "suspended"]

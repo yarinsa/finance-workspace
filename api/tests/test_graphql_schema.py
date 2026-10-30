@@ -89,7 +89,7 @@ def test_connections_follow_the_relay_spec():
 # mutation is Relay style and pending migration.
 LINEAR = {"goalCreate", "goalUpdate", "goalDelete", "planTargetsUpdate", "syncSourceRetry", "assetCreate",
           "assetUpdate", "categoryMerge", "categoryUnmerge", "tenantCreate", "tenantMemberSet",
-          "tenantMemberRemove", "tenantSetStatus"}
+          "tenantMemberRemove", "tenantSetStatus", "tenantAccessSync"}
 
 
 def test_relay_mutations_take_one_input_and_echo_client_mutation_id():

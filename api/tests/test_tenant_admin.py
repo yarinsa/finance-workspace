@@ -63,6 +63,26 @@ def test_admin_adds_and_removes_members_and_suspends(as_user, admin):
     assert gql(a, sus)["data"]["tenantSetStatus"]["tenant"]["status"] == "SUSPENDED"
 
 
+def test_access_sync_asks_the_worker_and_is_for_the_platform_admin_only(as_user, rebuilder, admin):
+    a = as_user(ADMIN)
+    tid = gql(a, CREATE)["data"]["tenantCreate"]["tenant"]["id"]
+    q = 'mutation { tenantAccessSync(id: "%s", input: {email: "Owner@Acme.example"}) { success message } }' % tid
+    r = gql(a, q)["data"]["tenantAccessSync"]
+    assert r == {"success": True, "message": "added"}
+    new_id = str(admin.execute("SELECT id FROM tenants WHERE slug = 'acme'").fetchone()[0])
+    assert rebuilder.access_calls == [(new_id, "Owner@Acme.example")]   # the worker re-reads membership itself
+    assert gql(as_user(OTHER), q)["errors"][0]["message"] == "only a platform admin can manage tenants"
+    assert len(rebuilder.access_calls) == 1
+
+
+def test_access_sync_failure_reaches_the_screen(as_user, rebuilder):
+    a = as_user(ADMIN)
+    tid = gql(a, CREATE)["data"]["tenantCreate"]["tenant"]["id"]
+    rebuilder.access_result = (False, "tenant-groups.sh add failed: User does not exist")
+    q = 'mutation { tenantAccessSync(id: "%s", input: {email: "x@y.zz"}) { success } }' % tid
+    assert gql(a, q)["errors"][0]["message"] == "tenant-groups.sh add failed: User does not exist"
+
+
 def test_the_last_owner_and_the_master_tenant_are_protected(as_user):
     a = as_user(ADMIN)
     tid = gql(a, CREATE)["data"]["tenantCreate"]["tenant"]["id"]

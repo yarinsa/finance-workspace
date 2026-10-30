@@ -773,5 +773,48 @@ async def failure_streak(source: str, tenant_id: str | None = None) -> int:
         return 0
 
 
+TENANT_GROUPS = REPO_ROOT / "infra" / "tenant-groups.sh"
+_EMAIL = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
+
+def group_action(is_member: bool) -> str:
+    """What the Cognito group needs so it mirrors the database: members are in it, nobody else."""
+    return "add" if is_member else "remove"
+
+
+@activity.defn
+async def sync_tenant_group(tenant_id: str, email: str) -> str:
+    """Make `email`'s membership of Cognito group `tenant-<tenant_id>` match Postgres.
+
+    Run from the app's tenant screen (platform admin only, checked by the API). The API holds no
+    AWS credentials, so it only asks; this runs on the Mac with `infra/tenant-groups.sh`. The
+    database decides the action (a member is added, a non-member removed), so a request can never
+    put an arbitrary address in a group. Returns "added" / "removed"; a failure raises with the
+    script's output (e.g. the person has no Cognito account yet)."""
+    try:
+        tid = str(uuid.UUID(tenant_id))
+    except ValueError:
+        raise ApplicationError("bad tenant id", non_retryable=True)
+    email = email.strip().lower()
+    if not _EMAIL.match(email) or len(email) > 200:
+        raise ApplicationError("bad email", non_retryable=True)
+    url = _database_url()
+    if not url:
+        raise ApplicationError("DATABASE_URL is not set on the worker", non_retryable=True)
+
+    def is_member() -> bool:
+        import psycopg
+        with psycopg.connect(url, connect_timeout=5) as conn:
+            return conn.execute(
+                "SELECT 1 FROM memberships m JOIN users u ON u.id = m.user_id JOIN tenants t ON t.id = m.tenant_id "
+                "WHERE m.tenant_id = %s AND u.email = %s", (tid, email)).fetchone() is not None
+
+    action = group_action(await asyncio.to_thread(is_member))
+    rc, tail = await run_cmd([str(TENANT_GROUPS), action, tid, email], timeout=120)
+    if rc != 0:
+        raise ApplicationError(f"tenant-groups.sh {action} failed: {tail.strip()[-300:]}", non_retryable=True)
+    return "added" if action == "add" else "removed"
+
+
 ALL_ACTIVITIES = [ensure_chrome, check_session, scrape, scrape_login, deliver_otp, validate_dump, digest, publish_data, notify, publish_status, failure_streak,
-                  push_event, push_new_actions, push_daily_summary]
+                  push_event, push_new_actions, push_daily_summary, sync_tenant_group]

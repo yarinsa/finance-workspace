@@ -97,6 +97,12 @@ type Mutation {
   tenantMemberSet(id: ID!, input: TenantMemberSetInput!): TenantPayload!
   tenantMemberRemove(id: ID!, input: TenantMemberRemoveInput!): TenantPayload!
   tenantSetStatus(id: ID!, input: TenantSetStatusInput!): TenantPayload!
+  """
+  Make `email`'s Cognito group for this tenant match the database: members are added, anyone else
+  removed. The API holds no AWS credentials, so the Mac's sync worker runs it (the app waits up to
+  ~40 s). Until it has run, a new member's sign-in does not carry access to the tenant's files.
+  """
+  tenantAccessSync(id: ID!, input: TenantAccessSyncInput!): TenantAccessPayload!
 
   # assets (assets.graphql)
   assetCreate(input: AssetCreateInput!): AssetPayload!

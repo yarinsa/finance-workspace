@@ -220,6 +220,11 @@ class SnoozeAllNotificationsInput(_GraphQLModel):
     category: list[NotificationCategory] | None = None
 
 
+class TenantAccessSyncInput(_GraphQLModel):
+    """Make one person's access to the tenant's published files match their membership."""
+    email: str
+
+
 class TenantCreateInput(_GraphQLModel):
     slug: str
     name: str
@@ -528,6 +533,11 @@ class MutationSnoozeAllNotificationsArgs(_GraphQLModel):
 
 class MutationSyncSourceRetryArgs(_GraphQLModel):
     id: GlobalId
+
+
+class MutationTenantAccessSyncArgs(_GraphQLModel):
+    id: GlobalId
+    input: TenantAccessSyncInput
 
 
 class MutationTenantCreateArgs(_GraphQLModel):

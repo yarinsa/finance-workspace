@@ -6,6 +6,8 @@ signal or the daily sync publishes it.
 """
 import asyncio
 import logging
+import uuid
+from datetime import timedelta
 
 from temporalio.api.workflowservice.v1 import GetSystemInfoRequest
 from temporalio.client import Client
@@ -17,6 +19,8 @@ log = logging.getLogger("finance_api")
 
 WORKFLOW = "LedgerRebuildWorkflow"
 WORKFLOW_ID = "ledger-rebuild"
+ACCESS_WORKFLOW = "TenantAccessWorkflow"
+ACCESS_WAIT = 40   # seconds the app waits for a Cognito group change
 TASK_QUEUE = "finance-sync"
 SIGNAL = "edited"
 QUERY = "status"
@@ -138,6 +142,25 @@ class Rebuilder:
         except Exception:
             log.warning("could not deliver the %s code (no login waiting?)", source)  # never log the code
             return False
+
+    def sync_tenant_access(self, tenant_id, email):
+        """Run `TenantAccessWorkflow` on the Mac and wait for it: (True, "added"|"removed") or
+        (False, reason). The worker decides the action from the database, not from this call."""
+        async def go(client):
+            return await client.execute_workflow(
+                ACCESS_WORKFLOW, args=[tenant_id, email], id=f"tenant-access-{uuid.uuid4()}",
+                task_queue=TASK_QUEUE, execution_timeout=timedelta(seconds=ACCESS_WAIT))
+        try:
+            async def run():
+                client = await asyncio.wait_for(Client.connect(self.address), TIMEOUT)
+                return await asyncio.wait_for(go(client), ACCESS_WAIT + 5)
+            return True, asyncio.run(run())
+        except Exception as e:
+            cause = getattr(e, "cause", None)
+            while getattr(cause, "cause", None) is not None:
+                cause = cause.cause   # the activity's own error carries the script's output
+            log.warning("tenant access sync failed: %s", type(e).__name__)
+            return False, str(getattr(cause, "message", None) or "the sync worker did not answer in time")
 
     def ping(self):
         """True if the Temporal frontend answers."""

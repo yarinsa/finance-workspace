@@ -35,7 +35,7 @@ from api.schema_bindings import load_schema, snake
 
 from .inputs import (CategoryMergeInput, CategoryUnmergeInput, AssetCreateInput, AssetUpdateInput, BulkNotificationInput, ClearTransactionOverrideInput, GoalCreateInput, GoalDeleteInput, DeleteTagInput, GroupArgs,
                      GroupOrder, LinkOffsetInput, NotificationArgs, NotificationIdInput, ResetOffsetsInput,
-                     SetTransactionTagsInput, SnoozeAllNotificationsInput, SyncSourceRetryInput, TenantCreateInput, TenantMemberRemoveInput, TenantMemberSetInput, TenantSetStatusInput, TransactionArgs, TransactionOrder,
+                     SetTransactionTagsInput, SnoozeAllNotificationsInput, SyncSourceRetryInput, TenantCreateInput, TenantMemberRemoveInput, TenantAccessSyncInput, TenantMemberSetInput, TenantSetStatusInput, TransactionArgs, TransactionOrder,
                      UnlinkOffsetInput, UnreadCountArgs, GoalUpdateInput, UpdateNotificationInput, PlanTargetsUpdateInput, UpdateTagInput,
                      UpdateTransactionInput)
 from .binding import bind_all
@@ -659,6 +659,17 @@ class TenantResolver(NodeResolver[dict]):
         self.admin(info)
         t = self.require(info, inp.id)
         return self._run(info, t["id"], tenant_store.set_status, inp.status)
+
+    def resolve_tenant_access_sync(self, inp: TenantAccessSyncInput, info):
+        self.admin(info)
+        t = self.require(info, inp.id)
+        rebuilder = info.context.get("rebuilder")
+        if rebuilder is None:
+            raise GraphQLError("the sync worker is not reachable")
+        ok, message = rebuilder.sync_tenant_access(str(t["id"]), inp.email)
+        if not ok:
+            raise GraphQLError(message)
+        return lambda: {"message": message}
 
     def listing(self, info):
         """`Query.tenants`."""

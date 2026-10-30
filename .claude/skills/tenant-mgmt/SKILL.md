@@ -25,8 +25,12 @@ The household's original data is the **master tenant** `00000000-0000-4000-8000-
    it is, since 2026-10-30). If not: apply the Lambda change, `infra/tenant-groups.sh sync`, sign out/in, then set it.
 2. **Create it**: `/tenants` screen (or `tenantCreate(slug, name, ownerEmail)`). The admin is *not* made a member
    (otherwise they would belong to two tenants and every API call would need `X-Tenant-Id`).
-3. **Cognito group**: `infra/tenant-groups.sh add <tenant-id> <owner-email>` (needs AWS credentials, so the user
-   runs it or approves it). Their session picks it up on the next sign-in.
+3. **Cognito group**: the `/tenants` screen lists each add/remove under "גישה לנתונים" with a **הענקת גישה / ביטול גישה**
+   button (GraphQL `tenantAccessSync`). The API holds no AWS credentials: it starts `TenantAccessWorkflow` on the Mac's
+   worker, whose activity `sync_tenant_group` reads the membership from Postgres and runs `infra/tenant-groups.sh`
+   (a member is added, anyone else removed; the request cannot put an arbitrary address in a group). The CLI
+   `infra/tenant-groups.sh add|remove|sync` still works. Their session picks it up on the next sign-in. The person
+   needs a Cognito account first, otherwise the button shows the script's error.
 4. **Credentials**: the household types its own bank logins into `~/.finance-tenants/<tenant-id>.env`, mode 600,
    on the Mac. **Never type, read or invent credentials**; same rule as every bank login in this repo. Only
    self-login sources run for another tenant (`discount*`, `leumi`, `cal`, `amex`, `max`).

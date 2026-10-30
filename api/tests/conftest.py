@@ -128,6 +128,13 @@ class FakeRebuilder:
     def status(self, tenant_id=None):
         return self.state
 
+    access_calls: list
+    access_result = (True, "added")
+
+    def sync_tenant_access(self, tenant_id, email):
+        self.access_calls = [*getattr(self, "access_calls", []), (tenant_id, email)]
+        return self.access_result
+
     def ping(self):
         return True
 

@@ -28,6 +28,17 @@ type Tenant {   # not a Node: node(id) never serves the registry
   members: [TenantMember!]!
 }
 
+"""Make one person's access to the tenant's published files match their membership."""
+input TenantAccessSyncInput {
+  email: String!
+}
+
+type TenantAccessPayload {
+  success: Boolean!
+  """"added" (a member was put in the tenant's Cognito group) or "removed" (a non-member was taken out)."""
+  message: String!
+}
+
 type TenantPayload {
   success: Boolean!
   tenant: Tenant

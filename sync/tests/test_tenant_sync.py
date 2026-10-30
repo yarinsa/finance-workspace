@@ -40,3 +40,29 @@ def test_a_tenants_rebuild_digests_and_publishes_for_that_tenant():
     run(fake, scenario, workflow=LedgerRebuildWorkflow,
         args=({"tenant_id": T, "idle_seconds": 5, "debounce_seconds": 0.1, "max_passes": 1},))
     assert ("digest", T) in fake.tenants and ("publish", T) in fake.tenants
+
+
+# --- Cognito group sync (the app's "grant access" button) ---------------------------
+
+def test_group_follows_the_database_not_the_request():
+    from activities import group_action
+    assert group_action(True) == "add"      # a member is put in the group
+    assert group_action(False) == "remove"  # anyone else is taken out, whatever was asked
+
+
+def test_group_sync_refuses_malformed_input_before_touching_aws(monkeypatch):
+    import asyncio
+    import activities
+    from temporalio.exceptions import ApplicationError
+
+    ran = []
+
+    async def fake_run_cmd(*a, **k):
+        ran.append(a)
+        return 0, ""
+    monkeypatch.setattr(activities, "run_cmd", fake_run_cmd)
+    for tenant, email in [("not-a-uuid", "a@b.cc"), (T, "no-at-sign"), (T, "a b@c.dd"), (T, "x" * 300 + "@b.cc")]:
+        with pytest.raises(ApplicationError):
+            asyncio.run(activities.sync_tenant_group.__wrapped__(tenant, email) if hasattr(activities.sync_tenant_group, "__wrapped__")
+                        else activities.sync_tenant_group(tenant, email))
+    assert ran == []

@@ -5,6 +5,7 @@ import type { tenantAdminCreateMutation } from "@/__generated__/tenantAdminCreat
 import type { tenantAdminMemberSetMutation } from "@/__generated__/tenantAdminMemberSetMutation.graphql";
 import type { tenantAdminMemberRemoveMutation } from "@/__generated__/tenantAdminMemberRemoveMutation.graphql";
 import type { tenantAdminSetStatusMutation } from "@/__generated__/tenantAdminSetStatusMutation.graphql";
+import type { tenantAdminAccessSyncMutation } from "@/__generated__/tenantAdminAccessSyncMutation.graphql";
 
 // Every operation selects the same tenant fields, so the compiler-generated result types are
 // identical and `AdminTenant` is simply the list query's row.
@@ -43,6 +44,12 @@ const SET_STATUS = graphql`
   }
 `;
 
+const ACCESS_SYNC = graphql`
+  mutation tenantAdminAccessSyncMutation($id: ID!, $input: TenantAccessSyncInput!) {
+    tenantAccessSync(id: $id, input: $input) { success message }
+  }
+`;
+
 /** The tenant uuid inside a GraphQL global id ("Tenant:<uuid>", base64url). */
 export function tenantUuid(globalId: string): string {
   const b64 = globalId.replaceAll("-", "+").replaceAll("_", "/");
@@ -78,4 +85,14 @@ export async function removeMember(id: string, email: string): Promise<AdminTena
 export async function setStatus(id: string, status: TenantStatus): Promise<AdminTenant> {
   const d = await graphqlRequest<tenantAdminSetStatusMutation>(SET_STATUS, { id, input: { status } });
   return narrow(d.tenantSetStatus!.tenant!);
+}
+
+/**
+ * Make `email`'s Cognito access to the tenant's published files match their membership: a member is
+ * added to the tenant's group, anyone else removed. The Mac's sync worker runs it (the API has no AWS
+ * credentials), so this can take a few seconds. Returns "added" or "removed"; throws with the reason.
+ */
+export async function syncAccess(id: string, email: string): Promise<"added" | "removed"> {
+  const d = await graphqlRequest<tenantAdminAccessSyncMutation>(ACCESS_SYNC, { id, input: { email } });
+  return d.tenantAccessSync!.message as "added" | "removed";
 }

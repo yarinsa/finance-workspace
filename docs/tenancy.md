@@ -35,6 +35,12 @@ member`). Isolation is enforced by Postgres, not by per-query filters.
 
 ## Platform admin (the master tenant)
 
+Access to a tenant's published files follows its Cognito group, which only the Mac can change. The `/tenants`
+screen therefore asks the Mac: `tenantAccessSync` starts `TenantAccessWorkflow`, the worker's `sync_tenant_group`
+activity reads the membership from Postgres and adds the person to (member) or removes them from (not a member)
+the group `tenant-<id>` with `infra/tenant-groups.sh`. The API still holds no AWS credentials.
+
+
 `finance.tenancy.PLATFORM_ADMIN_EMAILS` (hard-coded: `yarinsasson2@gmail.com`) may manage the tenant
 registry through GraphQL: `tenants`, `tenantCreate(input: {slug, name, ownerEmail})`,
 `tenantMemberSet(id, input: {email, role})`, `tenantMemberRemove`, `tenantSetStatus`. Every field errors
