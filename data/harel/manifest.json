@@ -1,6 +1,32 @@
 {
   "name": "harel",
   "label": "הראל",
-  "account_types": ["pension", "study_fund"],
-  "capabilities": ["savings"]
+  "account_types": [
+    "pension",
+    "study_fund"
+  ],
+  "capabilities": [
+    "savings"
+  ],
+  "connection": {
+    "type": "object",
+    "properties": {
+      "HAREL_ID": {
+        "type": "string",
+        "title": "תעודת זהות",
+        "x-env": "HAREL_ID",
+        "pattern": "^\\d{5,9}$"
+      },
+      "HAREL_PHONE": {
+        "type": "string",
+        "title": "טלפון נייד",
+        "x-env": "HAREL_PHONE"
+      }
+    },
+    "required": [
+      "HAREL_ID",
+      "HAREL_PHONE"
+    ],
+    "description": "הקוד החד-פעמי ב-SMS מוקלד בידי המשתמש באפליקציה, לא נשמר כאן."
+  }
 }

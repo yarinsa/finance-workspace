@@ -1,6 +1,34 @@
 {
   "name": "leumi",
   "label": "לאומי",
-  "account_types": ["checking", "loan"],
-  "capabilities": ["accounts", "loans", "transactions"]
+  "account_types": [
+    "checking",
+    "loan"
+  ],
+  "capabilities": [
+    "accounts",
+    "loans",
+    "transactions"
+  ],
+  "connection": {
+    "type": "object",
+    "properties": {
+      "LEUMI_USERNAME": {
+        "type": "string",
+        "title": "שם משתמש",
+        "x-env": "LEUMI_USERNAME"
+      },
+      "LEUMI_PASSWORD": {
+        "type": "string",
+        "title": "סיסמה",
+        "x-env": "LEUMI_PASSWORD",
+        "writeOnly": true
+      }
+    },
+    "required": [
+      "LEUMI_USERNAME",
+      "LEUMI_PASSWORD"
+    ],
+    "description": "כניסה אוטומטית."
+  }
 }

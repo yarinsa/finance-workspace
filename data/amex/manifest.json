@@ -1,6 +1,41 @@
 {
   "name": "amex",
   "label": "אמריקן אקספרס",
-  "account_types": ["credit_card"],
-  "capabilities": ["credit_cards", "transactions"]
+  "account_types": [
+    "credit_card"
+  ],
+  "capabilities": [
+    "credit_cards",
+    "transactions"
+  ],
+  "connection": {
+    "type": "object",
+    "properties": {
+      "AMEX_ID": {
+        "type": "string",
+        "title": "תעודת זהות",
+        "x-env": "AMEX_ID",
+        "pattern": "^\\d{5,9}$"
+      },
+      "AMEX_CARD6_DIGITS": {
+        "type": "string",
+        "title": "6 ספרות אחרונות של הכרטיס",
+        "x-env": "AMEX_CARD6_DIGITS",
+        "writeOnly": true,
+        "pattern": "^\\d{6}$"
+      },
+      "AMEX_PASSWORD": {
+        "type": "string",
+        "title": "סיסמה",
+        "x-env": "AMEX_PASSWORD",
+        "writeOnly": true
+      }
+    },
+    "required": [
+      "AMEX_ID",
+      "AMEX_CARD6_DIGITS",
+      "AMEX_PASSWORD"
+    ],
+    "description": "כניסה אוטומטית."
+  }
 }

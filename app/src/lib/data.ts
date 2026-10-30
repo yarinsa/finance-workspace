@@ -329,7 +329,6 @@ export interface Loan {
   [k: string]: unknown;
 }
 
-
 /**
  * A long-term savings vehicle (pension / study fund). These are assets, not
  * cashflow — they carry no transactions, so they never appear in the ledger.
@@ -435,6 +434,8 @@ export interface SourceManifest {
   label: string;
   account_types: string[];
   capabilities: string[];
+  /** JSON Schema of the connection form; `x-env` names the .env variable behind a field. */
+  connection: Record<string, unknown>;
 }
 
 /** A source's Hebrew label from its manifest; the id itself when it has none (e.g. RiseUp). */

@@ -1,6 +1,40 @@
 {
   "name": "discount-mortgage",
   "label": "דיסקונט — משכנתא",
-  "account_types": ["mortgage", "loan"],
-  "capabilities": ["loans"]
+  "account_types": [
+    "mortgage",
+    "loan"
+  ],
+  "capabilities": [
+    "loans"
+  ],
+  "connection": {
+    "type": "object",
+    "properties": {
+      "DISCOUNT_ID": {
+        "type": "string",
+        "title": "תעודת זהות",
+        "x-env": "DISCOUNT_ID",
+        "pattern": "^\\d{5,9}$"
+      },
+      "DISCOUNT_PASSWORD": {
+        "type": "string",
+        "title": "סיסמה",
+        "x-env": "DISCOUNT_PASSWORD",
+        "writeOnly": true
+      },
+      "DISCOUNT_NUM": {
+        "type": "string",
+        "title": "קוד משתמש",
+        "x-env": "DISCOUNT_NUM",
+        "writeOnly": true
+      }
+    },
+    "required": [
+      "DISCOUNT_ID",
+      "DISCOUNT_PASSWORD",
+      "DISCOUNT_NUM"
+    ],
+    "description": "כניסה אוטומטית עם פרטי הכניסה לאתר הבנק."
+  }
 }

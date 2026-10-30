@@ -1,6 +1,32 @@
 {
   "name": "cal",
   "label": "כאל",
-  "account_types": ["credit_card"],
-  "capabilities": ["credit_cards", "transactions"]
+  "account_types": [
+    "credit_card"
+  ],
+  "capabilities": [
+    "credit_cards",
+    "transactions"
+  ],
+  "connection": {
+    "type": "object",
+    "properties": {
+      "CAL_USERNAME": {
+        "type": "string",
+        "title": "שם משתמש",
+        "x-env": "CAL_USERNAME"
+      },
+      "CAL_PASSWORD": {
+        "type": "string",
+        "title": "סיסמה",
+        "x-env": "CAL_PASSWORD",
+        "writeOnly": true
+      }
+    },
+    "required": [
+      "CAL_USERNAME",
+      "CAL_PASSWORD"
+    ],
+    "description": "כניסה אוטומטית; אם נדרש קוד חד-פעמי המקור מסומן כממתין להתחברות."
+  }
 }

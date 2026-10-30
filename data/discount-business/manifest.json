@@ -1,6 +1,34 @@
 {
   "name": "discount-business",
   "label": "דיסקונט — עסקי",
-  "account_types": ["business_checking"],
-  "capabilities": ["accounts", "credit_cards", "transactions"]
+  "account_types": [
+    "business_checking"
+  ],
+  "capabilities": [
+    "accounts",
+    "credit_cards",
+    "transactions"
+  ],
+  "connection": {
+    "type": "object",
+    "properties": {
+      "DISCOUNT_ID": {
+        "type": "string",
+        "title": "תעודת זהות",
+        "x-env": "DISCOUNT_ID",
+        "pattern": "^\\d{5,9}$"
+      },
+      "DISCOUNT_PASSWORD": {
+        "type": "string",
+        "title": "סיסמה",
+        "x-env": "DISCOUNT_PASSWORD",
+        "writeOnly": true
+      }
+    },
+    "required": [
+      "DISCOUNT_ID",
+      "DISCOUNT_PASSWORD"
+    ],
+    "description": "כניסה אוטומטית לדף ה-SME: תעודת זהות וסיסמה בלבד."
+  }
 }

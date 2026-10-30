@@ -1,7 +1,8 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { lazy, Suspense, useEffect, useState, type FormEvent } from "react";
 import { Card, CardLabel, Page, StubNotice } from "@/components/common";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import type { RJSFSchema } from "@rjsf/utils";
 import { ApiError, startLogin, submitOtp } from "@/lib/api";
 import { retrySync, type SyncRetryPoint } from "@/lib/syncRetry";
 import {
@@ -27,6 +28,9 @@ import {
 } from "@/lib/syncStatus";
 import { useLedgerApi } from "@/lib/useLedgerApi";
 import { cn } from "@/lib/utils";
+
+// react-jsonschema-form (ajv) is heavy: load it only when a connection panel is opened.
+const ConnectionForm = lazy(() => import("@/components/ConnectionForm"));
 
 const ENTITY_LABEL: Record<string, string> = {
   transactions: "עסקאות",
@@ -431,6 +435,7 @@ function SyncItem({ it }: { it: Item }) {
     live?.step && live.total_steps
       ? Math.round((live.step / live.total_steps) * 100)
       : 0;
+  const manifest = snapshot.source_manifests?.[it.source];
   const failed = display === "failed" || display === "rejected";
 
   return (
@@ -514,6 +519,16 @@ function SyncItem({ it }: { it: Item }) {
               </>
             )}
           </dl>
+        )}
+        {manifest && (
+          <details className="sync-connection">
+            <summary className="cursor-pointer text-xs text-muted-foreground">
+              פרטי חיבור
+            </summary>
+            <Suspense fallback={null}>
+              <ConnectionForm schema={manifest.connection as RJSFSchema} />
+            </Suspense>
+          </details>
         )}
         {live && fmt(dateTime, live.started_at) && (
           <p className="live-meta muted">

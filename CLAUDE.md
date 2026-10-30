@@ -519,8 +519,13 @@ Each source declares itself in `data/<source>/manifest.json`: `name`, Hebrew `la
 entities it provides). Model and loader: `finance/manifest.py`. The sync registry
 (`Source.label`/`.manifest`, `LABEL_HE`), `digest.source_syncs` and `snapshot.source_manifests`
 read it, and the app takes labels from the snapshot (`sourceLabel` in `app/src/lib/data.ts`).
-A new source adds its manifest (a test enforces it). Planned: a JSON Schema for the
-connection form per source, rendered with react-jsonschema-form.
+A new source adds its manifest (a test enforces it).
+
+`connection` is the source's connection form as a JSON Schema: one string property per `.env`
+variable the scraper reads (`x-env` names it, `writeOnly` marks a secret; a test checks each
+against the scraper's `process.env.*`). The `/syncs` row renders it with react-jsonschema-form
+(`app/src/components/ConnectionForm.tsx`, lazy-loaded) **read-only**: the app shows what a
+source needs, but values stay in the Mac's `.env` and never pass through the API.
 
 ## Conventions
 

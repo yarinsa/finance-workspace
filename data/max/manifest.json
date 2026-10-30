@@ -1,6 +1,39 @@
 {
   "name": "max",
   "label": "מקס",
-  "account_types": ["credit_card"],
-  "capabilities": ["credit_cards", "transactions"]
+  "account_types": [
+    "credit_card"
+  ],
+  "capabilities": [
+    "credit_cards",
+    "transactions"
+  ],
+  "connection": {
+    "type": "object",
+    "properties": {
+      "MAX_USERNAME": {
+        "type": "string",
+        "title": "שם משתמש",
+        "x-env": "MAX_USERNAME"
+      },
+      "MAX_PASSWORD": {
+        "type": "string",
+        "title": "סיסמה",
+        "x-env": "MAX_PASSWORD",
+        "writeOnly": true
+      },
+      "MAX_ID": {
+        "type": "string",
+        "title": "תעודת זהות",
+        "x-env": "MAX_ID",
+        "pattern": "^\\d{5,9}$"
+      }
+    },
+    "required": [
+      "MAX_USERNAME",
+      "MAX_PASSWORD",
+      "MAX_ID"
+    ],
+    "description": "כניסה אוטומטית."
+  }
 }

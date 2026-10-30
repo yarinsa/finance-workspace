@@ -1,6 +1,16 @@
 {
   "name": "analyst",
   "label": "אנליסט",
-  "account_types": ["provident_fund"],
-  "capabilities": ["savings"]
+  "account_types": [
+    "provident_fund"
+  ],
+  "capabilities": [
+    "savings"
+  ],
+  "connection": {
+    "type": "object",
+    "properties": {},
+    "required": [],
+    "description": "אין פרטי כניסה: המשתמש מתחבר בעצמו ב-Chrome והסנכרון משתמש בהתחברות הקיימת."
+  }
 }
