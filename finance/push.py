@@ -139,6 +139,22 @@ def failure_payload(source, name, status, error=None):
             "url": "/syncs", "tag": f"sync-{status}-{source}"}
 
 
+STREAK_PUSH_AT, STREAK_PUSH_EVERY = 3, 6
+
+
+def streak_push_due(streak):
+    """Push at the 3rd failed run in a row (a one-off blip never gets here), then every 6th (~3 days)."""
+    return streak == STREAK_PUSH_AT or (streak > STREAK_PUSH_AT and streak % STREAK_PUSH_EVERY == 0)
+
+
+def streak_payload(source, name, streak, error=None):
+    """The same source has failed `streak` scheduled runs in a row: not a blip, someone has to look."""
+    body = f"{name}: נכשל {streak} סנכרונים ברצף"
+    if error:
+        body += f" — {str(error).strip().splitlines()[0][:100]}"
+    return {"title": "מקור נתונים תקוע", "body": body, "url": "/syncs", "tag": f"sync-streak-{source}"}
+
+
 def action_payloads(new_actions):
     """One push per new PROBLEM / WARNING notification, opening its inbox tab; a single grouped push
     to the inbox when there are more than GROUP_ABOVE."""

@@ -90,11 +90,18 @@ function validateFailure(code) {
 async function login(page) {
   const seen = {}; // reqName -> parsed JSON response (never the request: it holds the password)
   const order = [];
+  const refused = {}; // reqName -> {status, server, body}: a 403/429 from the site's bot protection
   page.on('response', async (r) => {
     const m = r.url().match(/ProxyRequestHandler\.ashx\?reqName=([A-Za-z0-9_]+)/);
     if (!m || r.request().method() !== 'POST') return;
     order.push(`${m[1]}:${r.status()}`);
-    try { seen[m[1]] = JSON.parse(await r.text()); } catch { seen[m[1]] = { unparsable: true }; }
+    let text = '';
+    try { text = await r.text(); } catch { /* body gone */ }
+    try { seen[m[1]] = JSON.parse(text); } catch { seen[m[1]] = { unparsable: true }; }
+    if (r.status() === 403 || r.status() === 429) {
+      // Response only: enough to tell a WAF / reCAPTCHA refusal from a wrong password next time.
+      refused[m[1]] = { status: r.status(), server: r.headers().server || '', body: text.replace(/\s+/g, ' ').slice(0, 300) };
+    }
   });
 
   // The login page is sometimes slow to render its form (seen 2026-10-25 in a scheduled run).
@@ -125,6 +132,15 @@ async function login(page) {
   for (let i = 0; i < 60; i++) {
     await sleep(1000);
     const url = page.url();
+    const blocked = Object.entries(refused)[0];
+    if (blocked) {
+      // The server refused the call itself, so no credential was judged: a bare 403 is the site's
+      // bot protection (seen 2026-10-27 on, after logins had worked since 2026-10-25), not a bad
+      // password. Reported on its own so the sync neither hammers the login nor blames the .env.
+      const [name, info] = blocked;
+      await saveUnknown(page, 'login-blocked', `${name} refused: ${JSON.stringify(info)}; responses: ${order.join(', ')}`);
+      throw fail('BOT_BLOCKED', `${name} HTTP ${info.status}${info.server ? ` from ${info.server}` : ''}: ${info.body.slice(0, 120)}`);
+    }
     const v = seen.ValidateIdDataNoReg;
     if (v) {
       const status = v.Header?.Status;

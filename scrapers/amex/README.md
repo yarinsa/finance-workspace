@@ -61,4 +61,6 @@ A missing one is reported by name, never by value.
 - 0 ok
 - 1 failure (unknown login outcome / timeout, a file rejected, cardList or every per-card pull missing); retryable
 - 2 missing env var or bad args
-- 3 `LOGIN FAILED: INVALID_PASSWORD | CHANGE_PASSWORD | OTP_REQUIRED | ACCOUNT_BLOCKED`; needs a human, do not retry
+- 3 `LOGIN FAILED: INVALID_PASSWORD | CHANGE_PASSWORD | OTP_REQUIRED | ACCOUNT_BLOCKED | BOT_BLOCKED`; needs a human, do not retry.
+  `BOT_BLOCKED` = a login call got HTTP 403/429 (the site's bot protection; no credential was judged). The refusal's
+  status, `server` header and first 300 body chars are saved to `login-blocked.{png,txt}` (response only, never the request).

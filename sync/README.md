@@ -255,3 +255,19 @@ Per-run detail (command output tails) is in the Temporal UI event history.
 
 `poetry run pytest sync/tests` (time-skipping Temporal test server, mocked
 activities; nothing touches Chrome or a bank).
+
+## Failure visibility (hardening, 2026-10-30)
+
+- **Run history is kept 30 days.** The dev server's namespace retention defaults to 24h, which deleted last
+  week's runs before anyone looked. The worker raises it on start (`worker.ensure_retention`, never lowers it;
+  `TEMPORAL_RETENTION_DAYS`, default 30). By hand: `temporal operator namespace update --retention 720h -n default`.
+- **Failures are in the worker log.** Every failed dump / `--login` / validation prints its output tail through
+  `activities.log_failure` into `~/Library/Logs/finance-sync/worker.err.log`, timestamped (the tail otherwise lives
+  only in Temporal history).
+- **Failure streak.** `merge_status` adds `failure_streak` and `streak_run_id` to each source's status entry: runs in a
+  row that ended `failed` / `rejected` / `needs_login`, reset by `done`; a run counts once. At the 3rd (then every 6th)
+  a `failed`/`rejected` source also sends a `sync-streak-<source>` push (`push.streak_push_due`).
+- **AMEX bot block.** A 403/429 on the login call is `LOGIN FAILED: BOT_BLOCKED`, a `needs_login` in the app with the
+  reason, no longer an unexplained `failed`.
+- Known risk: the dev server's SQLite file is a bind mount (`~/.temporal`); on Docker Desktop that can time out
+  (`context deadline exceeded` in `docker logs finance-temporal-1`).

@@ -206,10 +206,20 @@ class _FinanceSync:
         if status in (FAILED, REJECTED) and (source, status) not in self._pushed_failures:
             self._pushed_failures.add((source, status))
             await self._push("push_event", push.failure_payload(source, sources.LABEL_HE[source], status, error))
+            await self._push_streak(source, error)
 
     async def _say(self, title: str, message: str, pushes: list | None = None) -> None:
         """macOS banner, plus Web Push for each payload in `pushes`."""
         await workflow.execute_activity("notify", args=[title, message, pushes or []], **NOTIFY)
+
+    async def _push_streak(self, source: str, error: str | None) -> None:
+        """A source that fails run after run (e.g. a bot block) gets its own, rarer push."""
+        try:
+            streak = await workflow.execute_activity("failure_streak", args=[source, self._tenant], **STATUS)
+        except ActivityError:
+            return
+        if push.streak_push_due(streak):
+            await self._push("push_event", push.streak_payload(source, sources.LABEL_HE[source], streak, error))
 
     async def _push(self, activity_name: str, *args) -> None:
         """A best-effort Web Push activity: one attempt, any failure is swallowed."""

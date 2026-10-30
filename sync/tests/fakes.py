@@ -56,6 +56,7 @@ class Fake:
         self.summary_calls = []  # started_at of each push_daily_summary
         self.action_pushes = 0
         self.statuses = []  # every publish_status (source, entry), in order
+        self.streaks = {}  # source -> failed runs in a row, what failure_streak reports (default 0)
 
     # --- helpers for assertions
     def of(self, kind):
@@ -143,6 +144,10 @@ class Fake:
             self.calls.append(("notify", title, message))
             self.pushes.extend(pushes or [])
 
+        @activity.defn(name="failure_streak")
+        async def failure_streak(source: str, tenant_id: str | None = None) -> int:
+            return self.streaks.get(source, 0)
+
         @activity.defn(name="publish_status")
         async def publish_status(source: str, entry: dict, tenant_id: str | None = None) -> str:
             self.statuses.append((source, entry))
@@ -165,7 +170,7 @@ class Fake:
             self.summary_calls.append(started_at)
             return "skipped"
 
-        return [ensure_chrome, check_session, scrape, scrape_login, deliver_otp, validate_dump, digest, publish_data, notify, publish_status,
+        return [ensure_chrome, check_session, scrape, scrape_login, deliver_otp, validate_dump, digest, publish_data, notify, publish_status, failure_streak,
                 push_event, push_new_actions, push_daily_summary]
 
 
