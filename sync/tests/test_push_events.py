@@ -32,3 +32,18 @@ def test_nothing_scraped_pushes_no_digest_events():
     fake = Fake(sessions={"amex": "dead"})
     result_of(fake, args=(["amex"],))
     assert fake.action_pushes == 0 and fake.summary_calls == []
+
+
+def test_third_failed_run_in_a_row_adds_a_streak_push():
+    fake = Fake(scrape_errors={"amex": RuntimeError("LOGIN FAILED: BOT_BLOCKED (HTTP 403)")})
+    fake.streaks["amex"] = 3
+    result_of(fake, args=(["amex"],))
+    tags = [p["tag"] for p in fake.pushes]
+    assert tags.count("sync-streak-amex") == 1 and "sync-failed-amex" in tags
+
+
+def test_a_second_failed_run_in_a_row_is_not_yet_a_streak():
+    fake = Fake(scrape_errors={"amex": RuntimeError("boom")})
+    fake.streaks["amex"] = 2
+    result_of(fake, args=(["amex"],))
+    assert "sync-streak-amex" not in [p["tag"] for p in fake.pushes]

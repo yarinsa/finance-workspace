@@ -69,6 +69,7 @@ EXPIRED_MARKERS = (
     "LOGIN FAILED: INVALID_PASSWORD", "LOGIN FAILED: CHANGE_PASSWORD",
     "LOGIN FAILED: OTP_REQUIRED", "LOGIN FAILED: ACCOUNT_BLOCKED", "LOGIN FAILED: SESSION_EXPIRED",
     "LOGIN FAILED: OTP_TIMEOUT", "LOGIN FAILED: OTP_REJECTED", "LOGIN FAILED: LOGIN_ERROR",
+    "LOGIN FAILED: BOT_BLOCKED",  # the site's bot protection refused the login call (HTTP 403/429)
 )
 
 
@@ -93,6 +94,12 @@ def parse_verdict(output: str):
     if not matches:
         return None
     return matches[-1] == "LIVE"
+
+
+def log_failure(kind: str, source: str, rc: int, tail: str) -> None:
+    """Put a failed dump's output tail in the worker log. It otherwise lives only in the
+    activity's failure details, i.e. in Temporal history, which is pruned after its retention."""
+    activity.logger.error("%s failed for %s (rc=%s). Output tail:\n%s", kind, source, rc, tail or "(no output)")
 
 
 def _heartbeat(detail=None):
@@ -376,6 +383,7 @@ async def scrape(source: str, tenant_id: str | None = None) -> str:
         argv = [str(SKILLS / dump[0])] + [a.format(session=src.pw_session, port=src.port) for a in dump[1:]]
         rc, tail = await run_cmd(argv, env=_tenant_env(tenant_id))
         if rc != 0:
+            log_failure(Path(argv[0]).name, source, rc, tail)
             if looks_expired(tail):
                 raise ApplicationError(f"{source} session expired", tail, type=SESSION_EXPIRED, non_retryable=True)
             raise ApplicationError(f"{Path(argv[0]).name} failed for {source} (rc={rc})", tail,
@@ -398,6 +406,7 @@ async def scrape_login(source: str) -> str:
     finally:
         otp_file.unlink(missing_ok=True)
     if rc != 0:
+        log_failure(f"{Path(argv[0]).name} --login", source, rc, tail)
         if looks_expired(tail):
             raise ApplicationError(f"{source} login failed", tail, type=SESSION_EXPIRED, non_retryable=True)
         raise ApplicationError(f"{Path(argv[0]).name} --login failed for {source} (rc={rc})", tail,
@@ -436,6 +445,7 @@ async def validate_dump(source: str, tenant_id: str | None = None) -> dict:
                           env=_tenant_env(tenant_id))
     if rc != 0:
         human = "\n".join(l for l in tail.splitlines() if not l.startswith("DUMP_JSON "))
+        log_failure("validate.py", source, rc, human)
         raise ApplicationError(f"validate.py rejected the {source} dump (rc={rc}):\n{human}",
                                type=VALIDATION_FAILED, non_retryable=True)
     return {"gate": "ok", **parse_dump_json(tail)}
@@ -597,6 +607,22 @@ STATUS_UPLOAD_TIMEOUT = 15.0
 _bucket_cache: str | None = None
 
 
+BAD_TERMINAL = {"failed", "rejected", "needs_login"}
+
+
+def _failure_streak(prev: dict, entry: dict) -> dict:
+    """`failure_streak`: runs in a row that ended failed / rejected / needs_login for this source,
+    0 after a `done`. A run republishes its status many times, so a run is counted once, by
+    `streak_run_id`; in-flight statuses (scraping, validating...) just carry the count over."""
+    streak, run = prev.get("failure_streak") or 0, prev.get("streak_run_id")
+    status, run_id = entry.get("status"), entry.get("run_id")
+    if status == "done":
+        streak, run = 0, run_id
+    elif status in BAD_TERMINAL and run_id != run:
+        streak, run = streak + 1, run_id
+    return {"failure_streak": streak, "streak_run_id": run}
+
+
 def merge_status(doc: dict | None, source: str, entry: dict) -> dict:
     """Fold one source's status `entry` into the sync-status document.
 
@@ -608,6 +634,7 @@ def merge_status(doc: dict | None, source: str, entry: dict) -> dict:
     prev = sources.get(source) or {}
     merged = {**entry}
     merged["last_success_at"] = entry["updated_at"] if entry.get("status") == "done" else prev.get("last_success_at")
+    merged.update(_failure_streak(prev, entry))
     sources[source] = merged
     doc["sources"] = sources
     doc["updated_at"] = entry["updated_at"]
@@ -735,5 +762,16 @@ async def publish_status(source: str, entry: dict, tenant_id: str | None = None)
         return f"error: {e}"
 
 
-ALL_ACTIVITIES = [ensure_chrome, check_session, scrape, scrape_login, deliver_otp, validate_dump, digest, publish_data, notify, publish_status,
+@activity.defn
+async def failure_streak(source: str, tenant_id: str | None = None) -> int:
+    """Failed runs in a row for `source`, as publish_status recorded them (0 when unknown)."""
+    if _tid(tenant_id) != DEFAULT_TENANT_ID:
+        return 0
+    try:
+        return int(json.loads(STATUS_FILE.read_text())["sources"][source].get("failure_streak") or 0)
+    except (OSError, ValueError, KeyError, TypeError):
+        return 0
+
+
+ALL_ACTIVITIES = [ensure_chrome, check_session, scrape, scrape_login, deliver_otp, validate_dump, digest, publish_data, notify, publish_status, failure_streak,
                   push_event, push_new_actions, push_daily_summary]
