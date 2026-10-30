@@ -51,3 +51,11 @@ test('another tenant never loads the repo .env and needs its own 0600 file', () 
     assert.ok(!calls.some((c) => c.path === '/repo/.env'));
   } finally { process.env.HOME = prev; }
 });
+
+test('secrets already fetched from the vault: no file is read, for any tenant', () => {
+  for (const env of [{ FINANCE_VAULT_LOADED: '1' }, { FINANCE_TENANT_ID: A, FINANCE_VAULT_LOADED: '1' }]) {
+    const calls = [];
+    loadEnv('/repo', fakeDotenv(calls), env);
+    assert.deepEqual(calls, []);
+  }
+});

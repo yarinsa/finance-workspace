@@ -31,7 +31,7 @@ import sources
 REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
-from finance import tenancy  # noqa: E402
+from finance import tenancy, vault  # noqa: E402
 from finance.paths import data_root  # noqa: E402
 from finance.tenancy import DEFAULT_TENANT_ID  # noqa: E402
 
@@ -40,6 +40,16 @@ def _tid(tenant_id=None):
     """The tenant an activity works for. Activities receive it explicitly from the workflow;
     none means the master tenant, the single household this ran for before tenants."""
     return uuid.UUID(str(tenant_id)) if tenant_id else DEFAULT_TENANT_ID
+
+
+def _scrape_env(tenant_id=None):
+    """_tenant_env plus, when the vault is on (FINANCE_VAULT_URL), the tenant's secrets, passed to the
+    scraper's environment only: never to the digest or deploy steps, never written to disk."""
+    env = _tenant_env(tenant_id)
+    if vault.enabled():
+        env.update(vault.fetch_tenant_secrets(_tid(tenant_id)))
+        env["FINANCE_VAULT_LOADED"] = "1"   # scrapers/tenant.mjs then skips the .env file
+    return env
 
 
 def _tenant_env(tenant_id=None):
@@ -381,7 +391,11 @@ async def scrape(source: str, tenant_id: str | None = None) -> str:
     tail = ""
     for dump in src.dumps:
         argv = [str(SKILLS / dump[0])] + [a.format(session=src.pw_session, port=src.port) for a in dump[1:]]
-        rc, tail = await run_cmd(argv, env=_tenant_env(tenant_id))
+        try:
+            env = await asyncio.to_thread(_scrape_env, tenant_id)
+        except vault.VaultError as e:   # the message never carries a secret
+            raise ApplicationError(f"vault: {e}", type=SCRAPE_FAILED, non_retryable=True)
+        rc, tail = await run_cmd(argv, env=env)
         if rc != 0:
             log_failure(Path(argv[0]).name, source, rc, tail)
             if looks_expired(tail):

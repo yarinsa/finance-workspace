@@ -22,6 +22,9 @@ export function tenantId(env = process.env) {
  * (each scraper has its own node_modules; this shared file has none). */
 export function loadEnv(repo, dotenv, env = process.env) {
   const id = tenantId(env);
+  // The sync worker fetched this tenant's secrets from the vault into the environment already
+  // (finance/vault.py): there is no file to read and nothing to fall back to.
+  if (env.FINANCE_VAULT_LOADED === '1') return id;
   if (id === MASTER) {
     dotenv.config({ path: path.join(repo, '.env'), quiet: true });
     return id;

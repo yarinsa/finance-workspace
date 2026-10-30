@@ -66,5 +66,48 @@ services:
       retries: 3
       start_period: 10s
 
+  # The secrets vault (docs/secrets-vault.md): Infisical, one project per tenant. Profile "vault",
+  # 127.0.0.1:8080 only. Its own Postgres and Redis, separate from the ledger database so a ledger
+  # restore never touches the vault. ENCRYPTION_KEY and AUTH_SECRET come from .env and must be backed
+  # up outside the Mac: without them the stored secrets cannot be decrypted.
+  #   docker compose --profile vault up -d --wait
+  vault-db:
+    profiles: [vault]
+    image: postgres:17.6
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: infisical
+      POSTGRES_PASSWORD: ${INFISICAL_DB_PASSWORD:-}
+      POSTGRES_DB: infisical
+    volumes: [vaultdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U infisical -d infisical"]
+      interval: 5s
+      retries: 10
+
+  vault-redis:
+    profiles: [vault]
+    image: redis:7.4-alpine
+    restart: unless-stopped
+
+  vault:
+    profiles: [vault]
+    image: infisical/infisical:latest-postgres   # pin to a release tag after the first successful start
+    restart: unless-stopped
+    ports: ["127.0.0.1:8080:8080"]
+    environment:
+      ENCRYPTION_KEY: ${INFISICAL_ENCRYPTION_KEY:-}
+      AUTH_SECRET: ${INFISICAL_AUTH_SECRET:-}
+      DB_CONNECTION_URI: postgresql://infisical:${INFISICAL_DB_PASSWORD:-}@vault-db:5432/infisical
+      REDIS_URL: redis://vault-redis:6379
+      SITE_URL: http://localhost:8080
+      TELEMETRY_ENABLED: "false"
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    depends_on:
+      vault-db: {condition: service_healthy}
+      vault-redis: {condition: service_started}
+
 volumes:
   pgdata:
+  vaultdata:
