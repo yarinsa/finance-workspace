@@ -125,3 +125,5 @@ behaviour: limits, node-id types, validators, helpers.
 
 Workflow: edit the SDL, run `poetry run python -m api.codegen.generate`, commit both.
 `--check` exits 1 if the file is stale; `api/tests/test_codegen.py` runs it, so CI fails on drift.
+
+For the full SDL-first workflow (bindings, resolvers, drift-test fixes) see the `graphql-schema` skill.
