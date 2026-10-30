@@ -132,3 +132,6 @@ Workflow: edit the SDL, run `poetry run python -m api.codegen.generate`, commit 
 `--check` exits 1 if either generated file is stale; `api/tests/test_codegen.py` runs it, so CI fails on drift.
 
 For the full SDL-first workflow (bindings, resolvers, drift-test fixes) see the `graphql-schema` skill.
+
+The app's types come from the same SDL: `cd app && pnpm codegen` (relay-compiler, output in the
+gitignored `app/src/__generated__/`; `pnpm codegen:check` validates it, and `pnpm dev|build|test` run it first).

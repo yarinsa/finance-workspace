@@ -40,7 +40,7 @@ describe("error mapping", () => {
   // expired session navigated to /overview?login=1, left the app's scope and froze it.
   it("a 401 on the inbox's GraphQL call does not navigate either", async () => {
     fetchMock.mockResolvedValue(json({ error: "unauthenticated" }, 401));
-    await expect(graphqlRequest("query InboxNotifications { notifications { edges { node { id } } } }")).rejects.toBeInstanceOf(ApiOffline);
+    await expect(graphqlRequest({ params: { name: "InboxNotifications", text: "query InboxNotifications { notifications { edges { node { id } } } }" } } as never, {})).rejects.toBeInstanceOf(ApiOffline);
     expect(assign).not.toHaveBeenCalled();
     expect(getAppStatus().sessionExpired).toBe(true);
   });

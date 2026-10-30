@@ -1,11 +1,16 @@
 import { toGlobalId } from "@/lib/notifications";
+import { graphql } from "react-relay";
 import { graphqlRequest } from "@/lib/relay";
+import type { syncRetryMutation } from "@/__generated__/syncRetryMutation.graphql";
 
-export type SyncRetryPoint = "SCRAPE" | "DIGEST";
+type RetryFrom = NonNullable<NonNullable<syncRetryMutation["response"]["syncSourceRetry"]>["syncSource"]>["retryFrom"];
+export type SyncRetryPoint = Exclude<NonNullable<RetryFrom>, "%future added value">;
 
-const RETRY_MUTATION = `mutation SyncSourceRetry($id: ID!) {
-  syncSourceRetry(id: $id) { success syncSource { id status retryFrom } }
-}`;
+const RETRY_MUTATION = graphql`
+  mutation syncRetryMutation($id: ID!) {
+    syncSourceRetry(id: $id) { success syncSource { id status retryFrom } }
+  }
+`;
 
 /**
  * Retry a failed or rejected source from where it stopped: the Mac scrapes it again, or goes
@@ -14,10 +19,6 @@ const RETRY_MUTATION = `mutation SyncSourceRetry($id: ID!) {
 export async function retrySync(
   source: string,
 ): Promise<SyncRetryPoint | null> {
-  const data = await graphqlRequest<{
-    syncSourceRetry: {
-      syncSource: { retryFrom: SyncRetryPoint | null } | null;
-    };
-  }>(RETRY_MUTATION, { id: toGlobalId(source, "SyncSource") });
-  return data.syncSourceRetry.syncSource?.retryFrom ?? null;
+  const data = await graphqlRequest<syncRetryMutation>(RETRY_MUTATION, { id: toGlobalId(source, "SyncSource") });
+  return (data.syncSourceRetry?.syncSource?.retryFrom as SyncRetryPoint | null | undefined) ?? null;
 }

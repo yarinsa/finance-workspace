@@ -2,7 +2,7 @@
 // api/schema/*.graphql). Same transport rules as `request()` in ./api.ts: same-origin
 // cookie, the CSRF headers on every POST, and failures mapped onto ApiOffline/ApiError so
 // screens handle "the home computer is off" the same way for REST and GraphQL.
-import { Environment, Network, RecordSource, Store, type FetchFunction } from "relay-runtime";
+import { Environment, Network, RecordSource, Store, type ConcreteRequest, type FetchFunction, type GraphQLTaggedNode } from "relay-runtime";
 import { ApiError, ApiOffline, unauthenticated } from "./api";
 import { tenantHeaders } from "./tenant";
 import { isEditMutation, showToast } from "./toast";
@@ -60,12 +60,18 @@ const fetchGraphQL: FetchFunction = async (operation, variables) => {
 };
 
 /**
- * Run a plain GraphQL document outside Relay's store, for lists that are held in their own
+ * Run a `graphql` document outside Relay's store, for lists that are held in their own
  * module-level store (the notifications inbox) and updated optimistically. Same transport,
- * same errors as the Relay environment.
+ * same errors as the Relay environment. Pass the compiler's operation type as `Q` (e.g.
+ * `graphqlRequest<inboxListQuery>(LIST, vars)`): variables and result are then checked
+ * against the SDL.
  */
-export async function graphqlRequest<T>(query: string, variables?: Record<string, unknown>): Promise<T> {
-  return (await postGraphQL(query, variables)).data as T;
+export async function graphqlRequest<Q extends { variables: object; response: unknown }>(
+  doc: GraphQLTaggedNode,
+  variables: Q["variables"],
+): Promise<Q["response"]> {
+  const { params } = doc as ConcreteRequest;
+  return (await postGraphQL(params.text, variables, params.name)).data as Q["response"];
 }
 
 export function createEnvironment(): Environment {

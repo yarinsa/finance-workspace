@@ -1,6 +1,12 @@
 import { useCallback, useMemo, useSyncExternalStore } from "react";
 import { cashflow } from "@/lib/data";
+import { graphql } from "react-relay";
 import { graphqlRequest } from "@/lib/relay";
+import type { inboxListQuery } from "@/__generated__/inboxListQuery.graphql";
+import type { inboxUpdateMutation } from "@/__generated__/inboxUpdateMutation.graphql";
+import type { inboxArchiveMutation } from "@/__generated__/inboxArchiveMutation.graphql";
+import type { inboxUnarchiveMutation } from "@/__generated__/inboxUnarchiveMutation.graphql";
+import type { inboxMarkAllReadMutation } from "@/__generated__/inboxMarkAllReadMutation.graphql";
 import { onNotificationEvent, syncActions, useSyncStatus } from "@/lib/syncStatus";
 import {
   badgeCount,
@@ -9,7 +15,6 @@ import {
   mergeLive,
   tabCategories,
   toGlobalId,
-  type ApiNode,
   type Category,
   type LocalState,
   type Notification,
@@ -108,31 +113,44 @@ interface ApiState {
   items: Notification[];
 }
 
-const FIELDS = `
-  __typename id type category severity title detail amount cta { label to }
-  createdAt readAt snoozedUntilAt archivedAt
-  ... on CashflowNotification { date }
-  ... on BudgetNotification { budgetCategories cycleStart }
-  ... on BillNotification { billName dueDate }
-  ... on ServiceNotification { services }
-  ... on SyncNotification { sources }`;
+const LIST_QUERY = graphql`
+  query inboxListQuery($filter: NotificationFilter) {
+    notifications(first: 200, filter: $filter) {
+      edges {
+        node {
+          __typename id type category severity title detail amount cta { label to }
+          createdAt readAt snoozedUntilAt archivedAt
+          ... on CashflowNotification { date }
+          ... on BudgetNotification { budgetCategories cycleStart }
+          ... on BillNotification { billName dueDate }
+          ... on ServiceNotification { services }
+          ... on SyncNotification { sources }
+        }
+      }
+    }
+  }
+`;
 
-const LIST_QUERY = `query InboxNotifications($filter: NotificationFilter) {
-  notifications(first: 200, filter: $filter) { edges { node { ${FIELDS} } } }
-}`;
-
-const UPDATE_MUTATION = `mutation InboxUpdateNotification($input: UpdateNotificationInput!) {
-  updateNotification(input: $input) { notification { id } }
-}`;
-const ARCHIVE_MUTATION = `mutation InboxArchiveNotification($input: NotificationIdInput!) {
-  archiveNotification(input: $input) { notification { id } }
-}`;
-const UNARCHIVE_MUTATION = `mutation InboxUnarchiveNotification($input: NotificationIdInput!) {
-  unarchiveNotification(input: $input) { notification { id } }
-}`;
-const MARK_ALL_MUTATION = `mutation InboxMarkAllRead($input: BulkNotificationInput!) {
-  markAllNotificationsRead(input: $input) { count }
-}`;
+const UPDATE_MUTATION = graphql`
+  mutation inboxUpdateMutation($input: UpdateNotificationInput!) {
+    updateNotification(input: $input) { notification { id } }
+  }
+`;
+const ARCHIVE_MUTATION = graphql`
+  mutation inboxArchiveMutation($input: NotificationIdInput!) {
+    archiveNotification(input: $input) { notification { id } }
+  }
+`;
+const UNARCHIVE_MUTATION = graphql`
+  mutation inboxUnarchiveMutation($input: NotificationIdInput!) {
+    unarchiveNotification(input: $input) { notification { id } }
+  }
+`;
+const MARK_ALL_MUTATION = graphql`
+  mutation inboxMarkAllReadMutation($input: BulkNotificationInput!) {
+    markAllNotificationsRead(input: $input) { count }
+  }
+`;
 
 let state: ApiState = { status: "loading", items: [] };
 const apiListeners = new Set<() => void>();
@@ -148,7 +166,7 @@ function setState(next: ApiState) {
 
 async function refetch() {
   try {
-    const data = await graphqlRequest<{ notifications: { edges: { node: ApiNode }[] } }>(LIST_QUERY, {
+    const data = await graphqlRequest<inboxListQuery>(LIST_QUERY, {
       filter: { includeArchived: true },
     });
     setState({ status: "online", items: data.notifications.edges.map((e) => fromApiNode(e.node)) });
@@ -169,7 +187,7 @@ async function pushLocalArchives() {
   const open = new Set(state.items.filter((n) => !n.archivedAt).map((n) => n.id));
   const ids = local.archived.filter((id) => open.has(id));
   if (!ids.length) return;
-  await Promise.allSettled(ids.map((id) => graphqlRequest(ARCHIVE_MUTATION, { input: { id: toGlobalId(id) } })));
+  await Promise.allSettled(ids.map((id) => graphqlRequest<inboxArchiveMutation>(ARCHIVE_MUTATION, { input: { id: toGlobalId(id) } })));
   void refetch();
 }
 
@@ -208,9 +226,9 @@ function patchItems(ids: string[], patch: Partial<Pick<Notification, "readAt" | 
   setState({ ...state, items: state.items.map((n) => (ids.includes(n.id) ? { ...n, ...patch } : n)) });
 }
 
-async function mutate(query: string, input: Record<string, unknown>) {
+async function mutate(run: () => Promise<unknown>) {
   try {
-    await graphqlRequest(query, { input });
+    await run();
   } catch {
     void refetch();
   }
@@ -251,7 +269,7 @@ export function useInbox(): Inbox {
     (n: Notification, read = true) => {
       if (isLocal(n)) return patchLocal([n.id], { read });
       patchItems([n.id], { readAt: read ? new Date().toISOString() : null });
-      void mutate(UPDATE_MUTATION, { id: toGlobalId(n.id), read });
+      void mutate(() => graphqlRequest<inboxUpdateMutation>(UPDATE_MUTATION, { input: { id: toGlobalId(n.id), read } }));
     },
     [isLocal],
   );
@@ -259,7 +277,7 @@ export function useInbox(): Inbox {
     (n: Notification) => {
       if (isLocal(n)) return patchLocal([n.id], { archived: true });
       patchItems([n.id], { archivedAt: new Date().toISOString() });
-      void mutate(ARCHIVE_MUTATION, { id: toGlobalId(n.id) });
+      void mutate(() => graphqlRequest<inboxArchiveMutation>(ARCHIVE_MUTATION, { input: { id: toGlobalId(n.id) } }));
     },
     [isLocal],
   );
@@ -267,7 +285,7 @@ export function useInbox(): Inbox {
     (n: Notification) => {
       if (isLocal(n)) return patchLocal([n.id], { archived: false });
       patchItems([n.id], { archivedAt: null });
-      void mutate(UNARCHIVE_MUTATION, { id: toGlobalId(n.id) });
+      void mutate(() => graphqlRequest<inboxUnarchiveMutation>(UNARCHIVE_MUTATION, { input: { id: toGlobalId(n.id) } }));
     },
     [isLocal],
   );
@@ -275,7 +293,7 @@ export function useInbox(): Inbox {
     (n: Notification, until: string) => {
       if (isLocal(n)) return patchLocal([n.id], { snoozedUntil: until });
       patchItems([n.id], { snoozedUntilAt: until });
-      void mutate(UPDATE_MUTATION, { id: toGlobalId(n.id), snoozedUntilAt: until });
+      void mutate(() => graphqlRequest<inboxUpdateMutation>(UPDATE_MUTATION, { input: { id: toGlobalId(n.id), snoozedUntilAt: until } }));
     },
     [isLocal],
   );
@@ -290,7 +308,7 @@ export function useInbox(): Inbox {
         { readAt: now },
       );
       const category: Category[] | undefined = tabCategories(tab);
-      void mutate(MARK_ALL_MUTATION, category ? { category } : {});
+      void mutate(() => graphqlRequest<inboxMarkAllReadMutation>(MARK_ALL_MUTATION, { input: category ? { category } : {} }));
     },
     [isLocal, online],
   );

@@ -26,6 +26,7 @@ cd app
 pnpm install
 pnpm dev      # http://localhost:5173
 pnpm build    # type-check + production build to dist/
+pnpm codegen  # regenerate GraphQL types from ../api/schema (relay-compiler); `pnpm codegen:check` validates
 ```
 
 ## How it reads data

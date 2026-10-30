@@ -2,6 +2,7 @@
 // and the static fallback (`cashflow.actions` + live sync alerts) are mapped onto, plus
 // tab filtering, snooze targets and the global-id encoding. No React, no I/O (see ./inbox.ts).
 import type { HomeAction } from "./data";
+import type { inboxListQuery } from "@/__generated__/inboxListQuery.graphql";
 
 export type Category = "PROBLEM" | "WARNING" | "REMINDER" | "SUGGESTION" | "INFO";
 export type Severity = HomeAction["severity"];
@@ -190,29 +191,8 @@ export function snoozeUntil(choice: SnoozeChoice, now: Date, payday?: string | n
 
 // --- API (GraphQL) mapping --------------------------------------------------------
 
-/** Fields every `Notification` selects, plus the per-subtype fragments (see inbox.ts QUERY). */
-export interface ApiNode {
-  __typename?: string;
-  id: string;
-  type: string;
-  category: Category;
-  severity: "CRITICAL" | "HIGH" | "MEDIUM" | "LOW";
-  title: string;
-  detail: string | null;
-  amount: string | null;
-  cta: { label: string; to: string } | null;
-  createdAt: string;
-  readAt: string | null;
-  snoozedUntilAt: string | null;
-  archivedAt: string | null;
-  date?: string | null;
-  budgetCategories?: string[];
-  cycleStart?: string | null;
-  billName?: string;
-  dueDate?: string | null;
-  services?: string[];
-  sources?: string[];
-}
+/** One node of the inbox query (inbox.ts `inboxListQuery`), typed by the relay compiler from the SDL. */
+export type ApiNode = inboxListQuery["response"]["notifications"]["edges"][number]["node"];
 
 /**
  * The node's id is the Relay global id; the client id is the pipeline's action id so that
@@ -224,13 +204,13 @@ export function fromApiNode(n: ApiNode): Notification {
       case "CashflowNotification":
         return { kind: "cashflow", date: n.date ?? null };
       case "BudgetNotification":
-        return { kind: "budget", categories: n.budgetCategories ?? [], cycleStart: n.cycleStart ?? null };
+        return { kind: "budget", categories: [...(n.budgetCategories ?? [])], cycleStart: n.cycleStart ?? null };
       case "BillNotification":
         return { kind: "bill", billName: n.billName ?? "", dueDate: n.dueDate ?? null };
       case "ServiceNotification":
-        return { kind: "service", services: n.services ?? [] };
+        return { kind: "service", services: [...(n.services ?? [])] };
       case "SyncNotification":
-        return { kind: "sync", sources: n.sources ?? [] };
+        return { kind: "sync", sources: [...(n.sources ?? [])] };
       case "TransactionNotification":
         return { kind: "transaction" };
       default:
@@ -241,16 +221,16 @@ export function fromApiNode(n: ApiNode): Notification {
   return {
     id: fromGlobalId(n.id) ?? n.id,
     type: n.type,
-    category: n.category,
+    category: n.category as Category, // the SDL enum plus the compiler's "%future added value"
     severity: n.severity.toLowerCase() as Severity,
     title: n.title,
-    detail: n.detail,
+    detail: n.detail ?? null,
     amount: amount != null && Number.isFinite(amount) ? amount : null,
-    cta: n.cta,
+    cta: n.cta ?? null,
     createdAt: n.createdAt,
-    readAt: n.readAt,
-    snoozedUntilAt: n.snoozedUntilAt,
-    archivedAt: n.archivedAt,
+    readAt: n.readAt ?? null,
+    snoozedUntilAt: n.snoozedUntilAt ?? null,
+    archivedAt: n.archivedAt ?? null,
     subject: detail,
     live: false,
   };

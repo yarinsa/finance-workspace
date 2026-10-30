@@ -16,6 +16,7 @@ hand-edit `api/gql/generated/`.
 | Validation rules on inputs | `api/gql/inputs.py` (subclasses the generated bases) | `api/tests/test_graphql*.py` |
 | Object type ⇄ data model | `api/schema_bindings.py` `BINDINGS` | `api/tests/test_graphql_schema.py` |
 | Resolver contracts | `api/gql/generated/resolvers.py` (generated) | `api/tests/test_codegen.py` (`--check`) |
+| App operation/variable types | `app/src/__generated__/` (relay-compiler, gitignored; built by `pnpm dev/build/test`) | `pnpm codegen:check`, `tsc -b` |
 | Resolvers, bound by name | `api/gql/resolvers.py` + `api/gql/binding.py` (`bind_all`) | startup, `api/tests/test_graphql_binding.py` |
 
 ## Workflow
@@ -23,7 +24,8 @@ hand-edit `api/gql/generated/`.
 1. **Edit the SDL** in the right `api/schema/<area>.graphql`. Follow the house style: Relay
    `Node` ids and connections, mutations named `<entity><Verb>` taking one `…Input` with
    `clientMutationId` and returning a payload.
-2. **Regenerate:** `poetry run python -m api.codegen.generate` (check only: `--check`).
+2. **Regenerate both sides:** `poetry run python -m api.codegen.generate` (check only: `--check`)
+   and, in `app/`, `pnpm codegen` (check: `pnpm codegen:check`). Fix any `tsc -b` error it surfaces.
 3. **New object type?** Add a `Binding` in `api/schema_bindings.py` (model, `renames`,
    `resolved`, `hidden`, `never_null`) or list it in `STRUCTURAL`. A field that maps to a
    model field needs **no resolver** — the default resolver reads it in snake_case.
@@ -72,8 +74,17 @@ emitted non-null with that default (`relay.validated` treats explicit null as "u
 After changing the generator, regenerate and diff `generated/`; behaviour of the hand
 subclasses must not change.
 
+## Client (app/)
+
+Phase 3 reused the Relay compiler the app already ran instead of adding `@graphql-codegen`: it reads
+`api/schema/*.graphql` and emits a typed artifact per `graphql` document (types for variables, response and
+enums; scalars `Money`/`Date`/`DateTime`→`string`, `JSON`→`unknown` in `app/relay.config.json`). Every
+operation is a `graphql` tag: Relay hooks for screens, and `graphqlRequest<opQuery>(DOC, vars)` (in
+`app/src/lib/relay.ts`) for the inbox, tenant admin and sync retry, which live outside Relay's store.
+Name operations `<moduleName><Thing>Query|Mutation`. Enums carry a `"%future added value"` arm; narrow
+it (`Exclude<…>`) where the UI needs the closed set. Never hand-write a response/variables type.
+
 ## Roadmap
 
-Phase 1 (generated inputs) and Phase 2 (generated resolver contracts + `bind_all`, replacing the
-manual `fields[...].resolve =` wiring) have landed. Phase 3 adds `@graphql-codegen/cli` in `app/`
-for client types. Update this skill when it lands.
+Phases 1 (generated inputs), 2 (generated resolver contracts + `bind_all`) and 3 (typed client operations,
+above) have landed. Open server-side gaps are tracked in GitHub issue #60.

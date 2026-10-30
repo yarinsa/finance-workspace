@@ -8,7 +8,9 @@
     "build": "pnpm relay && tsc -b && vite build",
     "preview": "vite preview",
     "test": "pnpm relay && vitest run",
-    "relay": "FORCE_NO_WATCHMAN=1 relay-compiler"
+    "relay": "FORCE_NO_WATCHMAN=1 relay-compiler",
+    "codegen": "pnpm relay",
+    "codegen:check": "FORCE_NO_WATCHMAN=1 relay-compiler --validate"
   },
   "dependencies": {
     "@fontsource-variable/frank-ruhl-libre": "^5.3.0",
