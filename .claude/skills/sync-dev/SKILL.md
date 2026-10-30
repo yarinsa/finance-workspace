@@ -49,7 +49,8 @@ keeps the code it started with, so a changed workflow `run` signature needs opti
   style (`root.graphql`): `entityVerb` name, the target's `id` as its own argument, a
   `{success, entity}` payload. Examples: `syncSourceRetry(id: ID!): SyncSourcePayload!`, `goalUpdate`.
   The REST `/api/sync/*` routes predate this and are only the login/OTP/SSE/push plumbing.
-- A resolver is a `NodeResolver` in `api/gql/resolvers.py` (`mutations()` → `{field: (input, method)}`);
+- Schema-first: edit the SDL, run codegen, write the `resolve_<field>` method `bind_all` asks for —
+  the full workflow is the `graphql-schema` skill. Resolvers live in `api/gql/resolvers.py`;
   sync resolvers set `rebuilds = False` (starting a sync changes no ledger data). Temporal is
   reached through `info.context["rebuilder"]` (`api/rebuild.Rebuilder`); a failure is a `GraphQLError`.
 - `api/tests/test_graphql_schema.py` enforces: new object types are bound or listed in

@@ -50,6 +50,11 @@ normalizer is wrong (fix it) or the model is too strict (widen it), never drop `
 `poetry add <pkg>` (pipeline/db) or `poetry add --group sync <pkg>` (Temporal worker only),
 commit `pyproject.toml` + `poetry.lock`. No `requirements.txt` files exist any more.
 
+## 4. The GraphQL API exposes it
+
+A model change the app should see also changes `api/schema/*.graphql`: follow the `graphql-schema`
+skill (SDL → codegen → bindings → resolvers).
+
 ## Done means
 
 `poetry run pytest` passes (the 3 mortgage-freeze tests depend on live data), a digest runs,

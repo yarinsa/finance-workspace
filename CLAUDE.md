@@ -148,6 +148,11 @@ Rules that keep it cheap and safe — keep them when changing anything here:
   `--no-normalize` and `publish_data`. Digests take `data/digested/.lock`.
 - **Mac off = read-only.** The UI falls back to the static JSON and disables editing.
   Kill switch: `docker compose stop api` or `infra/tunnel.sh --off`.
+- **GraphQL is schema-first.** `api/schema/*.graphql` is the source of truth; Python inputs and
+  resolver contracts are generated (`poetry run python -m api.codegen.generate`), resolvers bind
+  by name and the API refuses to start with one missing; the app's types come from
+  `relay-compiler` (`pnpm codegen`). Never code-first, never edit `generated/`. Workflow: the
+  `graphql-schema` skill; open gaps: issue #60.
 - **The user does the outward steps**: installing/logging in to Tailscale, enabling Funnel,
   `terraform apply`, copying the secret into `.env`. SPA routing lives in the edge-auth
   Lambda (not CloudFront error responses, which would swallow API 403/404s).
