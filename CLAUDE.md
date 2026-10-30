@@ -319,7 +319,7 @@ cards and `?section=debt_savings` to the loans; `actions.py` CTAs use them. תח
 **Budget overrides.** Each budget line carries `history` (its ledger spend in the last 4
 cycles). To change a planned
 amount: `poetry run python data/budgets.py set "<category>" <amount>`, `unset "<category>"`, or
-`list`; it edits gitignored `data/budgets/budgets.json` (a RiseUp envelope name is stored as
+`list`; it edits the `budget_lines` table (`db/budget_store.py`; the old gitignored `data/budgets/budgets.json` is read only until `poetry run python db/budget_store.py import` copies it in) (a RiseUp envelope name is stored as
 our category; a category RiseUp has no envelope for adds a line), reruns `cashflow.py` and
 prints the new line. The budget editor in the `/monthly` category sheet is read-only and only shows this
 command; push the result with `sync-data`.
@@ -461,7 +461,7 @@ fixed − variable. Non-spending rows (income, card bills, own transfers, saving
   live in `finance/categories.py`, nowhere else: `DEBT_CATEGORIES`, `LEVERS` /
   `GROUP_LEVER` / `CATEGORY_LEVER` (how a fixed expense can be cut), `bill_kind`.
   **RiseUp still supplies plans, not categories**: `budgets.py`'s planned amounts until
-  `budgets.py seed` copies them into the household's own store (`data/budgets/budgets.json`;
+  `budgets.py seed` copies them into the household's own store (the `budget_lines` table;
   a variable category with spending but no line shows at ₪0 as `unplanned`, with its average), and `forecast.py`'s envelopes (see
   docs/forecast-architecture.md — its fixed items carry our `category` +
   `category_group`, the raw label as `source_category`). `plugin/scripts/` keeps its own

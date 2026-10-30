@@ -44,7 +44,7 @@ sessions: each one adds a separate block in `cashflow.py` and a separate compone
   per category: `planned`, `spent` (sum of actuals), `left`, `pct`, `over`.
   Header: `total_planned`, `total_spent`, `left`, `days_left` in the cycle, and
   `per_day = left / days_left`. Use RiseUp's `cashflowStartDay` for the cycle bounds,
-  not the calendar month. Optional user overrides come from `data/budgets/budgets.json`
+  not the calendar month. Optional user overrides come from the `budget_lines` table (was `data/budgets/budgets.json`)
   (gitignored; same pattern as `data/goals/`): `{category: amount}` replaces RiseUp's
   planned amount.
 - **UI**: new route `/budgets` (תקציב). Mint hero "₪X נותרו" with a progress bar and

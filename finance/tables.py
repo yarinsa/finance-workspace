@@ -143,6 +143,20 @@ class PlanTarget(SQLModel, table=True):
     updated_at: dt.datetime | None = Field(default=None, sa_column=_now())
 
 
+class BudgetLine(SQLModel, table=True):
+    """The household's planned monthly amount for one category (data/budgets.py).
+
+    Was data/budgets/budgets.json (`{category: amount}`). `category` is the category name as
+    the budget uses it, not a foreign key: a line may name a category the ledger has not
+    seen yet, and merges are applied when the budget is built (budgets.fold_merges)."""
+    __tablename__ = "budget_lines"
+
+    tenant_id: uuid.UUID = Field(sa_column=_tenant(primary_key=True))
+    category: str = Field(sa_column=Column(Text, primary_key=True))
+    amount: Decimal = Field(sa_type=Money)
+    updated_at: dt.datetime | None = Field(default=None, sa_column=_now())
+
+
 KIND_CHECK = "kind IN ('fixed', 'variable')"
 
 

@@ -13,9 +13,9 @@ category (or group) whose `kind` is variable — fixed charges are the fixed blo
 not a budget line — minus refunds (a positive row in that category). Offsets are
 already netted by `offsets.cashflow_view`.
 
-Optional user overrides: data/budgets/budgets.json `{category: amount}` replaces
-RiseUp's planned amount, or adds a line RiseUp does not have (gitignored store,
-same pattern as data/goals/). Old keys holding a RiseUp envelope name still work.
+Optional user overrides: the `budget_lines` table `{category: amount}` replaces
+RiseUp's planned amount, or adds a line RiseUp does not have (db/budget_store.py).
+Old keys holding a RiseUp envelope name still work.
 
 Cycle bounds come from `cashflowStartDay` (not the calendar month): the cycle of
 budget month YYYY-MM runs from day N of that month to day N-1 of the next. Every
@@ -86,13 +86,51 @@ def fold_merges(plan, merges):
     return out
 
 
-def load_overrides(path=OVERRIDES):
-    """User `{category: amount}` planned-amount overrides; {} when absent."""
+def _db(run):
+    """`run(budget_store, conn)` against the database (db/budget_store.py); None when no
+    database is configured or it is unreachable."""
+    import digest
+    url = digest.database_url()
+    if not url:
+        return None
+    db = str(CODE.parent / "db")
+    sys.path.insert(0, db)
+    try:
+        import budget_store
+        from ledger import connect
+        with connect(url) as conn:
+            return run(budget_store, conn)
+    except Exception as e:   # noqa: BLE001 — a dead DB must not stop the digest
+        print(f"budgets: database unavailable ({e})", file=sys.stderr)
+        return None
+    finally:
+        sys.path.remove(db)
+
+
+def _load_file(path):
     try:
         data = json.loads(Path(path).read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return {}
     return {str(k): float(v) for k, v in data.items() if isinstance(v, (int, float))}
+
+
+def load_overrides(path=None):
+    """The household's `{category: amount}` planned amounts; {} when there are none.
+
+    Read from the `budget_lines` table. With `path` (tests), or when the database is
+    unreachable, or while it is still empty and the old JSON store exists (before
+    `budget_store.py import`), read that JSON file instead."""
+    if path is not None:
+        return _load_file(path)
+    lines = _db(lambda m, conn: m.all_lines(conn))
+    if lines:
+        return lines
+    legacy = _load_file(OVERRIDES)
+    if legacy and lines is not None:
+        print("budgets: budget_lines is empty; using data/budgets/budgets.json "
+              "(run db/budget_store.py import)", file=sys.stderr)
+    return legacy
 
 
 def load_history(raw_dir=RAW):
@@ -369,11 +407,18 @@ def build_budgets(budget, transactions, as_of, overrides=None, ledger=None, expe
     }
 
 
-def save_overrides(overrides, path=OVERRIDES):
-    """Write the `{category: amount}` store, creating the directory if missing."""
-    path = Path(path)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(overrides, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+def save_overrides(overrides, path=None):
+    """Store the `{category: amount}` plan: in `budget_lines`, or in the JSON file at `path` (tests).
+
+    Raises when there is no database: writing the old JSON file would be ignored once the
+    table has lines."""
+    if path is not None:
+        path = Path(path)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(overrides, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        return
+    if _db(lambda m, conn: m.replace(conn, overrides)) is None:
+        raise SystemExit("budgets: no database to save to (set DATABASE_URL and start Postgres)")
 
 
 def set_override(overrides, category, amount):
@@ -409,7 +454,7 @@ def _print_line(category):
     print(f"{c['name']}: planned {c['planned']:g}{tag}, spent {c['spent']:g}, left {c['left']:g}")
 
 
-def main(argv, store=OVERRIDES, rebuild=_rebuild, show=_print_line):
+def main(argv, store=None, rebuild=_rebuild, show=_print_line):
     """CLI: `set <category> <amount>` | `unset <category>` | `list` | `seed`. A RiseUp
     envelope name is stored as our category (`חופשה ✈️` -> `תיירות`). `seed` copies
     RiseUp's planned amounts into the store as the household's own baseline (lines
@@ -451,6 +496,8 @@ def main(argv, store=OVERRIDES, rebuild=_rebuild, show=_print_line):
 
 
 if __name__ == "__main__":
+    from finance.tenancy import use_cli_tenant
+    use_cli_tenant()
     if len(sys.argv) > 1:
         sys.exit(main(sys.argv[1:]))
     view, ledger = _ledger()
