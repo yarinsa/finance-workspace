@@ -282,7 +282,9 @@ class _FinanceSync:
                     await self._set(source, "needs_login", f"{name}: ההתחברות לא הושלמה — נסה שוב", error=_reason(e))
                     return NEEDS_LOGIN
                 self._res(source, NEEDS_LOGIN, "session expired during scrape")
-                await self._set(source, "needs_login", f"{name}: החיבור פג באמצע ההורדה — התחבר והפעל שוב")
+                # error= carries the dump's own reason (e.g. BOT_BLOCKED), so /syncs says why, not just "log in"
+                await self._set(source, "needs_login", f"{name}: החיבור פג באמצע ההורדה — התחבר והפעל שוב",
+                                error=_reason(e))
                 return NEEDS_LOGIN
             self._res(source, FAILED, _detail(e))
             await self._set(source, "failed", f"{name}: ההורדה נכשלה", error=_reason(e))

@@ -100,7 +100,14 @@ async function login(page) {
     try { seen[m[1]] = JSON.parse(text); } catch { seen[m[1]] = { unparsable: true }; }
     if (r.status() === 403 || r.status() === 429) {
       // Response only: enough to tell a WAF / reCAPTCHA refusal from a wrong password next time.
-      refused[m[1]] = { status: r.status(), server: r.headers().server || '', body: text.replace(/\s+/g, ' ').slice(0, 300) };
+      // A Cloudflare page opens with ~300 chars of IE conditionals; the reason is its <title> and "Error code".
+      const flat = text.replace(/\s+/g, ' ');
+      const title = (flat.match(/<title>(.*?)<\/title>/i) || [])[1] || '';
+      const errCode = (flat.match(/Error code:?\s*(\d+)/i) || flat.match(/error[ -]?(?:code)?\s*(10\d\d)/i) || [])[1] || '';
+      refused[m[1]] = {
+        status: r.status(), server: r.headers().server || '', ray: r.headers()['cf-ray'] || '',
+        title, errCode, body: (title || flat).slice(0, 300),
+      };
     }
   });
 
@@ -139,7 +146,7 @@ async function login(page) {
       // password. Reported on its own so the sync neither hammers the login nor blames the .env.
       const [name, info] = blocked;
       await saveUnknown(page, 'login-blocked', `${name} refused: ${JSON.stringify(info)}; responses: ${order.join(', ')}`);
-      throw fail('BOT_BLOCKED', `${name} HTTP ${info.status}${info.server ? ` from ${info.server}` : ''}: ${info.body.slice(0, 120)}`);
+      throw fail('BOT_BLOCKED', `${name} HTTP ${info.status}${info.server ? ` from ${info.server}` : ''}${info.errCode ? ` error ${info.errCode}` : ''}: ${info.body.slice(0, 120)}`);
     }
     const v = seen.ValidateIdDataNoReg;
     if (v) {

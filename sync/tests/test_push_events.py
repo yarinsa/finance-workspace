@@ -47,3 +47,11 @@ def test_a_second_failed_run_in_a_row_is_not_yet_a_streak():
     fake.streaks["amex"] = 2
     result_of(fake, args=(["amex"],))
     assert "sync-streak-amex" not in [p["tag"] for p in fake.pushes]
+
+
+def test_mid_scrape_login_problem_keeps_the_dumps_own_reason_in_the_status():
+    from fakes import moved
+    fake = Fake(scrape_errors={"amex": expired("amex session expired")})
+    result_of(fake, args=(["amex"],))
+    last = [e for s, e in fake.statuses if s == "amex"][-1]
+    assert last["status"] == "needs_login" and last["error"]
