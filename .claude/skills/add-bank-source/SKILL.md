@@ -137,6 +137,8 @@ Spot-check one file with `node -e` that it's valid JSON with real figures.
   theirs).
 
 ### 7. Register + remember
+- Write `data/<name>/manifest.json` (label, account types, capabilities, connection form) and
+  register the `Source` in `sync/sources.py` — follow the `source-manifest` skill.
 - Add the port/profile row to the registry table **above** (in this file).
 - Write a `<name>-refresh-skill.md` memory file + a `MEMORY.md` pointer
   (mirror the existing `*-refresh-skill.md` entries).
