@@ -519,7 +519,7 @@ Each source declares itself in `data/<source>/manifest.json`: `name`, Hebrew `la
 entities it provides). Model and loader: `finance/manifest.py`. The sync registry
 (`Source.label`/`.manifest`, `LABEL_HE`), `digest.source_syncs` and `snapshot.source_manifests`
 read it, and the app takes labels from the snapshot (`sourceLabel` in `app/src/lib/data.ts`).
-A new source adds its manifest (a test enforces it).
+A new source adds its manifest (a test enforces it). Editing or adding manifests: the `source-manifest` skill.
 
 `connection` is the source's connection form as a JSON Schema: one string property per `.env`
 variable the scraper reads (`x-env` names it, `writeOnly` marks a secret; a test checks each
