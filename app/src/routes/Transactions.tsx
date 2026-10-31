@@ -4,9 +4,10 @@ import { Card, Page } from "@/components/common";
 import { TransactionList, TransactionRow } from "@/components/TransactionRow";
 import TransactionEditSheet, { type EditTarget } from "@/components/TransactionEditSheet";
 import { useQuickEdit } from "@/components/QuickEditSheets";
+import WidgetsCarousel from "@/components/transactions/WidgetsCarousel";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { shekel, sourceLabel, transactions } from "@/lib/data";
+import { cashflow, sourceLabel, transactions } from "@/lib/data";
 import { useLedgerApi } from "@/lib/useLedgerApi";
 import { cn } from "@/lib/utils";
 import {
@@ -23,7 +24,7 @@ import {
   rangeToParams,
   resolveRange,
   todayIso,
-  totals,
+  widgetStats,
   type LedgerRow,
   type RangeSpec,
 } from "@/lib/transactionsView";
@@ -68,7 +69,7 @@ export default function Transactions() {
   const accounts = accountCounts(windowed);
   const account = parseAccount(params.get("account"), accounts.map((a) => a.key));
   const rows = filterByAccount(windowed, account);
-  const sum = totals(rows);
+  const stats = widgetStats(rows);
 
   // Paging resets whenever the filter changes.
   const key = filterKey(range, account);
@@ -143,9 +144,8 @@ export default function Transactions() {
         </Card>
       ) : (
         <div className="flex flex-col gap-2">
-          <p className="text-sm text-muted-foreground tabular-nums">
-            {sum.count} תנועות · יצא {shekel(sum.out)} · נכנס {shekel(sum.in)}
-          </p>
+          <WidgetsCarousel w={stats} cycle={account === null ? (cashflow.budgets?.summary ?? null) : null} />
+          <p className="mt-2 text-sm text-muted-foreground tabular-nums">{rows.length} תנועות</p>
           <div className="overflow-hidden surface">
             <TransactionList inset>
               {rows.slice(0, limit).map((t, i) => {

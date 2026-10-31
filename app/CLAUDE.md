@@ -16,7 +16,9 @@ patterns per feature, what the app has vs. lacks, and the design principles
 **The תנועות tab's hub is `/transactions`** (`routes/Transactions.tsx`, logic in `lib/transactionsView.ts`):
 every ledger row in a window, newest first, card-bill payments and internal transfers hidden, the live
 overlay applied. Range chips 30/60/90/180/360 days ending today or a custom from/to, account chips per
-`origin` with counts, a quiet count / out / in line, 100 rows then "הצג עוד". URL: `?days=` or
+`origin` with counts, a widgets carousel (`components/transactions/WidgetsCarousel.tsx`,
+`widgetStats`: net with in/out, קבוע/משתנה/אחר by `kind`, top categories, all from the filtered rows;
+plus the cycle's free money under "הכל" only, labelled as not following the filter), a row count, 100 rows then "הצג עוד". URL: `?days=` or
 `?from=&to=`, `?account=<origin>`. Rollout plan (widgets carousel, group-by) in
 `docs/transactions-screen-plan.md`. `/monthly` stays in the same group as a non-hub page until it is retired.
 

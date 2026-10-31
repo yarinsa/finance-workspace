@@ -11,17 +11,18 @@ import {
   rangeToParams,
   resolveRange,
   totals,
+  widgetStats,
   type LedgerRow,
 } from "./transactionsView";
 
 // Made-up transactions shaped like the digested ledger (money out negative).
 const ledger: LedgerRow[] = [
-  { date: "2026-10-29", amount: -184.9, description: "שופרסל דיל", category: "מזון", origin: "cal", card_last4: "1234" },
+  { date: "2026-10-29", amount: -184.9, description: "שופרסל דיל", category: "מזון", origin: "cal", card_last4: "1234", kind: "variable" },
   { date: "2026-10-28", amount: 12500, description: "משכורת", category: "הכנסה", origin: "discount" },
   { date: "2026-10-10", amount: -4210.55, description: "כרטיסי אשראי-י", origin: "discount", card_bill_payment: true },
   { date: "2026-10-09", amount: -3000, description: "העברה לחשבון", origin: "discount", internal_transfer: true },
-  { date: "2026-10-05", amount: -320, description: "פז סלף", category: "תחבורה", origin: "amex" },
-  { date: "2026-10-05", amount: -89, description: "נטפליקס", category: "מנויים", origin: "cal" },
+  { date: "2026-10-05", amount: -320, description: "פז סלף", category: "תחבורה", origin: "amex", kind: "variable" },
+  { date: "2026-10-05", amount: -89, description: "נטפליקס", category: "מנויים", origin: "cal", kind: "fixed" },
   { date: "2026-09-02", amount: -600, description: "ארוחה משותפת", category: "מסעדות", origin: "max", offset_amount: 300 },
   { date: "2026-11-02", amount: -250, description: "תשלום עתידי", category: "ביטוח", origin: "leumi" },
 ];
@@ -117,5 +118,29 @@ describe("totals", () => {
     const rows = inRange(applyView(ledger, new Map()), { from: "2026-09-01", to: "2026-10-31" });
     // out: 184.9 + 320 + 89 + (600 - 300 offset) = 893.9
     expect(totals(rows)).toEqual({ count: 5, out: 893.9, in: 12500 });
+  });
+});
+
+describe("widgetStats", () => {
+  const rows = inRange(applyView(ledger, new Map()), { from: "2026-09-01", to: "2026-10-31" });
+
+  it("splits money out by kind, kindless rows into other", () => {
+    const w = widgetStats(rows);
+    expect(w.split).toEqual({ fixed: 89, variable: 504.9, other: 300 });
+    expect(w.net).toBeCloseTo(12500 - 893.9);
+  });
+
+  it("ranks the largest spending categories, after offsets", () => {
+    expect(widgetStats(rows, 2).topCategories).toEqual([
+      { name: "תחבורה", amount: 320 },
+      { name: "מסעדות", amount: 300 },
+    ]);
+  });
+
+  it("follows the account filter and the overlay's category", () => {
+    const overlay = overlayOf(overlayRow({}));
+    const amex = filterByAccount(inRange(applyView(ledger, overlay), { from: "2026-09-01", to: "2026-10-31" }), "amex");
+    expect(widgetStats(amex).topCategories).toEqual([{ name: "דלק", amount: 320 }]);
+    expect(widgetStats(amex).in).toBe(0);
   });
 });

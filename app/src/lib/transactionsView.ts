@@ -153,3 +153,34 @@ export const PAGE_SIZE = 100;
 export function parseAccount(raw: string | null | undefined, keys: readonly string[]): string | null {
   return raw && keys.includes(raw) ? raw : null;
 }
+
+export interface WidgetStats {
+  /** Positive ₪ out / in, after offsets. */
+  out: number;
+  in: number;
+  net: number;
+  /** Money out by the ledger's `kind`; rows with no kind (loans, pension, untyped) land in `other`. */
+  split: { fixed: number; variable: number; other: number };
+  /** The largest spending categories, positive ₪, at most `top`. */
+  topCategories: { name: string; amount: number }[];
+}
+
+/** Figures for the widgets carousel, computed from the filtered rows so they follow every filter. */
+export function widgetStats(rows: readonly LedgerRow[], top = 3): WidgetStats {
+  const { out, in: inn } = totals(rows);
+  const split = { fixed: 0, variable: 0, other: 0 };
+  const byCat = new Map<string, number>();
+  for (const t of rows) {
+    const n = netAmount(t);
+    if (n >= 0) continue;
+    const k = t.kind === "fixed" || t.kind === "variable" ? t.kind : "other";
+    split[k] -= n;
+    const name = t.category || "ללא קטגוריה";
+    byCat.set(name, (byCat.get(name) ?? 0) - n);
+  }
+  const topCategories = [...byCat]
+    .map(([name, amount]) => ({ name, amount }))
+    .sort((a, b) => b.amount - a.amount || a.name.localeCompare(b.name))
+    .slice(0, top);
+  return { out, in: inn, net: inn - out, split, topCategories };
+}
