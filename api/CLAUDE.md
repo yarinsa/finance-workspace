@@ -29,7 +29,17 @@ Rules that keep it cheap and safe — keep them when changing anything here:
   `terraform apply`, copying the secret into `.env`. SPA routing lives in the edge-auth
   Lambda (not CloudFront error responses, which would swallow API 403/404s).
 
-### Notifications inbox
+### Secrets vault (Infisical)
+
+One self-hosted Infisical on the Mac (compose profile `vault`, `127.0.0.1:8080`), **one project and one read-only
+machine identity per tenant** (project slug = tenant id). A tenant opts in by having `~/.finance-vault/<id>.json`
+(`poetry run python -m finance.vault_admin tenant <id>`) while `FINANCE_VAULT_URL` is set; every other tenant keeps
+its `.env`. The sync worker fetches the secrets into the scraper's environment only (`FINANCE_VAULT_LOADED=1`);
+the API has no vault access. Households type their own secrets in the UI; agents never do. Infisical-specific code
+is only `finance/vault.py` + `finance/vault_admin.py` (`FINANCE_VAULT_BACKEND` keeps it swappable). Design,
+setup and what it does not fix: **docs/secrets-vault.md**; rollout: issue #61.
+
+## Notifications inbox
 
 The "לטיפול" actions (`data/actions.py` + `validation_actions`) are also mirrored into Postgres
 `notifications` by `data/cashflow.py` (best-effort, via `db/inbox.py sync`; a dead DB never stops the

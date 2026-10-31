@@ -79,6 +79,10 @@ the `default` tenant (`00000000-0000-4000-8000-000000000001`) holding all pre-ex
   Lambda serves `/data/t/<id>/<file>.json` only to a session whose Cognito groups include `tenant-<id>`
   (it has no database, so the group mirrors the membership: `infra/tenant-groups.sh add|remove|sync`).
   With `enforce_tenant_data = true` the master tenant's `/data/*.json` needs `tenant-0000…0001` too.
+- **Secrets vault.** One Infisical instance on the Mac, one project and one read-only identity per tenant
+  (`docs/secrets-vault.md`). A tenant with `~/.finance-vault/<id>.json` gets its secrets from its project, injected
+  into the scraper's environment by the sync worker. **Exception:** the platform admin (instance admin, Mac owner)
+  can read every household's secrets; unavoidable while the Mac runs every scrape.
 - **Scrapers.** `scrapers/tenant.mjs`: another tenant reads only `~/.finance-tenants/<id>.env` (0600) and
   writes to its own tree; it never loads the repo `.env`, so a missing credential stops the run instead of
   logging in as another household. Only self-login sources (`discount*`, `leumi`, `cal`, `amex`, `max`) can run for
@@ -98,7 +102,8 @@ the `default` tenant (`00000000-0000-4000-8000-000000000001`) holding all pre-ex
    so every current member is in their tenant group; sign out and in once. Then set `enforce_tenant_data = true`
    and apply. **Do this before step 2**: until then any signed-in user can read the master tenant's files.
 2. As platform admin: `tenantCreate(slug, name, ownerEmail)`; `infra/tenant-groups.sh add <tenant-id> <owner-email>`.
-3. The owner's bank logins go in `~/.finance-tenants/<tenant-id>.env` (mode 600) on the Mac, typed by that household.
+3. The owner's bank logins go in `~/.finance-tenants/<tenant-id>.env` (mode 600) on the Mac, typed by that household,
+   or in the tenant's own vault project (`python -m finance.vault_admin tenant <id>`; `docs/secrets-vault.md`).
 4. `poetry run python sync/schedule.py --tenant <tenant-id>`, then `--trigger`.
 5. The owner signs in again (the group is in the id token) and sees their own data.
 
