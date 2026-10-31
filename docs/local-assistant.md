@@ -17,5 +17,14 @@ poetry run python -m assistant                                      # chat
 ## Running the model
 Standalone Ollama binary in `~/.local/ollama/` (Homebrew install failed). `./ollama serve`, then `./ollama pull qwen3:30b-a3b-instruct-2507-q4_K_M` (~18 GB, non-thinking: the plain `qwen3:30b` reasons for a minute on a one-line prompt).
 
+## In the dashboard (API + chat)
+`POST /api/assistant/chat` (contract: docs/ledger-api.md) runs the same tools on the caller's tenant. The API container reaches
+Ollama as `host.docker.internal:11434` (verified: it works while Ollama listens on `127.0.0.1` only; keep it there, Ollama has no auth).
+To turn it on, the user does these outward steps:
+1. `infra/ollama.sh` — Ollama as a login LaunchAgent (`--off` removes it). Stop any manual `ollama serve` first.
+2. `.env`: `FINANCE_API_ASSISTANT_URL=http://host.docker.internal:11434/v1` (+ optional `FINANCE_API_ASSISTANT_MODEL`).
+3. `docker compose --profile api up -d --build api` from the main checkout, once this branch is merged.
+Unset URL = the assistant is off (503 `assistant_off`) and the UI hides the chat. Kill switch: `infra/ollama.sh --off` or clear the URL.
+
 ## Not done yet
-Read-only and CLI-only. No API endpoint or dashboard panel (those need the tenant/auth layers and a GraphQL schema), no writes, no evals beyond the unit tests, and Ollama does not start on login.
+Read-only. No dashboard chat sheet yet, no writes, no net-worth/debt answers (the API does not serve `snapshot`), no evals beyond the unit tests.

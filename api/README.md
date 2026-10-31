@@ -45,7 +45,7 @@ Set in `.env` (see `.env.example`); compose passes exactly these, never `env_fil
 | `API_DATABASE_URL` | set by compose; for non-Docker runs, a URL for role `finance_api` |
 | `TEMPORAL_ADDRESS` | set to `temporal:7233` by compose |
 | `PUSH_VAPID_PUBLIC_KEY` | optional; the Web Push public key served at `GET /api/push/key` (the private key never enters the container) |
-| `ASSISTANT_BASE_URL`, `ASSISTANT_MODEL` | optional; an OpenAI-compatible server (Ollama on the Mac) and model for `POST /api/assistant/chat`; unset = the assistant is off (503 `assistant_off`) |
+| `ASSISTANT_BASE_URL`, `ASSISTANT_MODEL` (compose reads them from `FINANCE_API_ASSISTANT_URL` / `FINANCE_API_ASSISTANT_MODEL` in `.env`) | optional; an OpenAI-compatible server (Ollama on the Mac) and model for `POST /api/assistant/chat`; unset = the assistant is off (503 `assistant_off`) |
 | `FINANCE_API_DEV_USER` | development only, see above |
 
 The API refuses to start if the origin secret is missing, or if the Cognito settings and

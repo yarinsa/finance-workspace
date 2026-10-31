@@ -51,6 +51,10 @@ services:
       FINANCE_API_COGNITO_CLIENT_ID: ${FINANCE_API_COGNITO_CLIENT_ID:-}
       FINANCE_API_ALLOWED_EMAILS: ${FINANCE_API_ALLOWED_EMAILS:-}
       PUSH_VAPID_PUBLIC_KEY: ${PUSH_VAPID_PUBLIC_KEY:-}   # public half only; the private key stays on the Mac
+      # The chat assistant (docs/local-assistant.md): Ollama on the Mac, reached through Docker Desktop's
+      # host alias (http://host.docker.internal:11434/v1). Empty = the assistant is off (503 assistant_off).
+      ASSISTANT_BASE_URL: ${FINANCE_API_ASSISTANT_URL:-}
+      ASSISTANT_MODEL: ${FINANCE_API_ASSISTANT_MODEL:-}
       # Self-service secrets (docs/secrets-vault.md): the API writes straight to the tenant's vault project with
       # that tenant's write identity. Needs `--profile vault` up; empty = the feature is off.
       FINANCE_VAULT_URL: ${FINANCE_API_VAULT_URL:-}
