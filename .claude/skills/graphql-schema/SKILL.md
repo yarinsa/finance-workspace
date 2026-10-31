@@ -1,6 +1,6 @@
 ---
 name: graphql-schema
-description: Change the Ledger API's GraphQL surface schema-first — add or change a type, field, input, enum, query or mutation in api/schema/*.graphql, regenerate the codegen, bind it to its Pydantic model, and write only the resolvers the generator can't cover. Activate when the user asks for a new GraphQL field/query/mutation/enum, a new API action for the app (including sync actions), when test_codegen.py or test_graphql_schema.py fails, or when maintaining api/codegen.
+description: Change the Ledger API GraphQL surface schema-first (api/schema/*.graphql, codegen, Pydantic binding, resolvers). Use for any new field, query, mutation or enum, or when test_codegen.py / test_graphql_schema.py fails.
 ---
 
 # GraphQL schema (SDL-first) and its codegen

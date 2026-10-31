@@ -1,6 +1,6 @@
 ---
 name: backoffice-members
-description: Back-office procedures for people - add or invite a member to a household, remove or offboard one, change a role, and what provisioning and deprovisioning do to their Cognito account. Activate when the user asks to add, invite, give access to, remove, offboard or revoke someone, or to make someone an owner/admin/member of a tenant.
+description: Add, invite, remove or change the role of a household member, including the Cognito side. Use when asked to give access to, offboard or revoke someone.
 ---
 
 # Back office: members

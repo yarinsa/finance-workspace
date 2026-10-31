@@ -1,6 +1,6 @@
 ---
 name: riseup
-description: RiseUp-native operations — classify, rename, exclude, or merge RiseUp transactions, and RiseUp-specific queries. Activate when the user explicitly mentions RiseUp, or wants to edit/classify RiseUp categories. For general money questions (spending, income, net worth, goals) prefer the `finance` skill, which reads the unified digested ledger.
+description: "RiseUp-native operations: classify, rename, exclude or merge RiseUp transactions and RiseUp-specific queries. Use when the user mentions RiseUp or wants to edit its categories."
 ---
 
 # RiseUp Finance CLI Skill

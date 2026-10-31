@@ -1,6 +1,6 @@
 ---
 name: schema-change
-description: Change the shape of the finance data — add/rename a field on a normalized entity or ledger row, change a Postgres table or view, add a dependency — keeping finance/models.py, finance/tables.py, the Alembic migrations and Poetry in sync. Activate when a normalizer needs a new field, a ValidationError comes out of write_envelope, test_schema.py reports drift, or the user asks to change the DB schema or add a Python package.
+description: Change the shape of finance data (normalized field, ledger row, Postgres table/view, dependency) keeping models.py, tables.py, Alembic and Poetry in sync. Use when a normalizer needs a new field, write_envelope raises ValidationError, or test_schema.py reports drift.
 ---
 
 # Schema change (Pydantic models ⇄ SQLModel tables ⇄ Alembic)

@@ -6,7 +6,7 @@ lifecycle). `scrape.mjs` does checking; `scrape-mortgage.mjs` does mortgage + lo
 Deterministic scrape of Bank Discount personal checking. It does its own login with
 `puppeteer` (headless; same flow as `israeli-bank-scrapers`' Discount scraper, which is no
 longer a dependency), then calls the telebank gateway API from inside the page and writes
-the same raw files `.claude/skills/discount-account-refresh/scripts/dump.sh` writes
+the same raw files `.claude/skills/refresh/scripts/discount-account/dump.sh` writes
 (`userAccountsData`, `infoAndBalance`, `headerData`, `dashboardBalances`, `creditLine`,
 `transactions`, `categoriesList`, `totalCreditAndDebitByMonth`, `creditCards_*`,
 `deposits_depositsDetails`; pretty JSON, atomic tmp + rename). It replaces `dump.sh` for
@@ -36,7 +36,7 @@ The account number is `DefaultAccountNumber` from `userAccountsData` (fallback `
 ## Mortgage (`scrape-mortgage.mjs`)
 
 Same login, headers (`site: retail`, `businessprocessid: MY_ACCOUNT_HOMEPAGE`) and stub guard;
-replaces `.claude/skills/discount-mortgage-refresh/scripts/dump.sh`. Writes `accountsList.json`,
+replaces `.claude/skills/refresh/scripts/discount-mortgage/dump.sh`. Writes `accountsList.json`,
 `onlineLoans_loansQuery.json` and `mortgage_details.json` (required) to `data/discount-mortgage/raw`.
 The `mortgage/details` POST body is built from `accountsList` (`OldAccountInfo` per entry).
 
@@ -44,7 +44,7 @@ The `mortgage/details` POST body is built from `accountsList` (`OldAccountInfo` 
 
 ## Business (`scrape-business.mjs`)
 
-Replaces `.claude/skills/discount-business-refresh/scripts/dump.sh` and writes the same files to
+Replaces `.claude/skills/refresh/scripts/discount-business/dump.sh` and writes the same files to
 `data/discount-business/raw` (`infoAndBalance.json` and `transactions.json` required). Two
 differences from personal: it logs in through `LOGIN_PAGE_SME` (ID + password, no `#aidnum`;
 `login(page, 'LOGIN_PAGE_SME')` lands on `/apollo/business2/`), because a personal session that

@@ -333,7 +333,7 @@ export interface Loan {
  * A long-term savings vehicle (pension / study fund). These are assets, not
  * cashflow — they carry no transactions, so they never appear in the ledger.
  * `management_fee` / `yield_ytd` are null until the per-policy detail is
- * captured (see the harel-refresh skill's "known gap").
+ * captured (see the refresh skill's references/harel.md "known gap").
  */
 /** A debt-bearing card in the snapshot (RiseUp's, with the issuers' roster names by last4). */
 export interface CreditCard {

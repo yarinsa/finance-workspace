@@ -17,7 +17,7 @@ set -euo pipefail
 
 SESSION="${1:-__NAME__}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/../../../../.." && pwd)"
 OUT_DIR="${2:-$REPO_ROOT/data/__NAME__/raw}"
 
 mkdir -p "$OUT_DIR"

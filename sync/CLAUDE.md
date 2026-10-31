@@ -49,7 +49,7 @@ as the CDP `dump.sh` scripts; a refused login becomes `needs_login` (and skips t
 Discount sources, which share the credentials).
 CAL works the same way: `scrapers/cal/scrape.mjs` logs in headless with
 `CAL_USERNAME`/`CAL_PASSWORD` from `.env` (check mode `self`) and writes the same
-`data/cal/raw` files as `cal-refresh/scripts/dump.sh`; a refused login (or a demanded OTP) is `needs_login`.
+`data/cal/raw` files as `refresh/scripts/cal/dump.sh`; a refused login (or a demanded OTP) is `needs_login`.
 Max does the same: `scrapers/max/scrape.mjs` logs in headless with `MAX_USERNAME`/`MAX_PASSWORD`
 (check mode `self`, its own login group) and writes `data/max/raw/`.
 Leumi too: `scrapers/leumi/scrape.mjs` logs in headless with `LEUMI_USERNAME`/`LEUMI_PASSWORD`

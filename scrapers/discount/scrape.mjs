@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Deterministic Discount personal-checking scrape: logs in itself (puppeteer, same flow as
 // israeli-bank-scrapers' Discount scraper; shared foundation in lib.mjs) and writes the same raw
-// files as .claude/skills/discount-account-refresh/scripts/dump.sh. Credentials come from <repo>/.env only.
+// files as .claude/skills/refresh/scripts/discount-account/dump.sh. Credentials come from <repo>/.env only.
 import path from 'node:path';
 import { repo, opt, requireLoginEnv, createDumper, runScrape, Exit, GATEWAY } from './lib.mjs';
 import { dataDir } from '../tenant.mjs';

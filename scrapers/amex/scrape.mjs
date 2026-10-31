@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Deterministic American Express Israel (Isracard/ICC) scrape: logs in headless by itself
 // (puppeteer) with AMEX_ID / AMEX_CARD6_DIGITS / AMEX_PASSWORD from <repo>/.env, then writes the
-// same raw files as .claude/skills/amex-refresh/scripts/dump.sh to data/amex/raw/.
+// same raw files as .claude/skills/refresh/scripts/amex/dump.sh to data/amex/raw/.
 //
 // Login: we fill and submit the site's own password form on he.americanexpress.co.il instead of
 // POSTing the JSON calls ourselves (israeli-bank-scrapers' way). The form sends the page's

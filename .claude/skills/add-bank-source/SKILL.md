@@ -1,6 +1,6 @@
 ---
 name: add-bank-source
-description: Scaffold a new bank/financial-service scraper skill in this repo, following the proven CDP + playwright-cli pattern used by the discount-*, leumi, and riseup raw-refresh skills. Activate when the user wants to add a new data source / bank / institution scraper, or asks how the existing scrapers work and wants to build another like them.
+description: Scaffold a new bank or data-source scraper into the `refresh` skill (CDP + playwright-cli pattern). Use when adding a new institution or asking how the scrapers work.
 ---
 
 # Add a New Bank / Service Source
@@ -11,13 +11,13 @@ page context, and dumping raw JSON into `data/<source>/raw/`. This skill is the
 **recipe + template** for adding another source the same way.
 
 Existing examples to copy from (read the closest one first):
-| Skill | Source | Shape |
+| Reference | Source | Shape |
 |-------|--------|-------|
-| `discount-account-refresh` | Discount personal | REST-ish GET/POST, `site:retail` header |
-| `discount-business-refresh` | Discount business (SME) | same backend, `site:sme` header |
-| `discount-mortgage-refresh` | Discount mortgage | POST body **derived live** from a prior call |
-| `leumi-account-refresh` | Bank Leumi | Broker.svc modules, **live SessionID**, triple-nested responses |
-| `riseup-raw-refresh` | RiseUp | plain `/api/...` GETs |
+| `refresh` references/discount-account.md | Discount personal | REST-ish GET/POST, `site:retail` header |
+| `refresh` references/discount-business.md | Discount business (SME) | same backend, `site:sme` header |
+| `refresh` references/discount-mortgage.md | Discount mortgage | POST body **derived live** from a prior call |
+| `refresh` references/leumi-account.md | Bank Leumi | Broker.svc modules, **live SessionID**, triple-nested responses |
+| `refresh` references/riseup.md | RiseUp | plain `/api/...` GETs |
 
 ## What stays constant (the pattern)
 
@@ -64,11 +64,11 @@ Confirm with the user: institution, login URL, and **what data** to capture
 .claude/skills/add-bank-source/scripts/new-source.sh <name> <port>
 # e.g. new-source.sh hapoalim 9225
 ```
-This creates `.claude/skills/<name>-refresh/{SKILL.md,scripts/dump.sh}` from
+This creates `.claude/skills/refresh/{references/<name>.md,scripts/<name>/dump.sh}` from
 templates, with the name/port/profile/out-dir filled in and TODO markers where
 the endpoint list goes.
 
-### 2. Launch Chrome + attach (commands are in the generated SKILL.md)
+### 2. Launch Chrome + attach (commands are in the generated reference)
 ```bash
 /Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome \
   --remote-debugging-port=<PORT> --user-data-dir="$HOME/.chrome-cdp-<NAME>" \
@@ -127,11 +127,11 @@ Replace the `TODO` endpoint list with your confirmed endpoints using the
 `get_ep` / `post_ep` helpers. Keep `parse_and_write` unchanged (add a
 `jsonResp`-style unwrap only if the bank triple-nests, like Leumi). Run it:
 ```bash
-.claude/skills/<name>-refresh/scripts/dump.sh
+.claude/skills/refresh/scripts/<name>/dump.sh
 ```
 Spot-check one file with `node -e` that it's valid JSON with real figures.
 
-### 6. Fill in the generated `SKILL.md`
+### 6. Fill in the generated `references/<name>.md`
 - Real endpoint table, the actual login/launch commands, and any
   source-specific gotcha you hit (mirror how the existing skills document
   theirs).
@@ -140,8 +140,7 @@ Spot-check one file with `node -e` that it's valid JSON with real figures.
 - Write `data/<name>/manifest.json` (label, account types, capabilities, connection form) and
   register the `Source` in `sync/sources.py` — follow the `source-manifest` skill.
 - Add the port/profile row to the registry table **above** (in this file).
-- Write a `<name>-refresh-skill.md` memory file + a `MEMORY.md` pointer
-  (mirror the existing `*-refresh-skill.md` entries).
+- Add a row to the table in `refresh/SKILL.md`. Don't add a per-source memory file; the reference holds the gotchas.
 - If the user wants stored credentials, add `<NAME>_*` placeholders to the
   gitignored `.env` — **empty, user-filled, never auto-typed**.
 

@@ -57,7 +57,7 @@ def _tenant_env(tenant_id=None):
     return {"FINANCE_TENANT_ID": str(_tid(tenant_id))}
 SKILLS = REPO_ROOT / ".claude" / "skills"
 REFRESH_ALL = SKILLS / "refresh-all" / "scripts"
-AMEX_CHECK = SKILLS / "amex-refresh" / "scripts" / "check_session.sh"
+AMEX_CHECK = SKILLS / "refresh" / "scripts" / "amex" / "check_session.sh"
 VALIDATOR = REPO_ROOT / "data" / "validate.py"  # built separately; absent means no gate yet
 
 CHROME_BIN = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"

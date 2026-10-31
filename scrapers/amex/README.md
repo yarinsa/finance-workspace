@@ -1,7 +1,7 @@
 # AMEX scraper
 
 `scrape.mjs` logs in to American Express Israel (Isracard/ICC) headless with `puppeteer` and
-writes the same raw files as `.claude/skills/amex-refresh/scripts/dump.sh` to `data/amex/raw/`,
+writes the same raw files as `.claude/skills/refresh/scripts/amex/dump.sh` to `data/amex/raw/`,
 so `data/amex/normalize.py` and `data/validate.py dump amex` work unchanged. No Chrome/CDP
 session needed.
 

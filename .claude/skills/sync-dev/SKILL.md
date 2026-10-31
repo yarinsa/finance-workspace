@@ -1,6 +1,6 @@
 ---
 name: sync-dev
-description: Develop and debug the automated sync (sync/ Temporal workflows, scrapers/*/scrape.mjs, the API's sync endpoints and GraphQL, the /syncs screen) — where the running services load code from, how to restart them, the API conventions a sync feature must follow, and how to test it. Activate when a scheduled/app sync fails (ScrapeFailed, needs_login, rejected), when changing the sync workflow, a headless scraper, sync status/retry/login in the API, or the /syncs UI.
+description: Develop and debug the automated sync (Temporal workflows, scrapers/*/scrape.mjs, sync API/GraphQL, /syncs screen). Use for failed syncs (ScrapeFailed, needs_login, rejected) or when changing any of those.
 ---
 
 # Developing the sync

@@ -113,4 +113,4 @@ RiseUp's envelope under-reports (residual-cycle figure). We use
 show the higher figure until that charge posts, so `forecast.py` applies the
 user-confirmed freeze from `data/freeze.json` (written by `detect_freeze.py`) to
 project the post-freeze months correctly. Do **not** treat the current ~₪5,901 as
-permanent — see the freeze section in the `discount-mortgage-refresh` skill.
+permanent — see the freeze section in `refresh` skill (references/discount-mortgage.md).

@@ -1,6 +1,6 @@
 ---
 name: cashflow-mgmt
-description: Manage the household's month-to-month cashflow — where the checking balance will land after upcoming debits, when the overdraft (מסגרת) gets hit, available-to-spend until payday, how to reorganize timing and money flows before cutting, sinking funds for periodic costs, and which cuts/prepayments actually help. Activate when the user asks about overdraft/מינוס, "what will my balance be after the charges", how much they can spend, steady/predictable cashflow, reorganizing the budget, a payday/weekly/monthly money review, or whether to put spare cash toward an installment or loan.
+description: "Month-to-month cashflow: projected checking balance after upcoming debits, overdraft (מסגרת) risk, available-to-spend until payday, sinking funds, and which cuts or prepayments help. Use for overdraft/מינוס, \"what will my balance be\", or a payday/weekly money review."
 ---
 
 # Cashflow management

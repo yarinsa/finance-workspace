@@ -30,6 +30,9 @@ things shrink that: a smaller fixed start, and shorter sessions.
 | Details moved next to their code: `sync/`, `api/`, `db/`, `finance/`, `data/`, `app/` `CLAUDE.md` | Claude loads a directory's file only when it works there |
 | `finance-copilot` plugin disabled in this project (`.claude/settings.json`) | Its skills duplicate the project's own skills |
 | `israeli-bank` MCP server disabled | The direct scrapers replaced it |
+| The eleven `*-refresh` skills merged into one `refresh` skill: a short `SKILL.md` plus `references/<source>.md` and `scripts/<source>/` | Eleven descriptions and bodies loaded into every session; now one description, and a source's details only when needed |
+| Descriptions of the other skills cut to one or two sentences | Every description is in the context of every session |
+| Machine-global memory pruned: eleven per-skill notes and the superseded June 2026 picture removed; the few facts only they held moved into the `refresh` references | The index loads every session |
 | Models for subagents: `design-system`, `backoffice` and `sync-ops` on Sonnet; `pipeline` on Opus | Mechanical work doesn't need the largest model |
 
 ## Working habits
@@ -39,11 +42,17 @@ things shrink that: a smaller fixed start, and shorter sessions.
 3. Hand mechanical work (refreshes, screenshots, broad searches) to `sync-ops`, `design-system` or `Explore`.
 4. Use `/context` when a session feels heavy, and `/compact` before a long implementation.
 
+## `plugin/` copies
+
+Nothing in the repo (code, tests, scripts, CI, `.claude/settings.json`) loads or imports `plugin/`; the
+`finance-copilot` plugin is disabled here and only the docs mention `plugin/scripts/`. It stays as a
+standalone distribution with its own copies of the skills and scripts, so it is not kept in step with the
+`refresh` skill. Delete it when the plugin is retired.
+
 ## Next steps
 
-- Merge the nine `*-refresh` skills into one `refresh` skill with a reference file per source.
-- Prune the machine-global memory index (superseded and per-skill notes).
-- Take a weekly snapshot and add a row to this file.
+- Check `/context` in a new session: the start should be under 40k tokens.
+- Take a weekly snapshot and add a row to the table below. The first one is due from 2026-11-07.
 
 | Week | Sessions | Weighted | Per session (median) | Start context | Notes |
 |---|---|---|---|---|---|

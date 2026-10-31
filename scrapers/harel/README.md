@@ -2,7 +2,7 @@
 
 `scrape.mjs` scrapes Harel (pension + study funds) **headless, without logging in**. Harel's only
 login is ID + phone + a one-time code (SMS/email), which is never automated; the human logs in once
-in the Chrome profile `~/.chrome-cdp-harel` (port 9227, see the `harel-refresh` skill) and this
+in the Chrome profile `~/.chrome-cdp-harel` (port 9227, see `refresh` skill (references/harel.md)) and this
 reuses that session:
 
 - Chrome on 9227 is up → `puppeteer.connect` and work in a new tab of it (the profile is locked).

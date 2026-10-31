@@ -1,6 +1,6 @@
 from activities import parse_verdict
 
-# Real output format of .claude/skills/amex-refresh/scripts/check_session.sh
+# Real output format of .claude/skills/refresh/scripts/amex/check_session.sh
 LIVE = """cookie authentication_shared: 561 chars
 cookie JSESSIONID: 36 chars
 IsLoggedIn status: 200

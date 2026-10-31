@@ -1,6 +1,6 @@
 ---
 name: dashboard-screenshots
-description: Run the Plangram dashboard app (app/, Vite + React) and capture screenshots of every route at a mobile (390x844 @2x, dark) or desktop viewport. Use when the user says "screenshot the dashboard", "show me the app", "run the app", or wants to see how a UI change looks (they often work from a phone).
+description: Run the Plangram dashboard (app/) and screenshot every route at mobile (390x844 @2x, dark) or desktop size. Use when the user wants to see the app or how a UI change looks.
 ---
 
 # Dashboard screenshots

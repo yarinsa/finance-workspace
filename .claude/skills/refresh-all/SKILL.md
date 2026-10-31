@@ -1,6 +1,6 @@
 ---
 name: refresh-all
-description: Refresh every financial data source end to end — checks all sessions up front, batches the logins you need into one pass, scrapes each source in dependency-correct order, then runs digest and forecast and publishes the data to the dashboard. Activate when the user asks to sync, refresh, update, or pull fresh data for ALL sources / everything / the whole pipeline, rather than one named institution.
+description: "Refresh every data source end to end: check sessions, batch logins, scrape in order, then digest, forecast and publish. Use when asked to sync or refresh all sources; for one source use `refresh`."
 ---
 
 # Refresh everything
@@ -63,20 +63,20 @@ whole reason the current, metadata-only approach exists.
 
 ### 2. Scrape
 
-Spawn one agent per institution, in parallel, each invoking that source's
-existing skill:
+Spawn one agent per institution, in parallel, each following the `refresh` skill
+(its `references/<source>.md` for that source):
 
-| Agent | Skill(s) |
+| Agent | Sources |
 |---|---|
-| riseup | `riseup-raw-refresh` |
-| discount | `discount-account-refresh` → `discount-mortgage-refresh` → `discount-business-refresh` **(sequential, this order)** |
-| leumi | `leumi-account-refresh` |
-| cal | `cal-refresh` |
-| amex | `amex-refresh` |
-| max | `max-refresh` (headless self-login from `.env`, no Chrome) |
-| harel | `harel-refresh` |
-| more | `more-refresh` |
-| analyst | `analyst-refresh` |
+| riseup | `riseup` |
+| discount | `discount-account` → `discount-mortgage` → `discount-business` **(sequential, this order)** |
+| leumi | `leumi-account` |
+| cal | `cal` |
+| amex | `amex` |
+| max | `max` (headless self-login from `.env`, no Chrome) |
+| harel | `harel` |
+| more | `more` |
+| analyst | `analyst` |
 
 Tell every agent: **do not run `digest.py` or `forecast.py`** — this skill does
 that once, at the end, after all sources have landed.

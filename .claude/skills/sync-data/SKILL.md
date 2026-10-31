@@ -1,6 +1,6 @@
 ---
 name: sync-data
-description: Rebuild the digested finance data and push ONLY the JSON (cashflow, snapshot, transactions, goals, forecast) to the private S3 bucket behind https://my-finance.yarinsa.me, then invalidate /data/*. No app build. Activate when the user asks to sync/push/upload data to the bucket(s), update the dashboard's numbers, or publish fresh data. For shipping code changes to the dashboard itself, use `deploy-app`.
+description: Rebuild digested data and push only the JSON to the S3 bucket behind my-finance.yarinsa.me, then invalidate /data/*. Use to publish fresh numbers; for code changes use `deploy-app`.
 ---
 
 # Sync data to the bucket

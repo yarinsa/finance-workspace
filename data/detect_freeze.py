@@ -55,7 +55,7 @@ mortgage posts one debit per month described "דסק-משכנתא".
   Omitting either returns HTTP 200 with {"Error":{"MsgText":"קלט לא תקין"}}.
   Lookback is capped at ~9-10 months (FromDate=20250901 works, 20250801 is empty).
 
-See .claude/skills/discount-mortgage-refresh/SKILL.md ("Dating a freeze from
+See .claude/skills/refresh/references/discount-mortgage.md ("Dating a freeze from
 payment history") for the full recipe and the worked Apr-Jun 2026 example.
 
 For the record, that history — the evidence that settled it:
@@ -290,7 +290,7 @@ HISTORY_HINT = """
       Headers: UUID: <live from app>, BusinessProcessID: OSH_LENTRIES_ALTAMIRA
       (lookback caps at ~9-10 months)
 
-    Recipe: .claude/skills/discount-mortgage-refresh/SKILL.md
+    Recipe: .claude/skills/refresh/references/discount-mortgage.md
             -> "Dating a freeze from payment history"
 """
 

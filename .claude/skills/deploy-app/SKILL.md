@@ -1,6 +1,6 @@
 ---
 name: deploy-app
-description: Build the Plangram dashboard (app/) and push ONLY the app bundle to the private S3 bucket behind https://my-finance.yarinsa.me, then invalidate CloudFront. Does not touch the data. Activate when the user asks to deploy/ship/release the app, dashboard code or UI changes. For pushing fresh numbers, use `sync-data`.
+description: Build the dashboard (app/) and push only the app bundle to the S3 bucket behind my-finance.yarinsa.me, then invalidate CloudFront. Use to deploy UI changes; for fresh numbers use `sync-data`.
 ---
 
 # Deploy the app

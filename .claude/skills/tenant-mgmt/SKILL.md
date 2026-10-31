@@ -1,6 +1,6 @@
 ---
 name: tenant-mgmt
-description: Manage tenants (households) — create one, add or remove members, suspend it, onboard a second household end to end (database, Cognito group, credentials file, sync schedule), or change code that touches tenant-owned data (a new table, an RLS policy, a scraper path). Activate when the user asks about tenants, memberships, a second household/customer, platform admin, tenant isolation, X-Tenant-Id, the /tenants screen, or `enforce_tenant_data`.
+description: "Tenant (household) isolation: memberships, platform admin, X-Tenant-Id, enforce_tenant_data, and code touching tenant-owned data (new table, RLS policy, scraper path). Use for tenant questions or such code changes; for create/suspend procedures see the backoffice-* skills."
 ---
 
 # Tenant management

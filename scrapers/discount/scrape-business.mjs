@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Deterministic Discount BUSINESS (SME) scrape: logs in itself (shared foundation in lib.mjs) and
-// writes the same raw files as .claude/skills/discount-business-refresh/scripts/dump.sh to
+// writes the same raw files as .claude/skills/refresh/scripts/discount-business/dump.sh to
 // data/discount-business/raw. Credentials come from <repo>/.env only (same login as personal).
 //
 // Same backend as the personal scrapers; the differences are the `site: sme` header (with

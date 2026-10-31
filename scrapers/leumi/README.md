@@ -2,7 +2,7 @@
 
 `scrape.mjs` logs in to hb2.bankleumi.co.il headless (puppeteer; same flow as israeli-bank-scrapers'
 Leumi scraper) with `LEUMI_USERNAME` / `LEUMI_PASSWORD` from the repo-root `.env`, then makes the
-calls of `.claude/skills/leumi-account-refresh/scripts/dump.sh` (`accounts.json`, `summary.json`,
+calls of `.claude/skills/refresh/scripts/leumi-account/dump.sh` (`accounts.json`, `summary.json`,
 `transactions.json`, all required; the Broker `SessionID` is read from localStorage) and
 `dump-loans.sh` (`loans.json`, `loan-summary.html`, `loan-activity-<N>.html`) into `data/leumi/raw`
 (pretty JSON, atomic, stub guard; `loans.json` is not written when a loan comes back without its number).

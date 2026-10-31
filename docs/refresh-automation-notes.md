@@ -22,7 +22,7 @@ stale silently.
 
 `data/amex/normalize.py` reads only `raw/cardList.json` and
 `raw/transactions_<suffix>_<month>.json` (per-card monthly pulls) — see its
-glob at `data/amex/normalize.py:64`. But `.claude/skills/amex-refresh/scripts/dump.sh`
+glob at `data/amex/normalize.py:64`. But `.claude/skills/refresh/scripts/amex/dump.sh`
 (pre-fix) only ever captured 5 SPA-bootstrap endpoints (cardList,
 transactionsList, initContent, personalComponents, campaign) — it never wrote
 a single `transactions_*` file. `transactionsList.json` is the account-wide
@@ -42,14 +42,14 @@ actually produces, which nobody had done since the endpoints moved.
 via `POST .../GetTransactionsList` with an explicit `card4Number` /
 `billingMonth` / `companyCode` / `isPartner` body — issued with
 `page.request.post()` (not `page.evaluate()+fetch()`), which does carry the
-context's HttpOnly cookies. `amex-refresh/SKILL.md` previously claimed
+context's HttpOnly cookies. `refresh/references/amex.md` previously claimed
 `page.request.post()` "was also tried and also returned login HTML" — that
 note was wrong (never cleanly isolated from the dead-StatusPage-endpoint
 confusion of the same period) and has been corrected in place.
 Filenames match `normalize.py`'s glob exactly:
 `transactions_<suffix>_<YYYYMM>.json`. See
-`.claude/skills/amex-refresh/scripts/dump.sh` (Step 3) and
-`.claude/skills/amex-refresh/SKILL.md` ("Per-card transaction files" section).
+`.claude/skills/refresh/scripts/amex/dump.sh` (Step 3) and
+`.claude/skills/refresh/references/amex.md` ("Per-card transaction files" section).
 
 **Lesson for future sources:** whenever a scraper endpoint list changes,
 diff it against the corresponding `normalize.py`'s glob/read list before
@@ -58,7 +58,7 @@ whether the file the normalizer actually reads was written.
 
 ### FIX 2 — stub guard now enforced in all seven sources (fixed)
 
-Previously only `amex-refresh/scripts/dump.sh` validated a response
+Previously only `refresh/scripts/amex/dump.sh` validated a response
 (login-shell HTML / JSON validity) before writing. The other six sources
 (discount-account, discount-mortgage, discount-business, leumi, harel, cal)
 shared a `parse_and_write()` that wrote unconditionally, only printing a
@@ -95,17 +95,17 @@ navigation or re-entering a bank's gateway URL loses/rebinds the session).
 
 | # | Problem | Change | File(s) | Effort | Risk | Time saved/run | Status |
 |---|---|---|---|---|---|---|---|
-| 0 | AMEX `dump.sh` never wrote the per-card files `normalize.py` globs; no size anomaly, all-green false pass | `dump.sh` now fetches `transactions_<suffix>_<month>.json` per active card via `page.request.post()` | `amex-refresh/scripts/dump.sh`, `amex-refresh/SKILL.md` | M | low | prevents the ledger from silently going stale forever | **DONE 2026-09-04** |
+| 0 | AMEX `dump.sh` never wrote the per-card files `normalize.py` globs; no size anomaly, all-green false pass | `dump.sh` now fetches `transactions_<suffix>_<month>.json` per active card via `page.request.post()` | `refresh/scripts/amex/dump.sh`, `refresh/references/amex.md` | M | low | prevents the ledger from silently going stale forever | **DONE 2026-09-04** |
 | 1 | SKILL.md says the checker navigates; script explicitly does not (and says why) | Rewrite SKILL.md lines 44-47 to match script behavior | `.claude/skills/refresh-all/SKILL.md:44-47` | S | none | prevents future regression, not per-run | **DONE 2026-09-04** |
-| 2 | 6/7 `dump.sh` scripts have no stub-content guard | Inlined amex's login-shell/JSON/auth-error-marker check into each script's own `parse_and_write` (no shared library — none of these scripts sourced one before) | `discount-account-refresh/scripts/dump.sh`, `discount-mortgage-refresh/scripts/dump.sh`, `discount-business-refresh/scripts/dump.sh`, `leumi-account-refresh/scripts/dump.sh`, `harel-refresh/scripts/dump.sh`, `cal-refresh/scripts/dump.sh` | M | low (additive, only tightens writes) | avoids re-scrape debugging when a stub silently lands | **DONE 2026-09-04** |
+| 2 | 6/7 `dump.sh` scripts have no stub-content guard | Inlined amex's login-shell/JSON/auth-error-marker check into each script's own `parse_and_write` (no shared library — none of these scripts sourced one before) | `refresh/scripts/discount-account/dump.sh`, `refresh/scripts/discount-mortgage/dump.sh`, `refresh/scripts/discount-business/dump.sh`, `refresh/scripts/leumi-account/dump.sh`, `refresh/scripts/harel/dump.sh`, `refresh/scripts/cal/dump.sh` | M | low (additive, only tightens writes) | avoids re-scrape debugging when a stub silently lands | **DONE 2026-09-04** |
 | 3 | `LAUNCH=1` → recheck is two manual invocations, no readiness wait on the *session* (only the port) | After launch, loop re-running the per-source liveness check (not just `/json/version`) until LIVE/DEAD/timeout, then print the final table once | `.claude/skills/refresh-all/scripts/check_sessions.sh:149-176` | S | low | removes 1 manual re-run per cold-start source | open |
 | 4 | Discount NEEDS LOGIN discovered only after agents were spawned | Nothing to automate here without navigating (which kills sessions) — but the *reporting* step could be more emphatic: exit code 1 already signals "stop", the caller just has to actually gate on it | `refresh-all` orchestration step (agent behavior, not a script) | S (process, not code) | none | avoids the drip-feed the skill exists to prevent | open |
 | 5 | Digest sanity checks (tx count "low thousands", uncategorized "~20%") are prose only, never asserted | Add a `--check` mode to `digest.py` (mirroring `detect_freeze.py --check`) that prints these two numbers and exits non-zero outside expected bands | `data/digest.py` (new function near `main()`, ~line 399) | M | low (read-only over already-written output) | turns a "did anyone eyeball this" step into a pass/fail | open |
-| 6 | `mortgage_details.json` ~17K-vs-~350B stub signal is documented (SKILL.md:264-268) but not code-enforced | Covered by #2 — same guard, sized per-endpoint | `discount-mortgage-refresh/scripts/dump.sh` | (subsumed in #2) | — | — | **DONE 2026-09-04** (via #2) |
+| 6 | `mortgage_details.json` ~17K-vs-~350B stub signal is documented (SKILL.md:264-268) but not code-enforced | Covered by #2 — same guard, sized per-endpoint | `refresh/scripts/discount-mortgage/dump.sh` | (subsumed in #2) | — | — | **DONE 2026-09-04** (via #2) |
 | 7 | No per-source record-count assertion after digest | `digest.py` already stamps `_source` per record (`load_entities`, digest.py:24-32); log a one-line count-per-source-per-entity table before consolidation so a source that normalized to near-zero is visible immediately, not just inferred from the total | `data/digest.py:24-32` | S | none | surfaces "cal normalized to 3 transactions" instead of "total count looks a bit low" | open |
 | 8 | `data/freeze.json` staleness | `detect_freeze.py` already clears a stale freeze file when no discrepancy is detected (`main()`, lines 339-348) — this is **already handled**, not a gap. Worth noting in this memo only so it isn't "fixed" twice. | `data/detect_freeze.py:339-348` | — | — | already done | n/a |
 | 9 | Duplicated `parse_and_write` boilerplate across 6 dump.sh scripts (near-identical node -e blocks) | Extract to one shared script (e.g. `.claude/skills/_shared/parse_and_write.sh`) sourced by each dump.sh, folding in the #2 stub guard at the same time | all `*/scripts/dump.sh` except amex | M | medium — touches every scraper, must preserve each source's exact status/label formatting | maintenance win, not per-run time | open — #2's guard was inlined per script instead, to avoid introducing a new cross-skill dependency in this pass |
-| 10 | amex has an ad-hoc `check_session.sh` that no other source has | Not proposing to replicate broadly — amex's problem (HTML-vs-expired ambiguity) is real but source-specific (HttpOnly cookies). Note it as a **pattern** worth reaching for if another source hits the same ambiguity, not a blanket requirement. | `amex-refresh/scripts/check_session.sh` | — | — | — | n/a |
+| 10 | amex has an ad-hoc `check_session.sh` that no other source has | Not proposing to replicate broadly — amex's problem (HTML-vs-expired ambiguity) is real but source-specific (HttpOnly cookies). Note it as a **pattern** worth reaching for if another source hits the same ambiguity, not a blanket requirement. | `refresh/scripts/amex/check_session.sh` | — | — | — | n/a |
 
 ## Details
 
@@ -135,17 +135,17 @@ behavior change — the current behavior is the right one.
 
 Checked every `dump.sh`'s write path:
 
-- **amex** (`amex-refresh/scripts/dump.sh:113-127`): explicit guard — skips
+- **amex** (`refresh/scripts/amex/dump.sh:113-127`): explicit guard — skips
   writing on login-shell HTML (`/^\s*<(!doctype|html)/i` test) or invalid
   JSON, logs `<-- LOGIN-SHELL HTML, NOT WRITTEN` / `<-- NOT JSON, NOT WRITTEN`,
   and exits 2 if literally nothing valid was captured.
 - **discount-mortgage / discount-account / discount-business / leumi / harel
   / cal** all share the same `parse_and_write()` shape (e.g.
-  `discount-mortgage-refresh/scripts/dump.sh:52-67`): it always
+  `refresh/scripts/discount-mortgage/dump.sh:52-67`): it always
   `fs.writeFileSync`s the body, and the only signal is a printed
   `<-- non-200` warning when `status !== "200"`. A stub that comes back **HTTP
   200 with error JSON** (documented explicitly in
-  `discount-mortgage-refresh/SKILL.md:264-268`: `actionRequired: stepup` /
+  `refresh/references/discount-mortgage.md:264-268`: `actionRequired: stepup` /
   `SME - קלט לא תקין` at ~350B when landed on the wrong Discount app) sails
   through this guard untouched and overwrites the last good dump.
 

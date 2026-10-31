@@ -1,6 +1,6 @@
 ---
 name: source-manifest
-description: Manage the sync sources' self-declarations (data/<source>/manifest.json) — add a manifest for a new source, change a source's label, account types, capabilities or connection form (JSON Schema + x-env), extend the allowed values, and keep the registry, digest, app and docs in step. Activate when the user adds or edits a source manifest, changes what a source provides or which .env variables it needs, touches finance/manifest.py or the /syncs connection panel, or asks what the manifests are for.
+description: "Manage sync sources' manifests (data/<source>/manifest.json): label, account types, capabilities, connection form. Use when adding or editing a manifest or the .env variables a source needs."
 ---
 
 # Source manifests

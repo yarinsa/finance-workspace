@@ -210,7 +210,8 @@ def scrape_env(monkeypatch):
         cmds.append(("bind", src.name))
 
     async def fake_run(args, **kw):
-        cmds.append(("run", Path(args[0]).parent.parent.name, args[1:]))
+        p = Path(args[0]).parent
+        cmds.append(("run", p.name if p.parent.name == "scripts" else p.parent.name, args[1:]))
         return results.pop(0) if results else (0, "done")
 
     monkeypatch.setattr(activities, "_ensure_tab", fake_ensure)
@@ -224,7 +225,7 @@ def test_scrape_passes_session_or_port_per_script(scrape_env, chrome_harel):
     run(activities.scrape("chrome-harel"))
     run(activities.scrape("more"))
     runs = [c for c in cmds if c[0] == "run"]
-    assert runs == [("run", "harel-refresh", ["harel"]), ("run", "more-refresh", ["9228"])]
+    assert runs == [("run", "harel", ["harel"]), ("run", "more", ["9228"])]
     assert not [c for c in cmds if c[:2] == ("bind", "more")]  # raw-CDP source: no playwright
 
 

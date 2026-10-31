@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Deterministic Discount mortgage + loans scrape: logs in itself (shared foundation in lib.mjs)
-// and writes the same raw files as .claude/skills/discount-mortgage-refresh/scripts/dump.sh
+// and writes the same raw files as .claude/skills/refresh/scripts/discount-mortgage/dump.sh
 // (accountsList, onlineLoans_loansQuery, mortgage_details). Credentials come from <repo>/.env only.
 //
 // Same headers as dump.sh: site 'retail', businessprocessid 'MY_ACCOUNT_HOMEPAGE'. The SME app's

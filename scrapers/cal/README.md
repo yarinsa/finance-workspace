@@ -2,7 +2,7 @@
 
 `scrape.mjs` logs in to cal-online headless (puppeteer; same flow as israeli-bank-scrapers'
 visaCal scraper) with `CAL_USERNAME` / `CAL_PASSWORD` from the repo-root `.env`, then calls the
-same `api.cal-online.co.il` endpoints as `.claude/skills/cal-refresh/scripts/dump.sh` and writes
+same `api.cal-online.co.il` endpoints as `.claude/skills/refresh/scripts/cal/dump.sh` and writes
 the same files to `data/cal/raw` (pretty JSON, atomic, stub guard). The `CALAuthScheme` token is
 read from `sessionStorage["auth-module"]` after login; card/account ids come from `account/init`.
 `monthlyDebitsSummary.json` and `filteredTransactions.json` are required.

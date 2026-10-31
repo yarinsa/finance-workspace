@@ -8,7 +8,7 @@
 //   - otherwise             -> launch the same Google Chrome binary headless on that profile (the
 //                              same binary, so it can decrypt the profile's Keychain-encrypted cookies).
 // Then it loads client-view.aspx, recovers the per-page-load `ticket` from the page's own XHRs, and
-// writes the same files as harel-refresh/scripts/dump.sh to data/harel/raw/.
+// writes the same files as refresh/scripts/harel/dump.sh to data/harel/raw/.
 //
 //   node scrapers/harel/scrape.mjs [--out DIR] [--check] [--login --otp-file PATH]
 //     --check     only report whether the session is live (writes nothing)
@@ -76,7 +76,7 @@ async function cdpUp() {
 /** {browser, page, done}: a tab in the human's Chrome, or a headless Chrome on the same profile. */
 async function open() {
   if (await cdpUp()) {
-    // 127.0.0.1, never localhost (IPv6 ::1 refuses, see harel-refresh gotchas).
+    // 127.0.0.1, never localhost (IPv6 ::1 refuses, see the refresh skill references/harel.md gotchas).
     const browser = await puppeteer.connect({ browserURL: `http://127.0.0.1:${PORT}`, defaultViewport: null });
     const page = await browser.newPage();
     return { page, done: async () => { await page.close().catch(() => {}); await browser.disconnect(); } };

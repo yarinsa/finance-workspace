@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Deterministic Bank Leumi scrape: logs in by itself, headless, with LEUMI_USERNAME /
 // LEUMI_PASSWORD from <repo>/.env (same flow as israeli-bank-scrapers' Leumi scraper), then makes
-// the same calls as .claude/skills/leumi-account-refresh/scripts/dump.sh (accounts, summary,
+// the same calls as .claude/skills/refresh/scripts/leumi-account/dump.sh (accounts, summary,
 // transactions) and dump-loans.sh (loan schedule + HTML snapshots), writing the same raw files to
 // data/leumi/raw. No Chrome/CDP session needed.
 //

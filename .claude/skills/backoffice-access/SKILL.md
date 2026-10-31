@@ -1,6 +1,6 @@
 ---
 name: backoffice-access
-description: Back-office knowledge of how access really works - Cognito accounts, the invitation email, per-tenant groups, the edge gate and enforce_tenant_data - plus the audit that compares the database with Cognito and the checklist for "she cannot sign in" or "I get 403". Activate when someone cannot sign in, sees 403 on /data, lost access, did not get the invitation, or when the user asks who has access to what.
+description: Explain how access works (Cognito, invitation email, tenant groups, edge gate) and audit the database against Cognito. Use when someone cannot sign in, gets 403, or the user asks who has access to what.
 ---
 
 # Back office: access

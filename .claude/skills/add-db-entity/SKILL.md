@@ -1,6 +1,6 @@
 ---
 name: add-db-entity
-description: Add a new entity (lookup/reference table) to the transactions Postgres DB and link the ledger to it by foreign key instead of free text — SQLModel table with Relationships, hand-written Alembic migration (backfill, views, finance_api grants), seeding on import in db/ledger.py, the override layer, tests, and showing it in the dashboard. Activate when the user wants a new table/entity in the DB (categories, merchants, tags, accounts…), to replace a free-text column with a reference, or to "normalize" a ledger field into its own table.
+description: Add a lookup/reference table to the transactions Postgres DB and link the ledger to it by foreign key (model, Alembic migration, seed, tests, dashboard). Use when the user wants a new table/entity or to normalize a free-text ledger column.
 ---
 
 # Add a DB entity (lookup table + FK from the ledger)

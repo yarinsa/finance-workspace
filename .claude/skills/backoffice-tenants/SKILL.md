@@ -1,6 +1,6 @@
 ---
 name: backoffice-tenants
-description: Back-office procedures for tenants (households) - create one, suspend or reactivate it, and onboard a second household end to end (database, Cognito owner invitation, credentials file, sync schedule, first sign-in). Activate when the user asks to add, create, open, suspend, freeze or reactivate a household/tenant/customer, or to onboard someone with their own bank accounts.
+description: Create, suspend or reactivate a tenant (household) and onboard a second household end to end. Use when asked to add, open, freeze or reactivate a household/customer.
 ---
 
 # Back office: tenants

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Deterministic CAL (cal-online) scrape: logs in by itself, headless, with CAL_USERNAME /
 // CAL_PASSWORD from <repo>/.env (same flow as israeli-bank-scrapers' visaCal scraper), then
-// calls the same api.cal-online.co.il endpoints as .claude/skills/cal-refresh/scripts/dump.sh
+// calls the same api.cal-online.co.il endpoints as .claude/skills/refresh/scripts/cal/dump.sh
 // and writes the same raw files to data/cal/raw. No Chrome/CDP session needed.
 //
 // Exit codes: 0 ok · 1 failure (retryable) · 2 missing env / bad args ·

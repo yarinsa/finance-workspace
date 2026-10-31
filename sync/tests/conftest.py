@@ -45,6 +45,6 @@ def chrome_harel(monkeypatch):
     src = dataclasses.replace(
         sources.get("harel"), name="chrome-harel", check=sources.SESSIONS, playwright=True,
         chrome="harel", tab_key="harel", login_url="https://www.harel-group.co.il/",
-        dumps=(("harel-refresh/scripts/dump.sh", "{session}"),))
+        dumps=(("refresh/scripts/harel/dump.sh", "{session}"),))
     monkeypatch.setitem(sources.SOURCES, src.name, src)
     return src

@@ -124,7 +124,7 @@ _ALL = [
     Source(name="cal", port=0, login_url="https://www.cal-online.co.il/", app_host="cal-online.co.il",
            check=SELF, playwright=False, dumps=((str(REPO_ROOT / "scrapers" / "cal" / "scrape.mjs"),),)),
     # AMEX logs in headless by itself (scrapers/amex/scrape.mjs, AMEX_ID / AMEX_CARD6_DIGITS /
-    # AMEX_PASSWORD from .env) and writes the same files as amex-refresh/scripts/dump.sh.
+    # AMEX_PASSWORD from .env) and writes the same files as refresh/scripts/amex/dump.sh.
     Source(name="amex", port=0, login_url="https://web.americanexpress.co.il/", app_host="americanexpress.co.il",
            check=SELF, playwright=False, dumps=((str(REPO_ROOT / "scrapers" / "amex" / "scrape.mjs"),),)),
     # Max (ex-Leumi Card) logs in headless by itself (scrapers/max/scrape.mjs, MAX_USERNAME /
@@ -139,10 +139,10 @@ _ALL = [
            dumps=((str(REPO_ROOT / "scrapers" / "harel" / "scrape.mjs"),),)),
     Source(name="more", port=9228, login_url="https://my-account.more.co.il/personalarea/dashboard",
            app_host="more.co.il", check=SESSIONS, playwright=False,
-           dumps=(("more-refresh/scripts/dump.sh", "{port}"),)),
+           dumps=(("refresh/scripts/more/dump.sh", "{port}"),)),
     Source(name="analyst", port=9229, login_url="https://amitim.analyst.co.il/lobby",
            app_host="analyst.co.il", check=SESSIONS, playwright=False,
-           dumps=(("analyst-refresh/scripts/dump.sh", "{port}"),)),
+           dumps=(("refresh/scripts/analyst/dump.sh", "{port}"),)),
 ]
 
 # Codes the human types in the app are handed to the waiting dump through one file per source here
