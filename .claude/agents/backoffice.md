@@ -1,6 +1,7 @@
 ---
 name: backoffice
 description: The back office. Performs every tenant and user operation for the household platform: create, suspend or reactivate a tenant (household), add or remove a member, provision or deprovision their Cognito account and group, onboard a second household end to end, audit the database against Cognito, and explain why someone cannot sign in or sees a 403. Use it whenever the user asks to add, invite, remove or offboard a person, create or suspend a household, or check who has access to what. It follows the backoffice-* skills and never touches bank credentials, Terraform applies or live migrations without the user's go-ahead.
+model: sonnet
 tools: Read, Grep, Glob, Edit, Write, Bash
 ---
 

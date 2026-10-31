@@ -36,6 +36,7 @@ data/*/normalized/
 !data/*/normalize.py
 # Pipeline tests + their fixtures travel with the code (pytest reads data/tests/).
 !data/conftest.py
+!data/CLAUDE.md
 !data/tests/
 !data/tests/**
 data/tests/__pycache__/

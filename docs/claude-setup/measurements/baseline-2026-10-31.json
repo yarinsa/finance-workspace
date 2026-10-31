@@ -1,0 +1,101 @@
+{
+  "generated_at": "2026-10-31T13:35:26",
+  "range": [
+    "2026-09-04",
+    "2026-10-31"
+  ],
+  "sessions": 63,
+  "subagent_runs": 26,
+  "start_context_median": 82802,
+  "turn_context_median": 153033,
+  "weighted_per_session_median": 1056347,
+  "subagent_share": 0.199,
+  "by_model": {
+    "claude-opus-5-5": 114722606,
+    "claude-sonnet-5-5": 43393395,
+    "claude-opus-5": 11784011,
+    "claude-sonnet-5": 4957374,
+    "claude-haiku-4-5-20251001": 1948006,
+    "claude-haiku-5-5": 782498,
+    "<synthetic>": 0
+  },
+  "by_week": {
+    "2026-W36": {
+      "input": 807,
+      "cache_write": 1362414,
+      "cache_read": 29685395,
+      "output": 82709,
+      "weighted": 5085908,
+      "turns": 405,
+      "sub_weighted": 2956726,
+      "sessions": 1,
+      "subagent_runs": 1
+    },
+    "2026-W38": {
+      "input": 367,
+      "cache_write": 933677,
+      "cache_read": 14159248,
+      "output": 52752,
+      "weighted": 2847148,
+      "turns": 162,
+      "sub_weighted": 1118649,
+      "subagent_runs": 1,
+      "sessions": 1
+    },
+    "2026-W40": {
+      "input": 1500,
+      "cache_write": 2684593,
+      "cache_read": 92437258,
+      "output": 304391,
+      "weighted": 14122922,
+      "turns": 753,
+      "sub_weighted": 1275609,
+      "sessions": 6,
+      "subagent_runs": 1
+    },
+    "2026-W41": {
+      "input": 442,
+      "cache_write": 797148,
+      "cache_read": 17983707,
+      "output": 77019,
+      "weighted": 3180342,
+      "turns": 194,
+      "sub_weighted": 1138131,
+      "sessions": 2,
+      "subagent_runs": 2
+    },
+    "2026-W42": {
+      "input": 6056,
+      "cache_write": 10443591,
+      "cache_read": 489305874,
+      "output": 1354812,
+      "weighted": 68765192,
+      "turns": 2983,
+      "sub_weighted": 14630878,
+      "sessions": 30,
+      "subagent_runs": 8
+    },
+    "2026-W43": {
+      "input": 1364,
+      "cache_write": 2938498,
+      "cache_read": 111329914,
+      "output": 329734,
+      "weighted": 16456147,
+      "turns": 675,
+      "sub_weighted": 3689069,
+      "sessions": 5,
+      "subagent_runs": 2
+    },
+    "2026-W44": {
+      "input": 6140,
+      "cache_write": 13711309,
+      "cache_read": 437657904,
+      "output": 1243833,
+      "weighted": 67130231,
+      "turns": 2587,
+      "sub_weighted": 10448060,
+      "sessions": 18,
+      "subagent_runs": 11
+    }
+  }
+}

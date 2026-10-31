@@ -1,6 +1,7 @@
 ---
 name: design-system
 description: Owner of the Plangram dashboard's calm design system (Holst palette, Frank Ruhl Libre + Heebo, quiet components, calm Hebrew copy). Use it to build or restyle any app/ screen or component, review a UI diff for design-system drift, add a token or primitive, choose colours/type/spacing for a chart or card, or word user-facing copy. It knows the decisions and their reasons, and checks contrast, tokens and screenshots before calling a UI change done.
+model: sonnet
 tools: Read, Grep, Glob, Edit, Write, Bash
 ---
 
