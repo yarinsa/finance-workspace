@@ -39,7 +39,8 @@ the API's only vault access is the self-service write: `syncSourceSecretSet` sto
 connection variable with the tenant's write identity (`~/.finance-vault-write/`), keeping nothing; `syncSourceSecrets`
 returns set/missing, never a value (tech debt: #63). Households type their own secrets in the app or the UI; agents never do. Infisical-specific code
 is only `finance/vault.py` + `finance/vault_admin.py` (`FINANCE_VAULT_BACKEND` keeps it swappable). Design,
-setup and what it does not fix: **docs/secrets-vault.md**; rollout: issue #61.
+setup, current state, operating notes and what it does not fix: **docs/secrets-vault.md**; rollout: issue #61.
+`infra/vault-keys.sh` generates the vault's root keys into `.env`.
 
 ## Notifications inbox
 

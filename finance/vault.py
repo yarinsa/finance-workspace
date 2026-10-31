@@ -129,7 +129,7 @@ def set_secret(tenant_id, name: str, value: str, env=None, home: Path | None = N
     """Create or replace one secret in the tenant's project. The value is never logged or echoed."""
     e = env if env is not None else os.environ
     base, token = _session(tenant_id, e, home, write_identity_path(tenant_id, e, home))
-    body = {"workspaceSlug": project_slug(tenant_id), "environment": ENVIRONMENT, "secretPath": SECRET_PATH,
+    body = {"projectSlug": project_slug(tenant_id), "environment": ENVIRONMENT, "secretPath": SECRET_PATH,
             "secretValue": value, "type": "shared"}
     url = f"{base}/api/v3/secrets/raw/{urllib.parse.quote(name, safe='')}"
     try:

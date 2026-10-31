@@ -1,9 +1,27 @@
 # Secrets vault (Infisical)
 
-Status: **built and tested end to end** against a real Infisical (bootstrap, a tenant project, a scoped
-identity, a fetch through `sync.activities._scrape_env`, the Node loader, cross-tenant refusal, outage).
-Nothing is moved out of `.env` yet. A tenant uses the vault only when it has an identity file, so everything
-stays as it was until you opt a household in.
+Status: **built and tested end to end** against a real Infisical: bootstrap, tenant projects, scoped identities,
+a fetch through `sync.activities._scrape_env`, the Node loader, cross-tenant refusal, outage, and (2026-10-31)
+the API's self-service write (create, update, status, delete) from the app container.
+Nothing is moved out of `.env` yet. A tenant's **scrapes** use the vault only when the worker has
+`FINANCE_VAULT_URL` AND the tenant has a read-identity file, so scraping stays as it was until you opt in.
+
+## Current state (2026-10-31)
+
+- The vault runs on this Mac (`docker compose --profile vault`, `127.0.0.1:8080`) and was bootstrapped once:
+  admin `yarinsasson2@gmail.com`; its generated password is in `~/.finance-vault/admin-password` (0600, move it to a
+  password manager and delete the file), the instance-admin token in `~/.finance-vault/admin.json`.
+- Both tenants have a project, a read identity (`~/.finance-vault/<id>.json`) and a write identity
+  (`~/.finance-vault-write/<id>.json`): `default` (`00000000-0000-4000-8000-000000000001`) and `tairsasson`
+  (`d7adcdd1-57a9-4e86-9d73-6a8e7b308ed9`). Both projects are empty.
+- The API container has `FINANCE_VAULT_URL=http://vault:8080` (from `FINANCE_API_VAULT_URL` in `.env`) and the
+  write identities mounted, so the syncs screen can set secrets now.
+- **The sync worker does NOT have `FINANCE_VAULT_URL`**, so nothing a household enters in the app is used by a
+  scrape yet. Before setting it (setup step 5) fill every tenant's project: an opted-in non-master tenant reads
+  its secrets from the vault only, never from `~/.finance-tenants/<id>.env`.
+- **Not end-to-end encrypted.** Secrets are encrypted at rest with `INFISICAL_ENCRYPTION_KEY`, but the vault, the
+  API (write identity, see #63) and the Mac's worker all handle them in the clear. It buys isolation, a UI and an
+  audit log, not secrecy from the platform admin.
 
 ## Decisions
 
@@ -45,20 +63,39 @@ access denied or a bad configuration is final. Messages never carry a secret.
 
 ## Setup (the user does these, on the Mac)
 
-1. `infra/vault-keys.sh` generates and adds these to `.env` (never overwrites one that is set). By hand: `INFISICAL_DB_PASSWORD`, `INFISICAL_ENCRYPTION_KEY` (`openssl rand -hex 16`),
-   `INFISICAL_AUTH_SECRET` (`openssl rand -base64 32`). **Back the encryption key and auth secret up off the
-   Mac**: without them the vault cannot be decrypted.
+1. `infra/vault-keys.sh` generates `INFISICAL_DB_PASSWORD`, `INFISICAL_ENCRYPTION_KEY` and `INFISICAL_AUTH_SECRET`
+   into `.env` plus `FINANCE_API_VAULT_URL`; it never overwrites one that is set (a new encryption key would make
+   every stored secret undecryptable). **Back the encryption key and auth secret up off the Mac**: without them
+   the vault cannot be decrypted.
 2. `docker compose --profile vault up -d --wait`
-3. `poetry run python -m finance.vault_admin bootstrap you@example.com` (once; asks for the admin password).
+3. `poetry run python -m finance.vault_admin bootstrap you@example.com` (once; asks for the admin password,
+   which is only needed to sign in to the Infisical UI; the script keeps a token, not the password).
 4. Per tenant: `poetry run python -m finance.vault_admin tenant <tenant-id>` (project + read identity + write
    identity), then enter that tenant's secrets in the syncs screen or in the UI at http://localhost:8080
    (project = the tenant id, environment `prod`). A tenant set up before self-service:
    `poetry run python -m finance.vault_admin upgrade <tenant-id>`.
 5. Set `FINANCE_VAULT_URL=http://127.0.0.1:8080` in the worker's environment and
    `launchctl kickstart -k gui/$(id -u)/me.yarinsa.finance-worker`. Then run one sync for that tenant.
-6. For the app: set `FINANCE_API_VAULT_URL=http://vault:8080` in `.env`, make `~/.finance-vault-write/` readable
-   by the API container's user (uid 10001; files stay 0600), rebuild and restart the api service
-   (`docker compose up -d --build api`; the image now carries the sources' manifests).
+6. For the app: `FINANCE_API_VAULT_URL=http://vault:8080` in `.env` (step 1 adds it), then
+   `docker compose --profile api up -d --build api` (the image carries the sources' manifests). On Docker Desktop
+   the 0600 write identities were readable by the container's user without further changes.
+
+## Operating it
+
+- **Add a household:** create the tenant (backoffice-tenants skill), then
+  `poetry run python -m finance.vault_admin tenant <tenant-id>`; the app can set its secrets right away.
+- **A tenant that has a project but no write identity:** `vault_admin upgrade <tenant-id>`.
+- **Restart after a change:** `docker compose --profile vault up -d` (vault), `docker compose --profile api up -d
+  --build api` (API); the worker with `launchctl kickstart -k gui/$(id -u)/me.yarinsa.finance-worker`.
+- **The app says "vault: …" when saving:** the message is the vault's HTTP status only (never a body, never a
+  value). 403 = the write identity lacks the role; 404 on login = identity file stale; "unreachable" = the vault
+  container is down or the API has no `FINANCE_VAULT_URL`.
+- **Infisical API facts learned the hard way:** list/read take `workspaceSlug`; create/update/delete take
+  `projectSlug` (a `workspaceSlug` body gets "You must provide projectSlug or workspaceId"). Code:
+  `finance/vault.py` (`set_secret`, `secret_status`), tests in `sync/tests/test_vault.py` (fake HTTP), and the
+  GraphQL layer in `api/gql/sync.py` + `api/tests/test_sync_secrets.py`.
+- **Lost the admin password:** reset it in Infisical or re-bootstrap on a fresh `vaultdata` volume; the encryption
+  key is what protects stored secrets, not the password.
 
 ## What the vault does not fix
 
@@ -72,11 +109,9 @@ access denied or a bad configuration is final. Messages never carry a secret.
 
 ## Not done
 
-- Self-service write is untested against a live Infisical: the create/update call uses `workspaceSlug` in the body
-  and `viewSecretValue=false` on the list; confirm on the first real run (the tests use a fake).
-
 - Migrating the master tenant's `.env` (bank logins first; Postgres, API origin secret and VAPID are needed at
   container start, so last).
 - Python outside the sync worker (CLI runs of `db/*`, `sync/`) still reads `.env`.
-- Self-service **reveal** (deliberately not built: set/missing only); the vault root keys in the Keychain; backups; rotation reminders; one vault
-  fetch per source instead of per dump script.
+- Self-service **reveal** (deliberately not built: set/missing only); the vault root keys in the Keychain; backups;
+  rotation reminders; one vault fetch per source instead of per dump script.
+- The API's write identity can also read its tenant's secrets (issue #63).

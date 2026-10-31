@@ -138,7 +138,7 @@ def test_set_secret_updates_and_creates_when_missing(tmp_path, monkeypatch):
     def fake(url, *, body=None, token=None, method=None):
         if "login" in url:
             return {"accessToken": "tok"}
-        seen.append((method, url, body["secretValue"], body["workspaceSlug"]))
+        seen.append((method, url, body["secretValue"], body["projectSlug"]))
         if method == "PATCH":
             raise vault.VaultError("vault refused the request (HTTP 404)", status=404)
         return {}
