@@ -305,8 +305,14 @@ async function launchBrowser() {
   const proc = spawn(chrome, [`--user-data-dir=${profile}`, `--remote-debugging-port=${port}`, '--no-first-run',
     '--no-default-browser-check', 'about:blank'], { stdio: 'ignore' });
   const stop = async () => {
-    proc.kill();
-    fs.rmSync(profile, { recursive: true, force: true });
+    // Chrome is still flushing its cache while it exits (ENOTEMPTY), so wait for it and retry; a
+    // leftover temp dir must never fail an otherwise good run.
+    if (proc.exitCode === null) {
+      const gone = new Promise((r) => proc.once('exit', r));
+      proc.kill();
+      await Promise.race([gone, sleep(5000)]);
+    }
+    try { fs.rmSync(profile, { recursive: true, force: true, maxRetries: 5, retryDelay: 300 }); } catch { /* temp dir */ }
   };
   for (let i = 0; i < 40; i++) {
     const up = await fetch(`http://127.0.0.1:${port}/json/version`).then((r) => r.ok, () => false);
