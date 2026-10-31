@@ -65,7 +65,7 @@ output without re-scraping).
 | Topic | File |
 |---|---|
 | Sync (Temporal), headless scrapers, refresh-all, freshness | `sync/CLAUDE.md` · skill `sync-dev` |
-| Ledger API, auth layers, secrets vault, inbox, tenants | `api/CLAUDE.md` · `docs/ledger-api.md` · `docs/tenancy.md` · `docs/secrets-vault.md` |
+| Ledger API, auth layers, secrets vault, inbox, tenants | `api/CLAUDE.md` · `docs/ledger-api.md` · `docs/tenancy.md` · `docs/secrets-vault.md` · `docs/passwordless-auth.md` (sign-in, invites) |
 | Postgres layers and overrides | `db/CLAUDE.md` · `db/README.md` |
 | Categories, kind, offsets (קיזוז) | `finance/CLAUDE.md` |
 | Validation, forecast, runway, budgets, history, projection, dedup, sources, saving-money method | `data/CLAUDE.md` |

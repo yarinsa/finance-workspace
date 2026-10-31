@@ -27,16 +27,25 @@ Replaces the temporary-password invite. Nobody in the household ever knows a pas
 Domain identity + DKIM/SPF/DMARC in Route53. Cost: ~$0.10 / 1000 emails — negligible.
 Production access (leaving the SES sandbox) is a one-time AWS request — **user step**.
 
-## Rollout (user steps)
+## State (2026-11-01)
 
-1. Review `terraform plan`, then `terraform apply`.
-2. Request SES production access.
-3. Test end to end on a throwaway address.
-4. Owner: register a passkey and sign in with an email code, then rotate the owner password to a
-   discarded random value (`admin-set-user-password --permanent`) — last.
+Applied to the live pool and verified end to end: a reinvite to the owner and a brand-new account
+(created through `ensure-user`, then deleted). The invite button opens managed login with the email
+prefilled (`login_hint` works), "send me a code" signs in, and the page offers a passkey. The
+account never sees a "choose a new password" step. SES production access was already on.
 
-## Open checks
+## Operating it
 
-- Confirm EMAIL_OTP requires SES DEVELOPER email and a CONFIRMED user.
-- Confirm PASSWORD can't be dropped from `allowed_first_auth_factors`.
-- Confirm managed login honours `login_hint`; can the password option be hidden by branding?
+- Invite: `/tenants` (worker) or `infra/tenant-groups.sh ensure-user EMAIL`; resend: `reinvite EMAIL`.
+- From a worktree the script has no terraform state: pass `USER_POOL_ID`, `SITE_DOMAIN`,
+  `COGNITO_CLIENT_ID` (`terraform output`).
+- The state lives only in the main checkout's `infra/` (gitignored). To plan/apply from another
+  worktree, copy `terraform.tfvars` + `terraform.tfstate` in, apply, copy the state back, delete the copies.
+- A new SES identity stays "Pending" for a few minutes after its DKIM records are created.
+
+## Still open
+
+- The owner's own password is unchanged. Once the passkey works on every device in use, replace it:
+  `admin-set-user-password --permanent` with a random value that is discarded.
+- PASSWORD stays in `allowed_first_auth_factors` (not tested whether Cognito accepts dropping it);
+  the login page still shows the password field.
