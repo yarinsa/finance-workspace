@@ -52,10 +52,14 @@ test('another tenant never loads the repo .env and needs its own 0600 file', () 
   } finally { process.env.HOME = prev; }
 });
 
-test('secrets already fetched from the vault: no file is read, for any tenant', () => {
-  for (const env of [{ FINANCE_VAULT_LOADED: '1' }, { FINANCE_TENANT_ID: A, FINANCE_VAULT_LOADED: '1' }]) {
-    const calls = [];
-    loadEnv('/repo', fakeDotenv(calls), env);
-    assert.deepEqual(calls, []);
-  }
+test('secrets already fetched from the vault: another tenant reads no file', () => {
+  const calls = [];
+  loadEnv('/repo', fakeDotenv(calls), { FINANCE_TENANT_ID: A, FINANCE_VAULT_LOADED: '1' });
+  assert.deepEqual(calls, []);
+});
+
+test('master with vault secrets still loads .env, without overriding them', () => {
+  const calls = [];
+  loadEnv('/repo', fakeDotenv(calls), { FINANCE_VAULT_LOADED: '1' });
+  assert.deepEqual(calls, [{ path: '/repo/.env', quiet: true }]);
 });

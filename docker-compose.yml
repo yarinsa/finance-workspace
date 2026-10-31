@@ -104,6 +104,12 @@ services:
       TELEMETRY_ENABLED: "false"
     cap_drop: [ALL]
     security_opt: ["no-new-privileges:true"]
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/api/status"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
     depends_on:
       vault-db: {condition: service_healthy}
       vault-redis: {condition: service_started}

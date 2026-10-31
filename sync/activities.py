@@ -46,7 +46,7 @@ def _scrape_env(tenant_id=None):
     """_tenant_env plus, when the vault is on (FINANCE_VAULT_URL), the tenant's secrets, passed to the
     scraper's environment only: never to the digest or deploy steps, never written to disk."""
     env = _tenant_env(tenant_id)
-    if vault.enabled():
+    if vault.uses_vault(_tid(tenant_id)):
         env.update(vault.fetch_tenant_secrets(_tid(tenant_id)))
         env["FINANCE_VAULT_LOADED"] = "1"   # scrapers/tenant.mjs then skips the .env file
     return env
@@ -394,7 +394,7 @@ async def scrape(source: str, tenant_id: str | None = None) -> str:
         try:
             env = await asyncio.to_thread(_scrape_env, tenant_id)
         except vault.VaultError as e:   # the message never carries a secret
-            raise ApplicationError(f"vault: {e}", type=SCRAPE_FAILED, non_retryable=True)
+            raise ApplicationError(f"vault: {e}", type=SCRAPE_FAILED, non_retryable=not e.retryable)
         rc, tail = await run_cmd(argv, env=env)
         if rc != 0:
             log_failure(Path(argv[0]).name, source, rc, tail)
