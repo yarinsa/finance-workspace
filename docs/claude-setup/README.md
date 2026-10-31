@@ -49,6 +49,18 @@ Nothing in the repo (code, tests, scripts, CI, `.claude/settings.json`) loads or
 standalone distribution with its own copies of the skills and scripts, so it is not kept in step with the
 `refresh` skill. Delete it when the plugin is retired.
 
+## Weekly check
+
+A launchd agent runs the measurement every Sunday at 09:17 (Haiku, local, because the script reads `~/.claude`
+logs). It makes a `usage/<date>` branch, writes the snapshot, adds the table row and commits; it never pushes
+or merges. Log: `~/Library/Logs/finance-usage-check.log`. The plist is copied in `scripts/`.
+
+```
+cp scripts/me.yarinsa.finance-usage-check.plist ~/Library/LaunchAgents/
+launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/me.yarinsa.finance-usage-check.plist
+launchctl kickstart gui/$(id -u)/me.yarinsa.finance-usage-check   # run now
+```
+
 ## Next steps
 
 - Check `/context` in a new session: the start should be under 40k tokens.

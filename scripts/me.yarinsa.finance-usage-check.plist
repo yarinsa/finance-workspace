@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+  <key>Label</key><string>me.yarinsa.finance-usage-check</string>
+  <key>WorkingDirectory</key><string>/Users/yarinsa/Code/Finance</string>
+  <key>EnvironmentVariables</key><dict>
+    <key>PATH</key><string>/Users/yarinsa/.nvm/versions/node/v22.22.3/bin:/opt/homebrew/bin:/usr/bin:/bin</string>
+  </dict>
+  <key>ProgramArguments</key><array>
+    <string>/Users/yarinsa/.nvm/versions/node/v22.22.3/bin/claude</string>
+    <string>-p</string>
+    <string>--model</string><string>haiku</string>
+    <string>--allowedTools</string><string>Bash Read Edit</string>
+    <string>Weekly usage check (issue #62). In /Users/yarinsa/Code/Finance: get today's date, create branch usage/DATE from master, run `poetry run python scripts/claude_usage.py --since 2026-11-01 --write DATE`, add one row for the week to the table in docs/claude-setup/README.md (sessions, weighted, per-session median, start context, short note vs the baseline and the targets), and commit. Do not push or merge. Reply with the row.</string>
+  </array>
+  <key>StartCalendarInterval</key><dict><key>Weekday</key><integer>0</integer><key>Hour</key><integer>9</integer><key>Minute</key><integer>17</integer></dict>
+  <key>StandardOutPath</key><string>/Users/yarinsa/Library/Logs/finance-usage-check.log</string>
+  <key>StandardErrorPath</key><string>/Users/yarinsa/Library/Logs/finance-usage-check.log</string>
+</dict></plist>
