@@ -118,7 +118,11 @@ async function login(page) {
     await page.goto(LOGIN_URL, { waitUntil: 'domcontentloaded', timeout: 60000 });
     const ok = await page.waitForSelector('#otpLoginId_ID', { timeout: 30000 }).then(() => true, () => false);
     if (ok) break;
-    if (attempt === 2) throw new Exit(1, `login form did not render at ${page.url()} (page not loaded; nothing typed)`);
+    if (attempt === 2) {
+      // Keep what the page showed (a Cloudflare interstitial looks the same as a slow page from here).
+      await saveUnknown(page, 'login-noform', `title: ${await page.title().catch(() => '')}`);
+      throw new Exit(1, `login form did not render at ${page.url()} (page not loaded; nothing typed; saved to ${outDir}/login-noform.*)`);
+    }
   }
   await sleep(1500); // let Angular bind the form
   // The card shows the SMS face first; #flip turns it to the permanent-password face.
