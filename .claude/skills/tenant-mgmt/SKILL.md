@@ -30,7 +30,7 @@ The household's original data is the **master tenant** `00000000-0000-4000-8000-
    Postgres and runs `infra/tenant-groups.sh`: a member of an active tenant gets an account (invited by email if new)
    and the group; anyone else is removed; an account with no access left is disabled. The API holds no AWS credentials.
    **Operating tenants and people is the back-office agent's job**; this skill is for changing the code.
-4. **Credentials**: the household types its own bank logins into `~/.finance-tenants/<tenant-id>.env`, mode 600,
+4. **Credentials** (or the vault: `docs/secrets-vault.md`, `python -m finance.vault_admin tenant <id>`): the household types its own bank logins into `~/.finance-tenants/<tenant-id>.env`, mode 600,
    on the Mac. **Never type, read or invent credentials**; same rule as every bank login in this repo. Only
    self-login sources run for another tenant (`discount*`, `leumi`, `cal`, `amex`, `max`).
 5. **Schedule**: `poetry run python sync/schedule.py --tenant <tenant-id>` (06:50 and 22:30), then `--trigger`.

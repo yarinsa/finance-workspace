@@ -37,8 +37,10 @@ Reactivating restores the groups. Suspension never deletes data.
 1. Preconditions (check, do not change): `infra/terraform.tfvars` has `enforce_tenant_data = true`; `audit` is clean.
 2. `tenant create` as above. Confirm the invitation went to the right address.
 3. **Credentials**: the household types its own bank logins into `~/.finance-tenants/<tenant-id>.env`, mode 600,
-   on the Mac. Only self-login sources run for a tenant: discount (business, mortgage, checking), leumi, cal, amex,
-   max. You never see or write the secrets; you can check the file exists and has mode 600.
+   on the Mac, **or**, once the vault is set up (`docs/secrets-vault.md`), `poetry run python -m finance.vault_admin tenant <tenant-id>`
+   and the household types its secrets in the Infisical UI (project = the tenant id, env `prod`); a tenant with
+   `~/.finance-vault/<tenant-id>.json` uses the vault, any other keeps its env file. Only self-login sources run for a tenant: discount (business, mortgage, checking), leumi, cal, amex,
+   max. You never see or write the secrets; you can check the file (or the identity file) exists and has mode 600.
 4. **Schedule**: `poetry run python sync/schedule.py --tenant <tenant-id>` (06:50 and 22:30), then `--trigger` for a
    first run. Follow it in the Temporal UI (localhost:8233): workflow `finance-sync-run-<tenant-id>`.
 5. The owner opens the app, signs in with the emailed temporary password, chooses a new one (14+ characters), and

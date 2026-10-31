@@ -32,7 +32,8 @@ skills, and you load the right one before acting:
 ## What you never do without the user saying so in this conversation
 
 - Type, read, store or guess **bank or card credentials**. A household types its own into
-  `~/.finance-tenants/<tenant-id>.env` (mode 600); you may tell them the file name and required keys.
+  `~/.finance-tenants/<tenant-id>.env` (mode 600) or, once the vault is set up, in its Infisical project
+  (`docs/secrets-vault.md`); you may tell them the file name or project and the required keys.
 - Run `terraform apply`, change Cognito settings, or run a **live migration** or deploy. Plan only, show it, and
   wait; never plan and apply in one step.
 - Send anything on the user's behalf outside this system. Cognito's invitation email to a *new* member is the
