@@ -1,4 +1,6 @@
+import type { BudgetCategory } from "./budgets";
 import { overlayFor, type Overlay } from "./ledgerOverlay";
+import type { ChargeItem, SpendCard } from "./monthList";
 
 /** A digested-ledger row, as far as the "תנועות" screen reads it (money out negative). */
 export interface LedgerRow {
@@ -29,7 +31,11 @@ export interface ViewRow extends LedgerRow {
 export const PRESET_DAYS = [30, 60, 90, 180, 360] as const;
 export const DEFAULT_DAYS = 30;
 
-export type RangeSpec = { kind: "days"; days: number } | { kind: "custom"; from: string; to: string };
+/** `cycle` is the current budget cycle (budgets.cycle_start .. cycle_end): the only range with plans and bill statuses. */
+export type RangeSpec =
+  | { kind: "days"; days: number }
+  | { kind: "custom"; from: string; to: string }
+  | { kind: "cycle" };
 
 const ISO_DAY = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -49,7 +55,8 @@ const isRealDay = (s: string | null | undefined): s is string =>
   !!s && ISO_DAY.test(s) && addDays(s, 0) === s;
 
 /** URL params -> range. Unknown or malformed values fall back to the 30-day default. */
-export function parseRange(p: { days?: string | null; from?: string | null; to?: string | null }): RangeSpec {
+export function parseRange(p: { days?: string | null; from?: string | null; to?: string | null; range?: string | null }): RangeSpec {
+  if (p.range === "cycle") return { kind: "cycle" };
   if (isRealDay(p.from) && isRealDay(p.to)) {
     return p.from <= p.to ? { kind: "custom", from: p.from, to: p.to } : { kind: "custom", from: p.to, to: p.from };
   }
@@ -57,15 +64,20 @@ export function parseRange(p: { days?: string | null; from?: string | null; to?:
   return { kind: "days", days: (PRESET_DAYS as readonly number[]).includes(days) ? days : DEFAULT_DAYS };
 }
 
-/** The inclusive day window. Presets end today (future-dated rows fall outside); custom is taken as given. */
-export function resolveRange(spec: RangeSpec, today: string): { from: string; to: string } {
+/**
+ * The inclusive day window. Presets end today (future-dated rows fall outside); custom is taken
+ * as given; the cycle is the budget's own bounds, or the 30-day default when there is no budget.
+ */
+export function resolveRange(spec: RangeSpec, today: string, cycle?: { from: string; to: string } | null): { from: string; to: string } {
   if (spec.kind === "custom") return { from: spec.from, to: spec.to };
+  if (spec.kind === "cycle") return cycle ?? resolveRange({ kind: "days", days: DEFAULT_DAYS }, today);
   return { from: addDays(today, -(spec.days - 1)), to: today };
 }
 
 /** Range -> URL params; the default (30 days) is omitted so the bare URL stays clean. */
 export function rangeToParams(spec: RangeSpec): Record<string, string> {
   if (spec.kind === "custom") return { from: spec.from, to: spec.to };
+  if (spec.kind === "cycle") return { range: "cycle" };
   return spec.days === DEFAULT_DAYS ? {} : { days: String(spec.days) };
 }
 
@@ -183,4 +195,95 @@ export function widgetStats(rows: readonly LedgerRow[], top = 3): WidgetStats {
     .sort((a, b) => b.amount - a.amount || a.name.localeCompare(b.name))
     .slice(0, top);
   return { out, in: inn, net: inn - out, split, topCategories };
+}
+
+export type GroupBy = "none" | "category" | "kind";
+
+export function parseGroup(raw: string | null | undefined): GroupBy {
+  return raw === "category" || raw === "kind" ? raw : "none";
+}
+
+/** The current cycle's plan for one spending card, as the group header reads it. */
+export interface CyclePlan {
+  /** fixed paid + fixed still expected + the variable plan; null when nothing is planned. */
+  planned: number | null;
+  /** The variable budget line, for the plan editor. */
+  budget?: BudgetCategory;
+  /** Fixed charges not charged yet this cycle (upcoming or overdue). */
+  pending: ChargeItem[];
+  /** A utility's bill status. */
+  bill?: ChargeItem;
+}
+
+/**
+ * The cycle's plans keyed by card name (`buildCards`), plus `alias`: a row category -> the
+ * card that holds it when a group-scope budget line covers several (רכב, דלק -> תחבורה).
+ */
+export function cyclePlans(cards: readonly SpendCard[]): { plans: Map<string, CyclePlan>; alias: Map<string, string> } {
+  const plans = new Map<string, CyclePlan>();
+  const alias = new Map<string, string>();
+  for (const c of cards) {
+    const lines = [...c.fixedLines, ...c.variableLines];
+    for (const l of c.variableLines) for (const part of l.parts ?? []) if (part !== c.name) alias.set(part, c.name);
+    plans.set(c.name, {
+      planned: c.planned,
+      budget: c.variableLines.find((l) => l.budget)?.budget,
+      pending: c.fixedLines.flatMap((l) => (l.charge && l.charge.status !== "paid" ? [l.charge] : [])),
+      bill: lines.find((l) => l.bill)?.bill,
+    });
+  }
+  return { plans, alias };
+}
+
+/** One group of the list: its rows (newest first, as given) and its money, positive ₪. */
+export interface RowGroup {
+  key: string;
+  label: string;
+  rows: ViewRow[];
+  out: number;
+  in: number;
+  /** Money out by kind, for the header's StackedBar. */
+  fixed: number;
+  variable: number;
+}
+
+export const KIND_GROUPS = [
+  { key: "fixed", label: "קבוע" },
+  { key: "variable", label: "משתנה" },
+  { key: "other", label: "אחר" },
+  { key: "income", label: "הכנסות" },
+] as const;
+
+const UNCATEGORISED = "ללא קטגוריה";
+
+/**
+ * Split rows into groups. `category`: by the row's (overlay) category, folded into its card via
+ * `alias`, biggest spend first and income-only groups last. `kind`: money out by the ledger's
+ * kind (kindless -> אחר), money in as הכנסות, in that fixed order. Empty groups are dropped.
+ */
+export function groupRows(rows: readonly ViewRow[], by: Exclude<GroupBy, "none">, alias: ReadonlyMap<string, string> = new Map()): RowGroup[] {
+  const groups = new Map<string, RowGroup>();
+  const keyOf = (t: ViewRow, n: number): [string, string] => {
+    if (by === "kind") {
+      const k = n > 0 ? "income" : t.kind === "fixed" || t.kind === "variable" ? t.kind : "other";
+      return [k, KIND_GROUPS.find((g) => g.key === k)!.label];
+    }
+    const name = alias.get(t.category) ?? (t.category || UNCATEGORISED);
+    return [name, name];
+  };
+  for (const t of rows) {
+    const n = netAmount(t);
+    const [key, label] = keyOf(t, n);
+    const g = groups.get(key) ?? { key, label, rows: [], out: 0, in: 0, fixed: 0, variable: 0 };
+    g.rows.push(t);
+    if (n < 0) {
+      g.out -= n;
+      if (t.kind === "fixed") g.fixed -= n;
+      else if (t.kind === "variable") g.variable -= n;
+    } else g.in += n;
+    groups.set(key, g);
+  }
+  const list = [...groups.values()];
+  if (by === "kind") return KIND_GROUPS.flatMap((k) => list.filter((g) => g.key === k.key));
+  return list.sort((a, b) => b.out - a.out || b.in - a.in || a.label.localeCompare(b.label));
 }

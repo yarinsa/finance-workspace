@@ -18,8 +18,13 @@ every ledger row in a window, newest first, card-bill payments and internal tran
 overlay applied. Range chips 30/60/90/180/360 days ending today or a custom from/to, account chips per
 `origin` with counts, a widgets carousel (`components/transactions/WidgetsCarousel.tsx`,
 `widgetStats`: net with in/out, קבוע/משתנה/אחר by `kind`, top categories, all from the filtered rows;
-plus the cycle's free money under "הכל" only, labelled as not following the filter), a row count, 100 rows then "הצג עוד". URL: `?days=` or
-`?from=&to=`, `?account=<origin>`. Rollout plan (widgets carousel, group-by) in
+plus the cycle's free money under "הכל" only, labelled as not following the filter), a row count, 100 rows then "הצג עוד". Group by (`?group=category|kind`,
+`components/transactions/TransactionGroups.tsx`, `groupRows`): one collapsible card per category (folded into
+`/monthly`'s cards, so a group-scope line like תחבורה holds רכב and דלק) or קבוע / משתנה / אחר / הכנסות by `kind`,
+each with a fixed/variable `StackedBar`. Plans ("₪X מתוך ₪Y", charges still expected, bill status, תכנון › →
+`BudgetPlan`) show only on the "המחזור" range (`?range=cycle`, the budget cycle) with הכל: they are the
+household's cycle budget (`cyclePlans` over `buildCards`). Over-plan or overdue cards start open.
+URL: `?days=`, `?from=&to=` or `?range=cycle`, `?account=<origin>`, `?group=`. Rollout plan (widgets carousel, group-by) in
 `docs/transactions-screen-plan.md`. `/monthly` stays in the same group as a non-hub page until it is retired.
 
 **The month screen is one screen: `/monthly`** (there is no `/budgets`, `/spending` or `/fixed`).

@@ -138,7 +138,7 @@ function ChargeRow({
 
 /** A category or budget line: amount, and for a planned line its bar (spent of planned) and usual month. */
 /** A utility's bill on its variable row: "חשבון" + paid / due / overdue (/ estimated). */
-function BillStatus({ c }: { c: ChargeItem }) {
+export function BillStatus({ c }: { c: ChargeItem }) {
   return (
     <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground tabular-nums">
       <span className="font-semibold">חשבון</span>

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Row } from "./api";
+import type { Line, SpendCard } from "./monthList";
 import {
   accountCounts,
   accountLabel,
@@ -12,6 +13,9 @@ import {
   resolveRange,
   totals,
   widgetStats,
+  cyclePlans,
+  groupRows,
+  parseGroup,
   type LedgerRow,
 } from "./transactionsView";
 
@@ -142,5 +146,74 @@ describe("widgetStats", () => {
     const amex = filterByAccount(inRange(applyView(ledger, overlay), { from: "2026-09-01", to: "2026-10-31" }), "amex");
     expect(widgetStats(amex).topCategories).toEqual([{ name: "דלק", amount: 320 }]);
     expect(widgetStats(amex).in).toBe(0);
+  });
+});
+
+describe("cycle range", () => {
+  it("round-trips ?range=cycle and uses the budget's bounds", () => {
+    expect(parseRange({ range: "cycle", days: "90" })).toEqual({ kind: "cycle" });
+    expect(rangeToParams({ kind: "cycle" })).toEqual({ range: "cycle" });
+    expect(resolveRange({ kind: "cycle" }, "2026-10-31", { from: "2026-10-10", to: "2026-11-09" })).toEqual({ from: "2026-10-10", to: "2026-11-09" });
+  });
+
+  it("falls back to 30 days with no budget", () => {
+    expect(resolveRange({ kind: "cycle" }, "2026-10-31", null)).toEqual({ from: "2026-10-02", to: "2026-10-31" });
+  });
+});
+
+describe("groupRows", () => {
+  const rows = inRange(applyView(ledger, new Map()), { from: "2026-09-01", to: "2026-10-31" });
+
+  it("parses ?group, defaulting to the flat list", () => {
+    expect(parseGroup("kind")).toBe("kind");
+    expect(parseGroup("merchant")).toBe("none");
+  });
+
+  it("by kind: fixed, variable, other, then income, rows kept newest first", () => {
+    const g = groupRows(rows, "kind");
+    expect(g.map((x) => [x.label, x.out, x.in])).toEqual([
+      ["קבוע", 89, 0],
+      ["משתנה", 504.9, 0],
+      ["אחר", 300, 0],
+      ["הכנסות", 0, 12500],
+    ]);
+    expect(g[1].rows.map((t) => t.description)).toEqual(["שופרסל דיל", "פז סלף"]);
+  });
+
+  it("by category: biggest spend first, income-only last, the overlay's category wins", () => {
+    const view = inRange(applyView(ledger, overlayOf(overlayRow({}))), { from: "2026-09-01", to: "2026-10-31" });
+    expect(groupRows(view, "category").map((x) => x.label)).toEqual(["דלק", "מסעדות", "מזון", "מנויים", "הכנסה"]);
+  });
+
+  it("folds a group-scope budget line's categories into its card", () => {
+    const g = groupRows(rows, "category", new Map([["תחבורה", "רכב ותחבורה"], ["מזון", "רכב ותחבורה"]]));
+    expect(g[0]).toMatchObject({ label: "רכב ותחבורה", out: 504.9, variable: 504.9 });
+  });
+});
+
+describe("cyclePlans", () => {
+  const line = (over: Partial<Line>): Line => ({ key: "k", section: "variable", group: "רכב", name: "x", category: "x", scope: "category", amount: 0, ...over });
+  const card = (over: Partial<SpendCard>): SpendCard => ({
+    name: "תחבורה", category: true, fixedLines: [], variableLines: [], fixed: 0, variable: 0,
+    fixedPending: 0, variablePlan: 0, planned: null, actual: 0, over: false, alert: false, ...over,
+  });
+  const budget = { name: "תחבורה", scope: "group" as const, planned: 900, spent: 320, left: 580, pct: 35.6, over: false, source: "override" as const };
+
+  it("keys the plan by card, aliases a group line's parts and lists unpaid charges", () => {
+    const { plans, alias } = cyclePlans([
+      card({
+        planned: 2100,
+        variableLines: [line({ name: "תחבורה", category: "תחבורה", scope: "group", budget, parts: ["דלק", "רכב"] })],
+        fixedLines: [
+          line({ section: "fixed", charge: { name: "מטרו מוטור", category: "רכב", amount: 1200, status: "upcoming", due_day: 10 } }),
+          line({ section: "fixed", charge: { name: "ביטוח רכב", category: "רכב", amount: 310, status: "paid" } }),
+        ],
+      }),
+    ]);
+    expect(alias).toEqual(new Map([["דלק", "תחבורה"], ["רכב", "תחבורה"]]));
+    const p = plans.get("תחבורה")!;
+    expect(p.planned).toBe(2100);
+    expect(p.budget?.planned).toBe(900);
+    expect(p.pending.map((c) => c.name)).toEqual(["מטרו מוטור"]);
   });
 });

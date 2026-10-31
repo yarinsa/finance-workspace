@@ -18,7 +18,7 @@ Replaces the "החודש" hub (`/monthly`) with a simple transactions screen. De
 ## Steps (each shippable on its own)
 1. **Screen + flat list + time range + account filter.** `/transactions` becomes the group hub; `/monthly` stays as a non-hub page (still "החודש") so budget cards and תחזית remain reachable. Point `/monthly?group=none` links (RecentTransactions, QuickActionsSheet) to `/transactions`.
 2. **Widgets carousel** — move the בפועל stats (free money, income / קבוע / משתנה) into a horizontal carousel that respects the filters. Done: net/in/out, קבוע/משתנה/אחר (by ledger `kind`) and top categories follow the filters; free money is a budget-cycle figure, so it shows only under "הכל" and says it does not follow the filter.
-3. **Group by category and fixed/variable**, reusing the spent-vs-planned bars, plan editor sheet and bill statuses from `MonthList` / `lib/monthList.ts`.
+3. **Group by category and fixed/variable**, reusing the spent-vs-planned bars, plan editor sheet and bill statuses from `MonthList` / `lib/monthList.ts`. Done: plans and bill statuses need the budget cycle, so they show on a new "המחזור" range chip with all accounts; other ranges group with totals and the fixed/variable bar only.
 4. **Group by account** with the limit bars; per-card granularity (`card_last4`, `account_id`) instead of institution.
 Then retire `/monthly` (redirect to `/transactions`), once תחזית has a home.
 
