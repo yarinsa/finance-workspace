@@ -22,7 +22,7 @@ poetry run python sync/backoffice.py audit     # database vs Cognito; "in sync" 
 - slug: lower-case letters, digits, dashes. The owner is required; the platform admin is **not** made a member
   (they would otherwise belong to two tenants and every API call would need `X-Tenant-Id`).
 - This writes the tenant (with its horizon buckets) and the owner's membership, then provisions the owner:
-  Cognito creates the account if new and **emails the invitation** (temporary password, valid one day) and puts
+  the account is created if new (no password) and a **sign-in email** goes out via SES (email code, then save a passkey); then they are put
   them in group `tenant-<id>`. Tell the user before running it for an address with no account.
 - The same is available in the app: `/tenants` → "משק בית חדש".
 
@@ -43,7 +43,7 @@ Reactivating restores the groups. Suspension never deletes data.
    max. You never see or write the secrets; you can check the file (or the identity file) exists and has mode 600.
 4. **Schedule**: `poetry run python sync/schedule.py --tenant <tenant-id>` (06:50 and 22:30), then `--trigger` for a
    first run. Follow it in the Temporal UI (localhost:8233): workflow `finance-sync-run-<tenant-id>`.
-5. The owner opens the app, signs in with the emailed temporary password, chooses a new one (14+ characters), and
+5. The owner opens the app, uses the emailed link, enters the email code, saves a passkey, and
    sees their own data under `/data/t/<tenant-id>/` after the first digest publishes.
 6. `audit` again and report.
 

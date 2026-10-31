@@ -181,7 +181,7 @@ resource "aws_cognito_user_pool" "users" {
   user_pool_tier = "ESSENTIALS"
 
   sign_in_policy {
-    allowed_first_auth_factors = ["PASSWORD", "WEB_AUTHN"]
+    allowed_first_auth_factors = ["PASSWORD", "EMAIL_OTP", "WEB_AUTHN"]
   }
 
   // With managed login on a custom domain, Cognito requires the RP id to be
@@ -193,26 +193,33 @@ resource "aws_cognito_user_pool" "users" {
   }
 
   password_policy {
-    minimum_length                   = 14
-    require_lowercase                = true
-    require_uppercase                = true
-    require_numbers                  = true
-    require_symbols                  = true
-    temporary_password_validity_days = 1
+    minimum_length    = 14
+    require_lowercase = true
+    require_uppercase = true
+    require_numbers   = true
+    require_symbols   = true
+  }
+
+  // Mail goes out through our own SES identity (EMAIL_OTP requires DEVELOPER sending).
+  email_configuration {
+    email_sending_account = "DEVELOPER"
+    source_arn            = aws_ses_domain_identity.site.arn
+    from_email_address    = "noreply@${var.domain_name}"
+  }
+
+  // Closes "forgot password" as a way back to passwords; recovery is an admin re-invite.
+  account_recovery_setting {
+    recovery_mechanism {
+      name     = "admin_only"
+      priority = 1
+    }
   }
 
   // No self-signup: people are created by the platform admin (the /tenants screen asks the
-  // Mac's worker, infra/tenant-groups.sh ensure-user), and Cognito emails them this invitation.
-  // The default invitation has no link, so it says where to sign in. The temporary password
-  // is valid for one day (password_policy above); after that the admin invites again.
+  // Mac's worker, infra/tenant-groups.sh ensure-user). Invites are suppressed there and sent
+  // through SES by the script, so Cognito's own invitation template is not used.
   admin_create_user_config {
     allow_admin_create_user_only = true
-
-    invite_message_template {
-      email_subject = "הזמנה ל-${var.domain_name}"
-      email_message = "הוזמנת להצטרף. כתובת: https://${var.domain_name} — שם המשתמש: {username} — סיסמה זמנית (תקפה ליום אחד): {####}. בכניסה הראשונה תתבקש/י לבחור סיסמה חדשה."
-      sms_message   = "{username} {####}"
-    }
   }
 
   tags = local.tags
@@ -346,7 +353,8 @@ resource "aws_cognito_user" "owner" {
     email_verified = "true"
   }
 
-  // Cognito emails a temporary password; it must be changed on first sign-in.
+  // Bootstrap only: the owner emailed here gets Cognito's one-off temporary password.
+  // New members are invited passwordless by tenant-groups.sh (SUPPRESS + SES email).
   desired_delivery_mediums = ["EMAIL"]
 }
 
@@ -598,6 +606,42 @@ resource "aws_route53_record" "site" {
     zone_id                = aws_cloudfront_distribution.site.hosted_zone_id
     evaluate_target_health = false
   }
+}
+
+# ─────────────────────────────── SES ───────────────────────────────
+
+resource "aws_ses_domain_identity" "site" {
+  domain = var.domain_name
+}
+
+resource "aws_ses_domain_dkim" "site" {
+  domain = aws_ses_domain_identity.site.domain
+}
+
+resource "aws_route53_record" "ses_dkim" {
+  count = 3
+
+  zone_id = data.aws_route53_zone.root.zone_id
+  name    = "${aws_ses_domain_dkim.site.dkim_tokens[count.index]}._domainkey.${var.domain_name}"
+  type    = "CNAME"
+  ttl     = 600
+  records = ["${aws_ses_domain_dkim.site.dkim_tokens[count.index]}.dkim.amazonses.com"]
+}
+
+resource "aws_route53_record" "ses_spf" {
+  zone_id = data.aws_route53_zone.root.zone_id
+  name    = var.domain_name
+  type    = "TXT"
+  ttl     = 600
+  records = ["v=spf1 include:amazonses.com ~all"]
+}
+
+resource "aws_route53_record" "ses_dmarc" {
+  zone_id = data.aws_route53_zone.root.zone_id
+  name    = "_dmarc.${var.domain_name}"
+  type    = "TXT"
+  ttl     = 600
+  records = ["v=DMARC1; p=quarantine; rua=mailto:${var.owner_email}"]
 }
 
 resource "aws_route53_record" "auth" {

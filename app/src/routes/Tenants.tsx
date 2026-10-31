@@ -11,7 +11,7 @@ import {
 
 const ROLE_LABEL: Record<TenantRole, string> = { OWNER: "בעלים", ADMIN: "מנהל", MEMBER: "חבר" };
 const STEP_LABEL: Record<string, string> = {
-  invited: "הוזמן במייל",
+  invited: "הזמנה נשלחה",
   added: "נוסף לגישה",
   removed: "הגישה בוטלה",
   disabled: "החשבון הושבת",

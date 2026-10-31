@@ -10,10 +10,9 @@ description: Explain how access works (Cognito, invitation email, tenant groups,
 - **Postgres is the source of truth** (users, memberships, tenant status). Cognito follows it; nothing in Cognito is
   decided by hand. The API never touches AWS: the app asks the Mac's worker (`sync_tenant_access`) and this CLI calls
   the same code.
-- **Account**: Cognito username = email. The pool is admin-create-only (no self sign-up). Creating a user makes
-  Cognito email the invitation (template in `infra/main.tf`, `invite_message_template`; temporary password valid
-  one day; default sender, so a few dozen emails a day at most). After a day, re-invite: `tenant-groups.sh` cannot
-  resend, so disable/re-add is not enough; use `aws cognito-idp admin-create-user --message-action RESEND` (ask first).
+- **Account**: Cognito username = email. The pool is admin-create-only (no self sign-up). Creating a user
+  suppresses Cognito's email and sends our own via SES (`infra/tenant-groups.sh ensure-user`): email code, then the
+  person saves a passkey. Nothing expires; to re-invite just resend with `tenant-groups.sh reinvite EMAIL`.
 - **Group** `tenant-<tenant-id>`: put in the id token as `cognito:groups`. The edge Lambda serves
   `/data/t/<tenant-id>/*.json` only to that group, and (with `enforce_tenant_data = true`, on since 2026-10-30)
   `/data/*.json` only to `tenant-00000000-0000-4000-8000-000000000001`. The Lambda has no database, so a group change
@@ -30,9 +29,9 @@ account), `GROUP` (group does not match membership/suspension), `ENABLED` (no ac
 ## "She cannot sign in"
 
 1. Does the account exist and is it enabled? `audit` says `MISSING`/`ENABLED`; or
-   `aws cognito-idp admin-get-user --user-pool-id <pool> --username EMAIL` (status `FORCE_CHANGE_PASSWORD` = has not
-   used the invitation yet; the temporary password expires after 1 day).
-2. Did the invitation arrive? Spam folder; address typo (compare with `list`); Cognito default sender limits.
+   `aws cognito-idp admin-get-user --user-pool-id <pool> --username EMAIL` (status `CONFIRMED` is normal; she may just not
+   have opened the invitation yet, so `reinvite` it).
+2. Did the invitation arrive? Spam folder; address typo (compare with `list`); SES sandbox (recipient must be verified until production access).
 3. Disabled because she lost her last tenant? `... member add SLUG EMAIL` re-enables.
 
 ## "403 on data" / "empty app"

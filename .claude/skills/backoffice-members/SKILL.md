@@ -13,7 +13,7 @@ Run from the main checkout. Roles: `owner` (manage the tenant), `admin`, `member
 
 What happens, in order, and it is the same as `/tenants` → "הוספה":
 1. Postgres: the user (created by email) and the membership. Emails are stored lower-case.
-2. Cognito, decided from the database: a **new** person gets an account and Cognito **emails the invitation**; a
+2. Cognito, decided from the database: a **new** person gets an account and a sign-in email goes out via SES (email code, then they save a passkey); a
    disabled one is re-enabled; then they join group `tenant-<tenant-id>`.
 3. Output line, e.g. `person@example.com: invited,added`.
 

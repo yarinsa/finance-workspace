@@ -38,3 +38,13 @@ output "api_origin_secret" {
   value       = try(random_password.api_origin_secret[0].result, "")
   sensitive   = true
 }
+
+output "domain_name" {
+  description = "Public domain; invite emails are sent from noreply@ it."
+  value       = var.domain_name
+}
+
+output "client_id" {
+  description = "Cognito app client id, for the invite sign-in link."
+  value       = aws_cognito_user_pool_client.web.id
+}
