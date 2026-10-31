@@ -6,7 +6,7 @@ description: Finish a piece of work and its session cleanly: verify, update docs
 # Wrap up
 
 Leave the repo, the live systems and the knowledge in a state the next person (or session) can pick up
-without asking. Work in this order; stop and report at any step that fails instead of papering over it.
+without asking. Work in this order (the last step updates this skill and the knowledge around it); stop and report at any step that fails instead of papering over it.
 Everything outward (merge, push, delete a branch, restart a service, open or edit an issue) follows the
 user's go-ahead: ask once with the full list, then do it.
 
@@ -61,6 +61,20 @@ user's go-ahead: ask once with the full list, then do it.
   **Never touch another session's worktree** (locked ones, other `bridge-*` or named worktrees).
 - Final message, short: what shipped (commit), what was verified and how, what was not, issues opened or
   updated (numbers), user steps. No restating of the diff.
+
+## 6. Self-update (last step, every time)
+
+Ask what this session taught that the next one should know, and change the knowledge to match, adding **and removing**:
+
+- **Add** only what is durable and not derivable from the code or git history: a trap that cost time, a decision
+  and its reason, a user preference or correction. Put it where it is read: this skill if it is about how to wrap
+  up, the area `CLAUDE.md` or `docs/` if it is about the system, a memory entry if it is about the user or the
+  project. One fact, one place; link instead of copying.
+- **Remove or fix** what the session proved wrong or stale: a rule that no longer holds, a workaround for a fixed
+  bug, a doc step that is now automated, a memory that names a file that moved. Verify a claim before deleting it.
+- **Keep this skill small.** If a step was never used or always skipped, cut it; if the same mistake happened twice,
+  add the one line that prevents it. Commit the change with the rest (small, separate commit when the topic differs),
+  and mention it in the final message ("updated: wrap-up step 4, memory X").
 
 ## Do not
 
