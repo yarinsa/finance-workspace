@@ -68,6 +68,19 @@ VALIDATE_TIMEOUT = 120.0
 SESSION_EXPIRED = "SessionExpired"
 SCRAPE_FAILED = "ScrapeFailed"
 VALIDATION_FAILED = "ValidationFailed"
+BOT_BLOCKED = "BotBlocked"
+
+# Self-login scrapers with an AMEX_HEADED-style switch: when headless is refused by the site's bot
+# protection, the workflow's second attempt runs headed in the real Chrome (#64).
+HEADED_FALLBACK = {"amex": "AMEX_HEADED"}
+
+
+def _attempt() -> int:
+    """This activity's Temporal attempt (1-based); 1 outside an activity (tests, scripts)."""
+    try:
+        return activity.info().attempt
+    except RuntimeError:
+        return 1
 
 # What the dump scripts print when the session, not the endpoint, is the problem:
 # amex's liveness gate, the Discount/Leumi/CAL/Harel stub guards (login-shell HTML,
@@ -395,9 +408,15 @@ async def scrape(source: str, tenant_id: str | None = None) -> str:
             env = await asyncio.to_thread(_scrape_env, tenant_id)
         except vault.VaultError as e:   # the message never carries a secret
             raise ApplicationError(f"vault: {e}", type=SCRAPE_FAILED, non_retryable=not e.retryable)
+        headed = HEADED_FALLBACK.get(source)
+        if headed and _attempt() > 1:
+            env = {**(env or {}), headed: "1"}
         rc, tail = await run_cmd(argv, env=env)
         if rc != 0:
             log_failure(Path(argv[0]).name, source, rc, tail)
+            if headed and _attempt() == 1 and "LOGIN FAILED: BOT_BLOCKED" in tail:
+                # Retryable on purpose: Temporal's next attempt sets the headed switch above.
+                raise ApplicationError(f"{source} login blocked headless; retrying headed", tail, type=BOT_BLOCKED)
             if looks_expired(tail):
                 raise ApplicationError(f"{source} session expired", tail, type=SESSION_EXPIRED, non_retryable=True)
             raise ApplicationError(f"{Path(argv[0]).name} failed for {source} (rc={rc})", tail,

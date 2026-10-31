@@ -15,6 +15,7 @@
 import puppeteer from 'puppeteer';
 import dotenv from 'dotenv';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { loadEnv, dataDir } from '../tenant.mjs';
@@ -279,7 +280,21 @@ function billingMonths(n) {
   });
 }
 
-const browser = await puppeteer.launch({ headless: true });
+/**
+ * Headless Chromium by default. AMEX_HEADED=1 launches the real, installed Chrome (headed, with a
+ * persistent profile at AMEX_PROFILE, default ~/.chrome-amex-scraper) in case Cloudflare is flagging
+ * the headless fingerprint (#64). A headed run needs a display. No stealth patches either way.
+ */
+function launchBrowser() {
+  if (process.env.AMEX_HEADED !== '1') return puppeteer.launch({ headless: true });
+  return puppeteer.launch({
+    headless: false, channel: 'chrome',
+    userDataDir: process.env.AMEX_PROFILE || path.join(os.homedir(), '.chrome-amex-scraper'),
+    args: ['--no-first-run', '--no-default-browser-check'],
+  });
+}
+
+const browser = await launchBrowser();
 let code = 0;
 try {
   const page = await browser.newPage();

@@ -56,6 +56,13 @@ A missing one is reported by name, never by value.
     cd scrapers/amex && npm install   # first time
     node scrapers/amex/scrape.mjs [--out DIR] [--months N]   # from repo root; defaults data/amex/raw, 2
 
+## Headed mode (Cloudflare block, #64)
+
+`AMEX_HEADED=1` launches the installed Chrome headed (`channel: 'chrome'`) on a persistent profile
+(`AMEX_PROFILE`, default `~/.chrome-amex-scraper`) instead of headless Chromium. It needs a display, so
+set it only if `BOT_BLOCKED` persists headless. If headed is not enough, the fallback is a human login in a
+Chrome profile (as Harel). No stealth patches.
+
 ## Exit codes
 
 - 0 ok

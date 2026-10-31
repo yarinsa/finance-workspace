@@ -268,6 +268,7 @@ activities; nothing touches Chrome or a bank).
   row that ended `failed` / `rejected` / `needs_login`, reset by `done`; a run counts once. At the 3rd (then every 6th)
   a `failed`/`rejected` source also sends a `sync-streak-<source>` push (`push.streak_push_due`).
 - **AMEX bot block.** A 403/429 on the login call is `LOGIN FAILED: BOT_BLOCKED`, a `needs_login` in the app with the
-  reason, no longer an unexplained `failed`.
+  reason, no longer an unexplained `failed`. The first headless `BOT_BLOCKED` is raised retryable (`BotBlocked`), so
+  `SCRAPE`'s second attempt runs the scraper with `AMEX_HEADED=1` (real Chrome, needs a display); blocked again it is `needs_login`.
 - Known risk: the dev server's SQLite file is a bind mount (`~/.temporal`); on Docker Desktop that can time out
   (`context deadline exceeded` in `docker logs finance-temporal-1`).
