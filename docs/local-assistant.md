@@ -9,7 +9,8 @@ poetry run python -m assistant                                      # chat
 
 ## How it is wired
 - `assistant/llm.py` — OpenAI-compatible client. **The model is config**: `ASSISTANT_BASE_URL` (default Ollama `localhost:11434/v1`) and `ASSISTANT_MODEL`. Any server that speaks `/chat/completions` works.
-- `assistant/tools.py` — read-only tools (`spending_by_category`, `monthly_totals`, `search_transactions`, `snapshot_totals`) over `data/digested/`; the model never reads raw dumps and never re-derives `kind`/`category`. Spending excludes own transfers, card settlements and savings, and nets offsets.
+- `assistant/tools.py` — a `Toolbox` of read-only tools (`spending_by_category`, `monthly_totals`, `search_transactions`, `snapshot_totals`) bound to a ledger backend; the model never reads raw dumps and never re-derives `kind`/`category`. Spending excludes own transfers, card settlements and savings, and nets offsets. Model-supplied arguments are validated (`YYYY-MM`) and results capped (50 rows, 24 months); errors come back as data.
+- `assistant/ledger.py` — the backend interface (`rows()`, `snapshot()`). `JsonLedger` reads the digested files (CLI, master household only). `api/assistant_ledger.py::DbLedger` wraps the API's tenant-bound `Ledger` loader, so the chat endpoint sees only the caller's tenant (`api/tests/test_assistant_isolation.py`). `snapshot_totals` is offered only when the backend has a snapshot: the API does not serve one yet, so it is absent from the DB backend.
 - `assistant/agent.py` — the tool loop (max 6 steps), strips `<think>` blocks.
 - Data dir: `FINANCE_DIGESTED_DIR` (a worktree has no `data/digested`; point it at the main checkout).
 

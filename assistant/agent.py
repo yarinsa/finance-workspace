@@ -2,7 +2,7 @@
 import json
 from datetime import date
 
-from assistant import llm, tools
+from assistant import llm
 
 MAX_STEPS = 6
 
@@ -12,12 +12,12 @@ Spending tools already exclude own transfers, card settlements and savings. If a
 Today is {today}. Be brief."""
 
 
-def ask(question, history=None, chat=llm.chat):
-    """Answer one question; returns (answer, messages). `chat` is injectable for tests."""
+def ask(question, toolbox, history=None, chat=llm.chat):
+    """Answer one question with `toolbox`; returns (answer, messages). `chat` is injectable for tests."""
     messages = history or [{"role": "system", "content": SYSTEM.format(today=date.today().isoformat())}]
     messages.append({"role": "user", "content": question})
     for _ in range(MAX_STEPS):
-        msg = chat(messages, tools=tools.SCHEMAS)
+        msg = chat(messages, tools=toolbox.schemas())
         messages.append(msg)
         calls = msg.get("tool_calls")
         if not calls:
@@ -25,6 +25,6 @@ def ask(question, history=None, chat=llm.chat):
         for c in calls:
             fn = c["function"]
             args = fn["arguments"]
-            result = tools.call(fn["name"], json.loads(args) if isinstance(args, str) else args)
-            messages.append({"role": "tool", "tool_call_id": c.get("id"), "content": json.dumps(result, ensure_ascii=False)})
+            content = toolbox.call_json(fn["name"], json.loads(args) if isinstance(args, str) else args)
+            messages.append({"role": "tool", "tool_call_id": c.get("id"), "content": content})
     return "I could not finish within the step limit.", messages
