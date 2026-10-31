@@ -20,6 +20,8 @@ class Settings:
     dev_user: str | None = None
     database_url: str = ""
     temporal_address: str = "localhost:7233"
+    assistant_base_url: str = ""   # OpenAI-compatible server for the chat (Ollama); empty = the assistant is off
+    assistant_model: str = ""
     push_public_key: str = ""   # VAPID public key only; the private key never reaches this process
 
     @property
@@ -61,5 +63,7 @@ class Settings:
             dev_user=(env.get("FINANCE_API_DEV_USER") or "").strip().lower() or None,
             database_url=env.get("API_DATABASE_URL", ""),
             temporal_address=env.get("TEMPORAL_ADDRESS", "localhost:7233"),
+            assistant_base_url=env.get("ASSISTANT_BASE_URL", "").rstrip("/"),
+            assistant_model=env.get("ASSISTANT_MODEL", ""),
             push_public_key=env.get("PUSH_VAPID_PUBLIC_KEY", ""),
         ).validate()

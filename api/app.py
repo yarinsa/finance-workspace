@@ -38,6 +38,7 @@ from .inputs import GoalEdit, Patch, PushSubscribe, PushUnsubscribe, TagEdit, Ta
 from .gql import endpoint  # noqa: E402
 from .rebuild import OTP_SOURCES, Rebuilder  # noqa: E402
 from .sse import END, Event, SyncBroadcaster, sse  # noqa: E402
+from . import assistant_chat  # noqa: E402
 
 log = logging.getLogger("finance_api")
 
@@ -155,6 +156,12 @@ def create_app(settings=None, pool=None, rebuilder=None, verifier=None, broadcas
     app.state.sse_lifetime = SSE_LIFETIME_SECONDS
     app.state.sse_max_streams = SSE_MAX_STREAMS
     app.state.sse_tick = SSE_TICK_SECONDS
+    app.state.assistant_chat = assistant_chat.default_chat(settings)   # tests swap in a fake model
+    app.state.assistant_rate = assistant_chat.RateLimit()
+    app.state.assistant_chats = 0
+    app.state.assistant_max_chats = assistant_chat.MAX_CHATS
+    app.state.assistant_ping = assistant_chat.PING_SECONDS
+    app.state.assistant_deadline = assistant_chat.DEADLINE_SECONDS
     app.state.verifier = verifier or (None if settings.dev_user else TokenVerifier(settings))
 
     @app.exception_handler(ApiError)
@@ -396,6 +403,16 @@ def create_app(settings=None, pool=None, rebuilder=None, verifier=None, broadcas
         if not request.app.state.rebuilder.submit_otp(source, body.code):
             raise ApiError(409, "not_waiting", "no login is waiting for a code")
         return {"ok": True}
+
+    @app.post("/api/assistant/chat", dependencies=[Depends(check_csrf)])
+    async def assistant_chat_endpoint(request: Request, user=Depends(current_user)):
+        """Ask the local model about the caller's own ledger; streams `tool`, `answer`, `done` or `error`."""
+        body = parse_body(assistant_chat.ChatBody, await read_json_body(request, assistant_chat.MAX_BODY))
+        st = request.app.state
+        slot = assistant_chat.admit(st, user)
+        return StreamingResponse(assistant_chat.stream(request, st, body, db, slot), media_type="text/event-stream",
+                                 background=BackgroundTask(slot.cleanup),
+                                 headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
     @app.get("/api/sync/events")
     async def sync_events(request: Request, user=Depends(current_user)):

@@ -12,19 +12,34 @@ Spending tools already exclude own transfers, card settlements and savings. If a
 Today is {today}. Be brief."""
 
 
-def ask(question, toolbox, history=None, chat=llm.chat):
-    """Answer one question with `toolbox`; returns (answer, messages). `chat` is injectable for tests."""
-    messages = history or [{"role": "system", "content": SYSTEM.format(today=date.today().isoformat())}]
-    messages.append({"role": "user", "content": question})
+def start(history=None):
+    """A fresh conversation: the system prompt, then any prior user/assistant turns."""
+    return [{"role": "system", "content": SYSTEM.format(today=date.today().isoformat())}, *(history or [])]
+
+
+def run(messages, toolbox, chat=llm.chat, should_stop=lambda: False):
+    """Advance `messages` (mutated in place) until the model answers. Yields ("tool", {name, arguments})
+    before each tool runs, then ("answer", text). Stops quietly when `should_stop()` turns true."""
     for _ in range(MAX_STEPS):
+        if should_stop():
+            return
         msg = chat(messages, tools=toolbox.schemas())
         messages.append(msg)
         calls = msg.get("tool_calls")
         if not calls:
-            return llm.strip_think(msg.get("content")), messages
+            yield "answer", llm.strip_think(msg.get("content"))
+            return
         for c in calls:
             fn = c["function"]
-            args = fn["arguments"]
-            content = toolbox.call_json(fn["name"], json.loads(args) if isinstance(args, str) else args)
-            messages.append({"role": "tool", "tool_call_id": c.get("id"), "content": content})
-    return "I could not finish within the step limit.", messages
+            args = json.loads(fn["arguments"]) if isinstance(fn["arguments"], str) else fn["arguments"]
+            yield "tool", {"name": fn["name"], "arguments": args}
+            messages.append({"role": "tool", "tool_call_id": c.get("id"), "content": toolbox.call_json(fn["name"], args)})
+    yield "answer", "I could not finish within the step limit."
+
+
+def ask(question, toolbox, history=None, chat=llm.chat):
+    """Answer one question; returns (answer, messages) so the CLI can keep the conversation."""
+    messages = history or start()
+    messages.append({"role": "user", "content": question})
+    answer = next(text for kind, text in run(messages, toolbox, chat) if kind == "answer")
+    return answer, messages

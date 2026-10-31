@@ -117,6 +117,27 @@ data: {"source":"cal","entry":{...}}
 - Headers: `Cache-Control: no-cache`, `X-Accel-Buffering: no`. Errors before the stream starts are normal
   JSON (401/403/503).
 
+### Assistant chat (SSE over POST)
+
+`POST /api/assistant/chat` (CSRF headers, session, tenant like every write) asks a local model about the
+**caller's own ledger**. Stateless: the client sends the whole conversation, kept in memory in the app (v1).
+
+```
+{"messages": [{"role": "user" | "assistant", "content": "…"}, …]}     # 1-20 turns, ≤2000 chars each, last is the user's
+```
+
+Only user/assistant turns are accepted; the system prompt and the tool results are the server's. The reply is
+`text/event-stream`: `tool` `{name, arguments}` as each read-only tool runs, then one `answer` `{text}` and `done`;
+or an `error` `{error, message}` (`assistant_unavailable`, `timeout`) with no `done`. The answer arrives whole
+(no token streaming in v1); pings keep CloudFront's 30 s read timeout away while the model thinks.
+
+Refused before streaming: 413 body over 16 KB, 422 invalid conversation, 429 `rate_limited` (20 a minute per user),
+503 `assistant_busy` (2 chats at once: one local GPU), 503 `assistant_off` (`ASSISTANT_BASE_URL` unset; the UI hides the chat).
+The ledger is read through the request's tenant-bound connection (`api/assistant_ledger.py`) and the connection is
+released before the model is called; a household never sees another's rows (`api/tests/test_assistant_isolation.py`).
+The tools are read-only, take validated arguments and return capped results; a transaction description is untrusted
+text, so the worst a hostile one can do is steer the words, not an action. Design: `docs/local-assistant.md`.
+
 ### GraphQL (schema-first, replacing the REST routes)
 
 The contract is the SDL in **`api/schema/*.graphql`**. Write the schema change first,

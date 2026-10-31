@@ -20,3 +20,17 @@ class JsonLedger:
         """The net-worth snapshot, or None when it is not available."""
         path = self.dir / "snapshot.json"
         return json.loads(path.read_text()) if path.exists() else None
+
+
+class StaticLedger:
+    """Rows already loaded (e.g. from the database), so a request can release its connection
+    before the slow model calls start."""
+
+    def __init__(self, rows, snapshot=None):
+        self._rows, self._snapshot = rows, snapshot
+
+    def rows(self):
+        return self._rows
+
+    def snapshot(self):
+        return self._snapshot
