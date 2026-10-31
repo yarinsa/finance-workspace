@@ -45,7 +45,7 @@ access denied or a bad configuration is final. Messages never carry a secret.
 
 ## Setup (the user does these, on the Mac)
 
-1. In `.env`: `INFISICAL_DB_PASSWORD`, `INFISICAL_ENCRYPTION_KEY` (`openssl rand -hex 16`),
+1. `infra/vault-keys.sh` generates and adds these to `.env` (never overwrites one that is set). By hand: `INFISICAL_DB_PASSWORD`, `INFISICAL_ENCRYPTION_KEY` (`openssl rand -hex 16`),
    `INFISICAL_AUTH_SECRET` (`openssl rand -base64 32`). **Back the encryption key and auth secret up off the
    Mac**: without them the vault cannot be decrypted.
 2. `docker compose --profile vault up -d --wait`
