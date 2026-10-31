@@ -56,12 +56,14 @@ A missing one is reported by name, never by value.
     cd scrapers/amex && npm install   # first time
     node scrapers/amex/scrape.mjs [--out DIR] [--months N]   # from repo root; defaults data/amex/raw, 2
 
-## Headed mode (Cloudflare block, #64)
+## Browser (Cloudflare, #64)
 
-`AMEX_HEADED=1` launches the installed Chrome headed (`channel: 'chrome'`) on a persistent profile
-(`AMEX_PROFILE`, default `~/.chrome-amex-scraper`) instead of headless Chromium. It needs a display, so
-set it only if `BOT_BLOCKED` persists headless. If headed is not enough, the fallback is a human login in a
-Chrome profile (as Harel). No stealth patches.
+Cloudflare blocks a Chrome that puppeteer launches itself: headed gets "Sorry, you have been blocked"
+on the plain GET, headless loads the form but gets a 403 on `ValidateIdDataNoReg` (checked 2026-10-31).
+A plain Chrome the scraper spawns itself (fresh temp profile, `--remote-debugging-port`, no
+`--enable-automation`) and attaches to over CDP loads the form. So the scraper does that, headed: it needs a
+display (the launchd worker runs in the GUI session) and a window opens for the run. `AMEX_CHROME`
+overrides the binary; `AMEX_HEADLESS=1` restores puppeteer's headless launch. No stealth patches.
 
 ## Exit codes
 

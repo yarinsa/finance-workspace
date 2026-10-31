@@ -15,7 +15,9 @@
 import puppeteer from 'puppeteer';
 import dotenv from 'dotenv';
 import fs from 'node:fs';
+import net from 'node:net';
 import os from 'node:os';
+import { spawn } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { loadEnv, dataDir } from '../tenant.mjs';
@@ -285,20 +287,37 @@ function billingMonths(n) {
 }
 
 /**
- * Headless Chromium by default. AMEX_HEADED=1 launches the real, installed Chrome (headed, with a
- * persistent profile at AMEX_PROFILE, default ~/.chrome-amex-scraper) in case Cloudflare is flagging
- * the headless fingerprint (#64). A headed run needs a display. No stealth patches either way.
+ * Root cause of #64 (2026-10-31): Cloudflare blocks a Chrome that puppeteer itself launched, headed
+ * or not (it serves "Sorry, you have been blocked" on the plain GET), and a headless one too (the
+ * login form loads but ValidateIdDataNoReg is refused). A plain Chrome we spawn ourselves
+ * (no --enable-automation, navigator.webdriver false) on a fresh profile and drive over CDP loads the
+ * form: the same "real Chrome over CDP" model as the refresh skills and Harel. No stealth patches.
+ * It is headed, so it needs a display (the launchd worker is a GUI-session agent). AMEX_CHROME
+ * overrides the binary; AMEX_HEADLESS=1 restores puppeteer's own headless launch.
  */
-function launchBrowser() {
-  if (process.env.AMEX_HEADED !== '1') return puppeteer.launch({ headless: true });
-  return puppeteer.launch({
-    headless: false, channel: 'chrome',
-    userDataDir: process.env.AMEX_PROFILE || path.join(os.homedir(), '.chrome-amex-scraper'),
-    args: ['--no-first-run', '--no-default-browser-check'],
+async function launchBrowser() {
+  if (process.env.AMEX_HEADLESS === '1') return { browser: await puppeteer.launch({ headless: true }), stop: async () => {} };
+  const chrome = process.env.AMEX_CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+  const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'amex-chrome-'));
+  const port = await new Promise((res) => {
+    const srv = net.createServer().listen(0, '127.0.0.1', () => { const { port } = srv.address(); srv.close(() => res(port)); });
   });
+  const proc = spawn(chrome, [`--user-data-dir=${profile}`, `--remote-debugging-port=${port}`, '--no-first-run',
+    '--no-default-browser-check', 'about:blank'], { stdio: 'ignore' });
+  const stop = async () => {
+    proc.kill();
+    fs.rmSync(profile, { recursive: true, force: true });
+  };
+  for (let i = 0; i < 40; i++) {
+    const up = await fetch(`http://127.0.0.1:${port}/json/version`).then((r) => r.ok, () => false);
+    if (up) return { browser: await puppeteer.connect({ browserURL: `http://127.0.0.1:${port}`, defaultViewport: null }), stop };
+    await sleep(500);
+  }
+  await stop();
+  throw new Error(`Chrome did not open its debugging port (binary: ${chrome}; needs a display)`);
 }
 
-const browser = await launchBrowser();
+const { browser, stop } = await launchBrowser();
 let code = 0;
 try {
   const page = await browser.newPage();
@@ -364,7 +383,8 @@ try {
   console.error(e.message);
   code = e.code;
 } finally {
-  await browser.close();
+  await browser.close().catch(() => {});
+  await stop();
 }
 console.log('----------------------------------------');
 process.exit(code || (failed ? 1 : 0));

@@ -194,26 +194,6 @@ def test_amex_logs_in_by_itself(monkeypatch):
     assert seen == [[str(script)]] and script.is_file()
 
 
-def test_amex_bot_block_retries_headed(monkeypatch):
-    """#64: a headless BOT_BLOCKED retries (attempt 2 sets AMEX_HEADED); blocked again it is SessionExpired."""
-    envs, attempt = [], [1]
-
-    async def fake_run(args, env=None, **kw):
-        envs.append(env or {})
-        return 3, "LOGIN FAILED: BOT_BLOCKED (ValidateIdDataNoReg HTTP 403 from cloudflare)\n"
-
-    monkeypatch.setattr(activities, "run_cmd", fake_run)
-    monkeypatch.setattr(activities, "_attempt", lambda: attempt[0])
-    with pytest.raises(ApplicationError) as e:
-        run(activities.scrape("amex"))
-    assert e.value.type == "BotBlocked" and not e.value.non_retryable
-    attempt[0] = 2
-    with pytest.raises(ApplicationError) as e:
-        run(activities.scrape("amex"))
-    assert e.value.type == "SessionExpired" and e.value.non_retryable
-    assert "AMEX_HEADED" not in envs[0] and envs[1]["AMEX_HEADED"] == "1"
-
-
 # --- scrape -----------------------------------------------------------------
 
 @pytest.fixture
