@@ -13,7 +13,8 @@ Nothing is moved out of `.env` yet. A tenant's **scrapes** use the vault only wh
   password manager and delete the file), the instance-admin token in `~/.finance-vault/admin.json`.
 - Both tenants have a project, a read identity (`~/.finance-vault/<id>.json`) and a write identity
   (`~/.finance-vault-write/<id>.json`): `default` (`00000000-0000-4000-8000-000000000001`) and `tairsasson`
-  (`d7adcdd1-57a9-4e86-9d73-6a8e7b308ed9`). Both projects are empty.
+  (`d7adcdd1-57a9-4e86-9d73-6a8e7b308ed9`). `tairsasson`'s project is empty; `default`'s holds the 15 source logins
+  copied from `.env` on 2026-10-31 with `vault_admin import-env` (the `.env` copies are still there).
 - The API container has `FINANCE_VAULT_URL=http://vault:8080` (from `FINANCE_API_VAULT_URL` in `.env`) and the
   write identities mounted, so the syncs screen can set secrets now.
 - **The sync worker does NOT have `FINANCE_VAULT_URL`**, so nothing a household enters in the app is used by a
@@ -82,6 +83,10 @@ access denied or a bad configuration is final. Messages never carry a secret.
 
 ## Operating it
 
+- **Import a household's logins from an env file:** `FINANCE_VAULT_URL=http://127.0.0.1:8080 poetry run python -m
+  finance.vault_admin import-env <tenant-id> [path/.env]`. Copies only the manifests' connection variables that have
+  a value (never Postgres, the API origin secret, VAPID or AWS), prints names only, and is safe to re-run (it
+  replaces). It does not remove anything from the file.
 - **Add a household:** create the tenant (backoffice-tenants skill), then
   `poetry run python -m finance.vault_admin tenant <tenant-id>`; the app can set its secrets right away.
 - **A tenant that has a project but no write identity:** `vault_admin upgrade <tenant-id>`.

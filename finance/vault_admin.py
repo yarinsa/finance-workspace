@@ -3,6 +3,7 @@
     poetry run python -m finance.vault_admin bootstrap EMAIL     # once, on a fresh vault (asks for the password)
     poetry run python -m finance.vault_admin tenant TENANT_ID    # project + read identity + write identity (for the API)
     poetry run python -m finance.vault_admin upgrade TENANT_ID   # add the write identity to a tenant set up earlier
+    poetry run python -m finance.vault_admin import-env TENANT_ID [ENV_FILE]   # copy the sources' logins from .env
 
 Run on the Mac by the household owner. It creates the structure only: the households type their own
 secrets (in the app or the Infisical UI), and nothing here reads or sets a credential value. The write
@@ -108,12 +109,47 @@ def upgrade_tenant(base: str, tenant_id: str, home: Path | None = None) -> None:
     print(f"tenant {tenant_id}: write identity created in {wtarget}")
 
 
+def parse_env_file(path: Path) -> dict[str, str]:
+    """KEY=VALUE lines of a .env file (comments and blanks skipped, one pair of surrounding quotes removed)."""
+    out: dict[str, str] = {}
+    for line in path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, value = line.partition("=")
+        value = value.strip()
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'":
+            value = value[1:-1]
+        out[key.strip().removeprefix("export ").strip()] = value
+    return out
+
+
+def import_env(tenant_id: str, env_file: Path, home: Path | None = None) -> list[str]:
+    """Copy the sources' connection variables (the manifests' `x-env` names) that have a value in `env_file`
+    into the tenant's project, with its write identity. Anything else in the file (Postgres, API origin secret,
+    VAPID, AWS) is left alone. Returns the names copied; values are never printed."""
+    from finance import manifest
+
+    wanted = {v for m in manifest.load_all().values() for v in m.env_vars}
+    values = parse_env_file(env_file)
+    names = [n for n in sorted(wanted) if values.get(n)]
+    if not vault.write_identity_path(tenant_id, home=home).exists():
+        raise SystemExit(f"no write identity for {tenant_id}: run `tenant` or `upgrade` first")
+    for name in names:
+        vault.set_secret(tenant_id, name, values[name], home=home)
+    return names
+
+
 def main(argv: list[str]) -> None:
     base = os.environ.get("FINANCE_VAULT_URL", "http://127.0.0.1:8080").rstrip("/")
     if len(argv) == 2 and argv[0] == "bootstrap":
         bootstrap(base, argv[1], getpass.getpass("Admin password for the new vault: "))
     elif len(argv) == 2 and argv[0] == "tenant":
         create_tenant(base, argv[1])
+    elif len(argv) in (2, 3) and argv[0] == "import-env":
+        env_file = Path(argv[2]) if len(argv) == 3 else Path(__file__).resolve().parent.parent / ".env"
+        done = import_env(argv[1], env_file)
+        print(f"imported {len(done)} secrets into tenant {argv[1]}: {', '.join(done) or 'none'}")
     elif len(argv) == 2 and argv[0] == "upgrade":
         upgrade_tenant(base, argv[1])
     else:
