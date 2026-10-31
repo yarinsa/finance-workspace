@@ -4,6 +4,7 @@
 !finance
 !db
 !api
+!data/*/manifest.json
 **/__pycache__
 **/tests
 **/.pytest_cache

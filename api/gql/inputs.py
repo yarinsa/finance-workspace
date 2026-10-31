@@ -10,7 +10,7 @@ from typing import Literal
 from decimal import Decimal
 from enum import Enum
 
-from pydantic import Field, field_validator, model_validator
+from pydantic import ConfigDict, Field, field_validator, model_validator
 
 from api.inputs import GoalEdit, Patch, TagEdit, TagSet
 
@@ -248,6 +248,13 @@ class SnoozeAllNotificationsInput(BulkNotificationInput, g.SnoozeAllNotification
 
 class SyncSourceRetryInput(MutationInput):
     id: node_id_of("SyncSource")
+
+
+class SyncSourceSecretSetInput(MutationInput, g.SyncSourceSecretSetInput):
+    model_config = ConfigDict(hide_input_in_errors=True)   # a rejected value must never be quoted in the error
+    source: str = Field(min_length=1, max_length=40)
+    name: str = Field(pattern=r"^[A-Z][A-Z0-9_]*$", max_length=80)
+    value: str = Field(min_length=1, max_length=2000, repr=False)   # repr=False: a validation error never prints it
 
 
 class TenantCreateInput(MutationInput, g.TenantCreateInput):

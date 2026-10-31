@@ -6,7 +6,8 @@ registry, the digest and the app read these instead of keeping their own lists.
 `connection` is a JSON Schema (draft 2020-12 object) for the source's connection form,
 rendered in the app with react-jsonschema-form. Each property names the `.env` variable it
 maps to in `x-env`; `writeOnly` marks a secret. The schema only describes what to set:
-values are never collected through the app, they stay in the Mac's `.env`.
+values are never read back through the app: a household with a vault write identity can set them from the
+syncs screen (stored in its vault, api/gql/sync.py); otherwise they stay in the Mac's `.env`.
 """
 import json
 from pathlib import Path

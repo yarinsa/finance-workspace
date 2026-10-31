@@ -35,13 +35,13 @@ from api.schema_bindings import load_schema, snake
 
 from .inputs import (CategoryMergeInput, CategoryUnmergeInput, AssetCreateInput, AssetUpdateInput, BulkNotificationInput, ClearTransactionOverrideInput, GoalCreateInput, GoalDeleteInput, DeleteTagInput, GroupArgs,
                      GroupOrder, LinkOffsetInput, NotificationArgs, NotificationIdInput, ResetOffsetsInput,
-                     SetTransactionTagsInput, SnoozeAllNotificationsInput, SyncSourceRetryInput, TenantCreateInput, TenantMemberRemoveInput, TenantAccessSyncInput, TenantMemberSetInput, TenantSetStatusInput, TransactionArgs, TransactionOrder,
+                     SetTransactionTagsInput, SnoozeAllNotificationsInput, SyncSourceRetryInput, SyncSourceSecretSetInput, TenantCreateInput, TenantMemberRemoveInput, TenantAccessSyncInput, TenantMemberSetInput, TenantSetStatusInput, TransactionArgs, TransactionOrder,
                      UnlinkOffsetInput, UnreadCountArgs, GoalUpdateInput, UpdateNotificationInput, PlanTargetsUpdateInput, UpdateTagInput,
                      UpdateTransactionInput)
 from .binding import bind_all
-from .generated.inputs import Direction, QueryNodeArgs, QueryTransactionByKeyArgs
+from .generated.inputs import Direction, QueryNodeArgs, QuerySyncSourceSecretsArgs, QueryTransactionByKeyArgs
 from .inbox import TYPENAMES, Notification
-from .sync import SyncSource
+from .sync import SecretsError, SyncSource, secrets_view, set_secret
 from . import tenants as tenant_store
 from finance import tenancy
 from .ledger import CENT, Ledger, Merchant, Txn, offset_candidates, totals
@@ -605,6 +605,22 @@ class SyncSourceResolver(NodeResolver[SyncSource]):
         rows = SyncSource.all(ledger(info).conn)   # ordered by source
         return paginate([{"node": s} for s in rows], lambda e: (e["node"].source,), args)
 
+    def secrets(self, info, args: QuerySyncSourceSecretsArgs):
+        """`Query.syncSourceSecrets`: the request's tenant only, names and state, never values."""
+        try:
+            return secrets_view(info.context["tenant_id"], args.source)
+        except SecretsError as e:
+            raise GraphQLError(str(e)) from None
+
+    def resolve_sync_source_secret_set(self, inp: SyncSourceSecretSetInput, info):
+        """Write one secret straight to the tenant's vault. The value is in memory for this call only:
+        never stored, logged or returned. Changes no ledger data, so no rebuild."""
+        try:
+            view = set_secret(info.context["tenant_id"], inp.source, inp.name, inp.value)
+        except SecretsError as e:
+            raise GraphQLError(str(e)) from None
+        return lambda: {"secrets": view}
+
 class TenantResolver(NodeResolver[dict]):
     """`Query.tenants` and the tenant mutations, for platform admins only: the registry of
     tenants and members. They change no ledger data, so they never signal a rebuild, and
@@ -741,6 +757,9 @@ class QueryResolver:
 
     def resolve_sync_sources(self, _, info, args: ConnectionArgs):
         return SYNC_SOURCES.listing(info, args)
+
+    def resolve_sync_source_secrets(self, _, info, args: QuerySyncSourceSecretsArgs):
+        return SYNC_SOURCES.secrets(info, args)
 
     def resolve_notifications(self, _, info, args: NotificationArgs):
         return NOTIFICATIONS.listing(info, args)

@@ -220,6 +220,12 @@ class SnoozeAllNotificationsInput(_GraphQLModel):
     category: list[NotificationCategory] | None = None
 
 
+class SyncSourceSecretSetInput(_GraphQLModel):
+    source: str
+    name: str
+    value: str
+
+
 class TenantAccessSyncInput(_GraphQLModel):
     """Make one person's access to the tenant's published files match their membership."""
     email: str
@@ -535,6 +541,10 @@ class MutationSyncSourceRetryArgs(_GraphQLModel):
     id: GlobalId
 
 
+class MutationSyncSourceSecretSetArgs(_GraphQLModel):
+    input: SyncSourceSecretSetInput
+
+
 class MutationTenantAccessSyncArgs(_GraphQLModel):
     id: GlobalId
     input: TenantAccessSyncInput
@@ -658,6 +668,10 @@ class QueryNotificationsArgs(_GraphQLModel):
 
 class QueryNotificationsUnreadCountArgs(_GraphQLModel):
     category: list[NotificationCategory] | None = None
+
+
+class QuerySyncSourceSecretsArgs(_GraphQLModel):
+    source: str
 
 
 class QuerySyncSourcesArgs(_GraphQLModel):

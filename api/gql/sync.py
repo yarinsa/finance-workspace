@@ -1,7 +1,9 @@
 """SyncSource: one row of Postgres `sync_status` (the worker's latest entry per source)."""
 import datetime as dt
 from dataclasses import dataclass
+from functools import lru_cache
 
+from finance import manifest, vault
 from api.rebuild import resume_point
 
 
@@ -42,3 +44,48 @@ class SyncSource:
     def all(cls, conn):
         rows = conn.execute("SELECT source, entry, updated_at FROM sync_status ORDER BY source").fetchall()
         return [cls.from_row(*r) for r in rows]
+
+
+class SecretsError(Exception):
+    """A secrets request the household can act on (unknown source or name, vault not set up, vault down).
+    The message is safe to show: it never carries a value."""
+
+
+@lru_cache(maxsize=1)
+def _manifests():
+    return manifest.load_all()
+
+
+def connection_fields(source: str) -> list[dict]:
+    """A source's connection variables from its manifest: name (the `x-env`), title and whether it is masked."""
+    m = _manifests().get(source)
+    if m is None:
+        raise SecretsError("unknown source")
+    return [{"name": p["x-env"], "title": p.get("title") or p["x-env"], "masked": bool(p.get("writeOnly"))}
+            for p in m.connection["properties"].values()]
+
+
+def secrets_view(tenant_id, source: str, env=None) -> dict:
+    """The `SyncSourceSecrets` of one source for this tenant: which fields the vault holds, never their values.
+    A household without a vault write identity gets the fields without a state and `can_edit` false."""
+    fields = connection_fields(source)
+    can_edit = vault.can_write(tenant_id, env)
+    try:
+        held = vault.secret_status(tenant_id, env) if can_edit else {}
+    except vault.VaultError as e:
+        raise SecretsError(f"vault: {e}") from None
+    return {"source": source, "can_edit": can_edit, "fields": [
+        {**f, "is_set": f["name"] in held, "updated_at": _ts(held.get(f["name"]))} for f in fields]}
+
+
+def set_secret(tenant_id, source: str, name: str, value: str, env=None) -> dict:
+    """Store one of the source's connection variables in the tenant's vault; returns the refreshed view."""
+    if name not in {f["name"] for f in connection_fields(source)}:
+        raise SecretsError("that is not one of this source's connection fields")
+    if not vault.can_write(tenant_id, env):
+        raise SecretsError("this household's vault is not set up for editing secrets from the app")
+    try:
+        vault.set_secret(tenant_id, name, value, env)
+    except vault.VaultError as e:
+        raise SecretsError(f"vault: {e}") from None
+    return secrets_view(tenant_id, source, env)

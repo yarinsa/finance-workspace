@@ -43,3 +43,43 @@ type SyncSourcePayload {
   success: Boolean!
   syncSource: SyncSource
 }
+
+"""
+One connection field of a source (its manifest `connection` property) and whether the household's
+vault holds a value for it. Never carries the value: a secret can be replaced, not read back.
+"""
+type SyncSourceSecret {
+  """The variable name, e.g. "CAL_PASSWORD" (the manifest's `x-env`)."""
+  name: String!
+  title: String!
+  """True for a password-like field: the form masks it."""
+  masked: Boolean!
+  isSet: Boolean!
+  """When the vault last changed it; null while it is not set."""
+  updatedAt: DateTime
+}
+
+"""A source's connection fields as the household's vault holds them."""
+type SyncSourceSecrets {
+  source: String!
+  """
+  False when this household is not on the vault with a write identity (it keeps its `.env`, set
+  on the Mac): the fields are then listed without a state and cannot be set from the app.
+  """
+  canEdit: Boolean!
+  fields: [SyncSourceSecret!]!
+}
+
+input SyncSourceSecretSetInput {
+  """The source id, e.g. "cal"."""
+  source: String!
+  """One of the source's connection variables; any other name is refused."""
+  name: String!
+  """Stored in the household's vault and never echoed, logged or kept by the API."""
+  value: String!
+}
+
+type SyncSourceSecretsPayload {
+  success: Boolean!
+  secrets: SyncSourceSecrets
+}

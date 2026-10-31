@@ -40,6 +40,8 @@ type Query {
 
   """Every scraped source's latest sync run (sync.graphql), by source id."""
   syncSources(first: Int, after: String, last: Int, before: String): SyncSourceConnection!
+  """A source's connection fields and which of them the household's vault holds (never the values)."""
+  syncSourceSecrets(source: String!): SyncSourceSecrets!
 
   # inbox (inbox.graphql)
   """Most severe first, then most recently updated."""
@@ -116,6 +118,12 @@ type Mutation {
   the Mac. An error when the last run did not fail or the sync worker is not reachable.
   """
   syncSourceRetry(id: ID!): SyncSourcePayload!
+  """
+  Store one connection secret in the household's vault (create or replace). The API writes it
+  straight through and keeps nothing; an error when the household has no vault write identity
+  or the name is not one of the source's connection variables. Takes effect on the next sync.
+  """
+  syncSourceSecretSet(input: SyncSourceSecretSetInput!): SyncSourceSecretsPayload!
 
   # inbox (inbox.graphql): no ledger rebuild
   """Mark read or unread, and/or snooze (or clear the snooze with a null). Snoozing marks it unread."""

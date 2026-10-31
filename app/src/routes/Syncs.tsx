@@ -31,6 +31,7 @@ import { cn } from "@/lib/utils";
 
 // react-jsonschema-form (ajv) is heavy: load it only when a connection panel is opened.
 const ConnectionForm = lazy(() => import("@/components/ConnectionForm"));
+const SourceSecrets = lazy(() => import("@/components/SourceSecrets"));
 
 const ENTITY_LABEL: Record<string, string> = {
   transactions: "עסקאות",
@@ -413,6 +414,7 @@ function NotificationsCard() {
 
 function SyncItem({ it }: { it: Item }) {
   const { data, live, display } = it;
+  const [connectionOpen, setConnectionOpen] = useState(false);   // the vault is asked only once this is opened
   const days = data ? daysSince(data.last_synced) : null;
   const lag = data ? txnLagDays(data) : null;
   const running = display ? isRunning(display) : false;
@@ -521,12 +523,20 @@ function SyncItem({ it }: { it: Item }) {
           </dl>
         )}
         {manifest && (
-          <details className="sync-connection">
+          <details
+            className="sync-connection"
+            onToggle={(e) => e.currentTarget.open && setConnectionOpen(true)}
+          >
             <summary className="cursor-pointer text-xs text-muted-foreground">
               פרטי חיבור
             </summary>
             <Suspense fallback={null}>
-              <ConnectionForm schema={manifest.connection as RJSFSchema} />
+              {connectionOpen && (
+                <SourceSecrets
+                  source={it.source}
+                  fallback={<ConnectionForm schema={manifest.connection as RJSFSchema} />}
+                />
+              )}
             </Suspense>
           </details>
         )}

@@ -35,7 +35,9 @@ One self-hosted Infisical on the Mac (compose profile `vault`, `127.0.0.1:8080`)
 machine identity per tenant** (project slug = tenant id). A tenant opts in by having `~/.finance-vault/<id>.json`
 (`poetry run python -m finance.vault_admin tenant <id>`) while `FINANCE_VAULT_URL` is set; every other tenant keeps
 its `.env`. The sync worker fetches the secrets into the scraper's environment only (`FINANCE_VAULT_LOADED=1`);
-the API has no vault access. Households type their own secrets in the UI; agents never do. Infisical-specific code
+the API's only vault access is the self-service write: `syncSourceSecretSet` stores one manifest-declared
+connection variable with the tenant's write identity (`~/.finance-vault-write/`), keeping nothing; `syncSourceSecrets`
+returns set/missing, never a value (tech debt: #63). Households type their own secrets in the app or the UI; agents never do. Infisical-specific code
 is only `finance/vault.py` + `finance/vault_admin.py` (`FINANCE_VAULT_BACKEND` keeps it swappable). Design,
 setup and what it does not fix: **docs/secrets-vault.md**; rollout: issue #61.
 

@@ -113,6 +113,7 @@ STRUCTURAL = frozenset({
     "BulkNotificationPayload",
     "Tenant", "TenantMember", "TenantPayload", "TenantAccessPayload",
     "SyncSource", "SyncSourceConnection", "SyncSourceEdge", "SyncSourcePayload",   # a sync_status JSON entry
+    "SyncSourceSecret", "SyncSourceSecrets", "SyncSourceSecretsPayload",   # the manifest + the vault, assembled
 })
 
 

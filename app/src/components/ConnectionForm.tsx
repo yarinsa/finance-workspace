@@ -4,8 +4,9 @@ import validator from "@rjsf/validator-ajv8";
 
 /**
  * A source's connection form, drawn from the JSON Schema it declares in its manifest.
- * Read-only: values live in the Mac's `.env` and never travel through the app, so the form
- * shows what the source needs and the variable each field maps to (`x-env`).
+ * Read-only: the fallback for a household without a vault write identity (SourceSecrets is the
+ * editable view). Values live in the Mac's `.env`, so the form shows what the source needs and the
+ * variable each field maps to (`x-env`).
  */
 export function connectionUiSchema(schema: RJSFSchema): UiSchema {
   const ui: UiSchema = {

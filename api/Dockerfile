@@ -20,6 +20,8 @@ WORKDIR /app
 COPY finance ./finance
 COPY db ./db
 COPY api ./api
+# Only the sources' manifests (api/Dockerfile.dockerignore): the names a household may set as secrets.
+COPY data ./data
 USER api
 EXPOSE 8787
 CMD ["uvicorn", "--factory", "api.app:create_app", "--host", "0.0.0.0", "--port", "8787", "--no-server-header"]
