@@ -8,6 +8,7 @@ import {
   CalendarCheck,
   Compass,
   Ellipsis,
+  ReceiptText,
   type LucideIcon,
 } from "lucide-react";
 import Overview from "./Overview";
@@ -16,6 +17,7 @@ import Metrics from "./Metrics";
 import Timeline from "./Timeline";
 import Syncs from "./Syncs";
 import Monthly from "./Monthly";
+import Transactions from "./Transactions";
 import Plan from "./Plan";
 
 /** Navigation hubs, Mint-style: each is one bottom tab (and one sidebar section). */
@@ -43,7 +45,7 @@ export interface GroupDef {
 /** Group order = tab order = sidebar section order. */
 export const groups: GroupDef[] = [
   { key: "overview", label: "מבט על", icon: House, tab: true },
-  { key: "monthly", label: "החודש", icon: CalendarCheck, tab: true },
+  { key: "monthly", label: "תנועות", icon: ReceiptText, tab: true },
   { key: "plan", label: "יעדים ותכנון", icon: Compass, tab: true },
   { key: "more", label: "עוד", icon: Ellipsis, tab: false },
 ];
@@ -67,11 +69,18 @@ export const routes: RouteDef[] = [
   },
 
   {
+    path: "/transactions",
+    label: "תנועות",
+    icon: ReceiptText,
+    group: "monthly",
+    hub: true,
+    Component: Transactions,
+  },
+  {
     path: "/monthly",
     label: "החודש",
     icon: CalendarCheck,
     group: "monthly",
-    hub: true,
     Component: Monthly,
   },
 

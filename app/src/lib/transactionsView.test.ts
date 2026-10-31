@@ -1,0 +1,121 @@
+import { describe, expect, it } from "vitest";
+import type { Row } from "./api";
+import {
+  accountCounts,
+  accountLabel,
+  applyView,
+  filterByAccount,
+  inRange,
+  parseAccount,
+  parseRange,
+  rangeToParams,
+  resolveRange,
+  totals,
+  type LedgerRow,
+} from "./transactionsView";
+
+// Made-up transactions shaped like the digested ledger (money out negative).
+const ledger: LedgerRow[] = [
+  { date: "2026-10-29", amount: -184.9, description: "שופרסל דיל", category: "מזון", origin: "cal", card_last4: "1234" },
+  { date: "2026-10-28", amount: 12500, description: "משכורת", category: "הכנסה", origin: "discount" },
+  { date: "2026-10-10", amount: -4210.55, description: "כרטיסי אשראי-י", origin: "discount", card_bill_payment: true },
+  { date: "2026-10-09", amount: -3000, description: "העברה לחשבון", origin: "discount", internal_transfer: true },
+  { date: "2026-10-05", amount: -320, description: "פז סלף", category: "תחבורה", origin: "amex" },
+  { date: "2026-10-05", amount: -89, description: "נטפליקס", category: "מנויים", origin: "cal" },
+  { date: "2026-09-02", amount: -600, description: "ארוחה משותפת", category: "מסעדות", origin: "max", offset_amount: 300 },
+  { date: "2026-11-02", amount: -250, description: "תשלום עתידי", category: "ביטוח", origin: "leumi" },
+];
+
+const overlayRow = (over: Partial<Row>): Row => ({
+  date: "2026-10-05",
+  abs_amount: "320.00",
+  amount: -320,
+  description: "פז סלף",
+  category: "דלק",
+  scraped_category: "תחבורה",
+  note: null,
+  excluded: false,
+  overridden: true,
+  origin: "amex",
+  sources: ["amex"],
+  ...over,
+});
+const overlayOf = (...rows: Row[]) => new Map(rows.map((r) => [`${r.date}/${r.abs_amount}`, r]));
+
+describe("applyView", () => {
+  it("hides card-bill payments and internal transfers, keeps income and spending", () => {
+    const v = applyView(ledger, new Map());
+    expect(v.map((t) => t.description)).not.toContain("כרטיסי אשראי-י");
+    expect(v.map((t) => t.description)).not.toContain("העברה לחשבון");
+    expect(v.map((t) => t.description)).toContain("משכורת");
+    expect(v).toHaveLength(6);
+  });
+
+  it("takes the overlay's category and drops rows it excludes", () => {
+    const v = applyView(ledger, overlayOf(overlayRow({}), overlayRow({ date: "2026-10-05", abs_amount: "89.00", excluded: true })));
+    const fuel = v.find((t) => t.description === "פז סלף")!;
+    expect(fuel.category).toBe("דלק");
+    expect(fuel.overridden).toBe(true);
+    expect(v.find((t) => t.description === "נטפליקס")).toBeUndefined();
+  });
+});
+
+describe("range", () => {
+  it("defaults to 30 days for missing or unknown ?days", () => {
+    expect(parseRange({})).toEqual({ kind: "days", days: 30 });
+    expect(parseRange({ days: "45" })).toEqual({ kind: "days", days: 30 });
+    expect(parseRange({ days: "90" })).toEqual({ kind: "days", days: 90 });
+  });
+
+  it("accepts a custom window, swapping a reversed one, and ignores impossible dates", () => {
+    expect(parseRange({ from: "2026-10-20", to: "2026-09-01" })).toEqual({ kind: "custom", from: "2026-09-01", to: "2026-10-20" });
+    expect(parseRange({ from: "2026-02-30", to: "2026-03-10", days: "60" })).toEqual({ kind: "days", days: 60 });
+  });
+
+  it("ends a preset today, inclusive", () => {
+    expect(resolveRange({ kind: "days", days: 30 }, "2026-10-31")).toEqual({ from: "2026-10-02", to: "2026-10-31" });
+  });
+
+  it("omits the default from the URL", () => {
+    expect(rangeToParams({ kind: "days", days: 30 })).toEqual({});
+    expect(rangeToParams({ kind: "days", days: 180 })).toEqual({ days: "180" });
+    expect(rangeToParams({ kind: "custom", from: "2026-09-01", to: "2026-09-30" })).toEqual({ from: "2026-09-01", to: "2026-09-30" });
+  });
+
+  it("keeps the window's rows newest first and leaves future-dated rows out", () => {
+    const v = inRange(applyView(ledger, new Map()), resolveRange({ kind: "days", days: 30 }, "2026-10-31"));
+    expect(v.map((t) => t.description)).toEqual(["שופרסל דיל", "משכורת", "פז סלף", "נטפליקס"]);
+  });
+});
+
+describe("accounts", () => {
+  const rows = inRange(applyView(ledger, new Map()), { from: "2026-09-01", to: "2026-10-31" });
+
+  it("counts rows per origin, most first", () => {
+    expect(accountCounts(rows)).toEqual([
+      { key: "cal", count: 2 },
+      { key: "amex", count: 1 },
+      { key: "discount", count: 1 },
+      { key: "max", count: 1 },
+    ]);
+  });
+
+  it("filters to one origin, or all with null", () => {
+    expect(filterByAccount(rows, "amex").map((t) => t.description)).toEqual(["פז סלף"]);
+    expect(filterByAccount(rows, null)).toHaveLength(5);
+  });
+
+  it("falls back to הכל for an account not in range", () => {
+    expect(parseAccount("leumi", ["cal", "amex"])).toBeNull();
+    expect(parseAccount("cal", ["cal", "amex"])).toBe("cal");
+    expect(accountLabel("other", (s) => s)).toBe("אחר");
+  });
+});
+
+describe("totals", () => {
+  it("sums money out and in after offsets", () => {
+    const rows = inRange(applyView(ledger, new Map()), { from: "2026-09-01", to: "2026-10-31" });
+    // out: 184.9 + 320 + 89 + (600 - 300 offset) = 893.9
+    expect(totals(rows)).toEqual({ count: 5, out: 893.9, in: 12500 });
+  });
+});

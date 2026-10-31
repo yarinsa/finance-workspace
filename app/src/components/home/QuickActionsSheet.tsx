@@ -91,7 +91,7 @@ export default function QuickActionsSheet({
           <button type="button" className={ROW} onClick={() => onPick("goal")}>
             <Row icon={Target} title="יעד חדש" sub="סכום, תאריך ואופק" />
           </button>
-          <Link to="/monthly?group=none" className={ROW} onClick={onClose}>
+          <Link to="/transactions" className={ROW} onClick={onClose}>
             <Row
               icon={ArrowLeftRight}
               title="קיזוז החזר"

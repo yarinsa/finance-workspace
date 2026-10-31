@@ -13,6 +13,13 @@ patterns per feature, what the app has vs. lacks, and the design principles
 (one number + verdict first, balance-after per row, label confidence).
 
 
+**The תנועות tab's hub is `/transactions`** (`routes/Transactions.tsx`, logic in `lib/transactionsView.ts`):
+every ledger row in a window, newest first, card-bill payments and internal transfers hidden, the live
+overlay applied. Range chips 30/60/90/180/360 days ending today or a custom from/to, account chips per
+`origin` with counts, a quiet count / out / in line, 100 rows then "הצג עוד". URL: `?days=` or
+`?from=&to=`, `?account=<origin>`. Rollout plan (widgets carousel, group-by) in
+`docs/transactions-screen-plan.md`. `/monthly` stays in the same group as a non-hub page until it is retired.
+
 **The month screen is one screen: `/monthly`** (there is no `/budgets`, `/spending` or `/fixed`).
 בפועל: free money (`budgets.summary.left`) and income / קבוע / משתנה on top (a figure scrolls to its
 section; past months show their net and `months_view` actuals instead), then the month's spending
