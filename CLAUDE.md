@@ -72,6 +72,7 @@ output without re-scraping).
 | Dashboard UI, `/monthly` | `app/CLAUDE.md` · the `design-system` agent |
 | Household facts (loans, freeze, birth date) | `MEMORY.md` (gitignored) |
 | Claude setup and usage tracking | `docs/claude-setup/README.md` |
+| Local LLM assistant (PoC, Qwen/Ollama) | `docs/local-assistant.md` |
 
 ## Conventions
 
