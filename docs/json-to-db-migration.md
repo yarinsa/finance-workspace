@@ -7,6 +7,30 @@ Postgres tables, serves everything the dashboard reads through schema-first Grap
 the static `/data/*.json` path. Per-source `raw/` and `normalized/` dumps stay files: they are the
 scrapers' output and the normalizers' contract, not app data.
 
+## Next up (follow-up list, 2026-11-01)
+
+Live state: master `8030802`, live DB at `0024`, offset rules + mortgage schedule imported (equal
+to the files), API container and sync worker restarted on master. No digest has run on the new
+code yet, so the position tables are still empty.
+
+1. **Sync failures of 2026-11-01 22:01–22:04 (before the worker restart, old code).** Do first:
+   the tables only fill when a digest succeeds.
+   - Six sources (max, amex, leumi, discount, discount-mortgage, discount-business) dumped, then
+     failed at publish: `deploy.sh --data-only failed (rc=1)`, with nothing after the colon. Find
+     why (AWS credentials? the S3 data loop?) and make the activity keep `deploy.sh`'s stderr in
+     the error, so the next failure names its cause.
+   - CAL failed in the scraper: `Attempted to use detached Frame` (Playwright; a page changed
+     mid-step). Retry once; if it repeats, it is a scraper fix (`sync-dev` skill).
+   - Unrelated, older: `sync_tenant_access` fails because `tenant-groups.sh` wants `terraform init`.
+2. **Verify the first digest on the new code:** `db/snapshot_store.py` totals equal
+   `snapshot.json`'s, `digest_runs` has a row, `source_dumps` matches the Syncs page.
+3. **Phase 2 slice 2:** `account_balance_days` (bank normalizers emit the measured end-of-day
+   balances; `history.cash` reads them), `household_settings.cycle_start_day`, `loans.next_payment`.
+4. **Phase 2 deletions (⚠ ask first):** the parity harness gets a seeded throwaway database, then
+   delete `rules.json`, `mortgage_schedule.json`, `freeze.json`, the `budgets.json` / `goals.json`
+   fallbacks and their file readers. Coordinate `goals.py` with the goals session.
+5. Then phase 3 (typed ledger); phase 2b after 2.
+
 ## Decisions already taken
 
 | # | Decision | By |
