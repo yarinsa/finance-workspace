@@ -2,7 +2,7 @@
 RiseUp never had, bi-monthly water, electricity)."""
 from datetime import date
 
-import bills
+from finance.views import bills
 
 AS_OF = date(2026, 10, 20)
 BUDGET = {"budgetDate": "2026-10", "cashflowStartDay": 1}

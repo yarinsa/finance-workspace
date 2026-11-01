@@ -3,6 +3,10 @@
 Real records from the 2026-10-27 digest."""
 import digest
 
+import datetime as _dt
+
+AS_OF = _dt.date.today()  # build_snapshot's as_of used to default to today
+
 DISCOUNT_DIRECT = {"institution": "discount", "account_id": "0034", "kind": "checking", "balance": 522.65,
                    "available_balance": 10522.65, "overdraft_limit": 10000.0, "currency": "ILS",
                    "_source": "discount"}
@@ -17,7 +21,7 @@ LEUMI_RISEUP = {"institution": "leumiBank", "account_id": "806-671963", "kind": 
 def snap(accounts=(), loans=(), savings=(), assets=None):
     e = {"accounts": [dict(a) for a in accounts], "credit_cards": [], "income": [],
          "savings": list(savings), "loans": list(loans)}
-    return digest.build_snapshot(e, assets=assets)
+    return digest.build_snapshot(e, AS_OF, "t", assets=assets)
 
 
 def test_direct_leumi_checking_beats_riseups_stale_loan_account_copy():
@@ -86,7 +90,7 @@ TXNS = [   # the 2026-10-28 dumps: each card's rows grouped by the day its card 
 def cards_snap(as_of, txns=TXNS, riseup=RISEUP_CARDS):
     e = {"accounts": [], "credit_cards": [dict(c) for c in riseup + ROSTER], "income": [], "savings": [],
          "loans": [], "transactions": [dict(t) for t in txns]}
-    return digest.build_snapshot(e, as_of=as_of)
+    return digest.build_snapshot(e, as_of or AS_OF, "t")
 
 
 def test_each_card_owes_the_issuers_next_charge_not_riseups_stale_balance():

@@ -14,7 +14,7 @@ from collections import defaultdict
 from datetime import date, datetime, time, timedelta
 from urllib.parse import quote
 
-import freshness
+from finance.views import freshness
 
 SEVERITY_ORDER = {"critical": 0, "high": 1, "medium": 2, "low": 3}
 MIN_BUDGET_PLAN = 50      # skip RiseUp's ₪1 placeholder envelopes
@@ -201,4 +201,45 @@ def build_actions(runway, bills, budgets, fixed_expenses, syncs, as_of, validati
                + _card_actions(runway, as_of) + _duplicate_actions(fixed_expenses)
                + _stale_actions(syncs, as_of) + list(validation))
     actions.sort(key=lambda a: (SEVERITY_ORDER[a["severity"]], -(a["amount"] or 0)))
+    return actions
+
+
+# --- Actions for the app's "לטיפול" list ---------------------------------------
+
+ACTION_TITLES = {
+    "dump": "סנכרון {id} נראה שגוי",
+    "card_bill": "חיוב אשראי לא תואם לחיוב בבנק",
+    "card_statement": "עסקאות הכרטיס לא מסתכמות לדף החשבון",
+    "balance": "פער בנתוני חשבון הבנק",
+    "internal_transfer": "העברה בין החשבונות ללא צד שני",
+    "loan_payment": "תשלום הלוואה לא תואם לחיוב בבנק",
+    "salary": "המשכורת לא נמצאה",
+}
+
+
+def validation_actions(report, include_warn=False):
+    """Action items (the shape build_actions emits) for failing checks.
+
+    Ids are stable for the report's month so a per-device dismiss sticks until the
+    situation changes. Dump and salary failures are critical; the rest are high.
+    Warnings are low-severity (category WARNING, failures PROBLEM) and only included on
+    request. Dump checks point at their source (a sync subject); the rest have no subject.
+    """
+    month = str(report.get("generated_at", ""))[:7]
+    actions = []
+    for c in report.get("checks", []):
+        if c["status"] == "fail" or (include_warn and c["status"] == "warn"):
+            fail = c["status"] == "fail"
+            severity = ("critical" if c["type"] in ("dump", "salary") else "high") if fail else "low"
+            title = ACTION_TITLES.get(c["type"], "בדיקת נתונים נכשלה").format(id=c["id"].split(".")[-1])
+            amounts = [abs(d["amount"]) for d in c.get("details", [])
+                       if d.get("level", "fail") == ("fail" if fail else "warn") and d.get("amount")]
+            actions.append({
+                "id": f"validation:{c['id']}:{month}", "severity": severity,
+                "category": "PROBLEM" if fail else "WARNING", "type": "validationFailed", "title": title,
+                "detail": c["summary"], "cta": {"label": "לסנכרונים", "to": "/syncs"},
+                "amount": round(sum(amounts), 2) if amounts else None,
+                "subject": {"kind": "sync", "sources": [c["id"].split(".", 1)[1]]}
+                           if c["type"] == "dump" else None,
+            })
     return actions

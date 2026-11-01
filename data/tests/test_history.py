@@ -1,7 +1,7 @@
-"""data/history.py: the home screen's cash and debt history, from the real 2026-10-27 dumps."""
+"""finance/views/history.py: the home screen's cash and debt history, from the real 2026-10-27 dumps."""
 from datetime import date
 
-import history
+from finance.views import history
 
 # Discount's running-balance chain starts on 2026-10-05 (raw/transactions.json, oldest first).
 DISCOUNT_OPS = [

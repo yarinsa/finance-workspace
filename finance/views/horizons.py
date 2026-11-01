@@ -16,13 +16,7 @@ of ``cashflow.json``: per month, each bucket as a share of net income against th
 Pure and stdlib-only. Running it directly prints the split of the real ledger.
 """
 
-import json
-import os
 from collections import defaultdict
-from finance.paths import data_root
-
-HERE = str(data_root())   # the tenant's data directory
-TRANSACTIONS = os.path.join(HERE, "digested", "transactions.json")
 
 HORIZONS = ("current", "near", "future")
 TARGET_PCT = round(100 / len(HORIZONS), 1)
@@ -129,20 +123,3 @@ def build_horizons(transactions, months=MONTHS, meta=None, goals=None):
                       for g in goals or [] if g.get("horizon") == h] for h in HORIZONS}
     return {"target_pct": TARGET_PCT, "horizons": list(HORIZONS), "names": names,
             "targets": {h: targets.get(h, TARGET_PCT) for h in HORIZONS}, "goals": by_horizon, "months": out}
-
-
-def main():
-    with open(TRANSACTIONS, encoding="utf-8") as f:
-        doc = json.load(f)
-    txns = doc["transactions"] if isinstance(doc, dict) else doc
-    block = build_horizons(txns)
-    print(f"target {block['target_pct']}% of net income per bucket")
-    for m in block["months"]:
-        cells = "  ".join(f"{h}: ₪{m['buckets'][h]['amount']:>9,.0f} ({m['buckets'][h]['pct']}%)"
-                          for h in HORIZONS)
-        print(f"{m['month']}  income ₪{m['income']:>9,.0f}  {cells}  "
-              f"left ₪{m['unallocated']['amount']:,.0f}")
-
-
-if __name__ == "__main__":
-    main()

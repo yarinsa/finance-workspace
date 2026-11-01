@@ -16,6 +16,10 @@ import pytest
 
 import digest
 
+import datetime as _dt
+
+AS_OF = _dt.date.today()  # build_snapshot's as_of used to default to today
+
 
 REAL_LOANS = {
     "source": "hb2.bankleumi.co.il - LoanAndMortgages",
@@ -170,7 +174,7 @@ def test_monthly_loan_service_picks_up_per_loan_payments():
         "accounts": [], "credit_cards": [], "income": [], "savings": [],
         "loans": loans,
     }
-    snap = digest.build_snapshot(entities)
+    snap = digest.build_snapshot(entities, AS_OF, "t")
     assert snap["totals"]["monthly_loan_service"] == 3212.22
 
 

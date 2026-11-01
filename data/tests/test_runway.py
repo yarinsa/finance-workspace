@@ -1,7 +1,7 @@
 """Real-case tests for runway.py (balance runway / safe-to-spend)."""
 from datetime import date
 
-import runway
+from finance.views import runway
 
 AS_OF = date(2026, 10, 16)
 RENT = 'הו"ק לעיין ניהול נכסי,לסניף 20-406'

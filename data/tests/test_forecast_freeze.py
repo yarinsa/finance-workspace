@@ -11,7 +11,12 @@ exist, and the tests remain idempotent.
 """
 import json
 import pytest
-import forecast
+
+import forecast as forecast_loader   # data/forecast.py: the file loaders
+from finance.views import forecast
+from finance.paths import data_root
+
+MORTGAGE_DUMP = data_root() / "discount-mortgage" / "raw" / "mortgage_details.json"
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
@@ -81,9 +86,8 @@ class TestPaymentForTrack:
         result = forecast.payment_for_track(track, "2026-11", {})
         assert result == self.FROZEN_NEXT
 
-    def test_none_freeze_falls_back_to_next_payment(self, track, monkeypatch):
-        # freeze=None triggers load_freeze() internally; we patch it to return {}.
-        monkeypatch.setattr(forecast, "load_freeze", lambda: {})
+    def test_none_freeze_falls_back_to_next_payment(self, track):
+        # freeze=None (nothing known) behaves like an empty freeze.
         result = forecast.payment_for_track(track, "2026-11", None)
         assert result == self.FROZEN_NEXT
 
@@ -93,8 +97,8 @@ class TestPaymentForTrack:
 # ─────────────────────────────────────────────────────────────────────────────
 class TestLoadFreeze:
     def test_returns_empty_dict_when_file_missing(self, tmp_path, monkeypatch):
-        monkeypatch.setattr(forecast, "FREEZE", tmp_path / "no_freeze.json")
-        assert forecast.load_freeze() == {}
+        monkeypatch.setattr(forecast_loader, "FREEZE", tmp_path / "no_freeze.json")
+        assert forecast_loader.load_freeze() == {}
 
     def test_returns_tracks_dict_from_valid_file(self, tmp_path, monkeypatch):
         data = {
@@ -109,8 +113,8 @@ class TestLoadFreeze:
         }
         f = tmp_path / "freeze.json"
         f.write_text(json.dumps(data))
-        monkeypatch.setattr(forecast, "FREEZE", f)
-        result = forecast.load_freeze()
+        monkeypatch.setattr(forecast_loader, "FREEZE", f)
+        result = forecast_loader.load_freeze()
         assert "ACC123" in result
         assert result["ACC123"]["resume_month"] == "2026-11"
 
@@ -142,30 +146,32 @@ class TestAuthoritativeMortgagePaymentFreeze:
         },
     }
 
-    def test_frozen_month_lower_than_resume_month(self, monkeypatch):
-        monkeypatch.setattr(forecast, "load_freeze", lambda: self.FREEZE_TRACKS)
-        total_frozen, _ = forecast.authoritative_mortgage_payment("2026-09")
-        total_resume, _ = forecast.authoritative_mortgage_payment("2026-11")
+    @staticmethod
+    def src(freeze):
+        """The real mortgage dump with ``freeze`` injected (nothing written to disk)."""
+        return forecast.Sources(mortgage=json.loads(MORTGAGE_DUMP.read_text()), freeze=freeze)
+
+    def test_frozen_month_lower_than_resume_month(self):
+        src = self.src(self.FREEZE_TRACKS)
+        total_frozen, _ = forecast.authoritative_mortgage_payment(src, "2026-09")
+        total_resume, _ = forecast.authoritative_mortgage_payment(src, "2026-11")
         assert total_resume > total_frozen
 
-    def test_frozen_month_returns_interest_only_for_frozen_tracks(self, monkeypatch):
-        monkeypatch.setattr(forecast, "load_freeze", lambda: self.FREEZE_TRACKS)
-        total, _ = forecast.authoritative_mortgage_payment("2026-09")
+    def test_frozen_month_returns_interest_only_for_frozen_tracks(self):
+        total, _ = forecast.authoritative_mortgage_payment(self.src(self.FREEZE_TRACKS), "2026-09")
         # Frozen tracks contribute 1692.40 + 1665.43 = 3357.83.
         # Unfrozen tracks: 2.09% NextPayment=835.88, three מתווה=461.59+659.51+586.44=1707.54
         # Total frozen month ≈ 3357.83 + 835.88 + 1707.54 = 5901.25
         # (allow ±50 for floating-point and CPI drift)
         assert 5800 < total < 6100
 
-    def test_resume_month_includes_higher_annuity_payments(self, monkeypatch):
-        monkeypatch.setattr(forecast, "load_freeze", lambda: self.FREEZE_TRACKS)
-        total, _ = forecast.authoritative_mortgage_payment("2026-11")
+    def test_resume_month_includes_higher_annuity_payments(self):
+        total, _ = forecast.authoritative_mortgage_payment(self.src(self.FREEZE_TRACKS), "2026-11")
         # Resume: 2408.60 + 2353.31 + 835.88 + 1707.54 = 7305.33 (approx)
         assert total > 7000
 
-    def test_due_date_is_returned_as_date_string(self, monkeypatch):
-        monkeypatch.setattr(forecast, "load_freeze", lambda: {})
-        _, due = forecast.authoritative_mortgage_payment("2026-09")
+    def test_due_date_is_returned_as_date_string(self):
+        _, due = forecast.authoritative_mortgage_payment(self.src({}), "2026-09")
         # Due date is the 10th (PrincipalPaymentDayOfMonth) of the target month.
         assert due == "2026-09-10"
 

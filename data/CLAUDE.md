@@ -2,6 +2,14 @@
 
 Loaded when working under data/. Project overview: the root CLAUDE.md. Taxonomy and offsets: finance/CLAUDE.md.
 
+**The compute lives in `finance/views/`, not here.** The `data/*.py` scripts load files, call
+the pure builders (`runway`, `bills`, `budgets`, `spending`, `months_view`, `actions`,
+`history`, `projection`, `forecast`, `goals`, `snapshot`) and write the outputs; the module
+names below refer to `finance/views/<name>.py` unless a `data/` path is given. `cashflow.py`
+builds `finance.views.household.Household` from `data/inputs.py`. Tests import the builders
+from `finance.views`. A refactor that must not change figures is checked with
+`scripts/parity/run.sh` (docs/json-to-db-migration.md, "Parity harness").
+
 ### Validation
 
 `data/validate.py` proves the scraped data is complete and consistent, using the
@@ -59,7 +67,7 @@ Rationale and the trust/double-counting decisions are in
 
 ### Balance runway
 
-`data/runway.py` (called from `cashflow.py`, output in `cashflow.json` → `runway`)
+`finance/views/runway.py` (`Household.runway`, output in `cashflow.json` → `runway`)
 projects the **combined Discount + Leumi checking balance day by day** for 45 days:
 recurring ledger items (≥2 of the last 3 months) re-posted on their day of month,
 Fri/Sat → Sunday. It reports the low point before payday, overdraft breaches and
@@ -107,7 +115,7 @@ command; push the result with `sync-data`.
 
 ### History and the property asset
 
-Scraped sources only know today, so `data/history.py` (called from `cashflow.py`, output in
+Scraped sources only know today, so `finance/views/history.py` (`Household.history`; loaders and `backfill` in `data/history.py`; output in
 `cashflow.json` → `history`) rebuilds the past for the home screen's lenses:
 `cash` (end-of-day Discount + Leumi checking, the runway's pool, last 90 days: days inside a
 bank's running-balance chain are measured, earlier days are walked back through its ledger;

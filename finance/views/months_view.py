@@ -37,8 +37,9 @@ max(actual, expected). Null when the forecast does not cover the current month.
 from collections import defaultdict
 from datetime import date
 
-import cashflow
 from finance import categories
+from finance.transfers import is_internal_transfer
+from finance.views import cashflow
 
 DEBT_CATEGORIES = categories.DEBT_CATEGORIES
 TOP_CATEGORIES = 12
@@ -109,13 +110,12 @@ def _expected_from_forecast(block):
 def _expected_from_budget(doc):
     if not doc:
         return None
-    import digest
     out = dict.fromkeys(("income", "fixed", "variable", "debt_savings"), 0.0)
     for e in doc.get("envelopes") or []:
         amt = abs(float(e.get("originalAmount") or 0))
         d = e.get("details") or {}
         if e.get("type") == "fixed":
-            if digest.is_internal_transfer({"description": str(d.get("businessName") or d.get("expense") or "")}):
+            if is_internal_transfer({"description": str(d.get("businessName") or d.get("expense") or "")}):
                 continue
             if d.get("isIncome"):
                 out["income"] += amt

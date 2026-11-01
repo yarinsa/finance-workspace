@@ -6,8 +6,9 @@ should pay down to ₪0 by Aug 2053, not sit flat at ~₪1.37M until age 90 beca
 today's reduced (≈interest-only) installment was extrapolated forever.
 """
 import copy
+from datetime import date
 
-import projection
+from finance.views import projection
 
 # The household's loans as scraped 2026-10 (data/digested/snapshot.json).
 # The three big Discount tracks are on reduced installments right now: the 2.09%
@@ -49,7 +50,7 @@ SNAPSHOT = {"totals": {"bank_balances_sum": 0, "credit_card_debt": 0}, "loans": 
 
 
 def _sim():
-    return projection.simulate(copy.deepcopy(SNAPSHOT))
+    return projection.simulate(copy.deepcopy(SNAPSHOT), TODAY)
 
 
 class TestAmortizeLoans:
@@ -120,6 +121,7 @@ FORECAST = {"current_month": {"forecast_month": "2026-10", "based_on_budget": "2
                               "expenses": {"total": 28189.56}}}
 
 # Fixed age so results don't drift with today's date.
+TODAY = date(2026, 11, 1)
 BASE_CFG = {**projection.CONFIG, "current_age": 28}
 
 
@@ -128,7 +130,7 @@ def _cfg(**over):
 
 
 def _household(**over):
-    return projection.build(copy.deepcopy(HOUSEHOLD), _cfg(**over), forecast=FORECAST)
+    return projection.build(copy.deepcopy(HOUSEHOLD), TODAY, FORECAST, cfg=_cfg(**over))
 
 
 def _metric(p, key):
@@ -137,18 +139,18 @@ def _metric(p, key):
 
 class TestBaselineSurplus:
     def test_surplus_defaults_to_forecast_expected_net(self):
-        cfg = projection.resolve_config(BASE_CFG, HOUSEHOLD, FORECAST)
+        cfg = projection.resolve_config(BASE_CFG, HOUSEHOLD, TODAY, FORECAST)
         assert cfg["monthly_surplus"] == -1025.76
 
     def test_injected_surplus_wins_over_forecast(self):
-        cfg = projection.resolve_config(_cfg(monthly_surplus=500), HOUSEHOLD, FORECAST)
+        cfg = projection.resolve_config(_cfg(monthly_surplus=500), HOUSEHOLD, TODAY, FORECAST)
         assert cfg["monthly_surplus"] == 500
 
     def test_negative_surplus_erodes_liquid_balance(self):
         # Same snapshot, only the surplus differs: a -₪1,026/mo month must leave
         # the liquid pool at least 12 × ₪1,026 lower after the first year.
-        flat = projection.simulate(copy.deepcopy(HOUSEHOLD), _cfg(monthly_surplus=0))
-        short = projection.simulate(copy.deepcopy(HOUSEHOLD), _cfg(monthly_surplus=-1025.76))
+        flat = projection.simulate(copy.deepcopy(HOUSEHOLD), TODAY, _cfg(monthly_surplus=0))
+        short = projection.simulate(copy.deepcopy(HOUSEHOLD), TODAY, _cfg(monthly_surplus=-1025.76))
         y1 = lambda s: s["timeline"][0]["invested"]
         assert y1(flat) - y1(short) >= 12 * 1025
 
@@ -156,7 +158,7 @@ class TestBaselineSurplus:
         # No loans, no savings, -₪1,000/mo: after a year the debt must exceed the
         # ₪12,000 of raw deficit because the negative balance is borrowed.
         snap = {"totals": {"bank_balances_sum": 0, "credit_card_debt": 0}, "loans": []}
-        sim = projection.simulate(snap, _cfg(monthly_surplus=-1000, borrow_rate=0.08))
+        sim = projection.simulate(snap, TODAY, _cfg(monthly_surplus=-1000, borrow_rate=0.08))
         assert sim["timeline"][0]["invested"] < -12_300
 
 
@@ -169,7 +171,7 @@ class TestLongTermSavings:
         snap = {"totals": {"bank_balances_sum": 0, "credit_card_debt": 0,
                            "long_term_savings": 644033.88, "liquid_savings": 0},
                 "loans": []}
-        sim = projection.simulate(snap, _cfg(monthly_surplus=0, real_return=0.04))
+        sim = projection.simulate(snap, TODAY, _cfg(monthly_surplus=0, real_return=0.04))
         y10 = sim["timeline"][9]
         assert abs(y10["savings"] - 644033.88 * (1 + 0.04 / 12) ** 120) < 1
 
@@ -177,7 +179,7 @@ class TestLongTermSavings:
 class TestRetirementDrawdown:
     def test_default_drawdown_is_todays_spending_minus_loan_service(self):
         # Loans are gone by 67, so living cost = ₪28,189.56 - ₪9,504.45.
-        cfg = projection.resolve_config(BASE_CFG, HOUSEHOLD, FORECAST)
+        cfg = projection.resolve_config(BASE_CFG, HOUSEHOLD, TODAY, FORECAST)
         assert cfg["retirement_drawdown"] == 18685.11
 
     def test_estate_shrinks_after_retirement(self):
@@ -216,8 +218,8 @@ class TestMetricsOnDecline:
 
     def _declining(self):
         snap = {"totals": {"bank_balances_sum": 50_000, "credit_card_debt": 0}, "loans": []}
-        return projection.build(snap, _cfg(monthly_surplus=-5_000, retirement_drawdown=5_000),
-                                forecast=None)
+        return projection.build(snap, TODAY, None,
+                                cfg=_cfg(monthly_surplus=-5_000, retirement_drawdown=5_000))
 
     def test_growth_is_negative_and_not_good(self):
         g = _metric(self._declining(), "growth")
@@ -232,7 +234,7 @@ class TestMetricsOnDecline:
         # slope is about -(300k + interest)/50k/5 ≈ -130%/yr, not from year 1.
         sim = projection.simulate(
             {"totals": {"bank_balances_sum": 50_000, "credit_card_debt": 0}, "loans": []},
-            _cfg(monthly_surplus=-5_000))
+            TODAY, _cfg(monthly_surplus=-5_000))
         g = _metric({"metrics": projection.metrics(sim, _cfg())}, "growth")
         y5 = next(p for p in sim["timeline"] if p["month"] == 60)["net_val"]
         assert g["value"] == round((y5 - 50_000) / 50_000 / 5 * 100, 1)

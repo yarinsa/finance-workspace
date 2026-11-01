@@ -172,12 +172,8 @@ def action_payloads(new_actions):
 def spent_on(day, ledger):
     """₪ of real spending dated `day` (ISO), counted as the cashflow screens do: offsets netted,
     card-bill settlements / transfers / savings / income excluded."""
-    import sys
-    for p in (REPO / "data", REPO):
-        if str(p) not in sys.path:
-            sys.path.insert(0, str(p))
-    import spending
     from finance import offsets
+    from finance.views import spending
     return round(sum(-float(t["amount"]) for t in offsets.cashflow_view(ledger)
                      if str(t.get("date", ""))[:10] == day and spending.classify(t) == "spend"), 2)
 

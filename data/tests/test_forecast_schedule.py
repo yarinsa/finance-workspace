@@ -9,8 +9,9 @@ Bug stories (2026-10-15 dashboard audit):
   to ~₪8.3k, per the bank's own amortization schedule (לוח סילוקין) — not carry
   the current installment forward forever.
 """
-import forecast
-import projection
+from datetime import date
+
+from finance.views import forecast, projection
 
 # The bank's schedule as supplied by the user on 2026-09-06 (see MEMORY.md).
 SCHEDULE = [
@@ -69,7 +70,7 @@ class TestProjectionUsesSchedule:
 
     def test_mortgage_cash_follows_the_bank_schedule(self):
         cfg = {**self.CFG, "mortgage_schedule": SCHEDULE, "start_month": "2026-11"}
-        sim = projection.simulate(self.SNAPSHOT, cfg)
+        sim = projection.simulate(self.SNAPSHOT, date(2026, 11, 1), cfg)
         cash = {r["month"]: r["mortgage_paid"] for r in sim["mortgage_cash"]}
         assert cash[1] == 5817.26                          # Dec 2026: current band
         assert cash[2] == round(5817.26 + 8190 - 5717, 2)  # Jan 2027 step-up
@@ -96,23 +97,26 @@ class TestEnvelopeCategories:
               for i, a in enumerate((233.98, 200, 400, 300, 400))),
         ]}
 
-    def month(self, monkeypatch, known=None):
-        monkeypatch.setattr(forecast, "authoritative_mortgage_payment", lambda m=None: (5813.27, "2026-10-10"))
-        return forecast.build(self.budget(), "2026-10", known)
+    # A one-track mortgage dump whose next installment is ₪5,813.27 due on the 10th.
+    SRC = forecast.Sources(mortgage={"MortgagesDetails": {"MortgagesBlock": {"MortgageEntry": [
+        {"MortgageDetailsBlock": {"LoanEntry": [
+            {"NextPayment": 5813.27, "NextPaymentDate": "20261010", "LastPaymentDate": "20530810"}]}}]}}})
 
-    def test_rent_is_rent_and_the_mortgage_envelope_is_replaced(self, monkeypatch):
-        items = self.month(monkeypatch)["expenses"]["fixed_items"]
+    def month(self, known=None):
+        return forecast.build(self.budget(), "2026-10", self.SRC, known)
+
+    def test_rent_is_rent_and_the_mortgage_envelope_is_replaced(self):
+        items = self.month()["expenses"]["fixed_items"]
         assert [(i["category"], i["category_group"], i["amount"]) for i in items] == [
             ("שכר דירה", "דיור", 6800), ("משכנתא", "דיור", 5813.27), ("הלוואה", "פיננסים", 1844.42)]
         assert items[0]["source_category"] == "דיור"
 
-    def test_mortgage_found_through_the_ledger_category_too(self, monkeypatch):
+    def test_mortgage_found_through_the_ledger_category_too(self):
         b = self.budget()
         b["envelopes"][1]["details"]["expense"] = "תשלומים"
-        monkeypatch.setattr(forecast, "authoritative_mortgage_payment", lambda m=None: (5813.27, "2026-10-10"))
-        items = forecast.build(b, "2026-10", {"דסק-משכנתא": "משכנתא"})["expenses"]["fixed_items"]
+        items = forecast.build(b, "2026-10", self.SRC, {"דסק-משכנתא": "משכנתא"})["expenses"]["fixed_items"]
         assert sum(i["category"] == "משכנתא" for i in items) == 1
 
-    def test_budget_lines_are_named_by_category_and_weekly_envelopes_merge(self, monkeypatch):
-        disc = self.month(monkeypatch)["expenses"]["discretionary_items"]
+    def test_budget_lines_are_named_by_category_and_weekly_envelopes_merge(self):
+        disc = self.month()["expenses"]["discretionary_items"]
         assert disc == [{"name": "כלכלה", "amount": 1533.98}, {"name": "תיירות", "amount": 1000}]

@@ -21,15 +21,11 @@ data/*
 !data/projection.py
 !data/detect_freeze.py
 !data/goals.py
-!data/runway.py
-!data/bills.py
 !data/budgets.py
-!data/spending.py
-!data/months_view.py
-!data/actions.py
 !data/validate.py
 !data/history.py
 !data/freshness.py
+!data/inputs.py
 !data/*/
 data/*/raw/
 data/*/normalized/

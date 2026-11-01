@@ -15,7 +15,9 @@ from sqlalchemy import ARRAY, BigInteger, CheckConstraint, Column, ForeignKey, I
 from sqlalchemy.dialects.postgresql import JSONB, TIMESTAMP, UUID
 from sqlmodel import Field, Relationship, SQLModel
 
-Money = Numeric(12, 2)
+from finance.models import MoneySQL
+
+Money = MoneySQL
 
 
 def _now():

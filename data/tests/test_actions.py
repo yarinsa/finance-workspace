@@ -1,7 +1,7 @@
 """Real-case tests for actions.py (home "לטיפול" list)."""
 from datetime import date, datetime, timedelta, timezone
 
-import actions
+from finance.views import actions
 
 AS_OF = date(2026, 10, 16)
 

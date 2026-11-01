@@ -11,6 +11,10 @@ import pytest
 
 import digest
 
+import datetime as _dt
+
+AS_OF = _dt.date.today()  # build_snapshot's as_of used to default to today
+
 
 def _load_harel(tmp_path, online_data, customer_products):
     """Execute data/harel/normalize.py against a temp raw/ dir."""
@@ -89,7 +93,7 @@ def test_savings_excluded_from_tracked_net_but_in_combined_total():
              "balance": 137861.0, "currency": "ILS"},
         ],
     }
-    snap = digest.build_snapshot(entities)
+    snap = digest.build_snapshot(entities, AS_OF, "t")
     t = snap["totals"]
 
     assert t["long_term_savings"] == 476222.0

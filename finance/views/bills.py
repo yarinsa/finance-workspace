@@ -25,8 +25,6 @@ cycle is the calendar month.
 Read-only over the ledger.
 """
 import calendar
-import json
-import os
 import re
 from collections import defaultdict
 from datetime import date, timedelta
@@ -34,26 +32,13 @@ from statistics import median
 
 from finance import categories
 from finance.merchants import merchant_name
-from runway import posting_date
-from finance.paths import data_root
-
-HERE = str(data_root())   # the tenant's data directory
-BUDGET = os.path.join(HERE, "riseup", "raw", "budget_current.json")
+from finance.views.runway import posting_date
 
 SERIES_TOLERANCE = 0.15   # same series: within ±15% of the series' median amount
 LOOKBACK_CYCLES = 3       # a fixed series is active when seen in >= MIN_CYCLES of these
 MIN_CYCLES = 2
 UTILITIES = {"חשמל", "מים", "גז", "ארנונה"}
 UTILITY_HISTORY = 6       # charges looked at for a utility's cadence and amount
-
-
-def load_budget(path=BUDGET):
-    """The raw RiseUp budget dump, or None when it has not been scraped."""
-    try:
-        with open(path, encoding="utf-8") as f:
-            return json.load(f)
-    except (OSError, ValueError):
-        return None
 
 
 def _norm(s):
@@ -204,10 +189,3 @@ def build_bills(budget, transactions, as_of):
         "overdue_total": total("overdue"),
         "items": items,
     }
-
-
-if __name__ == "__main__":
-    tx = json.load(open(os.path.join(HERE, "digested", "transactions.json"), encoding="utf-8"))
-    tx = tx["transactions"] if isinstance(tx, dict) else tx
-    out = build_bills(load_budget(), tx, date.today())
-    print(json.dumps(out, ensure_ascii=False, indent=2))

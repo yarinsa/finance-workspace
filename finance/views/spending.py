@@ -14,21 +14,14 @@ purchases are already in the ledger), savings deposits are saved rather than spe
 and positive amounts / ``is_income`` rows are income. A row is counted in exactly
 one bucket, in that precedence order.
 
-Pure (merchant keys come from finance/merchants.py); imported by ``cashflow.build()``. Running it directly prints
-a summary of the real ledger.
+Pure (merchant keys come from finance/merchants.py); computed by ``Household.spending``.
 """
 
-import json
-import os
 from collections import defaultdict
 from datetime import date
 
 from finance.categories import DEBT_CATEGORIES
 from finance.merchants import merchant_name
-from finance.paths import data_root
-
-HERE = str(data_root())   # the tenant's data directory
-TRANSACTIONS = os.path.join(HERE, "digested", "transactions.json")
 
 MONTHS = 6
 MAX_TX_PER_MONTH = 300   # keep the cashflow.json payload small
@@ -154,17 +147,3 @@ def build_spending(transactions, months=MONTHS, today=None):
                          for k, v in b["excluded"].items()},
         })
     return {"months": out}
-
-
-def main():
-    with open(TRANSACTIONS, encoding="utf-8") as f:
-        txs = json.load(f)["transactions"]
-    for m in build_spending(txs, today=date.today())["months"]:
-        print(f'{m["month"]}  total ₪{m["total"]:,.0f}  vs_prev {m["vs_prev"]}  partial={m["partial"]}')
-        for c in m["by_category"][:5]:
-            print(f'    {c["name"]:<20} ₪{c["amount"]:>9,.0f}  {c["pct"]:>5}%  x{c["count"]}')
-        print("    excluded:", {k: (v["amount"], v["count"]) for k, v in m["excluded"].items()})
-
-
-if __name__ == "__main__":
-    main()

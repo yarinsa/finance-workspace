@@ -1,7 +1,7 @@
 """Months view: real October-2026 decisions (salary, rent, loan, card bill, Wolt)."""
 from datetime import date
 
-import months_view as mv
+from finance.views import months_view as mv
 
 AS_OF = date(2026, 10, 16)
 

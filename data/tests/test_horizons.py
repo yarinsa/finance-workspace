@@ -1,6 +1,6 @@
 """Horizon buckets (current / near / future), from real ledger rows."""
-import horizons
-from horizons import build_horizons, default_horizon
+from finance.views import horizons
+from finance.views.horizons import build_horizons, default_horizon
 
 
 def tx(desc, amount, date="2026-09-10", **kw):

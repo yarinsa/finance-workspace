@@ -4,6 +4,7 @@ import json
 from datetime import date
 
 import budgets
+from finance.views import budgets as view
 
 
 def env(name, amount, idx=""):
@@ -37,7 +38,7 @@ def cat(block, name):
 
 
 def build(envs, ledger=(), as_of=date(2026, 10, 16), **kw):
-    return budgets.build_budgets(doc(envs, **{k: kw.pop(k) for k in ("start_day",) if k in kw}),
+    return view.build_budgets(doc(envs, **{k: kw.pop(k) for k in ("start_day",) if k in kw}),
                                  list(ledger), as_of, **kw)
 
 
@@ -139,7 +140,7 @@ class TestCycle:
         assert build([env("עציצים", 100)], [row("2026-10-13", "קיוסק לב הנמל", -129.0, "עציצים")])["per_day"] is None
 
     def test_no_budget_returns_none(self):
-        assert budgets.build_budgets(None, [], date(2026, 10, 16)) is None
+        assert view.build_budgets(None, [], date(2026, 10, 16)) is None
 
 
 class TestHistory:
@@ -189,24 +190,24 @@ class TestFixedItems:
                    merchant="SPOTIFY P47D8D")]
 
     def test_monthly_charge_not_seen_yet_is_expected(self):
-        items = budgets.fixed_items(self.HEALTH, "2026-10")
+        items = view.fixed_items(self.HEALTH, "2026-10")
         assert [(i["description"], i["amount"], i["expected"]) for i in items] == \
             [("כלל ב.בריאות ה.ק", -129.14, True)]
 
     def test_charge_that_already_hit_is_not_expected_again(self):
         ledger = self.HEALTH + [row("2026-10-28", "כלל ב.בריאות ה.ק", -129.14, "בריאות", kind="fixed")]
-        assert [i["expected"] for i in budgets.fixed_items(ledger, "2026-10")] == [False]
+        assert [i["expected"] for i in view.fixed_items(ledger, "2026-10")] == [False]
 
     def test_a_service_that_moved_card_is_not_expected_twice(self):
-        items = budgets.fixed_items(self.SPOTIFY, "2026-10")
+        items = view.fixed_items(self.SPOTIFY, "2026-10")
         assert [(i["merchant"], i["expected"]) for i in items] == [("SPOTIFY P47D8D", False)]
 
     def test_needs_both_previous_cycles(self):
         # only September: could be a bi-monthly bill in its off month
-        assert budgets.fixed_items(self.HEALTH[1:], "2026-10") == []
+        assert view.fixed_items(self.HEALTH[1:], "2026-10") == []
 
     def test_variable_rows_are_not_fixed_items(self):
-        assert budgets.fixed_items(TRANSPORT[:2], "2026-10") == []
+        assert view.fixed_items(TRANSPORT[:2], "2026-10") == []
 
 
 class TestSummary:
@@ -317,7 +318,7 @@ class TestMergedCategories:
         """אלכוהול (₪255.70) merged into אוכל בחוץ (₪1,000): one ₪1,255.70 line; the ledger
         already says אוכל בחוץ for the beer."""
         ledger = [row("2026-10-12", "בירה בזאר", -153.4, "אוכל בחוץ", group="אוכל")]
-        b = budgets.build_budgets(doc([env("אוכל בחוץ", 1)]), ledger, date(2026, 10, 16),
+        b = view.build_budgets(doc([env("אוכל בחוץ", 1)]), ledger, date(2026, 10, 16),
                                   overrides={"אוכל בחוץ": 1000, "אלכוהול": 255.7},
                                   merges={"אלכוהול": "אוכל בחוץ"})
         names = [c["name"] for c in b["categories"]]

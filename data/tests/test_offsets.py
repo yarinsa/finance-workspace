@@ -1,7 +1,7 @@
 """קיזוז: paybacks netted against the expenses they pay back (finance/offsets.py),
 and PayBox round trips (digest.mark_round_trips). Every case is a real ledger row."""
 import digest
-import spending
+from finance.views import spending
 from finance import offsets
 
 ROOMMATE_RULE = [{"payer": "בללי אסף", "against": ["לעיין ניהול"]}]

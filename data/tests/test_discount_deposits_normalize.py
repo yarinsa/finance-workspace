@@ -12,6 +12,10 @@ from pathlib import Path
 
 import digest
 
+import datetime as _dt
+
+AS_OF = _dt.date.today()  # build_snapshot's as_of used to default to today
+
 
 def _load_normalize(source_dir, raw_files, tmp_path):
     """Execute <source_dir>/normalize.py against a temp raw/ dir, return entities."""
@@ -128,7 +132,7 @@ def test_liquid_vs_illiquid_split_in_snapshot_totals():
              "balance": 9542.3, "currency": "ILS", "liquid": True},
         ],
     }
-    snap = digest.build_snapshot(entities)
+    snap = digest.build_snapshot(entities, AS_OF, "t")
     t = snap["totals"]
 
     assert t["long_term_savings"] == round(359740.0 + 9542.3, 2)

@@ -7,31 +7,34 @@ on-track verdict turns on its end-date runway.
 from datetime import date, timedelta
 
 import goals
+from finance.views import goals as view
+
+GENERATED_AT = "2026-11-01T00:00:00"
 
 
 class TestPct:
     def test_unset_denominator_is_none_not_zero(self):
         # An unset target (0) must NOT read as 0% — it is "needs input".
-        assert goals.pct(1619.15, 0) is None
+        assert view.pct(1619.15, 0) is None
 
     def test_coverage_caps_at_100(self):
         # Liquid buffer far above target still reads 100%, not 300%.
-        assert goals.pct(180000, 60000) == 100.0
+        assert view.pct(180000, 60000) == 100.0
 
     def test_partial_coverage_rounds_to_one_dp(self):
         # ₪1,619.15 liquid vs a ₪60,000 emergency-fund target → 2.7%.
-        assert goals.pct(1619.15, 60000) == 2.7
+        assert view.pct(1619.15, 60000) == 2.7
 
 
 class TestEmergencyFundCard:
     def test_unset_target_needs_input(self):
-        card = goals.emergency_fund_card(1619.15, 0)
+        card = view.emergency_fund_card(1619.15, 0)
         assert card["status"] == "needs_input"
         assert card["value"] is None
         assert card["shortfall"] is None
 
     def test_shortfall_is_target_minus_buffer(self):
-        card = goals.emergency_fund_card(1619.15, 60000)
+        card = view.emergency_fund_card(1619.15, 60000)
         assert card["value"] == 2.7
         assert card["shortfall"] == round(60000 - 1619.15, 2)
 
@@ -39,12 +42,12 @@ class TestEmergencyFundCard:
 class TestInheritanceCard:
     def test_modelled_estate_vs_target_verdict(self):
         # The card shows the modelled estate (₪) and flags whether it meets target.
-        card = goals.inheritance_card(6816471, 1000000)
+        card = view.inheritance_card(6816471, 1000000)
         assert card["value"] == 6816471
         assert card["meets_target"] is True
 
     def test_no_estate_needs_input(self):
-        card = goals.inheritance_card(None, 1000000)
+        card = view.inheritance_card(None, 1000000)
         assert card["status"] == "needs_input"
         assert card["meets_target"] is None
 
@@ -106,10 +109,11 @@ class TestStoreMutations:
 class TestPerGoal:
     def test_future_end_date_is_on_track(self):
         end = (date.today() + timedelta(days=149)).isoformat()
-        g = goals.per_goal(
+        g = view.per_goal(
             {"id": "phone", "description": "החלפת טלפון", "amount": 3000, "end_date": end},
             buffer=1619.15,
             monthly_surplus=2000,
+            today=date.today(),
         )
         # progress = min(buffer, amount) / amount; the remaining ₪1,380.85 over
         # ~4.9 months (~₪282/mo) fits a ₪2,000/mo surplus → on track. Runway
@@ -120,17 +124,19 @@ class TestPerGoal:
 
     def test_past_end_date_underfunded_is_off_track(self):
         end = (date.today() - timedelta(days=10)).isoformat()
-        g = goals.per_goal(
+        g = view.per_goal(
             {"id": "late", "description": "יעד שעבר", "amount": 50000, "end_date": end},
             buffer=1000,
+            today=date.today(),
         )
         assert g["on_track"] is False
 
     def test_fully_funded_is_on_track_regardless_of_date(self):
         end = (date.today() - timedelta(days=10)).isoformat()
-        g = goals.per_goal(
+        g = view.per_goal(
             {"id": "done", "description": "ממומן", "amount": 500, "end_date": end},
             buffer=10000,
+            today=date.today(),
         )
         assert g["progress_pct"] == 100.0
         assert g["on_track"] is True
@@ -183,66 +189,66 @@ def _card(out, key):
 
 class TestOverdrawnGoals:
     def test_progress_floors_at_zero_when_overdrawn(self):
-        g = goals.per_goal(_store()["goals"][0], buffer=OVERDRAWN)
+        g = view.per_goal(_store()["goals"][0], buffer=OVERDRAWN, today=date.today())
         assert g["progress_pct"] == 0.0
 
     def test_overdrawn_with_negative_surplus_is_not_on_track(self):
         for raw in _store()["goals"]:
-            g = goals.per_goal(raw, buffer=OVERDRAWN, monthly_surplus=NEG_SURPLUS)
+            g = view.per_goal(raw, buffer=OVERDRAWN, monthly_surplus=NEG_SURPLUS, today=date.today())
             assert g["progress_pct"] == 0.0
             assert g["on_track"] is False, raw["description"]
 
     def test_unknown_surplus_is_never_reported_on_track(self):
         # Runway alone does not make a goal fundable.
-        g = goals.per_goal(_store()["goals"][0], buffer=OVERDRAWN)
+        g = view.per_goal(_store()["goals"][0], buffer=OVERDRAWN, today=date.today())
         assert g["on_track"] is not True
 
     def test_required_monthly_fits_positive_surplus(self):
         # ₪3,000 in 39 days needs ≈ ₪2,341/mo; a ₪5,000/mo surplus covers it.
-        g = goals.per_goal(_store()["goals"][0], buffer=0, monthly_surplus=5000)
-        assert g["required_monthly"] == round(3000 / (39 / goals.DAYS_PER_MONTH), 2)
+        g = view.per_goal(_store()["goals"][0], buffer=0, monthly_surplus=5000, today=date.today())
+        assert g["required_monthly"] == round(3000 / (39 / view.DAYS_PER_MONTH), 2)
         assert g["on_track"] is True
 
     def test_required_monthly_exceeds_small_surplus(self):
-        g = goals.per_goal(_store()["goals"][0], buffer=0, monthly_surplus=1000)
+        g = view.per_goal(_store()["goals"][0], buffer=0, monthly_surplus=1000, today=date.today())
         assert g["on_track"] is False
 
 
 class TestBuildDigest:
     def test_goal_compliance_counts_only_fundable_goals(self):
-        out = goals.build(_store(), _snapshot(), _cashflow())
+        out = view.build(_store(), _snapshot(), _cashflow(), date.today(), GENERATED_AT)
         assert _card(out, "goal_compliance")["value"] == 0.0
         assert all(g["on_track"] is False for g in out["personal_goals"])
 
     def test_missing_piece_uses_floored_accrual(self):
         # Nothing accrued → the full 3,000 + 25,000, not inflated by the overdraft.
-        out = goals.build(_store(), _snapshot(), _cashflow())
+        out = view.build(_store(), _snapshot(), _cashflow(), date.today(), GENERATED_AT)
         assert out["missing_piece"] == 28000
 
     def test_shared_surplus_funds_earliest_goal_first(self):
         # ₪4,000/mo covers the phone (~₪2,341/mo) but not phone + trip together
         # (trip needs ~₪2,624/mo on top) — one surplus can't be spent twice.
-        out = goals.build(_store(), _snapshot(0), _cashflow(net=4000))
+        out = view.build(_store(), _snapshot(0), _cashflow(net=4000), date.today(), GENERATED_AT)
         by_id = {g["id"]: g for g in out["personal_goals"]}
         assert by_id["phone-2026"]["on_track"] is True
         assert by_id["trip-2027"]["on_track"] is False
         assert _card(out, "goal_compliance")["value"] == 50.0
 
     def test_emergency_fund_floors_and_flags_unmet(self):
-        card = _card(goals.build(_store(), _snapshot(), _cashflow()), "emergency_fund_coverage")
+        card = _card(view.build(_store(), _snapshot(), _cashflow(), date.today(), GENERATED_AT), "emergency_fund_coverage")
         assert card["value"] == 0.0
         assert card["shortfall"] == 60000
         assert card["meets_target"] is False
 
     def test_retirement_without_target_needs_input(self):
-        card = _card(goals.build(_store(), _snapshot(), _cashflow()), "retirement_coverage")
+        card = _card(view.build(_store(), _snapshot(), _cashflow(), date.today(), GENERATED_AT), "retirement_coverage")
         assert card["value"] is None
         assert card["status"] == "needs_input"
         assert card["target_derived"] is True
 
     def test_retirement_with_target_reports_coverage(self):
         store = {**_store(), "retirement_target": 24000000}
-        card = _card(goals.build(store, _snapshot(), _cashflow()), "retirement_coverage")
+        card = _card(view.build(store, _snapshot(), _cashflow(), date.today(), GENERATED_AT), "retirement_coverage")
         assert card["value"] == 50.0
         assert card["status"] == "ok"
         assert card["meets_target"] is False
@@ -250,13 +256,13 @@ class TestBuildDigest:
 
 class TestEmergencyFundOverdrawn:
     def test_negative_buffer_coverage_is_zero_not_negative(self):
-        card = goals.emergency_fund_card(OVERDRAWN, 60000)
+        card = view.emergency_fund_card(OVERDRAWN, 60000)
         assert card["value"] == 0.0
         assert card["shortfall"] == 60000
         assert card["meets_target"] is False
 
     def test_funded_meets_target(self):
-        card = goals.emergency_fund_card(70000, 60000)
+        card = view.emergency_fund_card(70000, 60000)
         assert card["value"] == 100.0
         assert card["shortfall"] == 0
         assert card["meets_target"] is True

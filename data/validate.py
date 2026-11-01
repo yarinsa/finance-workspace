@@ -40,7 +40,8 @@ from datetime import date, timedelta
 from pathlib import Path
 
 import digest
-import runway
+from finance.views import runway
+from finance.views.actions import ACTION_TITLES, validation_actions  # noqa: F401  (re-exported)
 from finance.paths import data_root
 
 CODE_ROOT = Path(__file__).resolve().parent
@@ -1377,45 +1378,7 @@ def write_report(report, out_dir):
     write_markdown(_clean(report), out / "validation.md")
 
 
-# --- Actions for the app's "לטיפול" list ---------------------------------------
-
-ACTION_TITLES = {
-    "dump": "סנכרון {id} נראה שגוי",
-    "card_bill": "חיוב אשראי לא תואם לחיוב בבנק",
-    "card_statement": "עסקאות הכרטיס לא מסתכמות לדף החשבון",
-    "balance": "פער בנתוני חשבון הבנק",
-    "internal_transfer": "העברה בין החשבונות ללא צד שני",
-    "loan_payment": "תשלום הלוואה לא תואם לחיוב בבנק",
-    "salary": "המשכורת לא נמצאה",
-}
-
-
-def validation_actions(report, include_warn=False):
-    """Action items (the shape data/actions.py emits) for failing checks.
-
-    Ids are stable for the report's month so a per-device dismiss sticks until the
-    situation changes. Dump and salary failures are critical; the rest are high.
-    Warnings are low-severity (category WARNING, failures PROBLEM) and only included on
-    request. Dump checks point at their source (a sync subject); the rest have no subject.
-    """
-    month = str(report.get("generated_at", ""))[:7]
-    actions = []
-    for c in report.get("checks", []):
-        if c["status"] == "fail" or (include_warn and c["status"] == "warn"):
-            fail = c["status"] == "fail"
-            severity = ("critical" if c["type"] in ("dump", "salary") else "high") if fail else "low"
-            title = ACTION_TITLES.get(c["type"], "בדיקת נתונים נכשלה").format(id=c["id"].split(".")[-1])
-            amounts = [abs(d["amount"]) for d in c.get("details", [])
-                       if d.get("level", "fail") == ("fail" if fail else "warn") and d.get("amount")]
-            actions.append({
-                "id": f"validation:{c['id']}:{month}", "severity": severity,
-                "category": "PROBLEM" if fail else "WARNING", "type": "validationFailed", "title": title,
-                "detail": c["summary"], "cta": {"label": "לסנכרונים", "to": "/syncs"},
-                "amount": round(sum(amounts), 2) if amounts else None,
-                "subject": {"kind": "sync", "sources": [c["id"].split(".", 1)[1]]}
-                           if c["type"] == "dump" else None,
-            })
-    return actions
+# --- Actions for the app's "לטיפול" list: finance/views/actions.py (validation_actions)
 
 
 # --- CLI --------------------------------------------------------------------

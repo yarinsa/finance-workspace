@@ -5,7 +5,7 @@ from Yarin's own Bit account, and Apple's differently-padded card descriptions.
 """
 from datetime import date
 
-import spending
+from finance.views import spending
 
 AMEX_BILL = {"date": "2026-09-02", "amount": -8339.89, "description": "אמריקן אקס,חיוב",
              "category": "תשלומים", "origin": "discount", "card_bill_payment": True}

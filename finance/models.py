@@ -9,10 +9,13 @@ Records are `extra="forbid"`: a new field must be declared here first.
 import datetime as dt
 import json
 import re
+from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, BeforeValidator, ConfigDict
+from pydantic import BaseModel, BeforeValidator, ConfigDict, PlainSerializer
+from sqlalchemy import Numeric
+from sqlmodel import Field, SQLModel
 
 
 def _date(v):
@@ -29,6 +32,32 @@ def _date(v):
 
 Date = Annotated[dt.date, BeforeValidator(_date)]
 OptDate = Annotated[dt.date | None, BeforeValidator(_date)]
+
+
+def _money(v):
+    """Decimal from float/int/str via its text, so 0.1 stays 0.1 (Decimal(0.1) would not)."""
+    if isinstance(v, Decimal):
+        return v
+    try:
+        return Decimal(str(v))
+    except InvalidOperation:
+        raise ValueError(f"not an amount: {v!r}") from None
+
+
+# The SQL type of every money column; `Money` carries it, finance/tables.py reuses it.
+MoneySQL = Numeric(12, 2)
+
+# Decimal in Python, JSON float in `mode="json"` dumps (so normalized/*.json stay byte-identical),
+# and `sa_type` tells SQLModel table classes to make the column Numeric(12, 2).
+Money = Annotated[
+    Decimal,
+    BeforeValidator(_money),
+    PlainSerializer(float, return_type=float, when_used="json"),
+    Field(sa_type=MoneySQL),
+]
+
+# Optional money: the sa_type has to sit outside the union or SQLModel does not see it.
+OptMoney = Annotated[Money | None, Field(sa_type=MoneySQL)]
 
 
 class Record(BaseModel):
@@ -62,15 +91,20 @@ class Transaction(Record):
     budget_category: str | None = None   # riseup: tracking envelope name, the household's budget line
 
 
-class Account(Record):
+class AccountFields(SQLModel):
+    """Account's fields, declared once. A later table class subclasses this to reuse them."""
     institution: str
     account_id: str
     kind: str
-    balance: float
+    balance: Money
     currency: str = "ILS"
     label: str | None = None
-    available_balance: float | None = None
-    overdraft_limit: float | None = None
+    available_balance: OptMoney = None
+    overdraft_limit: OptMoney = None
+
+
+class Account(AccountFields, Record):
+    pass
 
 
 class CreditCard(Record):
