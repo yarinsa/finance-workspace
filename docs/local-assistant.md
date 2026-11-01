@@ -26,5 +26,9 @@ To turn it on, the user does these outward steps:
 3. `docker compose --profile api up -d --build api` from the main checkout, once this branch is merged.
 Unset URL = the assistant is off (503 `assistant_off`) and the UI hides the chat. Kill switch: `infra/ollama.sh --off` or clear the URL.
 
+## Live state (2026-11-01)
+On: Ollama runs as the `me.finance.ollama` LaunchAgent, `.env` sets the URL and `FINANCE_API_ASSISTANT_MODEL=gemma4:26b`, the dashboard shows the chat button (`app/src/components/assistant/`). Only `gemma4:26b` is installed; Qwen3-30B was removed after the comparison above.
+Trap: the API image copies only the packages listed in `api/Dockerfile` and `api/Dockerfile.dockerignore`. `api/assistant_chat.py` imports `assistant/`, so both files list it; a new top-level package the API imports needs both lines, or the container crash-loops on start. Run the new image once before swapping it in.
+
 ## Not done yet
-Read-only. No dashboard chat sheet yet, no writes, no net-worth/debt answers (the API does not serve `snapshot`), no evals beyond the unit tests.
+Read-only. No writes, no net-worth/debt answers through the API (it does not serve `snapshot`), no eval set beyond the unit tests, and no availability flag: the button shows until the first `assistant_off` reply (an `assistant` flag on `/api/health` would hide it from the start).
