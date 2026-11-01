@@ -27,6 +27,13 @@ household's cycle budget (`cyclePlans` over `buildCards`). Over-plan or overdue 
 URL: `?days=`, `?from=&to=` or `?range=cycle`, `?account=<origin>`, `?group=`. Rollout plan (widgets carousel, group-by) in
 `docs/transactions-screen-plan.md`. `/monthly` stays in the same group as a non-hub page until it is retired.
 
+**The חיסכון tab's hub is `/savings`** (`routes/Savings.tsx`, logic in `lib/savingsView.ts`) and it replaces the old
+יעדים ותכנון screen: holdings (`snapshot.savings`) and savings movements (ledger category `השקעה וחיסכון`) grouped
+`?group=horizon|goal|kind|institution`, a widgets carousel (household targets via `components/savings/GeneralCard.tsx`),
+goals as groups (edit / add through `GoalEditorSheet`, targets through `TargetsSheet`), then the net-worth journey and
+the `Horizons` income split below. Horizon is derived from `liquidity_date`; a hand placement (`holding_assignments`,
+`holdingAssign` mutation, `lib/holdingsOverlay.ts`) wins. `/plan`, `/goals`, `/horizons`, `/summary` redirect here.
+
 **The month screen is one screen: `/monthly`** (there is no `/budgets`, `/spending` or `/fixed`).
 בפועל: free money (`budgets.summary.left`) and income / קבוע / משתנה on top (a figure scrolls to its
 section; past months show their net and `months_view` actuals instead), then the month's spending

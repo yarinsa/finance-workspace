@@ -1,6 +1,8 @@
 import { useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { Card, Page } from "@/components/common";
+import { Card, CardLabel, Page } from "@/components/common";
+import NetWorthChart from "@/components/NetWorthChart";
+import Horizons from "./Horizons";
 import GoalEditorSheet, { type GoalEditorTarget } from "@/components/GoalEditorSheet";
 import SavingsGroups from "@/components/savings/SavingsGroups";
 import SavingsWidgets from "@/components/savings/SavingsWidgets";
@@ -172,6 +174,11 @@ export default function Savings() {
           />
         </div>
       )}
+      <Card>
+        <CardLabel>המסע הפיננסי שלי</CardLabel>
+        <NetWorthChart height={280} />
+      </Card>
+      <Horizons />
       <TargetsSheet open={targetSheet} onClose={() => setTargetSheet(false)} />
       <GoalEditorSheet goal={goalEditorTarget} onClose={() => setGoalEditorTarget(null)} />
       <TransactionEditSheet tx={editing} onClose={() => setEditing(null)} />

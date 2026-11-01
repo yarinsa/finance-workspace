@@ -6,7 +6,6 @@ import {
   Inbox as InboxIcon,
   RefreshCw,
   CalendarCheck,
-  Compass,
   PiggyBank,
   Ellipsis,
   ReceiptText,
@@ -19,11 +18,10 @@ import Timeline from "./Timeline";
 import Syncs from "./Syncs";
 import Monthly from "./Monthly";
 import Transactions from "./Transactions";
-import Plan from "./Plan";
 import Savings from "./Savings";
 
 /** Navigation hubs, Mint-style: each is one bottom tab (and one sidebar section). */
-export type RouteGroup = "overview" | "monthly" | "plan" | "more";
+export type RouteGroup = "overview" | "monthly" | "savings" | "more";
 
 export interface RouteDef {
   path: string;
@@ -48,7 +46,7 @@ export interface GroupDef {
 export const groups: GroupDef[] = [
   { key: "overview", label: "מבט על", icon: House, tab: true },
   { key: "monthly", label: "תנועות", icon: ReceiptText, tab: true },
-  { key: "plan", label: "יעדים ותכנון", icon: Compass, tab: true },
+  { key: "savings", label: "חיסכון", icon: PiggyBank, tab: true },
   { key: "more", label: "עוד", icon: Ellipsis, tab: false },
 ];
 
@@ -102,19 +100,11 @@ export const routes: RouteDef[] = [
   },
 
   {
-    path: "/plan",
-    label: "יעדים ותכנון",
-    icon: Compass,
-    group: "plan",
-    hub: true,
-    Component: Plan,
-  },
-
-  {
     path: "/savings",
     label: "חיסכון",
     icon: PiggyBank,
-    group: "plan",
+    group: "savings",
+    hub: true,
     Component: Savings,
   },
 
@@ -134,9 +124,10 @@ export const redirects: { from: string; to: string }[] = [
   { from: "/forecast", to: "/monthly?view=forecast" },
   { from: "/runway", to: "/monthly?view=forecast" },
   { from: "/recommendations", to: "/inbox?tab=suggestions" },
-  { from: "/summary", to: "/plan" },
-  { from: "/goals", to: "/plan" },
-  { from: "/horizons", to: "/plan" },
+  { from: "/summary", to: "/savings" },
+  { from: "/plan", to: "/savings" },
+  { from: "/goals", to: "/savings?group=goal" },
+  { from: "/horizons", to: "/savings" },
   { from: "/portfolio", to: "/overview?lens=savings&holdings=1" },
   { from: "/networth", to: "/overview?lens=networth" },
 ];

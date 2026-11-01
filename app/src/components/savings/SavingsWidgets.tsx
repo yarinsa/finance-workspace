@@ -1,6 +1,6 @@
 import { BigNumber, Card, CardLabel, StackedBar } from "@/components/common";
 import { Legend, Slide } from "@/components/transactions/WidgetsCarousel";
-import { GeneralCard } from "@/routes/Goals";
+import { GeneralCard } from "./GeneralCard";
 import { shekel, shekelSigned } from "@/lib/data";
 import type { DisplayGeneral } from "@/lib/goalsOverlay";
 import type { SavingsStats } from "@/lib/savingsView";
