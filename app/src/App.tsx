@@ -25,6 +25,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { MobileTabBar } from "@/components/MobileTabBar";
 import { PwaStatus } from "@/components/PwaStatus";
 import { Toaster } from "@/components/Toaster";
+import { AssistantLauncher } from "@/components/assistant/AssistantChat";
 import { TenantSwitcher } from "@/components/TenantSwitcher";
 import Tenants from "@/routes/Tenants";
 
@@ -158,6 +159,7 @@ export default function App() {
           </main>
         </SidebarInset>
         <MobileTabBar />
+        <AssistantLauncher />
         <Toaster />
       </SidebarProvider>
     </TooltipProvider>
