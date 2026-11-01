@@ -136,6 +136,7 @@ class LoanFields(SQLModel):
     payments_total: int | None = None
     monthly_payment: OptMoney = None
     final_date: OptDate = None
+    next_payment_date: OptDate = None
 
 
 class Loan(LoanFields, Record):

@@ -46,11 +46,13 @@ class Sources:
     """The authoritative dumps the forecast reads besides the budget envelopes.
 
     Each is already parsed; the empty value means "not known" (the file was absent).
-    ``mortgage`` is the Discount ``mortgage_details.json``, ``freeze`` the ``tracks`` of
+    ``mortgage`` is the Discount mortgage's tracks as stored loans (``Loan`` dicts with
+    ``category == "mortgage"``: ``loan_id``, ``monthly_payment``, ``final_date``,
+    ``next_payment_date``; ISO dates), ``freeze`` the ``tracks`` of
     ``freeze.json``, ``schedule`` the ``periods`` of ``mortgage_schedule.json``, ``cal``
     CAL's ``bigNumberAndDetails.json`` and ``amex`` AMEX's ``billingsOverview.json``.
     """
-    mortgage: dict | None = None
+    mortgage: list | None = None
     freeze: dict = field(default_factory=dict)
     schedule: list = field(default_factory=list)
     cal: dict | None = None
@@ -77,15 +79,15 @@ def category_names(b):
 
 
 def authoritative_mortgage_payment(src, target_month=None):
-    """Full mortgage installment from the Discount mortgage dump for `target_month`.
+    """Full mortgage installment from the Discount mortgage tracks for `target_month`.
 
-    Returns ``(total, due_date)`` where total = Σ ``NextPayment`` across loans
-    still active in ``target_month`` (YYYY-MM) and due_date is the installment
-    day in that month (YYYY-MM-DD), or ``(None, None)`` if ``src.mortgage`` is missing.
+    Returns ``(total, due_date)`` where total = Σ ``monthly_payment`` (the dump's per-track
+    ``NextPayment``) across loans still active in ``target_month`` (YYYY-MM) and due_date
+    is the installment day in that month (YYYY-MM-DD), or ``(None, None)`` with no tracks.
 
     The dump only knows each loan's *next* payment date, but the loans are
-    standard monthly amortising loans, so we carry ``NextPayment`` forward and
-    simply drop any loan whose ``LastPaymentDate`` falls before ``target_month``.
+    standard monthly amortising loans, so we carry ``monthly_payment`` forward and
+    simply drop any loan whose ``final_date`` falls before ``target_month``.
     When ``target_month`` is None we report the dump's own next installment.
 
     Why this and not RiseUp's envelope: RiseUp (and the mortgage ``Summary``'s
@@ -95,29 +97,25 @@ def authoritative_mortgage_payment(src, target_month=None):
     (~₪8.5k), which is what actually hits the account next month. We therefore
     drop the RiseUp mortgage envelope (expense == MORTGAGE_EXPENSE) and use this.
     """
-    d = src.mortgage
-    if d is None:
+    loans = src.mortgage
+    if not loans:
         return None, None
-    block = d["MortgagesDetails"]["MortgagesBlock"]["MortgageEntry"][0]
-    loans = block["MortgageDetailsBlock"]["LoanEntry"]
-    raw = next((l.get("NextPaymentDate") for l in loans if l.get("NextPaymentDate")), None)
-    day = raw[6:8] if raw and len(raw) == 8 else "10"
+    raw = next((l["next_payment_date"] for l in loans if l.get("next_payment_date")), None)
+    day = raw[8:10] if raw else "10"
 
     active = loans
     if target_month:
         # Keep loans whose final payment is in or after the target month.
-        active = [l for l in loans
-                  if (l.get("LastPaymentDate") or "99999999")[:6] >= target_month.replace("-", "")]
+        active = [l for l in loans if (l.get("final_date") or "9999-12")[:7] >= target_month]
         due = f"{target_month}-{day}"
     else:
-        due = f"{raw[:4]}-{raw[4:6]}-{raw[6:8]}" if raw and len(raw) == 8 else raw
+        due = raw
 
     total = round(sum(payment_for_track(l, target_month, src.freeze) for l in active), 2)
-    if target_month and raw and len(raw) == 8:
+    if target_month and raw:
         # The dump only knows the current installment; the bank's schedule knows
         # the Jan-2027 step-up (מתווה tranches end their reduced-principal phase).
-        total = schedule_adjusted(total, f"{raw[:4]}-{raw[4:6]}", target_month,
-                                  src.schedule)
+        total = schedule_adjusted(total, raw[:7], target_month, src.schedule)
     return total, due
 
 
@@ -159,10 +157,10 @@ def payment_for_track(track, target_month, freeze):
     the freeze window and the recomputed full payment from ``resume_month`` onward.
     With no freeze record, or no target month, we fall back to ``NextPayment``.
     """
-    nxt = track.get("NextPayment", 0)
+    nxt = track.get("monthly_payment") or 0
     if not target_month:
         return nxt
-    frz = (freeze or {}).get(track.get("LoanAccount"))
+    frz = (freeze or {}).get(track.get("loan_id"))
     if not frz:
         return nxt
     if target_month >= frz["resume_month"]:

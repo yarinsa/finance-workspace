@@ -20,8 +20,8 @@ Projection horizon & confidence:
   RiseUp emits ONE monthly prediction, not a separate figure per future month, so the
   income / fixed / discretionary envelopes are held flat across all three months. Two
   things are recomputed per target month from authoritative source data:
-    - mortgage installment — per-loan NextPayment, dropped once a loan's LastPaymentDate
-      passes (so a loan ending mid-horizon stops being charged);
+    - mortgage installment — per-track monthly_payment (the dump's NextPayment) from the
+      stored loans, dropped once a loan's final_date passes (so a loan ending mid-horizon stops being charged);
     - committed card charges — only exist for months the issuer has already billed
       (typically just next month), so later months correctly show none.
   Month 1 (next month) is therefore high-confidence; months 2-3 are an envelope
@@ -49,7 +49,7 @@ BUDGET = ROOT / "riseup" / "raw" / "budget_current.json"
 LEDGER = ROOT / "digested" / "transactions.json"
 CAL_BIG = ROOT / "cal" / "raw" / "bigNumberAndDetails.json"
 AMEX_BILL = ROOT / "amex" / "raw" / "billingsOverview.json"
-MORTGAGE = ROOT / "discount-mortgage" / "raw" / "mortgage_details.json"
+SNAPSHOT = ROOT / "digested" / "snapshot.json"
 FREEZE = ROOT / "freeze.json"
 # The bank's own amortization schedule (לוח סילוקין), hand-entered from the PDF —
 # gitignored like freeze.json since it holds real payment figures.
@@ -96,6 +96,22 @@ def load_freeze():
         return {}
 
 
+def _mortgage_tracks(loans):
+    return [l for l in loans if l.get("category") == "mortgage" and l.get("lender") == "Bank Discount"]
+
+
+def load_mortgage():
+    """The Discount mortgage tracks from the stored `loans` (db/snapshot_store.py), else
+    snapshot.json's loans; None when neither has any. A table written before
+    `next_payment_date` existed (no digest since migration 0025) defers to the file."""
+    rows = stores.from_db("snapshot_store", lambda m, conn: [r.model_dump(mode="json")
+                                                             for r in m.position(conn)["loans"]], "loans")
+    tracks = _mortgage_tracks(rows or [])
+    if tracks and any(t.get("next_payment_date") for t in tracks):
+        return tracks
+    return _mortgage_tracks((_read(SNAPSHOT) or {}).get("loans", [])) or None
+
+
 def _read(path):
     """Parsed JSON at ``path``, or None when the file is absent."""
     try:
@@ -105,8 +121,8 @@ def _read(path):
 
 
 def load_sources():
-    """The mortgage, freeze, schedule, CAL and AMEX dumps as the view's ``Sources``."""
-    return Sources(mortgage=_read(MORTGAGE), freeze=load_freeze(),
+    """The mortgage tracks, freeze, schedule, CAL and AMEX dumps as the view's ``Sources``."""
+    return Sources(mortgage=load_mortgage(), freeze=load_freeze(),
                    schedule=load_mortgage_schedule(), cal=_read(CAL_BIG),
                    amex=_read(AMEX_BILL))
 

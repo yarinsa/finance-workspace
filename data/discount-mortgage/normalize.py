@@ -44,6 +44,7 @@ def normalize_loan(ln, category):
         "payments_total": int(ln.get("NumOfPayments", 0)),
         "monthly_payment": round(ln.get("NextPayment", 0), 2),
         "final_date": ln.get("LastPaymentDate"),
+        "next_payment_date": ln.get("NextPaymentDate"),
         "currency": "ILS",
     }
 

@@ -98,9 +98,8 @@ class TestEnvelopeCategories:
         ]}
 
     # A one-track mortgage dump whose next installment is ₪5,813.27 due on the 10th.
-    SRC = forecast.Sources(mortgage={"MortgagesDetails": {"MortgagesBlock": {"MortgageEntry": [
-        {"MortgageDetailsBlock": {"LoanEntry": [
-            {"NextPayment": 5813.27, "NextPaymentDate": "20261010", "LastPaymentDate": "20530810"}]}}]}}})
+    SRC = forecast.Sources(mortgage=[
+        {"monthly_payment": 5813.27, "next_payment_date": "2026-10-10", "final_date": "2053-08-10"}])
 
     def month(self, known=None):
         return forecast.build(self.budget(), "2026-10", self.SRC, known)

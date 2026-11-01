@@ -58,8 +58,10 @@ multi-month cashflow projection (`HORIZON` months, currently 6) built from
 RiseUp's forward-looking budget envelopes (not ledger extrapolation, which the
 dedup key makes unreliable), with CAL/AMEX committed billings as a non-summed
 cross-check. Month 1 is high-confidence; later months are an envelope
-carry-forward. The **mortgage** installment comes from `sum(LoanEntry[].NextPayment)`
-in the mortgage dump (not RiseUp's residual figure), and is **freeze-aware**: if
+carry-forward. The **mortgage** installment is the sum of the Discount mortgage tracks'
+`monthly_payment` (the dump's `NextPayment`, due on `next_payment_date`), read from the stored
+`loans` (snapshot.json's loans until a digest after migration 0025 fills the date), not RiseUp's
+residual figure, and is **freeze-aware**: if
 `data/freeze.json` exists (written by `data/detect_freeze.py`), post-freeze months
 use the recomputed full payment. The freeze and the bank's schedule bands live in Postgres
 (`loan_freezes`, `mortgage_schedule_periods`, `db/input_store.py`; `import` copies the old

@@ -67,6 +67,8 @@ type Loan {
   paymentsTotal: Int
   monthlyPayment: Money
   finalDate: Date
+  """The installment `monthlyPayment` is due on (the mortgage dump's next payment)."""
+  nextPaymentDate: Date
 }
 
 type Savings {

@@ -16,7 +16,8 @@ import forecast as forecast_loader   # data/forecast.py: the file loaders
 from finance.views import forecast
 from finance.paths import data_root
 
-MORTGAGE_DUMP = data_root() / "discount-mortgage" / "raw" / "mortgage_details.json"
+# The real Discount mortgage tracks, as the digest stores them (one Loan per track).
+MORTGAGE_LOANS = data_root() / "discount-mortgage" / "normalized" / "loans.json"
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
@@ -49,8 +50,8 @@ class TestPaymentForTrack:
     @pytest.fixture
     def track(self):
         return {
-            "LoanAccount": self.LOAN_ACCT,
-            "NextPayment": self.FROZEN_NEXT,
+            "loan_id": self.LOAN_ACCT,
+            "monthly_payment": self.FROZEN_NEXT,
         }
 
     @pytest.fixture
@@ -148,8 +149,9 @@ class TestAuthoritativeMortgagePaymentFreeze:
 
     @staticmethod
     def src(freeze):
-        """The real mortgage dump with ``freeze`` injected (nothing written to disk)."""
-        return forecast.Sources(mortgage=json.loads(MORTGAGE_DUMP.read_text()), freeze=freeze)
+        """The real mortgage tracks with ``freeze`` injected (nothing written to disk)."""
+        loans = json.loads(MORTGAGE_LOANS.read_text())["records"]
+        return forecast.Sources(mortgage=[l for l in loans if l["category"] == "mortgage"], freeze=freeze)
 
     def test_frozen_month_lower_than_resume_month(self):
         src = self.src(self.FREEZE_TRACKS)
@@ -209,3 +211,28 @@ def test_schedule_falls_back_to_the_file_while_the_table_is_empty(monkeypatch, t
     f.write_text('{"periods": [{"from": "2026-09", "to": "2026-12", "payment": 5717}]}')
     monkeypatch.setattr(forecast_loader, "SCHEDULE", f)
     assert forecast_loader.load_mortgage_schedule() == [{"from": "2026-09", "to": "2026-12", "payment": 5717}]
+
+
+# The mortgage tracks come from the stored loans; a table from before migration 0025 (no
+# next_payment_date until the next digest) defers to snapshot.json.
+
+TRACK = {"lender": "Bank Discount", "category": "mortgage", "loan_id": "0034069100438552",
+         "monthly_payment": 839.87, "final_date": "2053-08-10"}
+
+
+def test_mortgage_reads_the_stored_loans_first(monkeypatch):
+    import stores
+    rows = [{**TRACK, "next_payment_date": "2026-11-10"},
+            {"lender": "Bank Leumi", "category": "consumer", "loan_id": "25290013", "monthly_payment": 1844.42}]
+    monkeypatch.setattr(stores, "from_db", lambda store, read, what=None: rows)
+    assert forecast_loader.load_mortgage() == rows[:1]
+
+
+def test_mortgage_falls_back_to_the_snapshot_until_a_digest_fills_the_date(monkeypatch, tmp_path):
+    import stores
+    monkeypatch.setattr(stores, "from_db", lambda store, read, what=None: [{**TRACK, "next_payment_date": None}])
+    f = tmp_path / "snapshot.json"
+    f.write_text(json.dumps({"loans": [{**TRACK, "next_payment_date": "2026-12-10"}]}))
+    monkeypatch.setattr(forecast_loader, "SNAPSHOT", f)
+    assert forecast_loader.load_mortgage() == [{**TRACK, "next_payment_date": "2026-12-10"}]
+    assert forecast.authoritative_mortgage_payment(forecast_loader.load_sources(), None)[1] == "2026-12-10"

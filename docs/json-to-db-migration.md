@@ -24,8 +24,8 @@ code yet, so the position tables are still empty.
    - Unrelated, older: `sync_tenant_access` fails because `tenant-groups.sh` wants `terraform init`.
 2. **Verify the first digest on the new code:** `db/snapshot_store.py` totals equal
    `snapshot.json`'s, `digest_runs` has a row, `source_dumps` matches the Syncs page.
-3. **Phase 2 slice 2:** `account_balance_days` (bank normalizers emit the measured end-of-day
-   balances; `history.cash` reads them), `household_settings.cycle_start_day`, `loans.next_payment`.
+3. **Phase 2 slice 2:** ~~`loans.next_payment`~~ done (migration 0025, `loans.next_payment_date`; forecast reads the stored tracks). Open: `account_balance_days` (bank normalizers emit the measured end-of-day
+   balances; `history.cash` reads them), `household_settings.cycle_start_day`.
 4. **Phase 2 deletions (⚠ ask first):** the parity harness gets a seeded throwaway database, then
    delete `rules.json`, `mortgage_schedule.json`, `freeze.json`, the `budgets.json` / `goals.json`
    fallbacks and their file readers. Coordinate `goals.py` with the goals session.
