@@ -66,7 +66,9 @@ def test_url():
 
 OWNED = ["scraped_transactions", "transaction_overrides", "override_audit", "transaction_tags",
          "transaction_offsets", "tags", "categories", "merchant_rules", "goals",
-         "notifications", "assets", "position_snapshots", "push_subscriptions"]   # horizons keep their seed
+         "notifications", "assets", "position_snapshots", "push_subscriptions", "holding_assignments",
+         "digest_runs", "accounts", "credit_cards", "loans", "savings_holdings", "source_dump_entities",
+         "source_dumps"]   # horizons keep their seed
 
 
 def make_member(admin, email, tenant_id, role="owner"):

@@ -82,13 +82,13 @@ BINDINGS: dict[str, Binding] = {
     "Asset": Binding(tables.Asset, resolved=frozenset({"id", "kind", "valuationSource"}),
                      hidden=frozenset({"created_at"}),
                      never_null=frozenset({"updated_at"})),   # filled by the database default
-    "SnapshotTotals": Binding(models.SnapshotTotals),
-    "BankAccount": Binding(models.Account, hidden=frozenset({"currency"})),
-    "CreditCard": Binding(models.CreditCard, hidden=frozenset({"currency"})),
-    "Loan": Binding(models.Loan, hidden=frozenset({"currency"})),
-    "Savings": Binding(models.Savings, hidden=frozenset({"currency", "account_id", "topic_id", "section",
-                                                         "policies_count", "work_state"})),
-    "IncomeSource": Binding(models.Income, hidden=frozenset({"currency", "detail"})),
+    # the headline position: the stored rows (db/snapshot_store.py), totals computed from them
+    "SnapshotTotals": Binding(models.SnapshotTotals, hidden=frozenset({"detected_monthly_salary"})),   # RiseUp-only (D8)
+    "BankAccount": Binding(tables.AccountRow),
+    "CreditCard": Binding(tables.CreditCardRow),
+    "Loan": Binding(tables.LoanRow, hidden=frozenset({"position"})),
+    "Savings": Binding(tables.SavingsRow, resolved=frozenset({"assignment"}),
+                       hidden=frozenset({"account_id", "topic_id", "section", "policies_count", "work_state"})),
     "CashflowNotification": _notification("date"),
     "BudgetNotification": _notification("budgetCategories", "cycleStart"),
     "BillNotification": _notification("billName", "dueDate"),
@@ -116,6 +116,7 @@ STRUCTURAL = frozenset({
     "BulkNotificationPayload",
     "Tenant", "TenantMember", "TenantPayload", "TenantAccessPayload",
     "SyncSource", "SyncSourceConnection", "SyncSourceEdge", "SyncSourcePayload",   # a sync_status JSON entry
+    "SourceEntityCount",                                                          # + its source_dumps row
     "SyncSourceSecret", "SyncSourceSecrets", "SyncSourceSecretsPayload",   # the manifest + the vault, assembled
 })
 

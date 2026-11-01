@@ -1,6 +1,7 @@
-"""SyncSource: one row of Postgres `sync_status` (the worker's latest entry per source)."""
+"""SyncSource: one row of Postgres `sync_status` (the worker's latest entry per source), with the
+source's manifest label and its latest dump on disk (`source_dumps`, written by the digest)."""
 import datetime as dt
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from functools import lru_cache
 
 from finance import manifest, vault
@@ -31,14 +32,25 @@ class SyncSource:
     started_at: dt.datetime | None
     updated_at: dt.datetime | None
     retry_from: str | None
+    label: str | None = None
+    last_dumped_at: dt.datetime | None = None
+    raw_files: int | None = None
+    latest_txn_date: dt.date | None = None
+    entities: list[dict] = field(default_factory=list)   # [{entity, records}]
 
     @classmethod
-    def from_row(cls, source, entry, updated_at):
+    def from_row(cls, source, entry, updated_at, dump=None):
+        """`dump` is the source's `(SourceDump, {entity: records})` from db/snapshot_store.dumps."""
         entry = entry or {}
+        d, counts = dump or (None, {})
+        m = _manifests().get(source)
         return cls(source=source, status=entry.get("status") or "unknown", message=entry.get("message"),
                    step=entry.get("step"), total_steps=entry.get("total_steps"), error=entry.get("error"),
                    started_at=_ts(entry.get("started_at")), updated_at=updated_at or _ts(entry.get("updated_at")),
-                   retry_from=resume_point(entry))
+                   retry_from=resume_point(entry), label=m.label if m else None,
+                   last_dumped_at=d and d.dumped_at, raw_files=d and d.raw_files,
+                   latest_txn_date=d and d.latest_txn_date,
+                   entities=[{"entity": e, "records": n} for e, n in counts.items()])
 
     @property
     def syncing(self):
@@ -53,12 +65,18 @@ class SyncSource:
     @classmethod
     def get(cls, conn, source):
         row = conn.execute("SELECT source, entry, updated_at FROM sync_status WHERE source = %s", (source,)).fetchone()
-        return cls.from_row(*row) if row else None
+        return cls.from_row(*row, _dumps(conn).get(source)) if row else None
 
     @classmethod
     def all(cls, conn):
         rows = conn.execute("SELECT source, entry, updated_at FROM sync_status ORDER BY source").fetchall()
-        return [cls.from_row(*r) for r in rows]
+        dumps = _dumps(conn)
+        return [cls.from_row(*r, dumps.get(r[0])) for r in rows]
+
+
+def _dumps(conn):
+    import snapshot_store   # db/, on the path once api.gql.resolvers is imported
+    return snapshot_store.dumps(conn)
 
 
 class SecretsError(Exception):

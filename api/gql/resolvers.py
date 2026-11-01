@@ -54,6 +54,7 @@ import goal_store  # noqa: E402
 import holding_store  # noqa: E402
 import inbox  # noqa: E402
 import offset_store  # noqa: E402
+import snapshot_store  # noqa: E402
 import overrides  # noqa: E402
 import tags as tag_store  # noqa: E402
 
@@ -537,6 +538,12 @@ class PlanTargetsResolver(NodeResolver):
         goal_store.set_targets(ledger(info).conn, **changes)
         return lambda: {"plan_targets": self.read(ledger(info).conn)}
 
+def _assignment(holding_id, a):
+    """A `HoldingAssignment` from holding_store's `{horizon, goal_id}`, or None."""
+    return a and {"holding_id": holding_id, "horizon": a["horizon"],
+                  "goal_id": to_global_id("Goal", str(a["goal_id"])) if a["goal_id"] is not None else None}
+
+
 class HoldingResolver:
     """`holdingAssign` (db/holding_store.py): where a savings holding sits, set by hand. The digest
     attaches it to the snapshot's savings, so this signals a rebuild like any ledger edit."""
@@ -549,9 +556,28 @@ class HoldingResolver:
             a = holding_store.assign(conn, inp.holding_id.strip(), **inp.changes())
         except ValueError as e:
             raise GraphQLError(str(e))
-        shown = a and {"holding_id": inp.holding_id.strip(), "horizon": a["horizon"],
-                       "goal_id": to_global_id("Goal", str(a["goal_id"])) if a["goal_id"] is not None else None}
+        shown = _assignment(inp.holding_id.strip(), a)
         return lambda: {"assignment": shown}
+
+
+class SnapshotResolver:
+    """`Query.snapshot` and `dataAsOf`: the position the last digest stored (db/snapshot_store.py),
+    totals computed from the rows. `Savings.assignment` reads the household's placements."""
+
+    def query(self, info):
+        conn = ledger(info).conn
+        rows = snapshot_store.position(conn)
+        totals = snapshot_store.totals(rows, asset_store.all_assets(conn))
+        return {"totals": totals, **rows}
+
+    def as_of(self, info):
+        return snapshot_store.as_of(ledger(info).conn)
+
+    def resolve_assignment(self, holding, info):
+        cache = info.context.setdefault("holding_assignments", {})
+        if "all" not in cache:
+            cache["all"] = holding_store.all_assignments(ledger(info).conn)
+        return _assignment(holding.holding_id, cache["all"].get(holding.holding_id))
 
 
 class AssetResolver(NodeResolver[dict]):
@@ -731,6 +757,7 @@ NOTIFICATIONS = NotificationResolver()
 SYNC_SOURCES = SyncSourceResolver()
 PLAN_TARGETS = PlanTargetsResolver()
 HOLDINGS = HoldingResolver()
+SNAPSHOT = SnapshotResolver()
 ASSETS = AssetResolver()
 TENANTS = TenantResolver()
 NODES: dict[str, NodeResolver] = {r.type_name: r for r in [TRANSACTIONS, *ENTITIES, NOTIFICATIONS, SYNC_SOURCES,
@@ -743,7 +770,10 @@ class QueryResolver:
         return r.fetch(ledger(info), args.id.key) if r else None
 
     def resolve_snapshot(self, _, info):
-        raise GraphQLError("snapshot is not served by the API yet")
+        return SNAPSHOT.query(info)
+
+    def resolve_data_as_of(self, _, info):
+        return SNAPSHOT.as_of(info)
 
     def resolve_transaction_by_key(self, _, info, args: QueryTransactionByKeyArgs):
         return ledger(info).by_key.get((args.date, Decimal(args.abs_amount).quantize(CENT)))
@@ -803,6 +833,7 @@ RESOLVERS: dict[str, object] = {
     "Query": QueryResolver(),
     "Mutation": [TRANSACTIONS, CATEGORIES, TAGS, GOALS, NOTIFICATIONS, SYNC_SOURCES, PLAN_TARGETS, HOLDINGS, ASSETS, TENANTS],
     "Transaction": TRANSACTIONS, "Asset": ASSETS, "SyncSource": SYNC_SOURCES, "Tenant": TENANTS,
+    "Savings": SNAPSHOT,
     **{e.type_name: e for e in ENTITIES},
     **{name: NOTIFICATIONS for name in TYPENAMES},   # `id` is a field of every subtype
 }

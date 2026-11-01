@@ -1,15 +1,14 @@
-# The headline position, read-only from data/digested/snapshot.json.
-# Each type is bound to its normalized entity in finance/models.py.
+# The headline position, as the last digest stored it (accounts, credit_cards, loans,
+# savings_holdings). Each entity type is bound to its row class in finance/tables.py; the
+# totals are computed from those rows (finance/views/snapshot.py). As-of time: Query.dataAsOf.
 
 type Snapshot {
-  generatedAt: DateTime!
   totals: SnapshotTotals!
   bankAccounts: [BankAccount!]!
   creditCards: [CreditCard!]!
   loans: [Loan!]!
   """Long-term savings: assets, never cashflow."""
   savings: [Savings!]!
-  incomeSources: [IncomeSource!]!
 }
 
 type SnapshotTotals {
@@ -30,7 +29,6 @@ type SnapshotTotals {
   """Net position with savings plus the property; null without a property value."""
   netWorthWithProperty: Money
   monthlyLoanService: Money!
-  detectedMonthlySalary: Money
 }
 
 type BankAccount {
@@ -49,7 +47,10 @@ type CreditCard {
   name: String
   holder: String
   active: Boolean
-  owed: Money
+  """The issuer's next charge (RiseUp's figure for a card no direct source sees)."""
+  owed: Money!
+  """The day that charge leaves the bank; null when only RiseUp knows the card."""
+  nextChargeDate: Date
 }
 
 type Loan {
@@ -69,6 +70,8 @@ type Loan {
 }
 
 type Savings {
+  """`institution:topic_id`, else the label: the id `holdingAssign` takes."""
+  holdingId: String!
   institution: String!
   kind: String!
   label: String
@@ -79,9 +82,6 @@ type Savings {
   asOf: Date
   managementFee: Float
   yieldYtd: Float
-}
-
-type IncomeSource {
-  label: String!
-  monthlyAmount: Money!
+  """Where the user placed it by hand (`holdingAssign`); null = derived from the liquidity date."""
+  assignment: HoldingAssignment
 }

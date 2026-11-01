@@ -26,6 +26,20 @@ type SyncSource implements Node {
   updatedAt: DateTime
   """Where `syncSourceRetry` would continue; null when the last run did not fail."""
   retryFrom: SyncRetryPoint
+  """The source's Hebrew name (data/<source>/manifest.json)."""
+  label: String
+  """When the scraper last wrote its dump (newest raw file); null with no dump on disk."""
+  lastDumpedAt: DateTime
+  rawFiles: Int
+  """The newest transaction the source carries (can lag the dump)."""
+  latestTxnDate: Date
+  """Records per normalized entity in the last dump, by entity name."""
+  entities: [SourceEntityCount!]!
+}
+
+type SourceEntityCount {
+  entity: String!
+  records: Int!
 }
 
 type SyncSourceConnection {

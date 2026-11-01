@@ -4,6 +4,9 @@ The ledger is conftest's: PURCHASE (-123.45, cal, קניות), SALARY (+1000, מ
 CARD_BILL (-500, חיובי כרטיס). Each test is a question the dashboard asks.
 """
 import datetime as dt
+import json
+from decimal import Decimal
+from pathlib import Path
 
 import pytest
 
@@ -12,6 +15,11 @@ from psycopg.types.json import Jsonb
 from api.tests.conftest import LEDGER, ME, PURCHASE_URL, WRITE
 
 GQL = "/api/graphql"
+
+
+def camel(name):
+    first, *rest = name.split("_")
+    return first + "".join(w.title() for w in rest)
 
 
 def gql(client, query, **variables):
@@ -193,9 +201,66 @@ def test_deep_queries_are_refused(client):
     assert status == 400 and "deeper" in body["errors"][0]["message"]
 
 
-def test_snapshot_is_an_error_not_a_crash(client):
-    status, body = gql(client, "{ snapshot { generatedAt } }")
-    assert status == 200 and body["errors"][0]["message"].startswith("snapshot")
+POSITION = {
+    "bank_accounts": [{"institution": "leumi", "account_id": "1", "kind": "checking", "balance": 1234.56,
+                       "available_balance": 5000.0, "overdraft_limit": 4000.0}],
+    "credit_cards": [{"issuer": "cal", "last4": "1111", "name": "כאל", "owed": 812.3, "next_charge_date": "2026-11-10"}],
+    "loans": [{"lender": "discount", "loan_id": None, "name": "משכנתא", "category": "mortgage", "balance": 500000.0,
+               "monthly_payment": 2500.0}],
+    "savings": [{"institution": "harel", "kind": "pension", "balance": 100000.0, "topic_id": "123", "label": "פנסיה"},
+                {"institution": "discount", "kind": "deposit", "balance": 3000.0, "label": "נזיל", "liquid": True}],
+}
+SNAPSHOT_Q = """{ dataAsOf snapshot {
+  totals { bankBalancesSum creditCardDebt mortgageBalance totalDebt trackedNetPosition liquidSavings
+           netPositionWithSavings propertyValue monthlyLoanService }
+  bankAccounts { institution balance availableBalance } creditCards { last4 owed nextChargeDate }
+  loans { name balance } savings { holdingId balance assignment { horizon } } } }"""
+
+
+def test_snapshot_before_any_digest_is_empty(client):
+    status, body = gql(client, SNAPSHOT_Q)
+    assert status == 200 and "errors" not in body
+    assert body["data"]["dataAsOf"] is None
+    assert body["data"]["snapshot"]["bankAccounts"] == [] and body["data"]["snapshot"]["totals"]["totalDebt"] == "0.00"
+
+
+def test_snapshot_serves_the_stored_position_and_its_totals(client, owner):
+    # As the household, after a digest stored my position, the API shows it with the digest's totals.
+    ledger.load(owner, LEDGER, POSITION, run={"started_at": "2026-11-01T07:00:00+02:00", "normalized": True})
+    status, body = gql(client, SNAPSHOT_Q)
+    assert status == 200 and "errors" not in body
+    snap = body["data"]["snapshot"]
+    assert body["data"]["dataAsOf"] is not None
+    assert snap["totals"] == {"bankBalancesSum": "1234.56", "creditCardDebt": "812.30", "mortgageBalance": "500000.00",
+                              "totalDebt": "500812.30", "trackedNetPosition": "-499577.74", "liquidSavings": "3000.00",
+                              "netPositionWithSavings": "-396577.74", "propertyValue": None,
+                              "monthlyLoanService": "2500.00"}
+    assert snap["creditCards"] == [{"last4": "1111", "owed": "812.30", "nextChargeDate": "2026-11-10"}]
+    assert [s["holdingId"] for s in snap["savings"]] == ["discount:נזיל", "harel:123"]
+    assert all(s["assignment"] is None for s in snap["savings"])
+
+
+def test_a_placed_holding_shows_its_assignment(client, owner):
+    ledger.load(owner, LEDGER, POSITION)
+    gql(client, 'mutation { holdingAssign(input: {holdingId: "harel:123", horizon: FUTURE}) { success } }')
+    snap = gql(client, SNAPSHOT_Q)[1]["data"]["snapshot"]
+    assert {s["holdingId"]: s["assignment"] for s in snap["savings"]} == {
+        "discount:נזיל": None, "harel:123": {"horizon": "FUTURE"}}
+
+
+def test_sync_source_carries_its_dump(client, owner):
+    owner.execute("INSERT INTO sync_status (source, entry) VALUES ('cal', '{\"status\": \"done\"}') "
+                  "ON CONFLICT (source) DO UPDATE SET entry = EXCLUDED.entry")
+    owner.commit()
+    ledger.load(owner, LEDGER, dumps=[{"source": "cal", "last_synced": "2026-11-01T06:21:30+02:00", "raw_files": 4,
+                                       "entities": {"credit_cards": 2, "transactions": 40},
+                                       "latest_txn_date": "2026-10-30"}])
+    body = gql(client, "{ syncSources(first: 10) { edges { node { source label rawFiles latestTxnDate lastDumpedAt "
+                       "entities { entity records } } } } }")[1]
+    node = next(e["node"] for e in body["data"]["syncSources"]["edges"] if e["node"]["source"] == "cal")
+    assert (node["label"], node["rawFiles"], node["latestTxnDate"]) == ("כאל", 4, "2026-10-30")
+    assert node["entities"] == [{"entity": "credit_cards", "records": 2}, {"entity": "transactions", "records": 40}]
+    assert node["lastDumpedAt"].startswith("2026-11-01")
 
 
 @pytest.mark.parametrize("body", [b"not json", b'{"variables": {}}', b'{"query": "{", "x": 1}'])
@@ -661,3 +726,44 @@ def test_run_with_the_worker_down_is_an_error(client, owner, rebuilder):
     rebuilder.up = False
     _, body = gql(client, RUN, id=to_global_id("SyncSource", "run-test"))
     assert body["errors"][0]["message"] == "the sync worker is not reachable"
+
+
+REAL_SNAPSHOT = Path(__file__).resolve().parents[2] / "data" / "digested" / "snapshot.json"
+
+
+@pytest.mark.skipif(not REAL_SNAPSHOT.exists(), reason="no digested snapshot in this checkout")
+def test_snapshot_resolver_equals_snapshot_json(client, owner):
+    """Parity (D7): the real position, stored by the digest's write path and served by GraphQL,
+    equals snapshot.json field by field (Money as the API's 2-decimal text)."""
+    real = json.loads(REAL_SNAPSHOT.read_text())
+    ledger.load(owner, LEDGER, {k: real[k] for k in ("bank_accounts", "credit_cards", "loans", "savings")})
+    for a in real["assets"]:
+        owner.execute("INSERT INTO assets (kind, label, value, valued_at) VALUES (%s, %s, %s, %s)",
+                      (a["kind"], a["label"], a["value"], a["valued_at"]))
+    owner.commit()
+    query = """{ snapshot {
+      totals { bankBalancesSum creditCardDebt mortgageBalance consumerLoanBalance totalDebt trackedNetPosition
+               longTermSavings liquidSavings illiquidSavings netPositionWithSavings propertyValue
+               netWorthWithProperty monthlyLoanService }
+      bankAccounts { institution accountId balance } creditCards { issuer last4 owed nextChargeDate }
+      loans { lender name balance monthlyPayment } savings { holdingId balance liquid } } }"""
+    status, body = gql(client, query)
+    assert status == 200 and "errors" not in body
+    snap = body["data"]["snapshot"]
+
+    def money(v):
+        return None if v is None else f"{Decimal(str(v)):.2f}"
+
+    want_totals = {camel(k): money(v) for k, v in real["totals"].items() if k != "detected_monthly_salary"}
+    assert snap["totals"] == want_totals
+    key = lambda r: tuple(map(str, r))   # noqa: E731
+    assert sorted(snap["bankAccounts"], key=lambda r: key(r.values())) == sorted(
+        ({"institution": a["institution"], "accountId": a["account_id"], "balance": money(a["balance"])}
+         for a in real["bank_accounts"]), key=lambda r: key(r.values()))
+    assert sorted(snap["creditCards"], key=lambda r: key(r.values())) == sorted(
+        ({"issuer": c["issuer"], "last4": c["last4"], "owed": money(c["owed"]), "nextChargeDate": c.get("next_charge_date")}
+         for c in real["credit_cards"]), key=lambda r: key(r.values()))
+    assert snap["loans"] == [{"lender": l["lender"], "name": l["name"], "balance": money(l["balance"]),
+                              "monthlyPayment": money(l["monthly_payment"])} for l in real["loans"]]
+    assert sorted(s["holdingId"] for s in snap["savings"]) == sorted(
+        f"{s['institution']}:{s['topic_id'] if s.get('topic_id') is not None else s.get('label')}" for s in real["savings"])

@@ -28,6 +28,8 @@ type Query {
         dateRange: DateRange, orderBy: GroupOrder = NAME_ASC): GoalConnection!
 
   snapshot: Snapshot!
+  """When the newest digest that reached the database finished; null before the first."""
+  dataAsOf: DateTime
 
   """The Goals screen's three general targets; a null amount is unset."""
   planTargets: PlanTargets!
