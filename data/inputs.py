@@ -35,6 +35,7 @@ def load(today):
         snapshot=snapshot,
         category_merges=tx_doc.get("category_merges") or {},
         budget=budgets.load_budget(),
+        cycle_start_day=budgets.load_cycle_start_day(),
         budget_history=budgets.load_history(),
         budget_overrides=budgets.load_overrides(),
         forecast_sources=forecast.load_sources(),

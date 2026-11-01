@@ -138,3 +138,10 @@ def test_electricity_under_two_payee_names_is_one_bill():
               tx("2026-10-10", 'חברת החשמל לישראל בע"מ', -499.06, "חשמל", kind="variable")]
     items = build(ledger)["items"]
     assert [(i["category"], i["status"], i["amount"]) for i in items] == [("חשמל", "paid", 499.06)]
+
+
+def test_the_household_cycle_start_day_wins_over_riseups():
+    """household_settings.cycle_start_day (phase 2 slice 2) sets the cycle; RiseUp's day only fills in."""
+    b = bills.build_bills({**BUDGET, "cashflowStartDay": 1}, [], AS_OF, start_day=10)
+    assert (b["cycle_start"], b["cycle_end"]) == ("2026-10-10", "2026-11-09")
+    assert bills.build_bills(BUDGET, [], AS_OF)["cycle_start"] == "2026-10-01"

@@ -123,6 +123,13 @@ def load_overrides(path=None):
     return legacy
 
 
+def load_cycle_start_day():
+    """The household's budget-cycle start day from `household_settings` (db/input_store.py),
+    or None (the views then take RiseUp's `cashflowStartDay`) until `input_store.py import settings`."""
+    import stores
+    return stores.from_db("input_store", lambda m, conn: m.cycle_start_day(conn), "cycle start day")
+
+
 def load_history(raw_dir=RAW):
     """All budget docs from the budget_YYYY-MM_6.json history dumps (each is a
     list of ~7 monthly docs), de-duplicated by budgetDate keeping the freshest.
@@ -169,7 +176,8 @@ def _ledger():
 
 def _print_line(category):
     view, ledger = _ledger()
-    b = build_budgets(load_budget(), view, date.today(), load_overrides(), ledger=ledger)
+    b = build_budgets(load_budget(), view, date.today(), load_overrides(), ledger=ledger,
+                      start_day=load_cycle_start_day())
     c = next((c for c in (b or {}).get("categories", []) if c["name"] == category), None)
     if not c:
         print(f"{category}: no such category in the current budget")
@@ -225,5 +233,6 @@ if __name__ == "__main__":
     if len(sys.argv) > 1:
         sys.exit(main(sys.argv[1:]))
     view, ledger = _ledger()
-    b = build_budgets(load_budget(), view, date.today(), load_overrides(), ledger=ledger)
+    b = build_budgets(load_budget(), view, date.today(), load_overrides(), ledger=ledger,
+                      start_day=load_cycle_start_day())
     print(json.dumps(b, ensure_ascii=False, indent=2) if b else "no budget doc")

@@ -160,9 +160,10 @@ def _item(name, category, amount, day, now, start, end, as_of, **extra):
             "status": status, "paid_on": paid_on, **extra}
 
 
-def build_bills(budget, transactions, as_of):
-    """Bills block for the current cycle (see the module docstring)."""
-    start_day = int((budget or {}).get("cashflowStartDay") or 1)
+def build_bills(budget, transactions, as_of, start_day=None):
+    """Bills block for the current cycle (see the module docstring). `start_day` is the
+    household's cycle start (`household_settings`); RiseUp's `cashflowStartDay` until set."""
+    start_day = start_day or int((budget or {}).get("cashflowStartDay") or 1)
     month = (budget or {}).get("budgetDate") or as_of.strftime("%Y-%m")
     start, end = cycle_bounds(month, start_day)
     items = []

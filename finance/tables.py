@@ -11,7 +11,7 @@ import datetime as dt
 import uuid
 from decimal import Decimal
 
-from sqlalchemy import ARRAY, BigInteger, CheckConstraint, Column, ForeignKey, ForeignKeyConstraint, Index, PrimaryKeyConstraint, Integer, Numeric, Text, UniqueConstraint, text
+from sqlalchemy import ARRAY, BigInteger, CheckConstraint, Column, ForeignKey, ForeignKeyConstraint, Index, PrimaryKeyConstraint, Integer, Numeric, SmallInteger, Text, UniqueConstraint, text
 from sqlalchemy.dialects.postgresql import JSONB, TIMESTAMP, UUID
 from sqlmodel import Field, Relationship, SQLModel
 
@@ -620,3 +620,14 @@ class LoanFreeze(SQLModel, table=True):
     resume_payment: Decimal = Field(sa_type=Money)
     note: str | None = Field(default=None, sa_type=Text)
     detected_at: dt.datetime | None = Field(default=None, sa_column=_now())
+
+
+class HouseholdSettings(SQLModel, table=True):
+    """The household's own settings, one row per tenant. `cycle_start_day` is the day the budget
+    cycle (budgets, bills) starts; imported once from RiseUp's `cashflowStartDay`."""
+    __tablename__ = "household_settings"
+    __table_args__ = (CheckConstraint("cycle_start_day BETWEEN 1 AND 31", name="household_settings_cycle_day"),)
+
+    tenant_id: uuid.UUID = Field(sa_column=_tenant(primary_key=True))
+    cycle_start_day: int | None = Field(default=None, sa_type=SmallInteger)
+    updated_at: dt.datetime | None = Field(default=None, sa_column=_now())

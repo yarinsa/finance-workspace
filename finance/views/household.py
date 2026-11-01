@@ -21,6 +21,7 @@ class Inputs:
     snapshot: dict                          # the headline position (finance/views/snapshot.py)
     category_merges: dict[str, str] = field(default_factory=dict)
     budget: dict | None = None              # RiseUp's current budget doc (until phase 2b)
+    cycle_start_day: int | None = None      # household_settings; None = the budget doc's
     budget_history: list[dict] = field(default_factory=list)
     budget_overrides: dict[str, float] = field(default_factory=dict)
     forecast_sources: forecast.Sources = field(default_factory=forecast.Sources)
@@ -82,7 +83,7 @@ class Household:
 
     @cached_property
     def bills(self):
-        return bills.build_bills(self.inputs.budget, self.ledger, self.today)
+        return bills.build_bills(self.inputs.budget, self.ledger, self.today, self.inputs.cycle_start_day)
 
     @cached_property
     def budgets(self):
@@ -90,7 +91,7 @@ class Household:
         return budgets.build_budgets(
             self.inputs.budget, self.transactions, self.today, self.inputs.budget_overrides,
             ledger=self.ledger, merges=self.inputs.category_merges,
-            expected_income=expected["income"] if expected else None)
+            expected_income=expected["income"] if expected else None, start_day=self.inputs.cycle_start_day)
 
     @cached_property
     def fixed_expenses(self):

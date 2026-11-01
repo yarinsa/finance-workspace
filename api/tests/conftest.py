@@ -68,7 +68,7 @@ OWNED = ["scraped_transactions", "transaction_overrides", "override_audit", "tra
          "transaction_offsets", "tags", "categories", "merchant_rules", "goals",
          "notifications", "assets", "position_snapshots", "push_subscriptions", "holding_assignments",
          "digest_runs", "accounts", "credit_cards", "loans", "savings_holdings", "source_dump_entities",
-         "source_dumps", "offset_rules", "mortgage_schedule_periods", "loan_freezes"]   # horizons keep their seed
+         "source_dumps", "offset_rules", "mortgage_schedule_periods", "loan_freezes", "household_settings"]   # horizons keep their seed
 
 
 def make_member(admin, email, tenant_id, role="owner"):

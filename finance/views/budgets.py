@@ -241,7 +241,7 @@ def build_summary(rows, ledger, month, start_day, expected_income=None, planned_
 
 
 def build_budgets(budget, transactions, as_of, overrides=None, ledger=None, expected_income=None,
-                  merges=None):
+                  merges=None, start_day=None):
     """Budget block for the app, or None when there is no budget doc.
 
     `transactions` is the offset-netted ledger (`offsets.cashflow_view`); `ledger`
@@ -250,7 +250,8 @@ def build_budgets(budget, transactions, as_of, overrides=None, ledger=None, expe
     last HISTORY_CYCLES cycles (`history`) and the median of the last
     ESTIMATE_CYCLES (`estimate`). `expected_income` (the forecast's) feeds `summary`.
     `merges` ({category: into}, from the database) adds a merged category's plan to its
-    target's: the ledger already counts its rows there.
+    target's: the ledger already counts its rows there. `start_day` is the household's cycle
+    start (`household_settings`); RiseUp's `cashflowStartDay` until set.
     """
     if not budget:
         return None
@@ -258,7 +259,7 @@ def build_budgets(budget, transactions, as_of, overrides=None, ledger=None, expe
                             merges)
     ledger = transactions if ledger is None else ledger
     month = budget.get("budgetDate") or as_of.strftime("%Y-%m")
-    start_day = int(budget.get("cashflowStartDay") or 1)
+    start_day = start_day or int(budget.get("cashflowStartDay") or 1)
     start, end = cycle_bounds(month, start_day)
     # Once seeded (`budgets.py seed`), the household's store is the whole plan: a line
     # removed from it is gone, not back to RiseUp's (e.g. its ₪1 placeholders).

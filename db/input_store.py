@@ -1,4 +1,5 @@
-"""The hand-kept inputs that were side files: offset rules, the mortgage schedule, loan freezes.
+"""The hand-kept inputs that were side files: offset rules, the mortgage schedule, loan freezes,
+and the household's settings (the budget cycle's start day, RiseUp's `cashflowStartDay`).
 
 Each reader returns the shape the pipeline read from the file, so the views do not change:
 
@@ -6,11 +7,13 @@ Each reader returns the shape the pipeline read from the file, so the views do n
     mortgage_schedule   [{"from": "YYYY-MM", "to": "YYYY-MM", "payment"}]           (data/mortgage_schedule.json "periods")
     loan_freezes        {loan_id: {"frozen_payment", "resume_month", "resume_payment", "note"}}
                                                                                    (data/freeze.json "tracks")
+    cycle_start_day     int | None                                                  (riseup/raw/budget_current.json
+                                                                                     "cashflowStartDay")
 
 Every function takes an open, tenant-scoped psycopg connection; writes commit.
 
     .venv/bin/python db/input_store.py list
-    .venv/bin/python db/input_store.py import [rules|schedule|freeze]   # one-time copy of the side files
+    .venv/bin/python db/input_store.py import [rules|schedule|freeze|settings]   # one-time copy of the side files
 """
 import datetime as dt
 import json
@@ -25,7 +28,7 @@ from finance.tables import LoanFreeze, MortgageSchedulePeriod, OffsetRule
 from ledger import orm_session
 
 FILES = {"rules": Path("offsets") / "rules.json", "schedule": Path("mortgage_schedule.json"),
-         "freeze": Path("freeze.json")}
+         "freeze": Path("freeze.json"), "settings": Path("riseup") / "raw" / "budget_current.json"}
 
 
 def _month(d):
@@ -85,6 +88,23 @@ def set_loan_freezes(conn, tracks):
     return len(tracks)
 
 
+def cycle_start_day(conn):
+    """The budget cycle's start day, or None while it was never set (RLS leaves this tenant's row)."""
+    with conn.cursor() as cur:
+        cur.execute("SELECT cycle_start_day FROM household_settings")
+        row = cur.fetchone()
+    return row[0] if row else None
+
+
+def set_cycle_start_day(conn, day):
+    """Set (or with None clear) the budget cycle's start day."""
+    with conn.cursor() as cur:
+        cur.execute("INSERT INTO household_settings (cycle_start_day) VALUES (%s) ON CONFLICT (tenant_id) "
+                    "DO UPDATE SET cycle_start_day = EXCLUDED.cycle_start_day, updated_at = now()", (day,))
+    conn.commit()
+    return 1
+
+
 def import_file(conn, which, root=None):
     """Copy one side file into its table (replacing what is there). Returns the row count, or None
     when the file does not exist."""
@@ -94,6 +114,9 @@ def import_file(conn, which, root=None):
     doc = json.loads(path.read_text(encoding="utf-8"))
     if which == "rules":
         return set_offset_rules(conn, doc)
+    if which == "settings":
+        day = doc.get("cashflowStartDay")
+        return set_cycle_start_day(conn, int(day)) if day else 0
     if which == "schedule":
         return set_mortgage_schedule(conn, doc.get("periods", []), doc.get("source"))
     return set_loan_freezes(conn, doc.get("tracks", {}))
@@ -107,7 +130,7 @@ def main(argv):
     with connect() as conn:
         if cmd == "list":
             json.dump({"offset_rules": offset_rules(conn), "mortgage_schedule": mortgage_schedule(conn),
-                       "loan_freezes": loan_freezes(conn)}, sys.stdout, ensure_ascii=False, indent=2)
+                       "loan_freezes": loan_freezes(conn), "cycle_start_day": cycle_start_day(conn)}, sys.stdout, ensure_ascii=False, indent=2)
             print()
         elif cmd == "import":
             for which in rest or list(FILES):

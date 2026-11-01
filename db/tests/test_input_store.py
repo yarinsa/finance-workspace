@@ -1,4 +1,5 @@
-"""The hand-kept inputs that were side files (offset rules, mortgage schedule, loan freezes):
+"""The hand-kept inputs that were side files (offset rules, mortgage schedule, loan freezes,
+the budget cycle's start day):
 stored, read back in the file's own shape, and imported from the real files when present."""
 import json
 from pathlib import Path
@@ -33,6 +34,14 @@ def test_a_freeze_is_recorded_then_cleared(conn):
     assert input_store.loan_freezes(conn) == {}
 
 
+def test_the_cycle_start_day_is_unset_then_set_then_changed(conn):
+    assert input_store.cycle_start_day(conn) is None
+    input_store.set_cycle_start_day(conn, 10)
+    input_store.set_cycle_start_day(conn, 1)
+    assert input_store.cycle_start_day(conn) == 1
+    assert conn.execute("SELECT count(*) FROM household_settings").fetchone() == (1,)
+
+
 def test_import_skips_a_missing_file(conn, tmp_path):
     assert input_store.import_file(conn, "freeze", tmp_path) is None
 
@@ -40,7 +49,7 @@ def test_import_skips_a_missing_file(conn, tmp_path):
 DATA = Path(__file__).resolve().parents[2] / "data"
 
 
-@pytest.mark.parametrize("which", ["rules", "schedule"])
+@pytest.mark.parametrize("which", ["rules", "schedule", "settings"])
 def test_real_side_files_import_unchanged(conn, which):
     """The real files, imported, read back exactly as the pipeline read them (D7)."""
     path = DATA / input_store.FILES[which]
@@ -50,5 +59,7 @@ def test_real_side_files_import_unchanged(conn, which):
     input_store.import_file(conn, which, DATA)
     if which == "rules":
         assert input_store.offset_rules(conn) == doc
+    elif which == "settings":
+        assert input_store.cycle_start_day(conn) == int(doc["cashflowStartDay"])
     else:
         assert input_store.mortgage_schedule(conn) == doc["periods"]
