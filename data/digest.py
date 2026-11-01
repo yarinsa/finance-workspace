@@ -505,6 +505,7 @@ def main():
     snapshot = build_snapshot(entities, datetime.date.today(), _now_iso(), load_assets())
     syncs = source_syncs()
     position = {k: snapshot[k] for k in ("bank_accounts", "credit_cards", "loans", "savings")}
+    position["balance_days"] = entities.get("balance_days", [])   # -> account_balance_days, not snapshot.json
     ledger = apply_overrides(ledger, position, syncs, run)   # human edits from Postgres, if configured
     offsets.resolve(ledger)                       # manual links (from the DB) win over auto
     summary = spending_summary(offsets.cashflow_view(ledger))

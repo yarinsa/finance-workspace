@@ -70,6 +70,17 @@ def test_a_bare_ledger_leaves_the_position_alone(conn):
     assert snapshot_store.as_of(conn) is None
 
 
+def test_balance_days_are_stored_per_bank_and_replaced(conn):
+    """Discount's chain opens on 10-04 at 1,272.92 and ends 10-05 at 1,485.99 (the balance_days entity)."""
+    days = [{"institution": "discount", "account_id": "0034", "date": "2026-10-04", "balance": 1272.92},
+            {"institution": "discount", "account_id": "0034", "date": "2026-10-05", "balance": 1485.99}]
+    ledger.load(conn, [], {**POSITION, "balance_days": days})
+    import datetime as dt
+    assert snapshot_store.balance_days(conn) == {"discount": {dt.date(2026, 10, 4): 1272.92, dt.date(2026, 10, 5): 1485.99}}
+    ledger.load(conn, [], POSITION)
+    assert snapshot_store.balance_days(conn) == {}
+
+
 REAL = Path(__file__).resolve().parents[2] / "data" / "digested" / "snapshot.json"
 
 

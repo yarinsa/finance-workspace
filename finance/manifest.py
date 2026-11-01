@@ -21,7 +21,7 @@ AccountType = Literal[
     "checking", "business_checking", "credit_card", "mortgage", "loan",
     "pension", "study_fund", "provident_fund",
 ]
-Capability = Literal["accounts", "credit_cards", "transactions", "loans", "savings"]
+Capability = Literal["accounts", "credit_cards", "transactions", "loans", "savings", "balance_days"]
 
 
 class SourceManifest(BaseModel):

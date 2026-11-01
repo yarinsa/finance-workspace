@@ -1,7 +1,7 @@
 """The headline position as the last digest stored it (read side).
 
-`db/ledger.py load` replaces `accounts`, `credit_cards`, `loans`, `savings_holdings` and
-`source_dumps` in the digest's transaction; this reads them back as the `finance.tables` rows,
+`db/ledger.py load` replaces `accounts`, `credit_cards`, `loans`, `savings_holdings`,
+`account_balance_days` and `source_dumps` in the digest's transaction; this reads them back as the `finance.tables` rows,
 for the ledger API's `snapshot`, `dataAsOf` and `syncSources`. The totals are not stored:
 `totals` runs finance/views/snapshot.py over the rows, the same code that wrote snapshot.json.
 (The daily net-worth history is a different table: db/position_store.py.)
@@ -13,7 +13,7 @@ import sys
 
 from sqlmodel import func, select
 
-from finance.tables import AccountRow, CreditCardRow, DigestRun, LoanRow, SavingsRow, SourceDump, SourceDumpEntity
+from finance.tables import AccountRow, BalanceDayRow, CreditCardRow, DigestRun, LoanRow, SavingsRow, SourceDump, SourceDumpEntity
 from finance.views import snapshot as views
 from ledger import orm_session
 
@@ -27,6 +27,15 @@ def position(conn):
             "loans": s.exec(select(LoanRow).order_by(LoanRow.position)).all(),
             "savings": s.exec(select(SavingsRow).order_by(SavingsRow.holding_id)).all(),
         }
+
+
+def balance_days(conn):
+    """{institution: {date: balance}}: each checking account's measured end-of-day balances."""
+    out = {}
+    with orm_session(conn) as s:
+        for r in s.exec(select(BalanceDayRow).order_by(BalanceDayRow.institution, BalanceDayRow.date)).all():
+            out.setdefault(r.institution, {})[r.date] = float(r.balance)
+    return out
 
 
 def totals(rows, assets=None):

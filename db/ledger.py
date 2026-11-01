@@ -26,7 +26,7 @@ from psycopg import sql
 from psycopg.types.json import Jsonb
 
 from finance import categories as taxonomy
-from finance.models import (AccountFields, CreditCardFields, LedgerTransaction, LoanFields, SavingsFields,
+from finance.models import (AccountFields, BalanceDayFields, CreditCardFields, LedgerTransaction, LoanFields, SavingsFields,
                             holding_id)
 from finance.tenancy import resolve_tenant_id, scope_connection, use_cli_tenant
 
@@ -188,6 +188,7 @@ def load_position(cur, position):
     _replace(cur, "loans", [_fields(LoanFields, l, position=i) for i, l in enumerate(position["loans"])])
     _replace(cur, "savings_holdings", [_fields(SavingsFields, s, holding_id=holding_id(s))
                                        for s in position["savings"]])
+    _replace(cur, "account_balance_days", [_fields(BalanceDayFields, b) for b in position.get("balance_days", [])])
 
 
 def load_dumps(cur, dumps):

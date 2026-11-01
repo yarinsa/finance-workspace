@@ -1,7 +1,14 @@
 """finance/views/history.py: the home screen's cash and debt history, from the real 2026-10-27 dumps."""
 from datetime import date
 
+from finance.models import balance_days
 from finance.views import history
+
+
+def measured(ops):
+    """A chain as the normalizers store it (the balance_days entity): {date: end-of-day balance}."""
+    days = balance_days([{**o, "date": o["date"].isoformat()} for o in ops])
+    return {date.fromisoformat(d["date"]): d["balance"] for d in days}
 
 # Discount's running-balance chain starts on 2026-10-05 (raw/transactions.json, oldest first).
 DISCOUNT_OPS = [
@@ -23,7 +30,7 @@ AS_OF = date(2026, 10, 8)
 
 
 def test_chain_days_are_the_banks_own_balances_and_today_is_the_current_balance():
-    bal, start = history.account_balances(DISCOUNT_OPS, DISCOUNT_ROWS, 1473.61, AS_OF, days=10)
+    bal, start = history.account_balances(measured(DISCOUNT_OPS), DISCOUNT_ROWS, 1473.61, AS_OF, days=10)
     assert start == date(2026, 10, 5)
     assert bal[date(2026, 10, 5)] == 1485.99          # end of day = the day's last operation
     assert bal[date(2026, 10, 6)] == 1473.61
@@ -35,7 +42,7 @@ def test_days_before_the_chain_walk_back_through_the_ledger():
     """Opening of 10-05 is 822.92 + 450 = 1,272.92 (end of 10-04). Undoing the AMEX bill
     gives 1,972.92 at the end of 10-03, both loan payments 2,946.11 at the end of 10-01,
     and the cash withdrawal 3,646.11 at the end of 09-30 — as far as the ledger reaches."""
-    bal, _ = history.account_balances(DISCOUNT_OPS, DISCOUNT_ROWS, 1473.61, AS_OF, days=30)
+    bal, _ = history.account_balances(measured(DISCOUNT_OPS), DISCOUNT_ROWS, 1473.61, AS_OF, days=30)
     assert bal[date(2026, 10, 4)] == 1272.92
     assert bal[date(2026, 10, 3)] == 1972.92
     assert bal[date(2026, 10, 2)] == 1972.92
@@ -50,8 +57,8 @@ def test_pool_lists_only_days_both_banks_know_and_says_where_measurement_starts(
         {"date": date(2026, 10, 1), "amount": -10.0, "balance_after": 1083.94},
         {"date": date(2026, 10, 8), "amount": 26144.0, "balance_after": 27227.94},
     ]
-    discount = history.account_balances(DISCOUNT_OPS, DISCOUNT_ROWS, 1473.61, AS_OF, days=10)
-    leumi = history.account_balances(leumi_ops, [], 27227.94, AS_OF, days=10)
+    discount = history.account_balances(measured(DISCOUNT_OPS), DISCOUNT_ROWS, 1473.61, AS_OF, days=10)
+    leumi = history.account_balances(measured(leumi_ops), [], 27227.94, AS_OF, days=10)
     pool = history.cash_history([discount, leumi], AS_OF)
     assert pool["days"][0] == {"date": "2026-09-30", "balance": 3646.11 + 1093.94}
     assert pool["days"][-1] == {"date": "2026-10-08", "balance": round(1473.61 + 27227.94, 2)}

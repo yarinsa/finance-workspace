@@ -19,7 +19,7 @@ Common envelope: {"source", "entity", "generated_at", "records": [...]}
 Self-contained; safe to re-run after each scrape.
 """
 import json, datetime, glob
-from finance.models import write_envelope
+from finance.models import balance_days, write_envelope
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -142,6 +142,18 @@ if cdp_fp.exists():
 
 emit("accounts", list(accounts.values()))
 emit("transactions", sorted(txns.values(), key=lambda r: r["date"]))
+
+# The CDP dump's running balance (BalanceAfterOperation) is the account's measured end-of-day
+# balance; history's cash line (finance/views/history.py) reads it as the balance_days entity.
+ops = []
+if cdp_fp.exists():
+    for e in entries:
+        d = str(e.get("OperationDate") or "")
+        if e.get("BalanceAfterOperation") is not None and len(d) >= 8:
+            ops.append({"date": f"{d[:4]}-{d[4:6]}-{d[6:8]}", "amount": round(float(e.get("OperationAmount") or 0), 2),
+                        "balance_after": round(float(e["BalanceAfterOperation"]), 2)})
+emit("balance_days", [{"institution": "discount", "account_id": cdp_aid, **b} for b in balance_days(ops)]
+     if ops else [])
 
 
 # ---- savings (bank deposits / פיקדונות) ----

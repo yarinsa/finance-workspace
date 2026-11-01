@@ -18,10 +18,10 @@ def test_every_synced_source_has_a_manifest(name):
 def test_capabilities_are_what_the_normalizer_writes():
     """The real entity sets from CLAUDE.md's Sources table: a manifest cannot promise data the source lacks."""
     assert {n: set(m.capabilities) for n, m in manifest.load_all().items() if n in SOURCES} == {
-        "discount": {"accounts", "transactions"},
+        "discount": {"accounts", "transactions", "balance_days"},
         "discount-business": {"accounts", "credit_cards", "transactions"},
         "discount-mortgage": {"loans"},
-        "leumi": {"accounts", "loans", "transactions"},
+        "leumi": {"accounts", "loans", "transactions", "balance_days"},
         "cal": {"credit_cards", "transactions"},
         "amex": {"credit_cards", "transactions"},
         "max": {"credit_cards", "transactions"},

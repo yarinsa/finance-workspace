@@ -6,7 +6,8 @@
   ],
   "capabilities": [
     "accounts",
-    "transactions"
+    "transactions",
+    "balance_days"
   ],
   "connection": {
     "type": "object",

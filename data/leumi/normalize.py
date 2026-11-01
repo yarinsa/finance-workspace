@@ -22,7 +22,7 @@ Common envelope: {"source", "entity", "generated_at", "records": [...]}
 Self-contained; safe to re-run after each scrape.
 """
 import json, datetime
-from finance.models import write_envelope
+from finance.models import balance_days, write_envelope
 from pathlib import Path
 
 from finance.paths import source_dir  # noqa: E402
@@ -219,3 +219,11 @@ for t in tx.get("HistoryTransactionsItems", []):
         "status": "completed",
     }
 emit("transactions", sorted(txns.values(), key=lambda r: r["date"] or ""))
+
+# The running balance (RunningBalance) is the checking account's measured end-of-day balance;
+# history's cash line (finance/views/history.py) reads it as the balance_days entity.
+ops = [{"date": iso(t.get("DateSO")), "amount": round(float(t.get("Amount") or 0), 2),
+        "balance_after": round(float(t.get("RunningBalance") or 0), 2)}
+       for t in tx.get("HistoryTransactionsItems", []) if iso(t.get("DateSO"))]
+emit("balance_days", [{"institution": "leumi", "account_id": checking_id, **b} for b in balance_days(ops)]
+     if ops and checking_id else [])

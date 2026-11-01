@@ -16,7 +16,7 @@ from sqlalchemy.dialects.postgresql import JSONB, TIMESTAMP, UUID
 from sqlmodel import Field, Relationship, SQLModel
 
 from finance import models
-from finance.models import AccountFields, CreditCardFields, LoanFields, MoneySQL, SavingsFields
+from finance.models import AccountFields, BalanceDayFields, CreditCardFields, LoanFields, MoneySQL, SavingsFields
 
 Money = MoneySQL
 
@@ -548,6 +548,15 @@ class SavingsRow(SavingsFields, table=True):
 
     tenant_id: uuid.UUID = Field(sa_column=_tenant(primary_key=True))
     holding_id: str = Field(primary_key=True)
+
+
+class BalanceDayRow(BalanceDayFields, table=True):
+    """A checking account's measured end-of-day balance (the `balance_days` entity), replaced by every
+    digest: what history's cash line reads instead of the banks' raw running-balance chains."""
+    __tablename__ = "account_balance_days"
+    __table_args__ = (PrimaryKeyConstraint("tenant_id", "institution", "account_id", "date"),)
+
+    tenant_id: uuid.UUID = Field(sa_column=_tenant())
 
 
 class SourceDump(SQLModel, table=True):

@@ -122,7 +122,8 @@ command; push the result with `sync-data`.
 Scraped sources only know today, so `finance/views/history.py` (`Household.history`; loaders and `backfill` in `data/history.py`; output in
 `cashflow.json` → `history`) rebuilds the past for the home screen's lenses:
 `cash` (end-of-day Discount + Leumi checking, the runway's pool, last 90 days: days inside a
-bank's running-balance chain are measured, earlier days are walked back through its ledger;
+bank's running-balance chain are measured (`account_balance_days`, else the normalized `balance_days` entity the
+Discount and Leumi normalizers emit), earlier days are walked back through its ledger;
 `measured_from` marks the line), `debt` (month-start loan balances, 12 months back by reverse
 amortization, 36 ahead on `projection.amortize_loans`) and `positions` (one row a day in Postgres
 `position_snapshots`, recorded by every digest; best-effort, a dead DB gives `[]`), which feed
@@ -197,10 +198,10 @@ two answer different questions ("can I pay my bills" vs "what am I worth").
 
 | Source | normalize.py | Entities emitted |
 |---|:--:|---|
-| `discount` (personal checking) | ✅ | accounts, transactions |
+| `discount` (personal checking) | ✅ | accounts, transactions, balance_days |
 | `discount-business` (SME checking) | ✅ | accounts, credit_cards, transactions |
 | `discount-mortgage` (mortgage + loans) | ✅ | loans |
-| `leumi` (checking + loan total) | ✅ | accounts, loans, transactions |
+| `leumi` (checking + loan total) | ✅ | accounts, loans, transactions, balance_days |
 | `cal` (CAL credit cards) | ✅ | credit_cards, transactions |
 | `amex` (American Express / Isracard) | ✅ | credit_cards, transactions |
 | `max` (Max, ex-Leumi Card) | ✅ | credit_cards, transactions |

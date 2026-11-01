@@ -32,12 +32,13 @@ DEBT_MONTHS_AHEAD = 36
 
 # ---- cash ------------------------------------------------------------------
 
-def account_balances(ops, rows, closing, as_of, days=CASH_DAYS):
+def account_balances(measured, rows, closing, as_of, days=CASH_DAYS):
     """End-of-day balances of one checking account: ``({date: balance}, chain_start)``.
 
-    ``ops`` is the running-balance chain, oldest first (validate.telebank_ops / leumi_ops
-    through validate.orient_ops),
-    ``rows`` the account's normalized ledger rows (``date`` ISO, ``amount``),
+    ``measured`` is the bank's measured end-of-day balances ``{date: balance}`` (the
+    ``balance_days`` entity / ``account_balance_days``, ``finance.models.balance_days``): the
+    opening balance on the day before the running-balance chain, then each day with an
+    operation. ``rows`` the account's normalized ledger rows (``date`` ISO, ``amount``),
     ``closing`` today's balance. Days after the chain's last operation carry its
     balance, and ``as_of`` itself is ``closing`` (it may include pending debits).
     Before the chain the balance is walked back through the ledger, as far as the
@@ -48,16 +49,14 @@ def account_balances(ops, rows, closing, as_of, days=CASH_DAYS):
     for r in rows:
         moves[date.fromisoformat(r["date"][:10])] += r["amount"]
     out = {}
-    if ops:
-        eod = {o["date"]: o["balance_after"] for o in ops}       # oldest first: the day's last op wins
-        chain_start = ops[0]["date"]
-        anchor = round(ops[0]["balance_after"] - ops[0]["amount"], 2)   # end of the day before
+    if measured:
+        anchor_day = min(measured)                                # end of the day before the chain
+        anchor, chain_start = measured[anchor_day], anchor_day + timedelta(days=1)
         bal, d = anchor, chain_start
         while d <= as_of:
-            bal = eod.get(d, bal)
+            bal = measured.get(d, bal)
             out[d] = bal
             d += timedelta(days=1)
-        anchor_day = chain_start - timedelta(days=1)
     elif closing is not None:
         chain_start, anchor_day, anchor = None, as_of, closing
     else:

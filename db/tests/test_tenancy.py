@@ -20,7 +20,7 @@ OWNED = ["scraped_transactions", "transaction_overrides", "override_audit", "tra
          "transaction_offsets", "tags", "categories", "merchant_rules", "horizons", "goals",
          "budget_lines", "holding_assignments", "notifications", "assets", "position_snapshots", "push_subscriptions",
          "digest_runs", "accounts", "credit_cards", "loans", "savings_holdings", "source_dump_entities", "source_dumps",
-         "offset_rules", "mortgage_schedule_periods", "loan_freezes", "household_settings"]
+         "offset_rules", "mortgage_schedule_periods", "loan_freezes", "household_settings", "account_balance_days"]
 
 
 @pytest.fixture

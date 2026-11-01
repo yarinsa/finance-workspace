@@ -1,7 +1,8 @@
-"""History CLI and loaders: reads the bank dumps and Postgres for the home screen's lenses.
+"""History CLI and loaders: reads the measured balance days and Postgres for the home screen's lenses.
 
 The builders (cash, debt and position series) are ``finance/views/history.py``; this
-file parses the raw bank chains, records/reads ``position_snapshots`` (best-effort) and
+file reads the banks' measured end-of-day balances (`account_balance_days`, else the
+normalized `balance_days` entity), records/reads ``position_snapshots`` (best-effort) and
 runs ``backfill``. ``build`` keeps its old signature for callers that want the whole block.
 """
 import json
@@ -9,6 +10,7 @@ import sys
 from datetime import date
 from pathlib import Path
 
+import stores
 from finance.paths import data_root
 from finance.views.history import (  # noqa: F401 — re-exported for scripts and tests
     CARD_DEBT_COMPARABLE_FROM, CASH_DAYS, DEBT_MONTHS_AHEAD, DEBT_MONTHS_BACK, LOCAL_TZ,
@@ -24,28 +26,32 @@ def data_dir():
 
 
 def load_cash(snapshot, as_of, root=None):
-    """The pool accounts' chains and ledgers from ``root``'s dumps -> ``[account_balances]``."""
+    """The pool accounts' measured days and ledgers -> ``[account_balances]``.
+
+    The measured end-of-day balances are `account_balance_days` (db/snapshot_store.py), else each
+    bank's normalized ``balance_days.json`` (with ``root``, tests and other checkouts, always the files)."""
     from finance.views import runway
-    import validate
     root = Path(root or data_dir())
 
     def read(*parts):
         p = root.joinpath(*parts)
         return json.loads(p.read_text(encoding="utf-8")) if p.exists() else None
 
+    stored = None if root != Path(data_dir()) else stores.from_db(
+        "snapshot_store", lambda m, conn: m.balance_days(conn), "balance days")
     accounts = []
     for a in snapshot.get("bank_accounts", []):
         inst = a.get("institution")
         if inst not in runway.POOL_INSTITUTIONS or a.get("kind") != "checking":
             continue
-        raw = read(inst, "raw", "transactions.json")
-        ops = (validate.leumi_ops if inst == "leumi" else validate.telebank_ops)(raw) if raw else []
-        ops = validate.orient_ops(ops) if ops else ops
+        measured = (stored or {}).get(inst) or {
+            date.fromisoformat(r["date"]): r["balance"]
+            for r in (read(inst, "normalized", "balance_days.json") or {}).get("records", [])}
         rows = (read(inst, "normalized", "transactions.json") or {}).get("records", [])
         # One checking account per pool bank; its ledger ids differ by scraper (Discount's
         # MCP rows say 0123444499, the snapshot 0034), so take the bank's whole ledger.
         rows = [r for r in rows if r.get("date")]
-        accounts.append(account_balances(ops, rows, a.get("balance"), as_of))
+        accounts.append(account_balances(measured, rows, a.get("balance"), as_of))
     return [x for x in accounts if x[0]]
 
 

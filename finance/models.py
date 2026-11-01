@@ -172,12 +172,46 @@ def holding_id(s):
     return f"{s['institution']}:{s['topic_id'] if s.get('topic_id') is not None else s.get('label')}"
 
 
+class BalanceDayFields(SQLModel):
+    """A checking account's measured end-of-day balance, from the bank's running-balance chain."""
+    institution: str
+    account_id: str
+    date: Date
+    balance: Money
+
+
+class BalanceDay(BalanceDayFields, Record):
+    pass
+
+
+def balance_days(ops):
+    """A running-balance chain ``[{"date": ISO, "amount", "balance_after"}]``, in either order,
+    as measured end-of-day balances ``[{"date", "balance"}]``, oldest first: the opening balance
+    on the day before the chain, then each day's last operation. Banks send the chain newest
+    or oldest first, so the orientation is the one whose balances link (date order breaks ties)."""
+    if not ops:
+        return []
+
+    def breaks(seq):
+        return sum(abs(seq[i - 1]["balance_after"] + seq[i]["amount"] - seq[i]["balance_after"]) > 0.011
+                   for i in range(1, len(seq)))
+    fwd, rev = list(ops), list(reversed(ops))
+    bf, br = breaks(fwd), breaks(rev)
+    chain = (fwd if fwd[0]["date"] <= fwd[-1]["date"] else rev) if bf == br else (fwd if bf < br else rev)
+    first = dt.date.fromisoformat(chain[0]["date"])
+    eod = {(first - dt.timedelta(days=1)).isoformat(): round(chain[0]["balance_after"] - chain[0]["amount"], 2)}
+    for o in chain:
+        eod[o["date"]] = round(o["balance_after"], 2)
+    return [{"date": d, "balance": b} for d, b in eod.items()]
+
+
 ENTITIES: dict[str, type[Record]] = {
     "transactions": Transaction,
     "accounts": Account,
     "credit_cards": CreditCard,
     "loans": Loan,
     "savings": Savings,
+    "balance_days": BalanceDay,
 }
 
 

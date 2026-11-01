@@ -39,6 +39,7 @@ const ENTITY_LABEL: Record<string, string> = {
   credit_cards: "כרטיסים",
   loans: "הלוואות",
   savings: "חסכונות",
+  balance_days: "יתרות יומיות",
   income: "הכנסות",
   subscription: "מנויים",
 };
