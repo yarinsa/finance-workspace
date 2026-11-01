@@ -15,7 +15,7 @@ poetry run python -m assistant                                      # chat
 - Data dir: `FINANCE_DIGESTED_DIR` (a worktree has no `data/digested`; point it at the main checkout).
 
 ## Running the model
-Standalone Ollama binary in `~/.local/ollama/` (Homebrew install failed). `./ollama serve`, then `./ollama pull qwen3:30b-a3b-instruct-2507-q4_K_M` (~18 GB, non-thinking: the plain `qwen3:30b` reasons for a minute on a one-line prompt).
+Standalone Ollama binary in `~/.local/ollama/` (Homebrew install failed). `./ollama serve`, then `./ollama pull gemma4:26b` (~16 GB). Compared 2026-11-01 on three real questions: same numbers as Qwen3-30B-A3B-instruct, but Gemma had clean Hebrew and the full debt breakdown while Qwen leaked an Arabic-script word. The plain `qwen3:30b` reasons for a minute on a one-line prompt.
 
 ## In the dashboard (API + chat)
 `POST /api/assistant/chat` (contract: docs/ledger-api.md) runs the same tools on the caller's tenant. The API container reaches

@@ -6,7 +6,7 @@ import re
 import urllib.request
 
 BASE_URL = os.environ.get("ASSISTANT_BASE_URL", "http://localhost:11434/v1")
-MODEL = os.environ.get("ASSISTANT_MODEL", "qwen3:30b-a3b-instruct-2507-q4_K_M")
+MODEL = os.environ.get("ASSISTANT_MODEL", "gemma4:26b")
 
 _THINK = re.compile(r"<think>.*?</think>", re.DOTALL)
 
