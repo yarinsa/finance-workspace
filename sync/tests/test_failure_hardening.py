@@ -135,3 +135,37 @@ def test_retention_failure_does_not_stop_the_worker():
         raise RuntimeError("server down")
     client.workflow_service.describe_namespace = boom
     assert "not updated" in asyncio.run(worker.ensure_retention(client, 30))
+
+
+# --- publish: deploy.sh's output must reach the error message (2026-11-01 22:02) ---------------
+
+TERRAFORM_INIT_TAIL = (
+    "\x1b[31m╷\x1b[0m\x1b[0m\n"
+    "\x1b[31m│\x1b[0m \x1b[0m\x1b[1m\x1b[31mError: \x1b[0m\x1b[0m\x1b[1mRequired plugins are not installed\x1b[0m\n"
+    "\x1b[31m│\x1b[0m \x1b[0m\n"
+    "\x1b[31m│\x1b[0m \x1b[0m  terraform init\n"
+    "\x1b[31m╵\x1b[0m\x1b[0m"
+)
+
+
+def test_failure_detail_is_one_plain_line_naming_the_cause():
+    detail = activities.failure_detail(TERRAFORM_INIT_TAIL)
+    assert "\n" not in detail and "\x1b" not in detail
+    assert "Required plugins are not installed" in detail and "terraform init" in detail
+
+
+def test_failure_detail_keeps_the_end_of_long_output():
+    detail = activities.failure_detail("noise\n" * 500 + "the real cause", limit=100)
+    assert detail.endswith("the real cause") and len(detail) < 120
+
+
+def test_publish_failure_message_carries_deploy_sh_output(monkeypatch):
+    async def fake_run_cmd(args, **kw):
+        return 1, TERRAFORM_INIT_TAIL
+
+    monkeypatch.setenv("SYNC_PUBLISH", "1")
+    monkeypatch.setattr(activities, "run_cmd", fake_run_cmd)
+    with pytest.raises(ApplicationError) as err:
+        asyncio.run(activities.publish_data())
+    first_line = str(err.value).splitlines()[0]
+    assert "rc=1" in first_line and "Required plugins are not installed" in first_line

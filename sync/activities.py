@@ -531,6 +531,22 @@ async def digest(normalize: bool = True, tenant_id: str | None = None) -> dict:
         return summary
 
 
+_ANSI = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
+
+
+def failure_detail(tail: str, limit: int = 600) -> str:
+    """A command's output tail as one readable line for an error message: ANSI colour and
+    terraform's box-drawing gutter stripped, blank lines dropped, last `limit` chars kept.
+    Temporal's UI shows only the first line of a message, so the cause must not hide after a newline."""
+    lines = []
+    for line in _ANSI.sub("", tail).splitlines():
+        line = line.strip(" \t\u2502\u2577\u2575")
+        if line:
+            lines.append(line)
+    text = " | ".join(lines)
+    return ("..." + text[-limit:]) if len(text) > limit else (text or "(no output)")
+
+
 @activity.defn
 async def publish_data(tenant_id: str | None = None) -> str:
     """infra/deploy.sh --data-only, only when SYNC_PUBLISH=1. Returns "published" or "skipped"."""
@@ -540,7 +556,7 @@ async def publish_data(tenant_id: str | None = None) -> str:
     argv = [str(REPO_ROOT / "infra" / "deploy.sh"), "--data-only", "--tenant", str(tid)]
     rc, tail = await run_cmd(argv, env=_tenant_env(tid))
     if rc != 0:
-        raise ApplicationError(f"deploy.sh --data-only failed (rc={rc}):\n{tail}")
+        raise ApplicationError(f"deploy.sh --data-only failed (rc={rc}): {failure_detail(tail)}")
     return "published"
 
 

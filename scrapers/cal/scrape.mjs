@@ -61,14 +61,21 @@ async function waitIn(frame, selector, what, secs = 30) {
 }
 
 /**
+ * Run a frame/page operation, returning `dflt` if it throws. Puppeteer's detached-frame check throws
+ * synchronously (before a promise exists), so `.catch()` on `frame.evaluate()` does NOT cover it: the
+ * login iframe is torn down the moment login succeeds, which crashed every run (2026-10-30..11-01).
+ */
+const safe = async (fn, dflt) => { try { return await fn(); } catch { return dflt; } };
+
+/**
  * In-page element.click(). Puppeteer's mouse click waits on a rendered frame and hangs when
  * headless Chrome is not painting (seen with the Mac's display asleep); the DOM click works always.
  */
-const domClick = (frame, selector) => frame.evaluate((sel) => {
+const domClick = (frame, selector) => safe(() => frame.evaluate((sel) => {
   const el = document.querySelector(sel);
   if (el) el.click();
   return !!el;
-}, selector).catch(() => false);
+}, selector), false);
 
 /** The rotating CALAuthScheme token, written to sessionStorage by the SPA after login. */
 const readToken = (page) => page.evaluate(() => {
@@ -84,7 +91,7 @@ async function saveLoginState(page, frame) {
     sleep(10000),
   ]);
   const pageText = await page.evaluate(() => document.body?.innerText || '').catch(() => '');
-  const frameText = frame ? await frame.evaluate(() => document.body?.innerText || '').catch(() => '') : '';
+  const frameText = frame ? await safe(() => frame.evaluate(() => document.body?.innerText || ''), '') : '';
   fs.writeFileSync(path.join(outDir, 'login-unknown.txt'),
     `page: ${page.url()}\n\n${pageText}\n\n--- login frame: ${frame?.url() || '-'} ---\n${frameText}`, 'utf8');
   console.error(`Saved login-unknown.png / login-unknown.txt to ${outDir}`);
@@ -123,15 +130,15 @@ async function login(page) {
     const f = page.frames().find((fr) => fr.url().includes('connect.cal-online'));
     if (!f) continue;
     if (/change-?password/i.test(f.url())) throw new Exit(3, 'LOGIN FAILED: CHANGE_PASSWORD');
-    const text = await f.evaluate(() => document.body?.innerText || '').catch(() => '');
+    const text = await safe(() => f.evaluate(() => document.body?.innerText || ''), '');
     if (text.includes(INVALID_PASSWORD_MSG)) throw new Exit(3, 'LOGIN FAILED: INVALID_PASSWORD');
     if (/החלפת סיסמה|סיסמה חדשה|תוקף הסיסמה/.test(text)) throw new Exit(3, 'LOGIN FAILED: CHANGE_PASSWORD');
-    if (/קוד אימות|קוד חד[ -]פעמי/.test(text) && !(await f.$('[formcontrolname="password"]'))) {
+    if (/קוד אימות|קוד חד[ -]פעמי/.test(text) && !(await safe(() => f.$('[formcontrolname="password"]'), null))) {
       throw new Exit(3, 'LOGIN FAILED: OTP_REQUIRED');
     }
-    const err = await f.evaluate(() =>
+    const err = await safe(() => f.evaluate(() =>
       [...document.querySelectorAll('div.general-error > div, .err-desc')].map((e) => e.innerText.trim()).filter(Boolean).join(' | '),
-    ).catch(() => '');
+    ), '');
     if (err) {
       await saveLoginState(page, f);
       throw new Exit(3, `LOGIN FAILED: ${err}`);
