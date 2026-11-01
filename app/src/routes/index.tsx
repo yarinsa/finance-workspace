@@ -7,6 +7,7 @@ import {
   RefreshCw,
   CalendarCheck,
   Compass,
+  PiggyBank,
   Ellipsis,
   ReceiptText,
   type LucideIcon,
@@ -19,6 +20,7 @@ import Syncs from "./Syncs";
 import Monthly from "./Monthly";
 import Transactions from "./Transactions";
 import Plan from "./Plan";
+import Savings from "./Savings";
 
 /** Navigation hubs, Mint-style: each is one bottom tab (and one sidebar section). */
 export type RouteGroup = "overview" | "monthly" | "plan" | "more";
@@ -106,6 +108,14 @@ export const routes: RouteDef[] = [
     group: "plan",
     hub: true,
     Component: Plan,
+  },
+
+  {
+    path: "/savings",
+    label: "חיסכון",
+    icon: PiggyBank,
+    group: "plan",
+    Component: Savings,
   },
 
   {

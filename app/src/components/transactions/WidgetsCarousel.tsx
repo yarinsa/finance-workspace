@@ -5,11 +5,11 @@ import { shekel, shekelSigned } from "@/lib/data";
 import type { WidgetStats } from "@/lib/transactionsView";
 
 /** One snap-aligned slide; the next one peeks in so the row reads as scrollable. */
-function Slide({ children }: { children: ReactNode }) {
+export function Slide({ children }: { children: ReactNode }) {
   return <div className="w-[78%] max-w-[300px] shrink-0 snap-start">{children}</div>;
 }
 
-function Legend({ tone, label, value }: { tone: string; label: string; value: number }) {
+export function Legend({ tone, label, value }: { tone: string; label: string; value: number }) {
   return (
     <div className="flex items-center justify-between gap-2 text-sm">
       <span className="flex items-center gap-1.5 text-muted-foreground">

@@ -33,7 +33,8 @@ function generalValue(c: DisplayGeneral): string {
   return Math.abs(c.value) >= 1_000_000 ? shekelCompact(c.value) : shekel(c.value);
 }
 
-function GeneralCard({ c }: { c: DisplayGeneral }) {
+/** One general target (emergency fund, retirement coverage…) as a card; also used by חיסכון. */
+export function GeneralCard({ c }: { c: DisplayGeneral }) {
   const muted = c.status === "needs_input" || c.pending;
   return (
     <Card>

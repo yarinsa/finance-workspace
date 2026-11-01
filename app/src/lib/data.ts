@@ -373,6 +373,12 @@ export interface Savings {
   policies_count?: number | null;
   /** "עצמאי" / "שכיר" on self-employed vs salaried funds (More, Analyst). */
   work_state?: string | null;
+  /** The vendor's id for the fund; with `institution` it identifies a holding. */
+  topic_id?: string | null;
+  /** When a locked fund can be withdrawn; absent for Harel's funds. */
+  liquidity_date?: string | null;
+  /** The date the balance was read. */
+  as_of?: string | null;
   balance: number;
   currency: string;
   management_fee?: number | null;

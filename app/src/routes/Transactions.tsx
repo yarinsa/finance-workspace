@@ -1,6 +1,7 @@
-import { useMemo, useState, type ReactNode } from "react";
+import { useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Card, Page } from "@/components/common";
+import { CHIP_ROW, Chip } from "@/components/shared/Chip";
 import { TransactionList, TransactionRow } from "@/components/TransactionRow";
 import TransactionEditSheet, { type EditTarget } from "@/components/TransactionEditSheet";
 import { useQuickEdit } from "@/components/QuickEditSheets";
@@ -15,7 +16,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cashflow, sourceLabel, transactions } from "@/lib/data";
 import { useLedgerApi } from "@/lib/useLedgerApi";
-import { cn } from "@/lib/utils";
 import {
   PAGE_SIZE,
   PRESET_DAYS,
@@ -40,30 +40,11 @@ import {
   type RangeSpec,
 } from "@/lib/transactionsView";
 
-/** One filter chip; the selected one is tinted. */
-function Chip({ selected, onClick, children }: { selected: boolean; onClick: () => void; children: ReactNode }) {
-  return (
-    <button
-      type="button"
-      aria-pressed={selected}
-      onClick={onClick}
-      className={cn(
-        "shrink-0 rounded-full border px-3 py-1 text-xs tabular-nums",
-        selected ? "border-brand bg-brand/15 font-semibold" : "border-line",
-      )}
-    >
-      {children}
-    </button>
-  );
-}
-
 const GROUP_CHIPS: { key: GroupBy; label: string }[] = [
   { key: "none", label: "לפי תאריך" },
   { key: "category", label: "לפי קטגוריה" },
   { key: "kind", label: "קבוע ומשתנה" },
 ];
-
-const CHIP_ROW = "-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-0.5";
 
 /**
  * "תנועות": every transaction in a time window, newest first, filterable by account.
