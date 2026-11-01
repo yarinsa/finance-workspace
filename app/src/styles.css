@@ -291,6 +291,12 @@ body {
 .sync-facts { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 2px 12px; font-size: 13px; }
 .sync-facts dt { color: var(--lg-muted); }
 .sync-facts dd { margin: 0; }
+.sync-section { display: flex; flex-direction: column; gap: 8px; }
+.sync-section + .sync-section { border-top: 1px solid var(--lg-line); padding-top: 10px; }
+.sync-section-title { margin: 0; font-size: 12px; font-weight: 500; color: var(--lg-muted); }
+.sync-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.sync-chip { font-size: 12px; padding: 2px 8px; border-radius: 999px; background: var(--lg-panel-2); }
+.sync-chip-quiet { color: var(--lg-muted); }
 
 /* ---- Mortgage card ------------------------------------------------------ */
 .list-foot.no-rule { border-top: 0; margin-top: 0; padding-top: 8px; }

@@ -6,6 +6,11 @@ from functools import lru_cache
 from finance import manifest, vault
 from api.rebuild import resume_point
 
+# A run that has not written for this long is a dead worker, not a sync in progress.
+SYNCING = frozenset({"starting", "checking_session", "scraping", "validating", "digesting", "publishing",
+                     "waiting_for_login", "waiting_for_otp"})
+SYNCING_FRESH = dt.timedelta(minutes=15)
+
 
 def _ts(v):
     try:
@@ -34,6 +39,16 @@ class SyncSource:
                    step=entry.get("step"), total_steps=entry.get("total_steps"), error=entry.get("error"),
                    started_at=_ts(entry.get("started_at")), updated_at=updated_at or _ts(entry.get("updated_at")),
                    retry_from=resume_point(entry))
+
+    @property
+    def syncing(self):
+        """True while a run is in progress (and the worker wrote recently)."""
+        if self.status not in SYNCING:
+            return False
+        if self.updated_at is None:
+            return True
+        now = dt.datetime.now(self.updated_at.tzinfo)
+        return now - self.updated_at < SYNCING_FRESH
 
     @classmethod
     def get(cls, conn, source):

@@ -110,7 +110,7 @@ export const routes: RouteDef[] = [
 
   {
     path: "/syncs",
-    label: "סנכרונים",
+    label: "חיבורים",
     icon: RefreshCw,
     group: "more",
     hub: true,

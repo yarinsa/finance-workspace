@@ -87,7 +87,7 @@ def test_connections_follow_the_relay_spec():
 
 # Linear style (`entityVerb`, optional `id` argument, `{success, entity}` payload); every other
 # mutation is Relay style and pending migration.
-LINEAR = {"goalCreate", "goalUpdate", "goalDelete", "planTargetsUpdate", "syncSourceRetry", "assetCreate",
+LINEAR = {"goalCreate", "goalUpdate", "goalDelete", "planTargetsUpdate", "syncSourceRetry", "syncSourceRun", "assetCreate",
           "assetUpdate", "categoryMerge", "categoryUnmerge", "tenantCreate", "tenantMemberSet",
           "tenantMemberRemove", "tenantSetStatus", "tenantAccessSync", "syncSourceSecretSet",
           "holdingAssign"}

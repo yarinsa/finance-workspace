@@ -117,7 +117,7 @@ def pool(test_url, owner):
 class FakeRebuilder:
     def __init__(self):
         self.signals = 0
-        self.logins, self.codes, self.retries = [], [], []
+        self.logins, self.codes, self.retries, self.runs = [], [], [], []
         self.state = {"state": "idle", "last_published_at": None, "last_error": None}
 
     def signal_edited(self, tenant_id=None):
@@ -140,6 +140,7 @@ class FakeRebuilder:
 
     # App logins (Harel): what was asked of Temporal, and whether it "answered".
     logins: list
+    runs: list
     codes: list
     up = True
     waiting = True
@@ -150,6 +151,10 @@ class FakeRebuilder:
 
     def retry(self, source, resume):
         self.retries.append((source, resume))
+        return self.up
+
+    def run(self, source):
+        self.runs.append(source)
         return self.up
 
     def submit_otp(self, source, code):

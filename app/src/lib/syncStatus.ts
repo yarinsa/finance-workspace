@@ -129,7 +129,7 @@ export function syncActions(doc: SyncStatusDoc | null, now = Date.now()): HomeAc
     const name = sourceLabel(source);
     // Keyed by run so dismissing one run's alert doesn't hide the next run's.
     const id = `sync-${source}-${d}-${s.run_id}`;
-    const cta = { label: "לסנכרונים", to: "/syncs" };
+    const cta = { label: "לחיבורים", to: "/syncs" };
     if (d === "waiting_for_otp") {
       out.push({ id, severity: "high", title: `הזן את קוד ה-SMS של ${name}`, detail: s.message, cta, amount: null });
     } else if (d === "needs_login" && OTP_SOURCES.has(source)) {

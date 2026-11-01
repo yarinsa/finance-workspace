@@ -125,6 +125,12 @@ type Mutation {
   """
   syncSourceRetry(id: ID!): SyncSourcePayload!
   """
+  Run one source's sync now: a one-source sync on the Mac that scrapes, validates, digests and
+  publishes. An error when the source is already syncing, needs an app-typed code (Harel logs in
+  with `POST /api/sync/harel/login`) or the sync worker is not reachable.
+  """
+  syncSourceRun(id: ID!): SyncSourcePayload!
+  """
   Store one connection secret in the household's vault (create or replace). The API writes it
   straight through and keeps nothing; an error when the household has no vault write identity
   or the name is not one of the source's connection variables. Takes effect on the next sync.

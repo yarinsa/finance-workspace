@@ -629,3 +629,35 @@ def test_merging_into_itself_is_an_error(client, rebuilder):
     ids = _cat_ids(client)
     status, body = gql(client, MERGE, id=ids["קניות"], input={"intoId": ids["קניות"]})
     assert "errors" in body and rebuilder.signals == 0
+
+
+# --- sync sources: run one now ---------------------------------------------------------------
+
+RUN = """mutation($id: ID!) { syncSourceRun(id: $id) { success syncSource { id source status } } }"""
+
+
+def test_run_starts_a_one_source_sync(client, owner, rebuilder):
+    _status(owner, "run-test", {"status": "done", "step": 5})
+    out = data(client, RUN, id=to_global_id("SyncSource", "run-test"))["syncSourceRun"]
+    assert out["success"] and rebuilder.runs == ["run-test"] and rebuilder.signals == 0
+
+
+def test_run_refuses_a_source_already_syncing(client, owner, rebuilder):
+    _status(owner, "run-test", {"status": "scraping", "step": 2})
+    _, body = gql(client, RUN, id=to_global_id("SyncSource", "run-test"))
+    assert body["errors"][0]["message"] == "this source is already syncing"
+    assert rebuilder.runs == []
+
+
+def test_run_refuses_an_app_login_source(client, owner, rebuilder):
+    _status(owner, "harel", {"status": "needs_login", "step": 1})
+    _, body = gql(client, RUN, id=to_global_id("SyncSource", "harel"))
+    assert body["errors"][0]["message"] == "this source logs in with a code: use the app login"
+    assert rebuilder.runs == []
+
+
+def test_run_with_the_worker_down_is_an_error(client, owner, rebuilder):
+    _status(owner, "run-test", {"status": "done", "step": 5})
+    rebuilder.up = False
+    _, body = gql(client, RUN, id=to_global_id("SyncSource", "run-test"))
+    assert body["errors"][0]["message"] == "the sync worker is not reachable"

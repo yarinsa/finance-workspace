@@ -24,6 +24,7 @@ parent's attribute or key in snake_case (`absAmount` -> `abs_amount`).
 """
 import datetime as dt
 import sys
+from api.rebuild import OTP_SOURCES
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import ClassVar, Generic, TypeVar
@@ -35,7 +36,7 @@ from api.schema_bindings import load_schema, snake
 
 from .inputs import (CategoryMergeInput, CategoryUnmergeInput, AssetCreateInput, AssetUpdateInput, BulkNotificationInput, ClearTransactionOverrideInput, GoalCreateInput, GoalDeleteInput, DeleteTagInput, GroupArgs,
                      GroupOrder, LinkOffsetInput, NotificationArgs, NotificationIdInput, ResetOffsetsInput,
-                     SetTransactionTagsInput, SnoozeAllNotificationsInput, SyncSourceRetryInput, SyncSourceSecretSetInput, TenantCreateInput, TenantMemberRemoveInput, TenantAccessSyncInput, TenantMemberSetInput, TenantSetStatusInput, TransactionArgs, TransactionOrder,
+                     SetTransactionTagsInput, SnoozeAllNotificationsInput, SyncSourceRetryInput, SyncSourceRunInput, SyncSourceSecretSetInput, TenantCreateInput, TenantMemberRemoveInput, TenantAccessSyncInput, TenantMemberSetInput, TenantSetStatusInput, TransactionArgs, TransactionOrder,
                      UnlinkOffsetInput, UnreadCountArgs, GoalUpdateInput, UpdateNotificationInput, PlanTargetsUpdateInput, HoldingAssignInput, UpdateTagInput,
                      UpdateTransactionInput)
 from .binding import bind_all
@@ -615,6 +616,17 @@ class SyncSourceResolver(NodeResolver[SyncSource]):
             raise GraphQLError("the last sync of this source did not fail")
         rebuilder = info.context.get("rebuilder")
         if rebuilder is None or not rebuilder.retry(s.source, s.retry_from):
+            raise GraphQLError("the sync worker is not reachable")
+        return lambda: {"sync_source": s}
+
+    def resolve_sync_source_run(self, inp: SyncSourceRunInput, info):
+        s = self.require(info, inp.id)
+        if s.source in OTP_SOURCES:
+            raise GraphQLError("this source logs in with a code: use the app login")
+        if s.syncing:
+            raise GraphQLError("this source is already syncing")
+        rebuilder = info.context.get("rebuilder")
+        if rebuilder is None or not rebuilder.run(s.source):
             raise GraphQLError("the sync worker is not reachable")
         return lambda: {"sync_source": s}
 

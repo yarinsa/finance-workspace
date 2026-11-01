@@ -48,6 +48,10 @@ def retry_workflow_id(source):
     return login_workflow_id(source) if source in OTP_SOURCES else f"finance-sync-retry-{source}"
 
 
+def run_workflow_id(source):
+    return f"finance-sync-run-{source}"
+
+
 RETRYABLE = frozenset({"failed", "rejected"})
 DIGEST_STEP = 4  # sync/workflows.py STEPS: digesting = 4, publishing = 5
 
@@ -130,6 +134,19 @@ class Rebuilder:
             return True
         except Exception:
             log.exception("could not start the %s retry", source)
+            return False
+
+    def run(self, source):
+        """Start (or join the running) one-source sync from the top. True on success."""
+        async def go(client):
+            await client.start_workflow(
+                SYNC_WORKFLOW, [source], id=run_workflow_id(source), task_queue=TASK_QUEUE,
+                id_conflict_policy=WorkflowIDConflictPolicy.USE_EXISTING)
+        try:
+            self._run(go)
+            return True
+        except Exception:
+            log.exception("could not start the %s sync", source)
             return False
 
     def submit_otp(self, source, code):

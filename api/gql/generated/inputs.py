@@ -552,6 +552,10 @@ class MutationSyncSourceRetryArgs(_GraphQLModel):
     id: GlobalId
 
 
+class MutationSyncSourceRunArgs(_GraphQLModel):
+    id: GlobalId
+
+
 class MutationSyncSourceSecretSetArgs(_GraphQLModel):
     input: SyncSourceSecretSetInput
 

@@ -68,7 +68,8 @@ The source registry is `sync/sources.py`.
 **Developing the sync** (debugging a failed source, restarting the worker/API, the GraphQL rule for
 new sync actions, testing): the `sync-dev` skill. The running worker and API load code from the main
 checkout's `master`, not a worktree. A failed or rejected source can be retried from `/syncs`
-(GraphQL `syncSourceRetry`), continuing at scrape or straight at digest/publish.
+(GraphQL `syncSourceRetry`), continuing at scrape or straight at digest/publish. Any non-OTP source can be run on demand from its `/syncs` (חיבורים) row
+("סנכרן עכשיו", GraphQL `syncSourceRun`, workflow id `finance-sync-run-<source>`); refused while the source is syncing.
 Every source's progress (checking_session → waiting_for_login → scraping → validating →
 digesting → publishing → done, or needs_login / failed / rejected) is published as its own
 entry to `data/sync-status.json` **and** upserted into Postgres `sync_status`, whose trigger

@@ -1,10 +1,10 @@
-import { lazy, Suspense, useEffect, useState, type FormEvent } from "react";
+import { lazy, Suspense, useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { Card, CardLabel, Page, StubNotice } from "@/components/common";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { RJSFSchema } from "@rjsf/utils";
 import { ApiError, startLogin, submitOtp } from "@/lib/api";
-import { retrySync, type SyncRetryPoint } from "@/lib/syncRetry";
+import { retrySync, runSync, type SyncRetryPoint } from "@/lib/syncRetry";
 import {
   currentSubscription,
   disablePush,
@@ -42,6 +42,27 @@ const ENTITY_LABEL: Record<string, string> = {
   income: "הכנסות",
   subscription: "מנויים",
 };
+
+const ACCOUNT_TYPE_LABEL: Record<string, string> = {
+  checking: "עו״ש",
+  business_checking: "עו״ש עסקי",
+  credit_card: "כרטיס אשראי",
+  loan: "הלוואה",
+  mortgage: "משכנתא",
+  pension: "פנסיה",
+  provident_fund: "קופת גמל",
+  study_fund: "קרן השתלמות",
+};
+
+/** A titled block inside an open connector row. */
+function Section({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <section className="sync-section">
+      <h4 className="sync-section-title">{title}</h4>
+      {children}
+    </section>
+  );
+}
 
 /** A scrape counts as stale after a week — same threshold as the header's dot. */
 function freshness(days: number): { text: string; cls: string } {
@@ -343,6 +364,51 @@ function RetrySync({ source }: { source: string }) {
   );
 }
 
+/** Run this source's sync now. The row's own live status shows the progress once the Mac picks it up. */
+function RunSync({ source }: { source: string }) {
+  const { online } = useLedgerApi();
+  const [busy, setBusy] = useState(false);
+  const [started, setStarted] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  if (online === false) return null;
+
+  async function run() {
+    setBusy(true);
+    setError(null);
+    try {
+      await runSync(source);
+      setStarted(true);
+    } catch (e) {
+      setError(
+        e instanceof ApiError && e.message === "this source is already syncing"
+          ? "המקור כבר מסתנכרן"
+          : e instanceof ApiError &&
+              e.message === "the sync worker is not reachable"
+            ? "ה-worker במק לא זמין"
+            : e instanceof ApiError
+              ? e.message || "הפעולה נכשלה"
+              : "המק לא זמין כרגע",
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="sync-otp">
+      <Button
+        size="sm"
+        variant="outline"
+        disabled={busy || started}
+        onClick={() => void run()}
+      >
+        {started ? "הסנכרון התחיל…" : "סנכרן עכשיו"}
+      </Button>
+      {error && <p className="text-xs text-bad">{error}</p>}
+    </div>
+  );
+}
+
 const PUSH_HINT: Record<PushState, string> = {
   unsupported: "הדפדפן הזה לא תומך בהתראות.",
   "ios-install": "הוסף למסך הבית כדי לקבל התראות",
@@ -414,7 +480,7 @@ function NotificationsCard() {
 
 function SyncItem({ it }: { it: Item }) {
   const { data, live, display } = it;
-  const [connectionOpen, setConnectionOpen] = useState(false);   // the vault is asked only once this is opened
+  const [rowOpen, setRowOpen] = useState(false);   // the vault is asked only once the row has been opened
   const days = data ? daysSince(data.last_synced) : null;
   const lag = data ? txnLagDays(data) : null;
   const running = display ? isRunning(display) : false;
@@ -439,9 +505,15 @@ function SyncItem({ it }: { it: Item }) {
       : 0;
   const manifest = snapshot.source_manifests?.[it.source];
   const failed = display === "failed" || display === "rejected";
+  const canRun =
+    live != null && !OTP_SOURCES.has(it.source) && !running && !failed && !attention;
 
   return (
-    <details className="sync-item group/sync" open={attention}>
+    <details
+      className="sync-item group/sync"
+      open={attention}
+      onToggle={(e) => e.currentTarget.open && setRowOpen(true)}
+    >
       <summary className="flex cursor-pointer list-none items-center justify-between gap-3 py-2.5">
         <span className="flex min-w-0 items-center gap-2">
           <span
@@ -472,81 +544,104 @@ function SyncItem({ it }: { it: Item }) {
       </summary>
 
       <div className="sync-body">
-        {running && (
-          <div
-            className="live-progress"
-            role="progressbar"
-            aria-valuenow={pct}
-            aria-valuemin={0}
-            aria-valuemax={100}
-          >
-            <span style={{ width: `${pct}%` }} />
-          </div>
+        {(running || live?.error || failed || canRun || OTP_SOURCES.has(it.source)) && (
+          <Section title="מצב">
+            {running && (
+              <div
+                className="live-progress"
+                role="progressbar"
+                aria-valuenow={pct}
+                aria-valuemin={0}
+                aria-valuemax={100}
+              >
+                <span style={{ width: `${pct}%` }} />
+              </div>
+            )}
+            {live?.error && (failed || attention) && (
+              <pre className="sync-error" dir="auto">
+                {live.error}
+              </pre>
+            )}
+            {failed && <RetrySync key={live?.run_id} source={it.source} />}
+            {canRun && <RunSync key={live?.run_id} source={it.source} />}
+            {OTP_SOURCES.has(it.source) && (
+              <OtpLogin key={live?.run_id} source={it.source} display={display} />
+            )}
+          </Section>
         )}
-        {live?.error && (failed || attention) && (
-          <pre className="sync-error" dir="auto">
-            {live.error}
-          </pre>
-        )}
-        {failed && <RetrySync key={live?.run_id} source={it.source} />}
-        {OTP_SOURCES.has(it.source) && (
-          <OtpLogin key={live?.run_id} source={it.source} display={display} />
-        )}
-        {live && <Intake live={live} />}
-        {live && <Timeline live={live} running={running} />}
 
-        {data && (
-          <dl className="sync-facts">
-            <dt>נתונים מעודכנים</dt>
-            <dd>
-              {fmt(dateTime, data.last_synced)}
-              {lag != null && (
-                <span className="sync-lag">פער של {lag} ימים</span>
-              )}
-            </dd>
-            {data.latest_txn_date && (
-              <>
-                <dt>עסקה אחרונה</dt>
-                <dd>{txDate(data.latest_txn_date)}</dd>
-              </>
+        {live && (
+          <Section title="ריצה אחרונה">
+            <Intake live={live} />
+            <Timeline live={live} running={running} />
+            {fmt(dateTime, live.started_at) && (
+              <p className="live-meta muted">
+                התחילה {fmt(dateTime, live.started_at)}
+                {live.last_success_at
+                  ? ` · סנכרון מוצלח אחרון ${fmt(dateTime, live.last_success_at)}`
+                  : " · עדיין אין סנכרון מוצלח"}
+              </p>
             )}
-            {Object.keys(data.entities).length > 0 && (
-              <>
-                <dt>במקור</dt>
-                <dd>
-                  {Object.entries(data.entities)
-                    .map(([e, n]) => `${num.format(n)} ${ENTITY_LABEL[e] ?? e}`)
-                    .join(" · ")}
-                </dd>
-              </>
-            )}
-          </dl>
+          </Section>
         )}
+
+        {(data || manifest) && (
+          <Section title="נתונים">
+            {data && (
+              <dl className="sync-facts">
+                <dt>נתונים מעודכנים</dt>
+                <dd>
+                  {fmt(dateTime, data.last_synced)}
+                  {lag != null && (
+                    <span className="sync-lag">פער של {lag} ימים</span>
+                  )}
+                </dd>
+                {data.latest_txn_date && (
+                  <>
+                    <dt>עסקה אחרונה</dt>
+                    <dd>{txDate(data.latest_txn_date)}</dd>
+                  </>
+                )}
+                {Object.keys(data.entities).length > 0 && (
+                  <>
+                    <dt>במקור</dt>
+                    <dd>
+                      {Object.entries(data.entities)
+                        .map(([e, n]) => `${num.format(n)} ${ENTITY_LABEL[e] ?? e}`)
+                        .join(" · ")}
+                    </dd>
+                  </>
+                )}
+              </dl>
+            )}
+            {manifest && (
+              <div className="sync-chips">
+                {manifest.account_types.map((t) => (
+                  <span key={t} className="sync-chip">
+                    {ACCOUNT_TYPE_LABEL[t] ?? t}
+                  </span>
+                ))}
+                {manifest.capabilities.map((c) => (
+                  <span key={c} className="sync-chip sync-chip-quiet">
+                    {ENTITY_LABEL[c] ?? c}
+                  </span>
+                ))}
+              </div>
+            )}
+          </Section>
+        )}
+
         {manifest && (
-          <details
-            className="sync-connection"
-            onToggle={(e) => e.currentTarget.open && setConnectionOpen(true)}
-          >
-            <summary className="cursor-pointer text-xs text-muted-foreground">
-              פרטי חיבור
-            </summary>
+          <Section title="פרטי חיבור">
             <Suspense fallback={null}>
-              {connectionOpen && (
+              {rowOpen && (
                 <SourceSecrets
                   source={it.source}
                   fallback={<ConnectionForm schema={manifest.connection as RJSFSchema} />}
                 />
               )}
             </Suspense>
-          </details>
-        )}
-        {live && fmt(dateTime, live.started_at) && (
-          <p className="live-meta muted">
-            ריצה אחרונה {fmt(dateTime, live.started_at)}
-            {live.last_success_at
-              ? ` · סנכרון מוצלח אחרון ${fmt(dateTime, live.last_success_at)}`
-              : " · עדיין אין סנכרון מוצלח"}
-          </p>
+          </Section>
         )}
       </div>
     </details>
@@ -559,7 +654,7 @@ export default function Syncs() {
   const liveSources = live?.sources ?? {};
   if (!syncs.length && !Object.keys(liveSources).length) {
     return (
-      <Page title="סנכרונים">
+      <Page title="חיבורים">
         <StubNotice status="אין נתונים">
           אין עדיין נתוני סנכרון — הריצו <code>python3 data/digest.py</code> ואז
           sync-data.
@@ -592,7 +687,7 @@ export default function Syncs() {
   const stale = syncs.filter((s) => daysSince(s.last_synced) > 7).length;
 
   return (
-    <Page title="סנכרונים">
+    <Page title="חיבורים">
       <p className="muted">
         {stale
           ? `${stale} מקורות לא סונכרנו מעל שבוע.`

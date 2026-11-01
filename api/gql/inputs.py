@@ -272,6 +272,10 @@ class SyncSourceRetryInput(MutationInput):
     id: node_id_of("SyncSource")
 
 
+class SyncSourceRunInput(MutationInput):
+    id: node_id_of("SyncSource")
+
+
 class SyncSourceSecretSetInput(MutationInput, g.SyncSourceSecretSetInput):
     model_config = ConfigDict(hide_input_in_errors=True)   # a rejected value must never be quoted in the error
     source: str = Field(min_length=1, max_length=40)
