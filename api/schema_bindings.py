@@ -76,7 +76,9 @@ BINDINGS: dict[str, Binding] = {
                        hidden=frozenset({"created_at"})),
     "Goal": Binding(tables.Goal, resolved=frozenset({"id", "interval", "horizon", "transactions", "merchants",
                                                      "categories", "tags"}),
-                    hidden=frozenset({"created_at", "horizon_id"})),
+                    hidden=frozenset({"created_at", "horizon_id",
+                                      # exposed with the merged goals UI (docs/goals-merge-plan.md step 3)
+                                      "key", "hidden", "projected_amount", "projection_source"})),
     "Asset": Binding(tables.Asset, resolved=frozenset({"id", "kind", "valuationSource"}),
                      hidden=frozenset({"created_at"}),
                      never_null=frozenset({"updated_at"})),   # filled by the database default

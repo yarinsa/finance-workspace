@@ -368,7 +368,7 @@ def horizons_from_db():
 
 
 def targets_from_db():
-    """The targets that have a `plan_targets` row ({key: amount}, 0 = unset), or None without a database."""
+    """The targets that have a default-goal row ({key: amount}, 0 = unset), or None without a database."""
     return _from_db(lambda m, conn: m.stored_targets(conn))
 
 

@@ -1,13 +1,14 @@
-"""Horizons, goals and plan targets, through the ORM entities in finance/tables.py
-(`Horizon`, `Goal`, `PlanTarget`).
+"""Horizons, goals and the three general targets, through the ORM entities in finance/tables.py
+(`Horizon`, `Goal`).
 
 Shared by data/goals.py, data/horizons.py and the ledger API: every function takes an
 open psycopg connection, works on it through `ledger.orm_session`, and commits writes.
 Horizons are a fixed list (seeded by migration 0006) addressed by `key`; goals are
 user rows, each optionally assigned to a horizon. The three general targets
-(emergency_fund_target, inheritance_target, retirement_target) live in `plan_targets`,
-one row per target that was ever decided; unset (None or 0) is a row of 0, while no row
-means not decided yet (the JSON store still applies).
+(emergency_fund_target, inheritance_target, retirement_target) are the household's default
+goals: rows of `goals` with a `key`, one per target that was ever decided; unset (None or 0)
+is a row of 0, while no row means not decided yet (the JSON store still applies). `all_goals`
+lists the personal goals only; the defaults are read and written through the targets functions.
 
     .venv/bin/python db/goal_store.py list
     .venv/bin/python db/goal_store.py import [data/goals/goals.json]   # one-time move from the JSON store
@@ -23,11 +24,12 @@ from pathlib import Path
 
 from sqlmodel import col, delete, func, select
 
-from finance.tables import Goal, Horizon, PlanTarget, TransactionOverride
+from finance.tables import Goal, Horizon, TransactionOverride
 from ledger import orm_session
 
 STORE = Path(__file__).resolve().parent.parent / "data" / "goals" / "goals.json"
 TARGET_KEYS = ("emergency_fund_target", "inheritance_target", "retirement_target")
+DEFAULT_NAMES = {"emergency_fund": "קרן חירום", "inheritance": "הורשה", "retirement": "פרישה"}
 EDITABLE = ("description", "amount", "start_date", "end_date", "interval", "repetitions", "rise",
             "from_asset_id", "horizon")
 
@@ -53,12 +55,12 @@ def horizons(conn):
 
 
 def all_goals(conn):
-    """Every goal with its horizon key and the number of transactions assigned to it."""
+    """Every personal goal with its horizon key and the number of transactions assigned to it."""
     with orm_session(conn) as s:
         counts = dict(s.exec(select(TransactionOverride.goal_id, func.count())
                              .where(col(TransactionOverride.goal_id).is_not(None))
                              .group_by(TransactionOverride.goal_id)).all())
-        goals = s.exec(select(Goal).order_by(Goal.end_date, Goal.id)).all()
+        goals = s.exec(select(Goal).where(col(Goal.key).is_(None)).order_by(Goal.end_date, Goal.id)).all()
         return [_goal(g, counts.get(g.id, 0)) for g in goals]
 
 
@@ -123,11 +125,15 @@ def update_goal(conn, goal_id, **fields):
 
 def delete_goal(conn, goal_id):
     """Delete a goal; False if it did not exist. Transactions assigned to it are unassigned,
-    and an override left with nothing in it is deleted (as db/overrides.py prunes)."""
+    and an override left with nothing in it is deleted (as db/overrides.py prunes).
+
+    Raises ValueError for a default goal (the general targets are unset, not deleted)."""
     with orm_session(conn) as s:
         g = s.get(Goal, goal_id)
         if not g:
             return False
+        if g.key:
+            raise ValueError(f"{g.key!r} is a default goal and cannot be deleted")
         s.delete(g)
         s.flush()
         s.exec(delete(TransactionOverride).where(
@@ -144,7 +150,7 @@ def stored_targets(conn):
     A missing row means "never decided" (the JSON store may still hold a value); a row with
     amount 0 means "deliberately unset"."""
     with orm_session(conn) as s:
-        have = {t.key: float(t.amount) for t in s.exec(select(PlanTarget)).all()}
+        have = {g.key: float(g.amount) for g in s.exec(select(Goal).where(col(Goal.key).is_not(None))).all()}
     return {k: have[k.removesuffix("_target")] for k in TARGET_KEYS if k.removesuffix("_target") in have}
 
 
@@ -167,11 +173,11 @@ def set_targets(conn, **fields):
     with orm_session(conn) as s:
         for k, v in fields.items():
             key, amount = k.removesuffix("_target"), Decimal(str(v or 0))
-            row = s.exec(select(PlanTarget).where(PlanTarget.key == key)).first()   # RLS: this tenant's row
+            row = s.exec(select(Goal).where(Goal.key == key)).first()   # RLS: this tenant's row
             if row:
-                row.amount, row.updated_at = amount, dt.datetime.now(dt.timezone.utc)
+                row.amount = amount
             else:
-                s.add(PlanTarget(key=key, amount=amount))
+                s.add(Goal(key=key, slug=f"default-{key}", description=DEFAULT_NAMES[key], amount=amount))
         s.commit()
     return get_targets(conn)
 

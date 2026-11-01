@@ -65,7 +65,7 @@ def test_url():
 
 
 OWNED = ["scraped_transactions", "transaction_overrides", "override_audit", "transaction_tags",
-         "transaction_offsets", "tags", "categories", "merchant_rules", "goals", "plan_targets",
+         "transaction_offsets", "tags", "categories", "merchant_rules", "goals",
          "notifications", "assets", "position_snapshots", "push_subscriptions"]   # horizons keep their seed
 
 

@@ -197,7 +197,7 @@ that take one `input` and echo `clientMutationId`.
   `goalUpdate(id, input)` and `goalDelete(id)` go through `db/goal_store.py`, and
   `updateTransaction` takes `goalId`. The old `Horizon` enum is now `HorizonKey` for inputs.
 - **Plan targets** (the Goals screen's emergency-fund, inheritance and retirement targets) live
-  in Postgres `plan_targets` (unset = a row of 0; no row = not decided yet), not in the
+  in Postgres as default goals (`goals` rows with a `key`; unset = a row of 0; no row = not decided yet), not in the
   gitignored `data/goals/goals.json`, which `db/goal_store.py import` seeds rows from.
   `data/goals.py` takes the targets that have a row from the table when the DB is reachable
   and keeps the JSON value for the rest. Query

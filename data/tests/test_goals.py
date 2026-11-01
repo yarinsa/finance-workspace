@@ -289,7 +289,7 @@ class TestMainTargetsFromDb:
             60000, 0, 2500000.0)
 
     def test_an_empty_table_keeps_the_json_targets(self, tmp_path, monkeypatch):
-        # Before anything is imported: JSON {emergency 60000, inheritance 1M}, no rows in plan_targets.
+        # Before anything is imported: JSON {emergency 60000, inheritance 1M}, no default-goal rows.
         root = tmp_path / "data"
         root.mkdir()
         monkeypatch.setattr(goals, "ROOT", root)

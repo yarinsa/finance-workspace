@@ -103,11 +103,20 @@ class Horizon(SQLModel, table=True):
 
 
 class Goal(SQLModel, table=True):
-    """A personal savings goal (docs/plangram-prd/04-goals.md), assigned to a horizon.
+    """A savings goal (docs/plangram-prd/04-goals.md), assigned to a horizon.
+
+    `key` marks one of the household's three defaults (emergency_fund, inheritance, retirement:
+    the former `plan_targets`); they are edited and hidden, never deleted. amount 0 on a default
+    = unset. `projected_amount` / `projection_source`: what the goal is expected to reach, and
+    where that figure came from (empty until the projection logic exists).
 
     Was data/goals/goals.json's `goals` list; `slug` keeps that store's string id."""
     __tablename__ = "goals"
-    __table_args__ = (UniqueConstraint("tenant_id", "slug", name="goals_slug_key"),)
+    __table_args__ = (UniqueConstraint("tenant_id", "slug", name="goals_slug_key"),
+                      CheckConstraint("key IS NULL OR key IN ('emergency_fund', 'inheritance', 'retirement')",
+                                      name="goals_key_check"),
+                      Index("goals_tenant_key_key", "tenant_id", "key", unique=True,
+                            postgresql_where=text("key IS NOT NULL")))
 
     tenant_id: uuid.UUID = Field(sa_column=_tenant())
     id: int | None = Field(default=None, primary_key=True)
@@ -121,26 +130,14 @@ class Goal(SQLModel, table=True):
     rise: Decimal = Field(default=Decimal(0), sa_type=Money)
     from_asset_id: str | None = Field(default=None, sa_type=Text)
     horizon_id: int | None = Field(default=None, sa_column=_fk("horizons"))
+    key: str | None = Field(default=None, sa_type=Text)
+    hidden: bool = Field(default=False)
+    projected_amount: Decimal | None = Field(default=None, sa_type=Money)
+    projection_source: str | None = Field(default=None, sa_type=Text)
     created_at: dt.datetime | None = Field(default=None, sa_column=_now())
 
     horizon_ref: Horizon | None = Relationship(back_populates="goals")
     overrides: list["TransactionOverride"] = Relationship(back_populates="goal_ref")
-
-
-class PlanTarget(SQLModel, table=True):
-    """One of the Goals screen's three general targets (data/goals.py): emergency fund,
-    inheritance, retirement. Was data/goals/goals.json's `*_target` keys.
-
-    No row = not decided yet (data/goals.py falls back to the JSON store); amount 0 = unset
-    (db/goal_store.py)."""
-    __tablename__ = "plan_targets"
-    __table_args__ = (CheckConstraint("key IN ('emergency_fund', 'inheritance', 'retirement')",
-                                      name="plan_targets_key_check"),)
-
-    tenant_id: uuid.UUID = Field(sa_column=_tenant(primary_key=True))
-    key: str = Field(sa_column=Column(Text, primary_key=True))
-    amount: Decimal = Field(sa_type=Money)
-    updated_at: dt.datetime | None = Field(default=None, sa_column=_now())
 
 
 class BudgetLine(SQLModel, table=True):
