@@ -176,6 +176,13 @@ class GoalUpdateInput(_GraphQLModel):
     horizon: HorizonKey | None = None
 
 
+class HoldingAssignInput(_GraphQLModel):
+    """`holdingId` plus at least one of horizon / goalId; null clears that field."""
+    holding_id: str
+    horizon: HorizonKey | None = None
+    goal_id: GlobalId | None = None
+
+
 class LinkOffsetInput(_GraphQLModel):
     client_mutation_id: str | None = None
     payback_id: GlobalId
@@ -511,6 +518,10 @@ class MutationGoalDeleteArgs(_GraphQLModel):
 class MutationGoalUpdateArgs(_GraphQLModel):
     id: GlobalId
     input: GoalUpdateInput
+
+
+class MutationHoldingAssignArgs(_GraphQLModel):
+    input: HoldingAssignInput
 
 
 class MutationLinkOffsetArgs(_GraphQLModel):

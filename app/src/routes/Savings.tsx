@@ -10,6 +10,7 @@ import TransactionEditSheet, { type EditTarget } from "@/components/TransactionE
 import { TransactionRow } from "@/components/TransactionRow";
 import { Input } from "@/components/ui/input";
 import { goals, snapshot, sourceLabel, transactions, useDataVersion } from "@/lib/data";
+import { manualPlacements, useHoldingsOverlay } from "@/lib/holdingsOverlay";
 import { applyGoalsOverlay, useGoalsOverlay } from "@/lib/goalsOverlay";
 import {
   SAVINGS_CATEGORY,
@@ -45,6 +46,7 @@ export default function Savings() {
   const { overlay, online } = useLedgerApi();
   const version = useDataVersion();
   const goalsOverlay = useGoalsOverlay();
+  const holdingsOverlay = useHoldingsOverlay();
   const [editing, setEditing] = useState<EditTarget | null>(null);
   const [targetSheet, setTargetSheet] = useState(false);
   const [goalEditorTarget, setGoalEditorTarget] = useState<GoalEditorTarget | null>(null);
@@ -57,7 +59,10 @@ export default function Savings() {
 
   const { general, personal_goals } = applyGoalsOverlay(goals, goalsOverlay, version);
 
-  const holdings = useMemo(() => holdingRows(snapshot.savings ?? [], today), [version, today]); // eslint-disable-line react-hooks/exhaustive-deps
+  const holdings = useMemo(
+    () => holdingRows(snapshot.savings ?? [], today, manualPlacements(snapshot.holding_assignments, holdingsOverlay, version)),
+    [version, today, holdingsOverlay],
+  ); // eslint-disable-line react-hooks/exhaustive-deps
   const allMovements = useMemo(() => movementRows(transactions.transactions as LedgerRow[], overlay), [overlay, version]); // eslint-disable-line react-hooks/exhaustive-deps
   const movements = useMemo(() => movementsInRange(allMovements, range), [allMovements, range.from, range.to]); // eslint-disable-line react-hooks/exhaustive-deps
   const stats = savingsStats(holdings, movements);
@@ -161,6 +166,7 @@ export default function Savings() {
             key={by}
             groups={groups}
             by={by}
+            goals={personal_goals}
             renderMovement={renderMovement}
             onEditGoal={online === true ? (goal_id) => setGoalEditorTarget({ goal_id }) : undefined}
           />

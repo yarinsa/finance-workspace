@@ -192,6 +192,28 @@ class PlanTargetsUpdateInput(MutationInput, g.PlanTargetsUpdateInput):
                 if f in self.model_fields_set}
 
 
+class HoldingAssignInput(MutationInput, g.HoldingAssignInput):
+    """A holding's horizon and/or goal; null clears that field, an omitted one is untouched."""
+    holding_id: str = Field(min_length=1, max_length=200)
+    horizon: Literal["current", "near", "future"] | None = None
+    goal_id: node_id_of("Goal") | None = None
+
+    @model_validator(mode="after")
+    def sends_something(self):
+        if not self.model_fields_set & {"horizon", "goal_id"}:
+            raise ValueError("send a horizon or a goalId")
+        return self
+
+    def changes(self):
+        """holding_store.assign keyword arguments for the fields that were sent."""
+        out = {}
+        if "horizon" in self.model_fields_set:
+            out["horizon"] = self.horizon
+        if "goal_id" in self.model_fields_set:
+            out["goal_id"] = int(self.goal_id.key) if self.goal_id is not None else None
+        return out
+
+
 class AssetKind(str, Enum):
     PROPERTY = "property"
 

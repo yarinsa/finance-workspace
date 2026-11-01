@@ -157,6 +157,22 @@ class BudgetLine(SQLModel, table=True):
     updated_at: dt.datetime | None = Field(default=None, sa_column=_now())
 
 
+class HoldingAssignment(SQLModel, table=True):
+    """Where a savings holding (pension, study fund, deposit) belongs, set by hand.
+
+    A holding is an asset from the snapshot, not a ledger row, so it has no table of its own:
+    `holding_id` is the app's id for it (`institution:topic_id`, else the label). The horizon a
+    holding falls in is otherwise derived from its liquidity date; a row here overrides that.
+    A row with neither field set is deleted (db/holding_store.py)."""
+    __tablename__ = "holding_assignments"
+
+    tenant_id: uuid.UUID = Field(sa_column=_tenant(primary_key=True))
+    holding_id: str = Field(sa_column=Column(Text, primary_key=True))
+    horizon_id: int | None = Field(default=None, sa_column=_fk("horizons"))
+    goal_id: int | None = Field(default=None, sa_column=_fk("goals"))
+    updated_at: dt.datetime | None = Field(default=None, sa_column=_now())
+
+
 KIND_CHECK = "kind IN ('fixed', 'variable')"
 
 

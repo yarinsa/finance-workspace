@@ -425,6 +425,8 @@ export interface Snapshot {
   credit_cards: CreditCard[];
   loans: Loan[];
   savings?: Savings[];
+  /** Where the user placed each holding (holdingId -> horizon / goal), written by the digest. */
+  holding_assignments?: Record<string, { horizon: "current" | "near" | "future" | null; goal_id: number | null }>;
   income?: unknown;
   transactions_count?: number;
   totals: SnapshotTotals;

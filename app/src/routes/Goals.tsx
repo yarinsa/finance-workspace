@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { graphql, useMutation } from "react-relay";
 import { Card, CardLabel, Section } from "@/components/common";
-import { HORIZON_LABEL, HORIZON_SHORT } from "@/components/TransactionEditSheet";
+import { HorizonChips } from "@/components/shared/HorizonChips";
 import GoalEditorSheet, { type GoalEditorTarget } from "@/components/GoalEditorSheet";
 import TargetsSheet from "@/components/TargetsSheet";
 import type { Horizon } from "@/lib/api";
@@ -106,26 +106,7 @@ function GoalHorizon({ g }: { g: DisplayGoal }) {
   if (!editable && !horizon && !optimistic) return null;
   return (
     <div className="mt-2">
-      <div className="flex gap-1.5" role="radiogroup" aria-label="אופק">
-        {(Object.keys(HORIZON_SHORT) as Horizon[]).map((h) =>
-          editable || optimistic || h === horizon ? (
-            <button
-              key={h}
-              type="button"
-              role="radio"
-              aria-checked={horizon === h}
-              title={HORIZON_LABEL[h]}
-              disabled={!editable}
-              onClick={() => pick(h)}
-              className={`rounded-full border px-2.5 py-0.5 text-xs ${
-                horizon === h ? "border-brand bg-brand/15 font-semibold" : "border-line text-muted-foreground"
-              }`}
-            >
-              {HORIZON_SHORT[h]}
-            </button>
-          ) : null,
-        )}
-      </div>
+      <HorizonChips value={horizon} editable={editable} busy={optimistic != null} onPick={pick} />
       {failed && <div role="alert" className="mt-1 text-xs text-destructive">{failed}</div>}
     </div>
   );

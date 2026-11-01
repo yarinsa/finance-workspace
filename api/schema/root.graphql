@@ -84,6 +84,12 @@ type Mutation {
   goalDelete(id: ID!): DeletePayload!
   """Set any of the general targets; null or 0 unsets one, an omitted one is untouched."""
   planTargetsUpdate(input: PlanTargetsUpdateInput!): PlanTargetsPayload!
+  """
+  Place a savings holding by hand: the horizon and/or goal it belongs to (holding_assignments).
+  A null clears a field, an omitted one is untouched; a holding left with neither is forgotten
+  and falls back to the horizon derived from its liquidity date.
+  """
+  holdingAssign(input: HoldingAssignInput!): HoldingAssignPayload!
 
   """
   Merge a category into another: its transactions count as the target's (its plan adds to
@@ -290,4 +296,24 @@ input PlanTargetsUpdateInput {
 type PlanTargetsPayload {
   success: Boolean!
   planTargets: PlanTargets!
+}
+
+"""Where the user placed a savings holding. `holdingId` is `institution:topic_id` (the app's id)."""
+type HoldingAssignment {
+  holdingId: String!
+  horizon: HorizonKey
+  goalId: ID
+}
+
+"""`holdingId` plus at least one of horizon / goalId; null clears that field."""
+input HoldingAssignInput {
+  holdingId: String!
+  horizon: HorizonKey
+  goalId: ID
+}
+
+type HoldingAssignPayload {
+  success: Boolean!
+  """Null once both fields are cleared."""
+  assignment: HoldingAssignment
 }

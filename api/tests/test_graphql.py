@@ -493,6 +493,31 @@ def test_invalid_plan_targets_input_is_an_error_and_signals_nothing(client, rebu
     assert data(client, TARGETS)["planTargets"] == NO_TARGETS
 
 
+# --- savings holdings placed by hand -----------------------------------------------------
+
+ASSIGN = """mutation($input: HoldingAssignInput!) { holdingAssign(input: $input) {
+  success assignment { holdingId horizon goalId } } }"""
+HAREL = "harel:70"   # Harel's pension has no liquidity date, so the user places it
+
+
+def test_a_holding_is_placed_on_a_horizon_then_a_goal_then_cleared_with_a_rebuild_each(client, rebuilder):
+    out = data(client, ASSIGN, input={"holdingId": HAREL, "horizon": "FUTURE"})["holdingAssign"]
+    assert out == {"success": True, "assignment": {"holdingId": HAREL, "horizon": "FUTURE", "goalId": None}}
+    goal = _goal(client)
+    out = data(client, ASSIGN, input={"holdingId": HAREL, "goalId": goal["id"]})["holdingAssign"]
+    assert out["assignment"] == {"holdingId": HAREL, "horizon": "FUTURE", "goalId": goal["id"]}
+    out = data(client, ASSIGN, input={"holdingId": HAREL, "horizon": None, "goalId": None})["holdingAssign"]
+    assert out == {"success": True, "assignment": None}
+    assert rebuilder.signals == 4   # the goal create counts too
+
+
+@pytest.mark.parametrize("inp", [{"holdingId": HAREL}, {"holdingId": "", "horizon": "NEAR"},
+                                 {"holdingId": HAREL, "goalId": "R29hbDo5OTk5"}, {"holdingId": HAREL, "color": 1}])
+def test_invalid_holding_assignment_is_an_error_and_signals_nothing(client, rebuilder, inp):
+    status, body = gql(client, ASSIGN, input=inp)
+    assert body.get("errors") and rebuilder.signals == 0
+
+
 # --- assets: the apartment's hand-typed value ----------------------------------------------
 
 ASSETS = "{ assets { totalCount edges { node { id kind label value valuedAt valuationSource } } } }"

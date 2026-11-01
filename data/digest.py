@@ -658,6 +658,26 @@ def load_assets():
         sys.path.remove(db)
 
 
+def load_holding_assignments():
+    """Where the user placed savings holdings by hand (db/holding_store.py): `{holding_id: {horizon, goal_id}}`,
+    or None with no database. The ids are the app's (`institution:topic_id`), so this only passes them through."""
+    url = database_url()
+    if not url or "--no-db" in sys.argv:
+        return None
+    db = str(CODE.parent / "db")
+    sys.path.insert(0, db)
+    try:
+        import holding_store
+        from ledger import connect
+        with connect(url) as conn:
+            return holding_store.all_assignments(conn)
+    except Exception as e:   # noqa: BLE001 — a dead DB must not stop the digest
+        print(f"holding assignments: database unavailable ({e})", file=sys.stderr)
+        return None
+    finally:
+        sys.path.remove(db)
+
+
 def write_markdown(s):
     def ils(x): return f"₪{x:,.0f}"
     t = s["totals"]
@@ -817,6 +837,7 @@ def main():
         ensure_ascii=False, indent=2))
 
     snapshot = build_snapshot(entities, load_assets())
+    snapshot["holding_assignments"] = load_holding_assignments() or {}
     snapshot["spending"] = summary
     snapshot["syncs"] = source_syncs()
     snapshot["source_manifests"] = {n: m.model_dump(mode="json") for n, m in manifest.load_all().items()}

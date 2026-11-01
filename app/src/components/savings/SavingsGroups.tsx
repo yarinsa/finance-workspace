@@ -1,10 +1,11 @@
 import { useState, type ReactNode } from "react";
 import { ChevronDown } from "lucide-react";
 import { Card, ProgressBar, StackedBar, StatusPill } from "@/components/common";
+import HoldingPlacement from "@/components/savings/HoldingPlacement";
 import { fullDate } from "@/components/savings/SavingsWidgets";
 import { TransactionList } from "@/components/TransactionRow";
 import { Button } from "@/components/ui/button";
-import { num, shekel } from "@/lib/data";
+import { num, shekel, type PersonalGoal } from "@/lib/data";
 import { KIND_LABEL, type HoldingRow, type MovementRow, type SavingsGroup, type SavingsGroupBy } from "@/lib/savingsView";
 import { PAGE_SIZE } from "@/lib/transactionsView";
 
@@ -28,9 +29,9 @@ function ShareBar({ share }: { share: number }) {
   );
 }
 
-function HoldingItem({ h, by }: { h: HoldingRow; by: SavingsGroupBy }) {
+function HoldingItem({ h, by, goals }: { h: HoldingRow; by: SavingsGroupBy; goals: readonly PersonalGoal[] }) {
   const mark =
-    h.horizonSource === "derived" ? "נגזר מתאריך הנזילות" : h.horizon == null && by !== "horizon" ? "לא משויך" : null;
+    h.horizonSource === "manual" ? "ידני" : h.horizonSource === "derived" ? "נגזר מתאריך הנזילות" : h.horizon == null && by !== "horizon" ? "לא משויך" : null;
   return (
     <div className="py-2.5 text-[15px] leading-5">
       <div className="flex items-baseline gap-3">
@@ -46,6 +47,7 @@ function HoldingItem({ h, by }: { h: HoldingRow; by: SavingsGroupBy }) {
         {h.asOf && <span>· נכון ל־{fullDate(h.asOf)}</span>}
         {mark && <span className="rounded-full bg-panel-2 px-1.5 py-px text-[10px]">{mark}</span>}
       </div>
+      <HoldingPlacement h={h} goals={goals} />
     </div>
   );
 }
@@ -56,6 +58,7 @@ function GroupCard({
   totalBalance,
   renderMovement,
   onEditGoal,
+  goals,
   defaultOpen,
 }: {
   g: SavingsGroup;
@@ -63,6 +66,7 @@ function GroupCard({
   totalBalance: number;
   renderMovement: (m: MovementRow, i: number) => ReactNode;
   onEditGoal?: (goalId: number) => void;
+  goals: readonly PersonalGoal[];
   defaultOpen: boolean;
 }) {
   const [open, setOpen] = useState(defaultOpen);
@@ -133,7 +137,7 @@ function GroupCard({
           {g.holdings.length > 0 && (
             <div className="divide-y divide-line">
               {g.holdings.map((h) => (
-                <HoldingItem key={h.id} h={h} by={by} />
+                <HoldingItem key={h.id} h={h} by={by} goals={goals} />
               ))}
             </div>
           )}
@@ -158,18 +162,21 @@ function GroupCard({
  * The grouped list of חיסכון: one collapsible card per group with its balance (a stock) and,
  * when non-zero, its flow in the range, then a bar by grouping: share vs the one-third mark for
  * horizons, progress for goals, locked vs liquid for kind and institution. Holdings first
- * (read only: assigning them is not shipped yet), then the movements.
+ * (placed by hand with chips when online), then the movements.
  */
 export default function SavingsGroups({
   groups,
   by,
   renderMovement,
   onEditGoal,
+  goals = [],
 }: {
   groups: SavingsGroup[];
   by: SavingsGroupBy;
   renderMovement: (m: MovementRow, i: number) => ReactNode;
   onEditGoal?: (goalId: number) => void;
+  /** Personal goals a holding can be assigned to. */
+  goals?: readonly PersonalGoal[];
 }) {
   const totalBalance = groups.reduce((s, g) => s + g.balance, 0);
   return (
@@ -182,6 +189,7 @@ export default function SavingsGroups({
           totalBalance={totalBalance}
           renderMovement={renderMovement}
           onEditGoal={onEditGoal}
+          goals={goals}
           defaultOpen={groups.length === 1}
         />
       ))}

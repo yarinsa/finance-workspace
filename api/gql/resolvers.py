@@ -36,7 +36,7 @@ from api.schema_bindings import load_schema, snake
 from .inputs import (CategoryMergeInput, CategoryUnmergeInput, AssetCreateInput, AssetUpdateInput, BulkNotificationInput, ClearTransactionOverrideInput, GoalCreateInput, GoalDeleteInput, DeleteTagInput, GroupArgs,
                      GroupOrder, LinkOffsetInput, NotificationArgs, NotificationIdInput, ResetOffsetsInput,
                      SetTransactionTagsInput, SnoozeAllNotificationsInput, SyncSourceRetryInput, SyncSourceSecretSetInput, TenantCreateInput, TenantMemberRemoveInput, TenantAccessSyncInput, TenantMemberSetInput, TenantSetStatusInput, TransactionArgs, TransactionOrder,
-                     UnlinkOffsetInput, UnreadCountArgs, GoalUpdateInput, UpdateNotificationInput, PlanTargetsUpdateInput, UpdateTagInput,
+                     UnlinkOffsetInput, UnreadCountArgs, GoalUpdateInput, UpdateNotificationInput, PlanTargetsUpdateInput, HoldingAssignInput, UpdateTagInput,
                      UpdateTransactionInput)
 from .binding import bind_all
 from .generated.inputs import Direction, QueryNodeArgs, QuerySyncSourceSecretsArgs, QueryTransactionByKeyArgs
@@ -50,6 +50,7 @@ from .relay import ConnectionArgs, paginate, to_global_id, validated
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "db"))   # the shared write paths
 import asset_store  # noqa: E402
 import goal_store  # noqa: E402
+import holding_store  # noqa: E402
 import inbox  # noqa: E402
 import offset_store  # noqa: E402
 import overrides  # noqa: E402
@@ -535,6 +536,23 @@ class PlanTargetsResolver(NodeResolver):
         goal_store.set_targets(ledger(info).conn, **changes)
         return lambda: {"plan_targets": self.read(ledger(info).conn)}
 
+class HoldingResolver:
+    """`holdingAssign` (db/holding_store.py): where a savings holding sits, set by hand. The digest
+    attaches it to the snapshot's savings, so this signals a rebuild like any ledger edit."""
+
+    def resolve_holding_assign(self, inp: HoldingAssignInput, info):
+        conn = ledger(info).conn
+        if inp.goal_id is not None:
+            GOALS.require(info, inp.goal_id)
+        try:
+            a = holding_store.assign(conn, inp.holding_id.strip(), **inp.changes())
+        except ValueError as e:
+            raise GraphQLError(str(e))
+        shown = a and {"holding_id": inp.holding_id.strip(), "horizon": a["horizon"],
+                       "goal_id": to_global_id("Goal", str(a["goal_id"])) if a["goal_id"] is not None else None}
+        return lambda: {"assignment": shown}
+
+
 class AssetResolver(NodeResolver[dict]):
     """`Query.assets`, `assetCreate`, `assetUpdate` (db/asset_store.py). A new value changes
     the snapshot totals, so these signal a ledger rebuild."""
@@ -700,6 +718,7 @@ TRANSACTIONS = TransactionResolver(GOALS)
 NOTIFICATIONS = NotificationResolver()
 SYNC_SOURCES = SyncSourceResolver()
 PLAN_TARGETS = PlanTargetsResolver()
+HOLDINGS = HoldingResolver()
 ASSETS = AssetResolver()
 TENANTS = TenantResolver()
 NODES: dict[str, NodeResolver] = {r.type_name: r for r in [TRANSACTIONS, *ENTITIES, NOTIFICATIONS, SYNC_SOURCES,
@@ -770,7 +789,7 @@ class QueryResolver:
 
 RESOLVERS: dict[str, object] = {
     "Query": QueryResolver(),
-    "Mutation": [TRANSACTIONS, CATEGORIES, TAGS, GOALS, NOTIFICATIONS, SYNC_SOURCES, PLAN_TARGETS, ASSETS, TENANTS],
+    "Mutation": [TRANSACTIONS, CATEGORIES, TAGS, GOALS, NOTIFICATIONS, SYNC_SOURCES, PLAN_TARGETS, HOLDINGS, ASSETS, TENANTS],
     "Transaction": TRANSACTIONS, "Asset": ASSETS, "SyncSource": SYNC_SOURCES, "Tenant": TENANTS,
     **{e.type_name: e for e in ENTITIES},
     **{name: NOTIFICATIONS for name in TYPENAMES},   # `id` is a field of every subtype
