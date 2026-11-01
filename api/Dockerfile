@@ -20,6 +20,7 @@ WORKDIR /app
 COPY finance ./finance
 COPY db ./db
 COPY api ./api
+COPY assistant ./assistant
 # Only the sources' manifests (api/Dockerfile.dockerignore): the names a household may set as secrets.
 COPY data ./data
 USER api

@@ -4,6 +4,7 @@
 !finance
 !db
 !api
+!assistant
 !data/*/manifest.json
 **/__pycache__
 **/tests
