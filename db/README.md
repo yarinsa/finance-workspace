@@ -13,6 +13,8 @@ ledger code is in `db/ledger.py`, the edit CLI is `db/edit.py`. The tables are S
 | Object | Layer | Written by | Lifetime |
 |---|---|---|---|
 | `scraped_transactions` | machine | `ledger.py sync` (from `data/digest.py`) | replaced in full on every digest run |
+| `accounts`, `credit_cards`, `loans`, `savings_holdings`, `source_dumps` (+ `source_dump_entities`) | machine | `ledger.py sync`, same transaction | the reconciled position, replaced in full on every digest run; read by `snapshot_store.py` (totals are computed, not stored) |
+| `digest_runs` | machine | `ledger.py sync` | one row per digest that reached the DB; newest `finished_at` = data as-of |
 | `transaction_overrides` | human | `edit.py` | kept forever; sparse (only the fields you changed) |
 | `override_audit` | audit | `overrides.py` (CLI and API) | append-only: who changed which field, old and new value |
 | `transactions` (view) | read | nothing | scraped rows with overrides applied; excluded rows hidden |

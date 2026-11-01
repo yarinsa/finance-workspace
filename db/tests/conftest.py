@@ -37,7 +37,7 @@ def test_url():
 @pytest.fixture
 def conn(test_url):
     admin = ledger.connect_admin(test_url)
-    admin.execute("TRUNCATE scraped_transactions, transaction_overrides, merchant_rules, categories, category_groups, transaction_tags, tags, override_audit, goals, budget_lines, transaction_offsets, holding_assignments, notifications, assets, position_snapshots")
+    admin.execute("TRUNCATE scraped_transactions, transaction_overrides, merchant_rules, categories, category_groups, transaction_tags, tags, override_audit, goals, budget_lines, transaction_offsets, holding_assignments, notifications, assets, position_snapshots, digest_runs, accounts, credit_cards, loans, savings_holdings, source_dump_entities, source_dumps")
     admin.commit()
     admin.close()
     c = ledger.connect(test_url, tenant_id=DEFAULT_TENANT_ID)

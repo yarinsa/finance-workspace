@@ -46,18 +46,20 @@ def database_url(env_file=CODE.parent / ".env"):
     return None
 
 
-def apply_overrides(ledger):
+def apply_overrides(ledger, position=None, dumps=None, run=None):
     """Round-trip the ledger through the transactions database (db/ledger.py).
 
     It is stored as `scraped_transactions` and comes back as the `transactions`
-    view: your category/note edits applied, excluded rows removed. A no-op when
-    DATABASE_URL is unset or with --no-db. When the database is configured but
-    unreachable we stop rather than publish numbers that silently drop the edits.
+    view: your category/note edits applied, excluded rows removed. The reconciled
+    `position`, the source `dumps` and this `run` are stored in the same transaction.
+    A no-op when DATABASE_URL is unset or with --no-db. When the database is configured
+    but unreachable we stop rather than publish numbers that silently drop the edits.
     """
     if "--no-db" in sys.argv or not database_url():
         return ledger
+    payload = {"ledger": ledger, "position": position, "dumps": dumps, "run": run}
     res = subprocess.run([sys.executable, str(CODE.parent / "db" / "ledger.py"), "sync"],
-                         input=json.dumps(ledger, ensure_ascii=False),
+                         input=json.dumps(payload, ensure_ascii=False),
                          capture_output=True, text=True)
     sys.stderr.write(res.stderr)
     if res.returncode != 0:
@@ -484,7 +486,8 @@ def source_syncs(root=ROOT):
 def main():
     from finance.tenancy import use_cli_tenant
     use_cli_tenant()
-    if "--no-normalize" not in sys.argv:
+    run = {"started_at": _now_iso(), "normalized": "--no-normalize" not in sys.argv}
+    if run["normalized"]:
         run_normalizers()
     entities = load_entities()
 
@@ -495,7 +498,10 @@ def main():
     if unmapped:
         print(f"categories: source labels not in finance/categories.py: {sorted(unmapped)}", file=sys.stderr)
     offsets.suggest(ledger, load_offset_rules())  # auto קיזוז, stored with the scraped row
-    ledger = apply_overrides(ledger)              # human edits from Postgres, if configured
+    snapshot = build_snapshot(entities, datetime.date.today(), _now_iso(), load_assets())
+    syncs = source_syncs()
+    position = {k: snapshot[k] for k in ("bank_accounts", "credit_cards", "loans", "savings")}
+    ledger = apply_overrides(ledger, position, syncs, run)   # human edits from Postgres, if configured
     offsets.resolve(ledger)                       # manual links (from the DB) win over auto
     summary = spending_summary(offsets.cashflow_view(ledger))
     (OUT / "transactions.json").write_text(json.dumps(
@@ -509,10 +515,9 @@ def main():
          "transactions": ledger},
         ensure_ascii=False, indent=2))
 
-    snapshot = build_snapshot(entities, datetime.date.today(), _now_iso(), load_assets())
     snapshot["holding_assignments"] = load_holding_assignments() or {}
     snapshot["spending"] = summary
-    snapshot["syncs"] = source_syncs()
+    snapshot["syncs"] = syncs
     snapshot["source_manifests"] = {n: m.model_dump(mode="json") for n, m in manifest.load_all().items()}
     snapshot["freshness"] = freshness.status()
     (OUT / "snapshot.json").write_text(json.dumps(snapshot, ensure_ascii=False, indent=2))

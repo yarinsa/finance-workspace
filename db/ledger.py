@@ -2,13 +2,16 @@
 """The transactions database: import the digested ledger, apply overrides.
 
     scraped_transactions   machine layer, replaced in full on each import
+    accounts, credit_cards, loans, savings_holdings, source_dumps(+_entities)
+                           the position's machine layer, replaced in the same transaction
+    digest_runs            one row per import; the newest is the data's as-of time
     transaction_overrides  human layer (category / note / excluded), kept forever
     transactions           view: the ledger with overrides applied
 
-`python3 db/ledger.py migrate` only applies migrations. `python3 db/ledger.py sync` is how data/digest.py uses it: the consolidated
-ledger arrives as JSON on stdin, is imported, and the `transactions` view comes
-back on stdout in the same order. Rows are keyed on the ledger's dedup key,
-(date, abs(amount)).
+`python3 db/ledger.py migrate` only applies migrations. `python3 db/ledger.py sync` is how data/digest.py uses it:
+`{"ledger", "position", "dumps", "run"}` arrives as JSON on stdin (a bare ledger list is
+still accepted), is imported in one transaction, and the `transactions` view comes back on
+stdout in the ledger's order. Rows are keyed on the ledger's dedup key, (date, abs(amount)).
 """
 import json
 import uuid
@@ -23,7 +26,8 @@ from psycopg import sql
 from psycopg.types.json import Jsonb
 
 from finance import categories as taxonomy
-from finance.models import LedgerTransaction
+from finance.models import (AccountFields, CreditCardFields, LedgerTransaction, LoanFields, SavingsFields,
+                            holding_id)
 from finance.tenancy import resolve_tenant_id, scope_connection, use_cli_tenant
 
 REPO = Path(__file__).resolve().parent.parent
@@ -130,14 +134,24 @@ def key(date, amount):
     return date, round(abs(Decimal(str(amount))), 2)
 
 
-def load(conn, ledger):
-    """Replace scraped_transactions with this ledger. Overrides are untouched.
+def load(conn, ledger, position=None, dumps=None, run=None):
+    """Replace scraped_transactions with this ledger, and (when given) the position's tables
+    with `position` (finance/views/snapshot.reconcile) and source_dumps with `dumps`
+    (digest.source_syncs), all in one transaction. `run` ({started_at, normalized}) records
+    the import in digest_runs. Overrides are untouched.
 
     Every row is validated as a LedgerTransaction first, so the jsonb `record`
     always has the shape finance/models.py declares."""
     ledger = [LedgerTransaction.model_validate(t).model_dump(mode="json", exclude_unset=True)
               for t in ledger]
     with conn.transaction(), conn.cursor() as cur:
+        if position is not None:
+            load_position(cur, position)
+        if dumps is not None:
+            load_dumps(cur, dumps)
+        if run is not None:
+            cur.execute("INSERT INTO digest_runs (started_at, normalized, transactions) VALUES (%s, %s, %s)",
+                        (run["started_at"], run["normalized"], len(ledger)))
         ids = seed_categories(cur, ledger)
         horizon_ids = dict(cur.execute("SELECT key, id FROM horizons").fetchall())
         cur.execute("DELETE FROM scraped_transactions")   # RLS: this tenant's rows only
@@ -150,6 +164,40 @@ def load(conn, ledger):
               t.get("source_category"), ids.get(t.get("category")), t.get("origin"), t.get("sources") or [], i,
               Jsonb(t), horizon_ids.get(t.get("horizon")))
              for i, t in enumerate(ledger)])
+
+
+def _replace(cur, table, rows):
+    """Delete this tenant's rows of `table` (RLS) and insert `rows` (dicts with the same keys)."""
+    cur.execute(f"DELETE FROM {table}")
+    if rows:
+        cols = list(rows[0])
+        cur.executemany(f"INSERT INTO {table} ({', '.join(cols)}) VALUES ({', '.join(['%s'] * len(cols))})",
+                        [[r[c] for c in cols] for r in rows])
+
+
+def _fields(model, record, **extra):
+    """`record` through the entity's field list: every declared column, typed (Money -> Decimal)."""
+    return {**model.model_validate(record).model_dump(), **extra}
+
+
+def load_position(cur, position):
+    """The reconciled accounts, cards, loans and savings, each validated through its `*Fields`."""
+    _replace(cur, "accounts", [_fields(AccountFields, a) for a in position["bank_accounts"]])
+    _replace(cur, "credit_cards", [_fields(CreditCardFields, c, next_charge_date=c.get("next_charge_date"))
+                                   for c in position["credit_cards"]])
+    _replace(cur, "loans", [_fields(LoanFields, l, position=i) for i, l in enumerate(position["loans"])])
+    _replace(cur, "savings_holdings", [_fields(SavingsFields, s, holding_id=holding_id(s))
+                                       for s in position["savings"]])
+
+
+def load_dumps(cur, dumps):
+    """Each source's latest dump (digest.source_syncs) and its per-entity record counts."""
+    cur.execute("DELETE FROM source_dump_entities")
+    _replace(cur, "source_dumps", [{"source": d["source"], "dumped_at": d["last_synced"],
+                                    "raw_files": d["raw_files"], "latest_txn_date": d.get("latest_txn_date")}
+                                   for d in dumps])
+    _replace(cur, "source_dump_entities", [{"source": d["source"], "entity": e, "records": n}
+                                           for d in dumps for e, n in d.get("entities", {}).items()])
 
 
 def seed_categories(cur, ledger):
@@ -231,9 +279,9 @@ def orphaned(conn):
         "ORDER BY txn_date DESC").fetchall()
 
 
-def sync(conn, ledger):
-    """Import the ledger and return it with overrides applied."""
-    load(conn, ledger)
+def sync(conn, ledger, position=None, dumps=None, run=None):
+    """Import the ledger (and the position, see `load`) and return it with overrides applied."""
+    load(conn, ledger, position, dumps, run)
     return materialize(conn)
 
 
@@ -249,11 +297,14 @@ def main():
             json.dump(category_merges(conn), sys.stdout, ensure_ascii=False)
         return
     if sys.argv[1:] != ["sync"]:
-        raise SystemExit("usage: ledger.py sync  < ledger.json  > ledger.json\n       ledger.py migrate\n"
+        raise SystemExit("usage: ledger.py sync  < digest.json  > ledger.json\n       ledger.py migrate\n"
                          "       ledger.py merges   (merged categories as {name: into})")
-    ledger = json.load(sys.stdin)
+    payload = json.load(sys.stdin)
+    if isinstance(payload, list):
+        payload = {"ledger": payload}
+    ledger = payload["ledger"]
     with connect() as conn:
-        out = sync(conn, ledger)
+        out = sync(conn, ledger, payload.get("position"), payload.get("dumps"), payload.get("run"))
         lost = orphaned(conn)
         lost_offsets = conn.execute(
             "SELECT payback_date, payback_abs_amount, expense_date, expense_abs_amount "

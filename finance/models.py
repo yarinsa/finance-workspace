@@ -91,55 +91,62 @@ class Transaction(Record):
     budget_category: str | None = None   # riseup: tracking envelope name, the household's budget line
 
 
+# Each scraped entity's fields are declared once, in a `*Fields` base (SQLModel without
+# table=True is a Pydantic model). The normalized record adds `extra="forbid"` and the
+# envelope-only `currency`; the table row in finance/tables.py adds the tenant and its key.
+
 class AccountFields(SQLModel):
-    """Account's fields, declared once. A later table class subclasses this to reuse them."""
     institution: str
     account_id: str
     kind: str
     balance: Money
-    currency: str = "ILS"
     label: str | None = None
     available_balance: OptMoney = None
     overdraft_limit: OptMoney = None
 
 
 class Account(AccountFields, Record):
-    pass
+    currency: str = "ILS"
 
 
-class CreditCard(Record):
+class CreditCardFields(SQLModel):
     issuer: str
     last4: str
-    currency: str = "ILS"
     name: str | None = None
     holder: str | None = None
     active: bool | None = None
-    owed: float | None = None
+    owed: OptMoney = None
 
 
-class Loan(Record):
+class CreditCard(CreditCardFields, Record):
+    currency: str = "ILS"
+
+
+class LoanFields(SQLModel):
     lender: str
     loan_id: str | None
     name: str | None
     category: str
-    balance: float
-    currency: str = "ILS"
-    original_amount: float | None = None
+    balance: Money
+    original_amount: OptMoney = None
     rate_pct: float | None = None
     rate_type: str | None = None
     index_linked: bool | None = None
     payments_remaining: int | None = None
     payments_total: int | None = None
-    monthly_payment: float | None = None
+    monthly_payment: OptMoney = None
     final_date: OptDate = None
 
 
-class Savings(Record):
+class Loan(LoanFields, Record):
+    currency: str = "ILS"
+
+
+class SavingsFields(SQLModel):
     """Pension / study fund / gemel balance: an asset, never a transaction."""
     institution: str
     kind: str
-    balance: float
-    currency: str = "ILS"
+    balance: Money
     label: str | None = None
     account_id: str | None = None
     topic_id: str | None = None
@@ -152,6 +159,16 @@ class Savings(Record):
     as_of: OptDate = None
     management_fee: float | None = None
     yield_ytd: float | None = None
+
+
+class Savings(SavingsFields, Record):
+    currency: str = "ILS"
+
+
+def holding_id(s):
+    """A savings holding's stable id, `institution:topic_id` else the label. The app
+    (savingsView.holdingId) and `holding_assignments` key on the same string."""
+    return f"{s['institution']}:{s['topic_id'] if s.get('topic_id') is not None else s.get('label')}"
 
 
 class Income(Record):

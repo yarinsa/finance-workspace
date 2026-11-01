@@ -11,11 +11,12 @@ import datetime as dt
 import uuid
 from decimal import Decimal
 
-from sqlalchemy import ARRAY, BigInteger, CheckConstraint, Column, ForeignKey, Index, Integer, Numeric, Text, UniqueConstraint, text
+from sqlalchemy import ARRAY, BigInteger, CheckConstraint, Column, ForeignKey, ForeignKeyConstraint, Index, PrimaryKeyConstraint, Integer, Numeric, Text, UniqueConstraint, text
 from sqlalchemy.dialects.postgresql import JSONB, TIMESTAMP, UUID
 from sqlmodel import Field, Relationship, SQLModel
 
-from finance.models import MoneySQL
+from finance import models
+from finance.models import AccountFields, CreditCardFields, LoanFields, MoneySQL, SavingsFields
 
 Money = MoneySQL
 
@@ -487,3 +488,89 @@ class PositionSnapshot(SQLModel, table=True):
     property: Decimal | None = Field(default=None, sa_type=Money)
     net_worth: Decimal = Field(sa_type=Money)         # incl. savings and property
     recorded_at: dt.datetime | None = Field(default=None, sa_column=_now())
+
+
+# The machine layer of the headline position: the reconciled scraped entities, replaced in full
+# by every digest in the same transaction as `scraped_transactions` (db/ledger.py `load`). The
+# columns are the entity's `*Fields` list from finance/models.py; a row adds the tenant and key.
+# Totals are not stored: finance/views/snapshot.py computes them from these rows.
+
+class DigestRun(SQLModel, table=True):
+    """One digest that reached the database. The newest `finished_at` is the data's as-of time."""
+    __tablename__ = "digest_runs"
+    __table_args__ = (PrimaryKeyConstraint("tenant_id", "id"),)
+
+    tenant_id: uuid.UUID = Field(sa_column=_tenant(primary_key=True))
+    id: int | None = Field(default=None, sa_column=Column(Integer, primary_key=True, autoincrement=True))
+    started_at: dt.datetime = Field(sa_type=TIMESTAMP(timezone=True))
+    finished_at: dt.datetime | None = Field(default=None, sa_column=_now())
+    normalized: bool                    # False for --no-normalize (the dumps were not re-read)
+    transactions: int                   # ledger rows imported
+
+
+class AccountRow(AccountFields, table=True):
+    """A bank account, one per institution (the direct scrape beats RiseUp's copy)."""
+    __tablename__ = "accounts"
+    __table_args__ = (PrimaryKeyConstraint("tenant_id", "institution", "account_id"),)
+
+    tenant_id: uuid.UUID = Field(sa_column=_tenant(primary_key=True))
+    institution: str = Field(primary_key=True)
+    account_id: str = Field(primary_key=True)
+
+
+class CreditCardRow(CreditCardFields, table=True):
+    """A card with money owed: the issuer's own next charge, else RiseUp's figure."""
+    __tablename__ = "credit_cards"
+    __table_args__ = (PrimaryKeyConstraint("tenant_id", "issuer", "last4"),)
+
+    tenant_id: uuid.UUID = Field(sa_column=_tenant(primary_key=True))
+    issuer: str = Field(primary_key=True)
+    last4: str = Field(primary_key=True)
+    owed: models.Money                  # required here: a card without money owed is not stored
+    next_charge_date: dt.date | None = None
+
+
+class LoanRow(LoanFields, table=True):
+    """A loan or mortgage track. `loan_id` can be missing, so the key is the digest's order."""
+    __tablename__ = "loans"
+    __table_args__ = (PrimaryKeyConstraint("tenant_id", "position"),)
+
+    tenant_id: uuid.UUID = Field(sa_column=_tenant(primary_key=True))
+    position: int = Field(primary_key=True)
+
+
+class SavingsRow(SavingsFields, table=True):
+    """A savings holding (pension, study fund, gemel, deposit): an asset, never cashflow.
+    `holding_id` (models.holding_id) is the key `holding_assignments` joins on, without an FK:
+    this row is replaced by every digest, the assignment is kept forever."""
+    __tablename__ = "savings_holdings"
+    __table_args__ = (PrimaryKeyConstraint("tenant_id", "holding_id"),)
+
+    tenant_id: uuid.UUID = Field(sa_column=_tenant(primary_key=True))
+    holding_id: str = Field(primary_key=True)
+
+
+class SourceDump(SQLModel, table=True):
+    """A scraped source's latest dump on disk: when the scraper last wrote, and how far its data reaches."""
+    __tablename__ = "source_dumps"
+    __table_args__ = (PrimaryKeyConstraint("tenant_id", "source"),)
+
+    tenant_id: uuid.UUID = Field(sa_column=_tenant(primary_key=True))
+    source: str = Field(primary_key=True)
+    dumped_at: dt.datetime = Field(sa_type=TIMESTAMP(timezone=True))   # newest raw file's mtime
+    raw_files: int
+    latest_txn_date: dt.date | None = None
+
+
+class SourceDumpEntity(SQLModel, table=True):
+    """How many records of one entity a source's normalized output holds."""
+    __tablename__ = "source_dump_entities"
+    __table_args__ = (
+        PrimaryKeyConstraint("tenant_id", "source", "entity"),
+        ForeignKeyConstraint(["tenant_id", "source"], ["source_dumps.tenant_id", "source_dumps.source"],
+                             ondelete="CASCADE"),)
+
+    tenant_id: uuid.UUID = Field(sa_column=_tenant(primary_key=True))
+    source: str = Field(primary_key=True)
+    entity: str = Field(primary_key=True)
+    records: int

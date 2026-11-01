@@ -1,7 +1,8 @@
 """`Money` (Decimal in Python, JSON float, Numeric(12,2) column) and the `*Fields` base pattern.
 
-The guard that matters: validating the real normalized accounts through the Decimal model
-must dump exactly what the old float model wrote, so normalized/*.json stay byte-identical.
+The guard that matters: validating the real normalized accounts, cards, loans and savings
+through the Decimal models must dump exactly the values the old float models wrote. Only the
+key order of `currency` moved (it is the record's, not the shared field list's).
 """
 import json
 from decimal import Decimal
@@ -16,19 +17,19 @@ from sqlmodel import Field, SQLModel
 from finance.models import Account, AccountFields, Money, MoneySQL, validate_records
 
 DATA = Path(__file__).resolve().parents[1]
-ACCOUNT_FILES = sorted(DATA.glob("*/normalized/accounts.json"))
+SCRAPED = ("accounts", "credit_cards", "loans", "savings")
+FILES = sorted(p for e in SCRAPED for p in DATA.glob(f"*/normalized/{e}.json"))
 
 BASE = {"institution": "leumi", "account_id": "1", "kind": "checking"}
 
 
-@pytest.mark.parametrize("path", ACCOUNT_FILES, ids=lambda p: p.parent.parent.name)
-def test_real_accounts_round_trip_byte_identical(path):
-    text = path.read_text()
-    records = json.loads(text)["records"]
-    dumped = validate_records("accounts", records)
+@pytest.mark.parametrize("path", FILES, ids=lambda p: f"{p.parent.parent.name}/{p.stem}")
+def test_real_records_round_trip_unchanged(path):
+    records = json.loads(path.read_text())["records"]
+    dumped = validate_records(path.stem, records)
     assert dumped == records
-    # the exact text write_envelope would produce for the records
-    assert json.dumps(dumped, ensure_ascii=False, indent=2) == json.dumps(records, ensure_ascii=False, indent=2)
+    # every float prints the same text it did before
+    assert json.dumps(dumped, sort_keys=True, ensure_ascii=False) == json.dumps(records, sort_keys=True, ensure_ascii=False)
 
 
 def test_int_dumps_as_float_like_before():

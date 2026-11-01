@@ -89,13 +89,11 @@ def next_card_charges(txns, as_of):
     return out, covered
 
 
-def build_snapshot(e, as_of, generated_at, assets=None):
-    """The headline position. `assets` are the household's hand-typed assets
-    (db/asset_store.py: the apartment), None when there is no database."""
+def reconcile(e, as_of):
+    """The position's entities, one copy each: what the digest stores (accounts, credit_cards,
+    loans, savings_holdings) and what `totals` sums. `e` is the normalized entities by name."""
     accounts = e.get("accounts", [])
     cards = e.get("credit_cards", [])
-    loans = e.get("loans", [])
-    income = e.get("income", [])
     txns = e.get("transactions", [])
 
     # De-dupe bank accounts that appear in more than one source. The same
@@ -149,12 +147,24 @@ def build_snapshot(e, as_of, generated_at, assets=None):
                           "holder": r.get("holder"), "owed": ch["owed"], "next_charge_date": ch["date"],
                           "currency": "ILS"})
     cards = [c for c in cards if c["owed"]]
+
+    def clean(records):                           # drop internal stamps from output
+        return [{k: v for k, v in r.items() if not k.startswith("_")} for r in records]
+
+    return {"bank_accounts": clean(accounts), "credit_cards": clean(cards),
+            "loans": clean(e.get("loans", [])), "savings": clean(e.get("savings", []))}
+
+
+def totals(position, assets=None, income=None):
+    """The headline sums over `reconcile`'s entities (or the same rows read back from the
+    database). `assets` are the household's hand-typed assets (db/asset_store.py: the apartment),
+    None when there is no database; `income` is RiseUp's frozen income entity (D8)."""
+    accounts, cards = position["bank_accounts"], position["credit_cards"]
+    loans, savings = position["loans"], position["savings"]
     cc_total = round(sum(c["owed"] for c in cards), 2)
     bank_sum = round(sum(a["balance"] for a in accounts), 2)
-    mortgage = [l for l in loans if l["category"] == "mortgage"]
-    consumer = [l for l in loans if l["category"] == "consumer"]
-    mortgage_balance = round(sum(l["balance"] for l in mortgage), 2)
-    consumer_balance = round(sum(l["balance"] for l in consumer), 2)
+    mortgage_balance = round(sum(l["balance"] for l in loans if l["category"] == "mortgage"), 2)
+    consumer_balance = round(sum(l["balance"] for l in loans if l["category"] == "consumer"), 2)
     loan_monthly = round(sum(l["monthly_payment"] for l in loans), 2)
     salary = income[0]["monthly_amount"] if income else None
 
@@ -172,55 +182,58 @@ def build_snapshot(e, as_of, generated_at, assets=None):
     # unmarked/legacy records like Harel's are conservatively illiquid) so the
     # totals below can be reported split, while net_position_with_savings keeps
     # its existing meaning (all savings, liquid or not, added to the tracked net).
-    savings = e.get("savings", [])
     savings_sum = round(sum(s["balance"] for s in savings), 2)
     liquid_savings_sum = round(sum(s["balance"] for s in savings if s.get("liquid")), 2)
     illiquid_savings_sum = round(savings_sum - liquid_savings_sum, 2)
 
     # Property (the apartment) is typed in by hand. It joins net worth only in its own
     # figure, so the existing totals keep answering the questions they always did.
-    assets = assets or []
-    prop = [a for a in assets if a.get("kind") == "property"]
+    prop = [a for a in assets or [] if a.get("kind") == "property"]
     property_value = round(sum(a["value"] for a in prop), 2) if prop else None
 
-    def clean(records):                           # drop internal stamps from output
-        return [{k: v for k, v in r.items() if not k.startswith("_")} for r in records]
+    return {
+        "bank_balances_sum": bank_sum,
+        "credit_card_debt": cc_total,
+        "mortgage_balance": mortgage_balance,
+        "consumer_loan_balance": consumer_balance,
+        "total_debt": round(cc_total + mortgage_balance + consumer_balance, 2),
+        "tracked_net_position": tracked_net,
+        "long_term_savings": savings_sum,
+        "liquid_savings": liquid_savings_sum,
+        "illiquid_savings": illiquid_savings_sum,
+        "net_position_with_savings": round(tracked_net + savings_sum, 2),
+        "property_value": property_value,
+        "net_worth_with_property": (round(tracked_net + savings_sum + property_value, 2)
+                                    if property_value is not None else None),
+        "monthly_loan_service": loan_monthly,
+        "detected_monthly_salary": salary,
+    }
 
+
+def debt_profile(loans):
+    return {
+        "mortgage": loan_profile([l for l in loans if l["category"] == "mortgage"]),
+        "consumer": loan_profile([l for l in loans if l["category"] == "consumer"]),
+        "all_loans": loan_profile(loans),
+    }
+
+
+def build_snapshot(e, as_of, generated_at, assets=None):
+    """snapshot.json: `reconcile`'s entities plus `totals` and `debt_profile`."""
+    position = reconcile(e, as_of)
+    income = [{k: v for k, v in r.items() if not k.startswith("_")} for r in e.get("income", [])]
     return {
         "generated_at": generated_at,
         "currency": "ILS",
         "note": "Combined from the normalized layer. Bank balances, debts and long-term "
                 "savings (pension / study funds). Property value and any savings held "
                 "outside the scraped sources are still NOT included.",
-        "bank_accounts": clean(accounts),
-        "credit_cards": clean(cards),
-        "loans": clean(loans),
-        "savings": clean(savings),
-        "assets": assets,
-        "income": clean(income),
-        "transactions_count": len(txns),
-        "debt_profile": {
-            "mortgage": loan_profile(mortgage),
-            "consumer": loan_profile(consumer),
-            "all_loans": loan_profile(loans),
-        },
-        "totals": {
-            "bank_balances_sum": bank_sum,
-            "credit_card_debt": cc_total,
-            "mortgage_balance": mortgage_balance,
-            "consumer_loan_balance": consumer_balance,
-            "total_debt": round(cc_total + mortgage_balance + consumer_balance, 2),
-            "tracked_net_position": tracked_net,
-            "long_term_savings": savings_sum,
-            "liquid_savings": liquid_savings_sum,
-            "illiquid_savings": illiquid_savings_sum,
-            "net_position_with_savings": round(tracked_net + savings_sum, 2),
-            "property_value": property_value,
-            "net_worth_with_property": (round(tracked_net + savings_sum + property_value, 2)
-                                        if property_value is not None else None),
-            "monthly_loan_service": loan_monthly,
-            "detected_monthly_salary": salary,
-        },
+        **position,
+        "assets": assets or [],
+        "income": income,
+        "transactions_count": len(e.get("transactions", [])),
+        "debt_profile": debt_profile(position["loans"]),
+        "totals": totals(position, assets, income),
     }
 
 

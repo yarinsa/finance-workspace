@@ -18,7 +18,8 @@ B = uuid.UUID("bbbbbbbb-0000-4000-8000-00000000000b")
 
 OWNED = ["scraped_transactions", "transaction_overrides", "override_audit", "transaction_tags",
          "transaction_offsets", "tags", "categories", "merchant_rules", "horizons", "goals",
-         "budget_lines", "holding_assignments", "notifications", "assets", "position_snapshots", "push_subscriptions"]
+         "budget_lines", "holding_assignments", "notifications", "assets", "position_snapshots", "push_subscriptions",
+         "digest_runs", "accounts", "credit_cards", "loans", "savings_holdings", "source_dump_entities", "source_dumps"]
 
 
 @pytest.fixture
