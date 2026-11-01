@@ -574,3 +574,49 @@ class SourceDumpEntity(SQLModel, table=True):
     source: str = Field(primary_key=True)
     entity: str = Field(primary_key=True)
     records: int
+
+
+# Hand-kept inputs that lived in side files (docs/json-to-db-migration.md, phase 2). Human layer:
+# kept forever, never truncated by a digest. Months are stored as their first day.
+
+class OffsetRule(SQLModel, table=True):
+    """A household קיזוז rule: transfers from `payer` pay back expenses matching `against`
+    (finance/offsets.py `suggest`), e.g. a roommate's share of the rent. Was data/offsets/rules.json."""
+    __tablename__ = "offset_rules"
+    __table_args__ = (PrimaryKeyConstraint("tenant_id", "id"),)
+
+    tenant_id: uuid.UUID = Field(sa_column=_tenant())
+    id: int | None = Field(default=None, sa_column=Column(Integer, autoincrement=True, nullable=False))
+    payer: str = Field(sa_type=Text)
+    against: list[str] = Field(sa_column=Column(ARRAY(Text), nullable=False))
+    note: str | None = Field(default=None, sa_type=Text)
+    created_at: dt.datetime | None = Field(default=None, sa_column=_now())
+
+
+class MortgageSchedulePeriod(SQLModel, table=True):
+    """One band of the bank's amortization schedule (לוח סילוקין): the installment from `from_month`
+    through `to_month`. Was data/mortgage_schedule.json."""
+    __tablename__ = "mortgage_schedule_periods"
+    __table_args__ = (PrimaryKeyConstraint("tenant_id", "from_month"),
+                      CheckConstraint("to_month >= from_month", name="mortgage_schedule_periods_order"))
+
+    tenant_id: uuid.UUID = Field(sa_column=_tenant())
+    from_month: dt.date
+    to_month: dt.date
+    payment: Decimal = Field(sa_type=Money)
+    source: str | None = Field(default=None, sa_type=Text)   # where the band came from (the PDF, its date)
+
+
+class LoanFreeze(SQLModel, table=True):
+    """A user-confirmed mortgage freeze on one track (data/detect_freeze.py): the frozen installment
+    until `resume_month`, then `resume_payment`. Deleted when the freeze is over. Was data/freeze.json."""
+    __tablename__ = "loan_freezes"
+    __table_args__ = (PrimaryKeyConstraint("tenant_id", "loan_id"),)
+
+    tenant_id: uuid.UUID = Field(sa_column=_tenant())
+    loan_id: str = Field(sa_type=Text)                 # the track's LoanAccount in the mortgage dump
+    frozen_payment: Decimal = Field(sa_type=Money)
+    resume_month: dt.date
+    resume_payment: Decimal = Field(sa_type=Money)
+    note: str | None = Field(default=None, sa_type=Text)
+    detected_at: dt.datetime | None = Field(default=None, sa_column=_now())

@@ -80,6 +80,5 @@ def test_real_snapshot_totals_survive_the_tables(conn):
     ledger.load(conn, [], {k: snap[k] for k in ("bank_accounts", "credit_cards", "loans", "savings")},
                 snap["syncs"], RUN)
     got = snapshot_store.totals(snapshot_store.position(conn), snap["assets"])
-    want = {k: v for k, v in snap["totals"].items() if k != "detected_monthly_salary"}
-    assert {k: v for k, v in got.items() if k != "detected_monthly_salary"} == want
+    assert got == {k: v for k, v in snap["totals"].items() if k != "detected_monthly_salary"}
     assert len(snapshot_store.dumps(conn)) == len(snap["syncs"])

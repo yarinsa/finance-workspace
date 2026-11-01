@@ -19,6 +19,8 @@ DIGESTED="$ROOT/data/digested"
 cd "$ROOT"
 unset DATABASE_URL API_DATABASE_URL FINANCE_DATA_DIR FINANCE_TENANT_ID
 export PYTHONHASHSEED=0   # budgets.summary.variable.categories follows set order
+export FINANCE_NO_DB=1    # data/stores.py readers stay off the database (it would read .env otherwise)
+[ -f "$ROOT/.env" ] && { echo "run this from a worktree: the main checkout's .env points at the live database" >&2; exit 2; }
 
 SAVED=$(mktemp -d)
 cp -R "$DIGESTED"/. "$SAVED"/

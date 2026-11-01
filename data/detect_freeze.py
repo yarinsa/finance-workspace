@@ -81,12 +81,14 @@ For the record, that history — the evidence that settled it:
 Run: python3 data/detect_freeze.py            (interactive)
      python3 data/detect_freeze.py --check     (report only, no prompts, exit 1 if discrepancy)
 
-Read-only over scraped data; only writes data/freeze.json.
+Read-only over scraped data; only writes the freeze (`loan_freezes`, or data/freeze.json without a database).
 """
 import json
 import sys
 from datetime import date
 from pathlib import Path
+
+import stores
 from finance.paths import data_root
 
 ROOT = data_root()
@@ -342,10 +344,13 @@ def main():
         print("NOTE: this does NOT rule out a freeze — a freeze that has already "
               "ended leaves no trace here. Only the charge history can tell you.")
         print(HISTORY_HINT)
-        # Clear a stale freeze file so the forecast stops applying it.
-        if FREEZE.exists() and not check_only:
-            FREEZE.unlink()
-            print(f"Removed stale {FREEZE.name}.")
+        # Clear a stale freeze so the forecast stops applying it.
+        if not check_only:
+            if stores.from_db("input_store", lambda m, conn: bool(m.loan_freezes(conn)) and (m.set_loan_freezes(conn, {}) or True)):
+                print("Removed the stale freeze from loan_freezes.")
+            if FREEZE.exists():
+                FREEZE.unlink()
+                print(f"Removed stale {FREEZE.name}.")
         return 0
 
     report(flagged, zeroed)
@@ -379,8 +384,11 @@ def main():
                 "through resume_month-1, then resume_payment.",
         "tracks": entries,
     }
-    FREEZE.write_text(json.dumps(payload, ensure_ascii=False, indent=2))
-    print(f"Wrote {FREEZE}. Re-run `python3 data/forecast.py` to apply it.")
+    if stores.from_db("input_store", lambda m, conn: m.set_loan_freezes(conn, entries) or True):
+        print("Recorded the freeze in loan_freezes. Re-run `python3 data/forecast.py` to apply it.")
+    else:   # no database: the side file, as before
+        FREEZE.write_text(json.dumps(payload, ensure_ascii=False, indent=2))
+        print(f"Wrote {FREEZE}. Re-run `python3 data/forecast.py` to apply it.")
     return 0
 
 

@@ -83,7 +83,7 @@ BINDINGS: dict[str, Binding] = {
                      hidden=frozenset({"created_at"}),
                      never_null=frozenset({"updated_at"})),   # filled by the database default
     # the headline position: the stored rows (db/snapshot_store.py), totals computed from them
-    "SnapshotTotals": Binding(models.SnapshotTotals, hidden=frozenset({"detected_monthly_salary"})),   # RiseUp-only (D8)
+    "SnapshotTotals": Binding(models.SnapshotTotals),
     "BankAccount": Binding(tables.AccountRow),
     "CreditCard": Binding(tables.CreditCardRow),
     "Loan": Binding(tables.LoanRow, hidden=frozenset({"position"})),

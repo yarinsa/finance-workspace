@@ -1,6 +1,6 @@
 # Digested JSON → Postgres tables + GraphQL
 
-Status: **phases 0 and 1 done** (2026-11-01); phase 2 next. Branch `claude/json-tables-graphql-migration-9223cd`.
+Status: **phases 0 and 1 done, phase 2 slice 1 done** (2026-11-01). Branch `claude/json-tables-graphql-migration-9223cd`.
 
 Moves every digested JSON (`data/digested/*.json`) and every hand-kept side file into typed
 Postgres tables, serves everything the dashboard reads through schema-first GraphQL, and deletes
@@ -59,7 +59,7 @@ Exact field-level reads are in the app sections below each row; anything not lis
 | Key | Fate |
 |---|---|
 | `bank_accounts`, `credit_cards`, `loans`, `savings` | **T** `accounts`, `credit_cards`, `loans`, `savings_holdings` |
-| `income` | X-dead. Only RiseUp emits it (D8), and it feeds only the dead `totals.detected_monthly_salary`. The runway infers payday from the ledger. |
+| `income` | X-dead, **dropped in phase 2**. Only RiseUp emitted it (D8). `totals.detected_monthly_salary` also fed the projection's retirement drawdown, but only when there is no forecast; that fallback now assumes 0, like the surplus one. The runway infers payday from the ledger. |
 | `totals` | **V** `Snapshot.totals`. The 6 read fields plus `propertyValue`. `position_snapshots` keeps recording the subset it records today. |
 | `debt_profile` | **V**, internal (assistant tool) |
 | `assets` | X-dup (`Query.assets`) |
@@ -316,7 +316,7 @@ the live DB, because `db/ledger.connect` auto-migrates.
 |---|---|---|
 | **0. Foundations** (no behaviour change) — **done 2026-11-01** | Move the builders into `finance/views/` with explicit inputs and `today`. `Household` loader (`Inputs` + `Household(inputs, today)`; `data/inputs.py` fills `Inputs` from the files). `Money` annotated type plus the `*Fields` base pattern, proven on `Account`. The parity harness (`scripts/parity/`, below). Verify the "no digest-time stamp depends on overrides" assumption: holds, as long as the loader resolves offsets the way `api/gql/ledger.py` does. **Output models moved to phase 4**, where each view gets its GraphQL type; adding them now would only be churn. | Done: `pytest` green (853 passed, DB tests skipped); all 12 `data/digested` outputs, `.md` included, byte-identical to the pre-refactor run at a pinned instant |
 | **1. Scraped entities** — **done 2026-11-01** (migration 0023) | Tables: `digest_runs`, `accounts`, `credit_cards`, `loans`, `savings_holdings`, `source_dumps` + `source_dump_entities` (per-entity counts, not repeated per source). No `income_sources`: `income` is dead (D8). Digest writes them in the ledger's transaction (`db/ledger.py load`); `db/snapshot_store.py` reads them, and `finance/views/snapshot.totals` over the stored rows equals `snapshot.json`'s totals on real data. `loans.next_payment` waits for phase 2, where forecast reads tables. Served: `Query.snapshot` (rows + computed totals; `incomeSources`, `detectedMonthlySalary`, `generatedAt` dropped) and `dataAsOf`; `Savings.holdingId` + `assignment`; `CreditCard.nextChargeDate`; `SyncSource` `label`, `lastDumpedAt`, `rawFiles`, `latestTxnDate`, `entities`. `SyncSource.connection` skipped: `syncSourceSecrets` already serves the fields. | Done: the resolver equals real `snapshot.json` field by field (`test_snapshot_resolver_equals_snapshot_json`) |
-| **2. Inputs** | Tables: `account_balance_days` (new bank entity), `offset_rules`, `mortgage_schedule_periods`, `loan_freezes`, `household_settings`. Importers. `forecast` / `history` / `detect_freeze` / `goals.py` CLI read and write tables. ⚠ Delete `budgets.json`, `goals/goals.json`, `offsets/rules.json`, `mortgage_schedule.json`, `freeze.json` after import. Stop emitting `subscriptions` and `income`. | No builder reads a side file; parity still holds |
+| **2. Inputs** — slice 1 done 2026-11-01 (migration 0024): `offset_rules`, `mortgage_schedule_periods`, `loan_freezes` with `db/input_store.py` (readers prefer the table, the file until `import`); `detect_freeze.py` writes the table; `income` and `subscription` no longer emitted. Slice 2 open: `account_balance_days`, `household_settings`, `loans.next_payment`, the side-file deletions | Tables: `account_balance_days` (new bank entity), `offset_rules`, `mortgage_schedule_periods`, `loan_freezes`, `household_settings`. Importers. `forecast` / `history` / `detect_freeze` / `goals.py` CLI read and write tables. ⚠ Delete `budgets.json`, `goals/goals.json`, `offsets/rules.json`, `mortgage_schedule.json`, `freeze.json` after import. Stop emitting `subscriptions` and `income`. | No builder reads a side file; parity still holds |
 | **2b. Off RiseUp** (D8, figure changes on purpose) | **Plan:** import RiseUp's tracking envelopes into `budget_lines` once, only for categories that have no household line. After that, planned = `budget_lines`. **Cycle:** starts on `household_settings.cycle_start_day`. **Past months' expected** (`months`) = the current plan; the RiseUp budget history is no longer read. **Forecast:** built from the ledger instead of envelopes. Income comes from the runway's inferred recurring income, fixed costs from the bill series plus `loans.next_payment` / schedule / freeze, and variable spend from the `budget_lines` plan. Each change gets a user-story test first and a backtest on Aug–Oct 2026 actuals, as was done for the runway card-bill estimate. Remove `riseup` from `refresh-all` and the sync sources; its normalized files stay as the frozen archive. | No code reads `data/riseup/raw`; the backtest error is reported and accepted |
 | **3. Typed ledger** | `scraped_transactions` gets one column per `LedgerTransaction` field via the base class; `transaction_auto_offsets`; views rewritten; `api/gql/ledger.py` reads columns, and its hand dataclasses go where a row class exists. ⚠ Drop `record` in a separate, later migration, after a digest has run on the columns. | `test_schema` and parity green; no `record->>` left |
 | **4. Views in GraphQL** | `runway`, `pace`, `months`, `cycle`, `monthSummaries`, `history`, `projection`, `horizonAllocation`, `metrics`, goal and target computed fields, the new `Transaction` fields. A parity test for each against the fixture. | Every app-read field in the consumption map is servable |
@@ -335,8 +335,12 @@ scripts/parity/run.sh check   /tmp/parity-before   # after it; exit 1 on any dif
 
 - `pinned.py` runs each script in-process under `time_machine.travel(PIN)` (default
   2026-11-01T12:00+02:00), so `today`, `now()` and `generated_at` are the same in both runs.
-- `DATABASE_URL`, `FINANCE_DATA_DIR` and `FINANCE_TENANT_ID` are unset: it never reaches the
-  live DB and reads this checkout's `data/` (in a worktree, its copy of the real data).
+- `DATABASE_URL`, `FINANCE_DATA_DIR` and `FINANCE_TENANT_ID` are unset and `FINANCE_NO_DB=1` is
+  set: it never reaches the live DB and reads this checkout's `data/` (in a worktree, its copy of
+  the real data). It refuses to run where a `.env` exists (the main checkout), since some loaders
+  still read `DATABASE_URL` from it.
+- It compares the file-backed run. Once a side file is deleted (phase 2), its input only exists in
+  the DB, so the harness then needs a seeded throwaway database; that comes with the deletions.
 - `PYTHONHASHSEED=0`, because `budgets.summary.variable.categories` follows set order (a
   pre-existing ordering bug, left for its own fix).
 - `data/digested/` is restored afterwards, so the pinned outputs never replace the real ones.

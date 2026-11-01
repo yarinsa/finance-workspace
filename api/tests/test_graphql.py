@@ -754,7 +754,7 @@ def test_snapshot_resolver_equals_snapshot_json(client, owner):
     def money(v):
         return None if v is None else f"{Decimal(str(v)):.2f}"
 
-    want_totals = {camel(k): money(v) for k, v in real["totals"].items() if k != "detected_monthly_salary"}
+    want_totals = {camel(k): money(v) for k, v in real["totals"].items() if k != "detected_monthly_salary"}   # dropped (D8)
     assert snap["totals"] == want_totals
     key = lambda r: tuple(map(str, r))   # noqa: E731
     assert sorted(snap["bankAccounts"], key=lambda r: key(r.values())) == sorted(

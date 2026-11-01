@@ -61,7 +61,9 @@ cross-check. Month 1 is high-confidence; later months are an envelope
 carry-forward. The **mortgage** installment comes from `sum(LoanEntry[].NextPayment)`
 in the mortgage dump (not RiseUp's residual figure), and is **freeze-aware**: if
 `data/freeze.json` exists (written by `data/detect_freeze.py`), post-freeze months
-use the recomputed full payment. Read-only over scraped data; safe to re-run.
+use the recomputed full payment. The freeze and the bank's schedule bands live in Postgres
+(`loan_freezes`, `mortgage_schedule_periods`, `db/input_store.py`; `import` copies the old
+`freeze.json` / `mortgage_schedule.json` in, and the files are read only while a table is empty). Read-only over scraped data; safe to re-run.
 Rationale and the trust/double-counting decisions are in
 `docs/forecast-architecture.md`.
 

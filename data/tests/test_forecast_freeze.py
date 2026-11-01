@@ -191,3 +191,21 @@ class TestForecastAddMonths:
 
     def test_zero(self):
         assert forecast.add_months("2026-06", 0) == "2026-06"
+
+
+# The tables win over the side files once imported (db/input_store.py); empty tables fall back.
+
+def test_freeze_reads_the_table_first(monkeypatch):
+    import stores
+    rows = {"X": {"frozen_payment": 1.0, "resume_month": "2026-07", "resume_payment": 2.0}}
+    monkeypatch.setattr(stores, "from_db", lambda store, read, what=None: rows)
+    assert forecast_loader.load_freeze() == rows
+
+
+def test_schedule_falls_back_to_the_file_while_the_table_is_empty(monkeypatch, tmp_path):
+    import stores
+    monkeypatch.setattr(stores, "from_db", lambda store, read, what=None: [])
+    f = tmp_path / "mortgage_schedule.json"
+    f.write_text('{"periods": [{"from": "2026-09", "to": "2026-12", "payment": 5717}]}')
+    monkeypatch.setattr(forecast_loader, "SCHEDULE", f)
+    assert forecast_loader.load_mortgage_schedule() == [{"from": "2026-09", "to": "2026-12", "payment": 5717}]

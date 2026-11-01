@@ -403,7 +403,6 @@ export interface SnapshotTotals {
   /** net_position_with_savings + property_value; null without a property value. */
   net_worth_with_property?: number | null;
   monthly_loan_service: number;
-  detected_monthly_salary: number;
 }
 
 export interface SnapshotAsset {

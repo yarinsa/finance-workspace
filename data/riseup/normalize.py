@@ -4,7 +4,8 @@
 Common envelope written for every entity:
     {"source", "entity", "generated_at", "records": [...]}
 
-Entities emitted: accounts, credit_cards, income, subscription.
+Entities emitted: accounts, credit_cards, transactions. (income and subscription were dropped:
+RiseUp is frozen, D8, and nothing read them; their old files are removed.)
 Self-contained; safe to re-run after each scrape.
 """
 import json, datetime
@@ -56,17 +57,8 @@ for c in load("current-credit-card-debt.json"):
     })
 emit("credit_cards", cards)
 
-# ---- income (detected salary transfers from insights) ----
-income = []
-for ins in load("insights_all.json"):
-    if ins.get("incomeAmount"):
-        income.append({
-            "label": ins.get("businessName") or "salary",
-            "monthly_amount": round(ins["incomeAmount"], 2),
-            "currency": "ILS",
-            "detail": {"date": ins.get("transactionDate"), "insight": ins.get("insightName")},
-        })
-emit("income", income)
+for dropped in ("income", "subscription"):   # no longer emitted; a stale file would still be digested
+    (OUT / f"{dropped}.json").unlink(missing_ok=True)
 
 # ---- transactions (RiseUp's category-tagged copy of every source's txns) ----
 # budget_current.json carries the real scraped transactions in two places:
@@ -145,12 +137,3 @@ def load_budgets():
 txns = collect_txns(load_budgets())
 emit("transactions", sorted(txns.values(), key=lambda r: r["date"]))
 
-# ---- subscription state ----
-sub = load("subscription-state-simplified.json")
-emit("subscription", [{
-    "service": "riseup",
-    "active": not sub.get("isDormant", False) and not sub.get("isFree", True),
-    "since": sub.get("since"),
-    "until": sub.get("until"),
-    "auto_renew": sub.get("isAutoRenewalOn"),
-}])

@@ -133,8 +133,8 @@ def resolve_config(cfg, snapshot, today, forecast=None, schedule=()):
             out["retirement_drawdown"] = round(max(0.0, fm[1] - service), 2)
             out["retirement_drawdown_source"] = "forecast expenses − today's loan service"
         else:
-            out["retirement_drawdown"] = float(totals.get("detected_monthly_salary") or 0)
-            out["retirement_drawdown_source"] = "detected monthly salary (no forecast)"
+            out["retirement_drawdown"] = 0.0
+            out["retirement_drawdown_source"] = "no forecast — assumed 0"
     else:
         out.setdefault("retirement_drawdown_source", "config")
 

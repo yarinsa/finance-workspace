@@ -11,7 +11,7 @@ import json
 import re
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
-from typing import Annotated, Any, Literal
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, BeforeValidator, ConfigDict, PlainSerializer
 from sqlalchemy import Numeric
@@ -171,29 +171,12 @@ def holding_id(s):
     return f"{s['institution']}:{s['topic_id'] if s.get('topic_id') is not None else s.get('label')}"
 
 
-class Income(Record):
-    label: str
-    monthly_amount: float
-    currency: str = "ILS"
-    detail: dict[str, Any] | None = None
-
-
-class Subscription(Record):
-    service: str
-    active: bool
-    since: dt.datetime | None = None
-    until: dt.datetime | None = None
-    auto_renew: bool | None = None
-
-
 ENTITIES: dict[str, type[Record]] = {
     "transactions": Transaction,
     "accounts": Account,
     "credit_cards": CreditCard,
     "loans": Loan,
     "savings": Savings,
-    "income": Income,
-    "subscription": Subscription,
 }
 
 
@@ -264,7 +247,6 @@ class SnapshotTotals(BaseModel):
     property_value: float | None = None          # the apartment, typed in by hand (assets table)
     net_worth_with_property: float | None = None
     monthly_loan_service: float
-    detected_monthly_salary: float | None = None
 
 
 def validate_records(entity, records):

@@ -155,10 +155,10 @@ def reconcile(e, as_of):
             "loans": clean(e.get("loans", [])), "savings": clean(e.get("savings", []))}
 
 
-def totals(position, assets=None, income=None):
+def totals(position, assets=None):
     """The headline sums over `reconcile`'s entities (or the same rows read back from the
     database). `assets` are the household's hand-typed assets (db/asset_store.py: the apartment),
-    None when there is no database; `income` is RiseUp's frozen income entity (D8)."""
+    None when there is no database."""
     accounts, cards = position["bank_accounts"], position["credit_cards"]
     loans, savings = position["loans"], position["savings"]
     cc_total = round(sum(c["owed"] for c in cards), 2)
@@ -166,7 +166,6 @@ def totals(position, assets=None, income=None):
     mortgage_balance = round(sum(l["balance"] for l in loans if l["category"] == "mortgage"), 2)
     consumer_balance = round(sum(l["balance"] for l in loans if l["category"] == "consumer"), 2)
     loan_monthly = round(sum(l["monthly_payment"] for l in loans), 2)
-    salary = income[0]["monthly_amount"] if income else None
 
     tracked_net = round(bank_sum - cc_total - mortgage_balance - consumer_balance, 2)
 
@@ -206,7 +205,6 @@ def totals(position, assets=None, income=None):
         "net_worth_with_property": (round(tracked_net + savings_sum + property_value, 2)
                                     if property_value is not None else None),
         "monthly_loan_service": loan_monthly,
-        "detected_monthly_salary": salary,
     }
 
 
@@ -221,7 +219,6 @@ def debt_profile(loans):
 def build_snapshot(e, as_of, generated_at, assets=None):
     """snapshot.json: `reconcile`'s entities plus `totals` and `debt_profile`."""
     position = reconcile(e, as_of)
-    income = [{k: v for k, v in r.items() if not k.startswith("_")} for r in e.get("income", [])]
     return {
         "generated_at": generated_at,
         "currency": "ILS",
@@ -230,10 +227,9 @@ def build_snapshot(e, as_of, generated_at, assets=None):
                 "outside the scraped sources are still NOT included.",
         **position,
         "assets": assets or [],
-        "income": income,
         "transactions_count": len(e.get("transactions", [])),
         "debt_profile": debt_profile(position["loans"]),
-        "totals": totals(position, assets, income),
+        "totals": totals(position, assets),
     }
 
 

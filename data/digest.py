@@ -10,6 +10,8 @@ With DATABASE_URL set, the ledger goes through Postgres (db/) to apply your edit
 `--no-db` skips that.
 """
 import json, datetime, glob, os, re, subprocess, sys
+
+import stores
 from pathlib import Path
 
 import freshness
@@ -352,6 +354,11 @@ OFFSET_RULES = ROOT / "offsets" / "rules.json"
 
 
 def load_offset_rules(path=OFFSET_RULES):
+    """The household's קיזוז rules from `offset_rules` (db/input_store.py); the side file until
+    `db/input_store.py import rules` has copied it in."""
+    rules = stores.from_db("input_store", lambda m, conn: m.offset_rules(conn), "offset rules")
+    if rules:
+        return rules
     return json.loads(path.read_text(encoding="utf-8")) if path.exists() else []
 
 
@@ -414,9 +421,6 @@ def write_markdown(s):
                   f"(liquid {ils(t.get('liquid_savings', 0))} — deposits you can exit "
                   f"same-day · illiquid {ils(t.get('illiquid_savings', 0))} — pension / "
                   f"study funds) → net with savings {ils(t['net_position_with_savings'])}.")
-    if t["detected_monthly_salary"]:
-        md.append(f"- **Detected monthly salary:** {ils(t['detected_monthly_salary'])} "
-                  f"({t['monthly_loan_service']/t['detected_monthly_salary']*100:.0f}% goes to loans).")
     md.append("\n## Loans\n")
     md.append("| Loan | Cat. | Balance | Rate | Type | Linked | Left | ₪/mo |")
     md.append("|---|---|--:|--:|---|:--:|--:|--:|")

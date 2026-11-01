@@ -26,6 +26,7 @@ data/*
 !data/history.py
 !data/freshness.py
 !data/inputs.py
+!data/stores.py
 !data/*/
 data/*/raw/
 data/*/normalized/

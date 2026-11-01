@@ -36,6 +36,7 @@ import json
 from datetime import date
 from pathlib import Path
 
+import stores
 from finance.paths import data_root
 from finance.views.forecast import (  # noqa: F401 — re-exported for scripts and tests
     HORIZON, MORTGAGE_EXPENSE, Sources, add_months, authoritative_mortgage_payment,
@@ -64,8 +65,13 @@ def load():
 
 
 def load_mortgage_schedule(path=None):
-    """Bank-schedule bands ``[{"from": "YYYY-MM", "to": "YYYY-MM", "payment": n}]``
-    from data/mortgage_schedule.json, or [] when the file is absent."""
+    """Bank-schedule bands ``[{"from": "YYYY-MM", "to": "YYYY-MM", "payment": n}]`` from
+    `mortgage_schedule_periods` (db/input_store.py); data/mortgage_schedule.json until it is
+    imported, or [] when neither has any."""
+    if path is None:
+        periods = stores.from_db("input_store", lambda m, conn: m.mortgage_schedule(conn), "mortgage schedule")
+        if periods:
+            return periods
     try:
         return json.loads(Path(path or SCHEDULE).read_text()).get("periods", [])
     except FileNotFoundError:
@@ -73,13 +79,17 @@ def load_mortgage_schedule(path=None):
 
 
 def load_freeze():
-    """User-confirmed freeze parameters from data/freeze.json (or {} if none).
+    """User-confirmed freeze parameters from `loan_freezes` (db/input_store.py), else
+    data/freeze.json until it is imported (or {} if none).
 
     Written by ``detect_freeze.py`` when the bank's dump still shows the frozen
     (interest-only) installment but the user has told us the freeze's real shape,
     so we can project the correct full payment once it lifts — before the bank
     reflects it.
     """
+    tracks = stores.from_db("input_store", lambda m, conn: m.loan_freezes(conn), "loan freezes")
+    if tracks:
+        return tracks
     try:
         return json.loads(FREEZE.read_text()).get("tracks", {})
     except FileNotFoundError:
