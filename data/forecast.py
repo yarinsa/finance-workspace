@@ -50,10 +50,6 @@ LEDGER = ROOT / "digested" / "transactions.json"
 CAL_BIG = ROOT / "cal" / "raw" / "bigNumberAndDetails.json"
 AMEX_BILL = ROOT / "amex" / "raw" / "billingsOverview.json"
 SNAPSHOT = ROOT / "digested" / "snapshot.json"
-FREEZE = ROOT / "freeze.json"
-# The bank's own amortization schedule (לוח סילוקין), hand-entered from the PDF —
-# gitignored like freeze.json since it holds real payment figures.
-SCHEDULE = ROOT / "mortgage_schedule.json"
 OUT_JSON = ROOT / "digested" / "forecast.json"
 OUT_MD = ROOT / "digested" / "forecast.md"
 
@@ -64,36 +60,22 @@ def load():
     return b, tx
 
 
-def load_mortgage_schedule(path=None):
-    """Bank-schedule bands ``[{"from": "YYYY-MM", "to": "YYYY-MM", "payment": n}]`` from
-    `mortgage_schedule_periods` (db/input_store.py); data/mortgage_schedule.json until it is
-    imported, or [] when neither has any."""
-    if path is None:
-        periods = stores.from_db("input_store", lambda m, conn: m.mortgage_schedule(conn), "mortgage schedule")
-        if periods:
-            return periods
-    try:
-        return json.loads(Path(path or SCHEDULE).read_text()).get("periods", [])
-    except FileNotFoundError:
-        return []
+def load_mortgage_schedule():
+    """The bank's amortization-schedule bands (לוח סילוקין, hand-entered from its PDF)
+    ``[{"from": "YYYY-MM", "to": "YYYY-MM", "payment": n}]`` from `mortgage_schedule_periods`
+    (db/input_store.py); [] without a database or before any are entered."""
+    return stores.from_db("input_store", lambda m, conn: m.mortgage_schedule(conn), "mortgage schedule") or []
 
 
 def load_freeze():
-    """User-confirmed freeze parameters from `loan_freezes` (db/input_store.py), else
-    data/freeze.json until it is imported (or {} if none).
+    """User-confirmed freeze parameters from `loan_freezes` (db/input_store.py), {} if none.
 
     Written by ``detect_freeze.py`` when the bank's dump still shows the frozen
     (interest-only) installment but the user has told us the freeze's real shape,
     so we can project the correct full payment once it lifts — before the bank
     reflects it.
     """
-    tracks = stores.from_db("input_store", lambda m, conn: m.loan_freezes(conn), "loan freezes")
-    if tracks:
-        return tracks
-    try:
-        return json.loads(FREEZE.read_text()).get("tracks", {})
-    except FileNotFoundError:
-        return {}
+    return stores.from_db("input_store", lambda m, conn: m.loan_freezes(conn), "loan freezes") or {}
 
 
 def _mortgage_tracks(loans):

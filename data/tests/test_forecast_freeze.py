@@ -5,8 +5,8 @@ authoritative_mortgage_payment when a freeze is in effect. The philosophy
 matches CLAUDE.md: scenarios are anchored to real household numbers and the
 actual freeze parameters that produced them.
 
-freeze.json is never written to disk here — we use monkeypatching to inject
-a synthetic freeze dict so we don't clobber any real freeze.json that might
+freezes are never read from the database here — we use monkeypatching to inject
+a synthetic freeze dict so we never touch any real freeze that might
 exist, and the tests remain idempotent.
 """
 import json
@@ -97,27 +97,12 @@ class TestPaymentForTrack:
 # load_freeze
 # ─────────────────────────────────────────────────────────────────────────────
 class TestLoadFreeze:
-    def test_returns_empty_dict_when_file_missing(self, tmp_path, monkeypatch):
-        monkeypatch.setattr(forecast_loader, "FREEZE", tmp_path / "no_freeze.json")
+    def test_returns_empty_dict_without_a_database_or_rows(self, monkeypatch):
+        import stores
+        monkeypatch.setattr(stores, "from_db", lambda store, read, what=None: None)
         assert forecast_loader.load_freeze() == {}
-
-    def test_returns_tracks_dict_from_valid_file(self, tmp_path, monkeypatch):
-        data = {
-            "generated_at": "2026-06-14",
-            "tracks": {
-                "ACC123": {
-                    "resume_month": "2026-11",
-                    "frozen_payment": 1692.4,
-                    "resume_payment": 2408.60,
-                }
-            },
-        }
-        f = tmp_path / "freeze.json"
-        f.write_text(json.dumps(data))
-        monkeypatch.setattr(forecast_loader, "FREEZE", f)
-        result = forecast_loader.load_freeze()
-        assert "ACC123" in result
-        assert result["ACC123"]["resume_month"] == "2026-11"
+        monkeypatch.setattr(stores, "from_db", lambda store, read, what=None: {})
+        assert forecast_loader.load_freeze() == {}
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -195,7 +180,7 @@ class TestForecastAddMonths:
         assert forecast.add_months("2026-06", 0) == "2026-06"
 
 
-# The tables win over the side files once imported (db/input_store.py); empty tables fall back.
+# The inputs live in the tables (db/input_store.py); with none, the forecast gets empty ones.
 
 def test_freeze_reads_the_table_first(monkeypatch):
     import stores
@@ -204,13 +189,13 @@ def test_freeze_reads_the_table_first(monkeypatch):
     assert forecast_loader.load_freeze() == rows
 
 
-def test_schedule_falls_back_to_the_file_while_the_table_is_empty(monkeypatch, tmp_path):
+def test_schedule_reads_the_table_and_is_empty_without_one(monkeypatch):
     import stores
-    monkeypatch.setattr(stores, "from_db", lambda store, read, what=None: [])
-    f = tmp_path / "mortgage_schedule.json"
-    f.write_text('{"periods": [{"from": "2026-09", "to": "2026-12", "payment": 5717}]}')
-    monkeypatch.setattr(forecast_loader, "SCHEDULE", f)
-    assert forecast_loader.load_mortgage_schedule() == [{"from": "2026-09", "to": "2026-12", "payment": 5717}]
+    bands = [{"from": "2026-09", "to": "2026-12", "payment": 5717}]
+    monkeypatch.setattr(stores, "from_db", lambda store, read, what=None: bands)
+    assert forecast_loader.load_mortgage_schedule() == bands
+    monkeypatch.setattr(stores, "from_db", lambda store, read, what=None: None)
+    assert forecast_loader.load_mortgage_schedule() == []
 
 
 # The mortgage tracks come from the stored loans; a table from before migration 0025 (no

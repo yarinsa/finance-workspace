@@ -105,7 +105,7 @@ Then check the outputs before publishing or reporting success:
   to a few hundred means a source normalized to almost nothing.
 - Uncategorized share should be **~20%**, not 60%+. RiseUp is the only source
   carrying categories, so a thin RiseUp month de-categorizes the whole ledger.
-- If `data/freeze.json` is missing while the mortgage shows interest-only
+- If no freeze is stored (`loan_freezes`) while the mortgage shows interest-only
   tracks, the forecast is carrying a frozen payment forward indefinitely — say
   so. `poetry run python data/detect_freeze.py --check` reports without prompting.
 

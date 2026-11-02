@@ -22,7 +22,7 @@ income. Logic: `finance/offsets.py` (shared by the digest and the API).
 - **Three layers.** `auto_offsets` (digest, on the scraped payback row): a same-merchant
   **card** refund (all-or-nothing, ≤180 days after the purchase) or a household rule from
   the `offset_rules` table (`db/input_store.py`; `[{"payer": …, "against": [...]}]`, same month first;
-  the old `data/offsets/rules.json` is read only until `db/input_store.py import rules`).
+  no side file; archived 2026-11-02).
   `manual_offsets` (DB `transaction_offsets`, attached by `db/ledger.py materialize`): a payback
   with any manual row ignores auto; a row with null expense = "offsets nothing".
   `resolve` turns them into `offsets` + `offset_amount` on both rows (manual gets the ₪ first).

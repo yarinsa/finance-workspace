@@ -347,19 +347,11 @@ def mark_round_trips(ledger):
     return ledger
 
 
-# Household offset rules (gitignored; personal names): a payer whose transfers pay
-# back a known expense, e.g. [{"payer": "<roommate>", "against": ["<landlord>"]}].
-# See finance/offsets.py.
-OFFSET_RULES = ROOT / "offsets" / "rules.json"
-
-
-def load_offset_rules(path=OFFSET_RULES):
-    """The household's קיזוז rules from `offset_rules` (db/input_store.py); the side file until
-    `db/input_store.py import rules` has copied it in."""
-    rules = stores.from_db("input_store", lambda m, conn: m.offset_rules(conn), "offset rules")
-    if rules:
-        return rules
-    return json.loads(path.read_text(encoding="utf-8")) if path.exists() else []
+def load_offset_rules():
+    """The household's קיזוז rules from `offset_rules` (db/input_store.py): a payer whose transfers
+    pay back a known expense, e.g. [{"payer": "<roommate>", "against": ["<landlord>"]}]
+    (finance/offsets.py). [] without a database."""
+    return stores.from_db("input_store", lambda m, conn: m.offset_rules(conn), "offset rules") or []
 
 
 def load_assets():

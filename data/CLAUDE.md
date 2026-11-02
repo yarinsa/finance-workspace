@@ -62,10 +62,10 @@ carry-forward. The **mortgage** installment is the sum of the Discount mortgage 
 `monthly_payment` (the dump's `NextPayment`, due on `next_payment_date`), read from the stored
 `loans` (snapshot.json's loans until a digest after migration 0025 fills the date), not RiseUp's
 residual figure, and is **freeze-aware**: if
-`data/freeze.json` exists (written by `data/detect_freeze.py`), post-freeze months
+a freeze is stored (`loan_freezes`, written by `data/detect_freeze.py`), post-freeze months
 use the recomputed full payment. The freeze and the bank's schedule bands live in Postgres
-(`loan_freezes`, `mortgage_schedule_periods`, `db/input_store.py`; `import` copies the old
-`freeze.json` / `mortgage_schedule.json` in, and the files are read only while a table is empty). Read-only over scraped data; safe to re-run.
+(`loan_freezes`, `mortgage_schedule_periods`, `db/input_store.py`; the old `freeze.json` /
+`mortgage_schedule.json` were archived 2026-11-02, with no database the forecast gets none). Read-only over scraped data; safe to re-run.
 Rationale and the trust/double-counting decisions are in
 `docs/forecast-architecture.md`.
 
@@ -111,7 +111,7 @@ upcoming card bills, duplicate services, stale syncs) from those blocks, with pe
 **Budget overrides.** Each budget line carries `history` (its ledger spend in the last 4
 cycles). To change a planned
 amount: `poetry run python data/budgets.py set "<category>" <amount>`, `unset "<category>"`, or
-`list`; it edits the `budget_lines` table (`db/budget_store.py`; the old gitignored `data/budgets/budgets.json` is read only until `poetry run python db/budget_store.py import` copies it in) (a RiseUp envelope name is stored as
+`list`; it edits the `budget_lines` table (`db/budget_store.py`) (a RiseUp envelope name is stored as
 our category; a category RiseUp has no envelope for adds a line), reruns `cashflow.py` and
 prints the new line. The budget editor in the `/monthly` category sheet is read-only and only shows this
 command; push the result with `sync-data`.

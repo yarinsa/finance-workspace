@@ -52,60 +52,6 @@ class TestInheritanceCard:
         assert card["meets_target"] is None
 
 
-class TestStoreMutations:
-    """CLI-backed store edits (PRD 11) — real cases: add a goal, edit its amount,
-    reject bad input. These operate on an in-memory store, no disk."""
-
-    def _store(self):
-        return {"emergency_fund_target": 0, "inheritance_target": 0, "goals": []}
-
-    def test_add_goal_assigns_unique_id_and_fields(self):
-        s = self._store()
-        g = goals.add_goal(s, "רכב חדש", 80000, "2027-12-31")
-        assert g["id"] and g["id"] in {x["id"] for x in s["goals"]}
-        assert g["amount"] == 80000 and g["end_date"] == "2027-12-31"
-        assert len(s["goals"]) == 1
-
-    def test_add_rejects_nonpositive_amount(self):
-        import pytest
-        with pytest.raises(ValueError):
-            goals.add_goal(self._store(), "x", -5, "2027-01-01")
-
-    def test_add_rejects_bad_date(self):
-        import pytest
-        with pytest.raises(ValueError):
-            goals.add_goal(self._store(), "x", 100, "nope")
-
-    def test_add_rejects_duplicate_id(self):
-        import pytest
-        s = self._store()
-        goals.add_goal(s, "a", 100, "2027-01-01", goal_id="dup")
-        with pytest.raises(ValueError):
-            goals.add_goal(s, "b", 100, "2027-01-01", goal_id="dup")
-
-    def test_edit_updates_amount(self):
-        s = self._store()
-        goals.add_goal(s, "רכב", 80000, "2027-12-31", goal_id="car")
-        goals.edit_goal(s, "car", amount=90000)
-        assert s["goals"][0]["amount"] == 90000
-
-    def test_edit_unknown_id_raises(self):
-        import pytest
-        with pytest.raises(ValueError):
-            goals.edit_goal(self._store(), "missing", amount=1)
-
-    def test_remove_goal(self):
-        s = self._store()
-        goals.add_goal(s, "a", 100, "2027-01-01", goal_id="gone")
-        goals.remove_goal(s, "gone")
-        assert s["goals"] == []
-
-    def test_remove_unknown_id_raises(self):
-        import pytest
-        with pytest.raises(ValueError):
-            goals.remove_goal(self._store(), "missing")
-
-
 class TestPerGoal:
     def test_future_end_date_is_on_track(self):
         end = (date.today() + timedelta(days=149)).isoformat()
@@ -268,69 +214,29 @@ class TestEmergencyFundOverdrawn:
         assert card["meets_target"] is True
 
 
-class TestMainTargetsFromDb:
-    def test_db_targets_override_the_json_store_and_unset_becomes_zero(self, tmp_path, monkeypatch):
-        # JSON still says emergency 60k / inheritance 1M; the DB has only a 2.5M retirement target.
+class TestMainFromDb:
+    def _run(self, tmp_path, monkeypatch, goals_rows, targets):
         root = tmp_path / "data"
         root.mkdir()
         monkeypatch.setattr(goals, "ROOT", root)
-        tmp_path = root
-        store = tmp_path / "goals.json"
-        store.write_text('{"emergency_fund_target": 60000, "inheritance_target": 1000000, "goals": []}')
-        monkeypatch.setattr(goals, "STORE", store)
-        for name in ("SNAPSHOT", "CASHFLOW"):
-            (tmp_path / name).write_text("{}")
-            monkeypatch.setattr(goals, name, tmp_path / name)
-        monkeypatch.setattr(goals, "OUT_JSON", tmp_path / "out.json")
-        monkeypatch.setattr(goals, "OUT_MD", tmp_path / "out.md")
-        monkeypatch.setattr(goals, "goals_from_db", lambda: [])
-        monkeypatch.setattr(goals, "targets_from_db", lambda: {
-            "retirement_target": 2500000.0, "inheritance_target": 0.0})
-        seen = {}
-        real_build = goals.build
-        monkeypatch.setattr(goals, "build", lambda s, *a: seen.update(s) or real_build(s, *a))
-        goals.main()
-        # no emergency row keeps the JSON 60000; the 0 inheritance row unsets despite the JSON 1M
-        assert (seen["emergency_fund_target"], seen["inheritance_target"], seen["retirement_target"]) == (
-            60000, 0, 2500000.0)
-
-    def test_an_empty_table_keeps_the_json_targets(self, tmp_path, monkeypatch):
-        # Before anything is imported: JSON {emergency 60000, inheritance 1M}, no default-goal rows.
-        root = tmp_path / "data"
-        root.mkdir()
-        monkeypatch.setattr(goals, "ROOT", root)
-        (root / "goals.json").write_text('{"emergency_fund_target": 60000, "inheritance_target": 1000000, "goals": []}')
         for name in ("SNAPSHOT", "CASHFLOW"):
             (root / name).write_text("{}")
             monkeypatch.setattr(goals, name, root / name)
-        monkeypatch.setattr(goals, "STORE", root / "goals.json")
         monkeypatch.setattr(goals, "OUT_JSON", root / "out.json")
         monkeypatch.setattr(goals, "OUT_MD", root / "out.md")
-        monkeypatch.setattr(goals, "goals_from_db", lambda: [])
-        monkeypatch.setattr(goals, "targets_from_db", lambda: {})
+        monkeypatch.setattr(goals, "goals_from_db", lambda: goals_rows)
+        monkeypatch.setattr(goals, "targets_from_db", lambda: targets)
         seen = {}
         real_build = goals.build
         monkeypatch.setattr(goals, "build", lambda s, *a: seen.update(s) or real_build(s, *a))
         goals.main()
-        assert (seen["emergency_fund_target"], seen["inheritance_target"]) == (60000, 1000000)
+        return seen
 
-    def test_without_a_database_the_json_targets_stand(self, tmp_path, monkeypatch):
-        root = tmp_path / "data"
-        root.mkdir()
-        monkeypatch.setattr(goals, "ROOT", root)
-        tmp_path = root
-        store = tmp_path / "goals.json"
-        store.write_text('{"emergency_fund_target": 60000, "goals": []}')
-        monkeypatch.setattr(goals, "STORE", store)
-        for name in ("SNAPSHOT", "CASHFLOW"):
-            (tmp_path / name).write_text("{}")
-            monkeypatch.setattr(goals, name, tmp_path / name)
-        monkeypatch.setattr(goals, "OUT_JSON", tmp_path / "out.json")
-        monkeypatch.setattr(goals, "OUT_MD", tmp_path / "out.md")
-        monkeypatch.setattr(goals, "goals_from_db", lambda: None)
-        monkeypatch.setattr(goals, "targets_from_db", lambda: None)
-        seen = {}
-        real_build = goals.build
-        monkeypatch.setattr(goals, "build", lambda s, *a: seen.update(s) or real_build(s, *a))
-        goals.main()
-        assert seen["emergency_fund_target"] == 60000
+    def test_stored_targets_reach_the_digest_and_a_zero_row_is_unset(self, tmp_path, monkeypatch):
+        seen = self._run(tmp_path, monkeypatch, [], {"retirement_target": 2500000.0, "inheritance_target": 0.0})
+        assert (seen.get("emergency_fund_target"), seen["inheritance_target"], seen["retirement_target"]) == (
+            None, 0, 2500000.0)
+
+    def test_without_a_database_every_target_is_unset(self, tmp_path, monkeypatch):
+        seen = self._run(tmp_path, monkeypatch, None, None)
+        assert seen == {"goals": []}

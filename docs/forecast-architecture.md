@@ -111,6 +111,6 @@ RiseUp's envelope under-reports (residual-cycle figure). We use
 (paying interest-only), so the dump's `NextPayment` sum reads **~₪5,901**, not the
 ~₪8.5k full price. The full price returns when the freeze lifts. The dump won't
 show the higher figure until that charge posts, so `forecast.py` applies the
-user-confirmed freeze from `data/freeze.json` (written by `detect_freeze.py`) to
+user-confirmed freeze from the `loan_freezes` table (written by `detect_freeze.py`) to
 project the post-freeze months correctly. Do **not** treat the current ~₪5,901 as
 permanent — see the freeze section in `refresh` skill (references/discount-mortgage.md).

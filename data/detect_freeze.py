@@ -6,7 +6,7 @@ posts. But the household knows about a freeze the moment they arrange it. This
 script closes that gap: it flags any mortgage track whose current ``NextPayment``
 is suspiciously far from the payment we'd expect, asks the user what changed
 (the three parameters a Discount freeze is defined by), and writes
-``data/freeze.json`` — which ``forecast.py`` reads to project the real forward
+the `loan_freezes` table — which ``forecast.py`` reads to project the real forward
 payments instead of naively carrying the frozen figure forward.
 
 A Discount freeze ("גרייס"/הקפאה) is fully described by three parameters:
@@ -81,7 +81,7 @@ For the record, that history — the evidence that settled it:
 Run: python3 data/detect_freeze.py            (interactive)
      python3 data/detect_freeze.py --check     (report only, no prompts, exit 1 if discrepancy)
 
-Read-only over scraped data; only writes the freeze (`loan_freezes`, or data/freeze.json without a database).
+Read-only over scraped data; only writes the freeze (`loan_freezes`); without a database it records nothing.
 """
 import json
 import sys
@@ -93,7 +93,6 @@ from finance.paths import data_root
 
 ROOT = data_root()
 MORTGAGE = ROOT / "discount-mortgage" / "raw" / "mortgage_details.json"
-FREEZE = ROOT / "freeze.json"
 
 # A track is flagged as "looks frozen" when its NextPayment is within this many
 # ₪ of the pure interest-only amount — i.e. it is paying interest but ~no
@@ -348,9 +347,6 @@ def main():
         if not check_only:
             if stores.from_db("input_store", lambda m, conn: bool(m.loan_freezes(conn)) and (m.set_loan_freezes(conn, {}) or True)):
                 print("Removed the stale freeze from loan_freezes.")
-            if FREEZE.exists():
-                FREEZE.unlink()
-                print(f"Removed stale {FREEZE.name}.")
         return 0
 
     report(flagged, zeroed)
@@ -377,18 +373,11 @@ def main():
         return 0
 
     entries = prompt_for_freeze(flagged)
-    payload = {
-        "generated_at": date.today().isoformat(),
-        "source": "detect_freeze.py",
-        "note": "User-confirmed mortgage freeze. forecast.py applies frozen_payment "
-                "through resume_month-1, then resume_payment.",
-        "tracks": entries,
-    }
     if stores.from_db("input_store", lambda m, conn: m.set_loan_freezes(conn, entries) or True):
         print("Recorded the freeze in loan_freezes. Re-run `python3 data/forecast.py` to apply it.")
-    else:   # no database: the side file, as before
-        FREEZE.write_text(json.dumps(payload, ensure_ascii=False, indent=2))
-        print(f"Wrote {FREEZE}. Re-run `python3 data/forecast.py` to apply it.")
+    else:
+        print("Nothing recorded: there is no database to write the freeze to.")
+        return 1
     return 0
 
 

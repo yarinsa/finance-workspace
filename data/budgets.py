@@ -62,7 +62,6 @@ from finance.views.budgets import (  # noqa: F401 — re-exported: the compute l
 CODE = Path(__file__).resolve().parent
 ROOT = data_root()
 BUDGET = ROOT / "riseup" / "raw" / "budget_current.json"
-OVERRIDES = ROOT / "budgets" / "budgets.json"
 RAW = ROOT / "riseup" / "raw"
 TRANSACTIONS = ROOT / "digested" / "transactions.json"
 
@@ -108,19 +107,10 @@ def _load_file(path):
 def load_overrides(path=None):
     """The household's `{category: amount}` planned amounts; {} when there are none.
 
-    Read from the `budget_lines` table. With `path` (tests), or when the database is
-    unreachable, or while it is still empty and the old JSON store exists (before
-    `budget_store.py import`), read that JSON file instead."""
+    Read from the `budget_lines` table; {} without a database. `path` (tests) reads a JSON file."""
     if path is not None:
         return _load_file(path)
-    lines = _db(lambda m, conn: m.all_lines(conn))
-    if lines:
-        return lines
-    legacy = _load_file(OVERRIDES)
-    if legacy and lines is not None:
-        print("budgets: budget_lines is empty; using data/budgets/budgets.json "
-              "(run db/budget_store.py import)", file=sys.stderr)
-    return legacy
+    return _db(lambda m, conn: m.all_lines(conn)) or {}
 
 
 def load_cycle_start_day():

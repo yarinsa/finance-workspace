@@ -30,9 +30,14 @@ code yet, so the position tables are still empty.
    `input_store.py import settings` copies RiseUp's day once), `account_balance_days` (Discount and Leumi emit
    `balance_days`; history's cash reads the table, else the normalized files, never `raw/`). Parity: every output
    identical except the new fields and entity counts in `snapshot.json` / `validation`.
-4. **Phase 2 deletions (⚠ ask first):** the parity harness gets a seeded throwaway database, then
-   delete `rules.json`, `mortgage_schedule.json`, `freeze.json`, the `budgets.json` / `goals.json`
-   fallbacks and their file readers. Coordinate `goals.py` with the goals session.
+4. **Phase 2 deletions:** done 2026-11-02. The readers (`forecast`, `digest` offset rules, `budgets`,
+   `goals`, `detect_freeze`) take their hand-kept inputs from the tables only; `goals.py` lost its
+   file-store CLI (the app and `db/goal_store.py` edit goals). The parity harness gained a seeded
+   throwaway database (`PARITY_DATABASE_URL`, `scripts/parity/seed_db.sh`): every figure equals the
+   file-backed run, and the only differences are DB-only fields (row ids, horizon names, stored
+   positions). The side files were moved to `data/archive/side-files-2026-11-02/`. Before this, the two
+   general targets (60k emergency fund, 1M inheritance) lived only in `goals.json` and were copied into
+   the `goals` table; the file's goal list was stale (the app had deleted `phone-2026`), so it was not imported.
 5. Then phase 3 (typed ledger); phase 2b after 2.
 
 ## Decisions already taken
@@ -367,8 +372,11 @@ scripts/parity/run.sh check   /tmp/parity-before   # after it; exit 1 on any dif
   set: it never reaches the live DB and reads this checkout's `data/` (in a worktree, its copy of
   the real data). It refuses to run where a `.env` exists (the main checkout), since some loaders
   still read `DATABASE_URL` from it.
-- It compares the file-backed run. Once a side file is deleted (phase 2), its input only exists in
-  the DB, so the harness then needs a seeded throwaway database; that comes with the deletions.
+- It compares the file-backed run by default. With `PARITY_DATABASE_URL` set (a throwaway database,
+  seeded by `scripts/parity/seed_db.sh` from this checkout's side files) it runs the chain against
+  that database, the way the side-file inputs are read once their files are gone. That run also reads
+  the database's own fields, so a diff against a file-backed capture shows row ids and horizon names
+  (`category_id`, `horizon_id`, `goal_id`) and stored positions; compare the figures, not those.
 - `PYTHONHASHSEED=0`, because `budgets.summary.variable.categories` follows set order (a
   pre-existing ordering bug, left for its own fix).
 - `data/digested/` is restored afterwards, so the pinned outputs never replace the real ones.

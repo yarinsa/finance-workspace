@@ -163,7 +163,7 @@ these, because they determine the post-freeze payment and the dump can't tell yo
    is squeezed into the unchanged remaining term, so the payment **rises**.
 
 `data/detect_freeze.py` implements exactly this: it flags interest-only tracks,
-asks the user the 3 params, and writes `data/freeze.json` (gitignored — real
+asks the user the 3 params, and writes the `loan_freezes` table (real
 payment amounts) with the recomputed post-freeze payment per track.
 `data/forecast.py` reads it so the months after the freeze show the real
 (higher) payment instead of naively carrying the frozen figure forward. When a
