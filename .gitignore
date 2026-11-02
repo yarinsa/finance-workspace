@@ -89,3 +89,6 @@ scrapers/**/node_modules/
 
 # Household offset rules (personal names) — see finance/offsets.py
 data/offsets/rules.json
+
+# Retired hand-kept side files (now in Postgres) — real figures and names; never commit.
+data/archive/
