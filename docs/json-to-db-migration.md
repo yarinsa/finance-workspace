@@ -24,7 +24,8 @@ code yet, so the position tables are still empty.
    - Unrelated, older: `sync_tenant_access` fails because `tenant-groups.sh` wants `terraform init`.
 2. **Verify the first digest on the new code:** `db/snapshot_store.py` totals equal
    `snapshot.json`'s, `digest_runs` has a row, `source_dumps` matches the Syncs page.
-3. **Phase 2 slice 2:** done in the worktree 2026-11-02, migrations 0025–0027 (not applied live): `loans.next_payment_date`
+3. **Phase 2 slice 2:** live on master 2026-11-02, migrations 0025–0027 applied, settings imported (cycle day 1), first digest
+   filled the tables (Discount 15 and Leumi 27 balance days, 6 mortgage tracks with their next date): `loans.next_payment_date`
    (forecast reads the stored tracks, not the mortgage dump), `household_settings.cycle_start_day` (bills and budgets;
    `input_store.py import settings` copies RiseUp's day once), `account_balance_days` (Discount and Leumi emit
    `balance_days`; history's cash reads the table, else the normalized files, never `raw/`). Parity: every output
